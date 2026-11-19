@@ -175,10 +175,11 @@ func (h *Handler) FreeQuote(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(201, quoteResponse(result))
+	c.JSON(201, NewQuoteResponse(result))
 }
 
-func quoteResponse(result application.CreateFreeQuoteResult) QuoteResponse {
+// NewQuoteResponse projects a quote to the public wire format.
+func NewQuoteResponse(result application.CreateFreeQuoteResult) QuoteResponse {
 	return QuoteResponse{CompilerVersion: result.CompilerVersion, ReferenceMapping: result.ReferenceMapping, SubmissionID: result.SubmissionID, SubmissionEpoch: result.SubmissionEpoch, ConfirmKey: result.ConfirmKey, EditorDraft: result.EditorDraft, OperationID: result.OperationID, QuoteMicros: result.QuoteMicros, QuoteDetail: result.QuoteDetail, AvailableMicros: result.AvailableMicros, ExpiresAt: result.ExpiresAt, ReusedFromID: result.ReusedFromID, Confirmable: result.Confirmable, PromptPreparation: result.PromptPreparation, FinalPrompt: result.FinalPrompt}
 }
 

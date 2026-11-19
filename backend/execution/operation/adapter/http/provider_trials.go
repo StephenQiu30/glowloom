@@ -46,7 +46,7 @@ func (h *ProviderTrialHandler) Quote(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	response := quoteResponse(result)
+	response := NewQuoteResponse(result)
 	key := application.ProviderTrialConfirmKey(result.OperationID)
 	response.ConfirmKey = &key
 	c.JSON(201, response)

@@ -1,12 +1,16 @@
 package aigateway_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"sync"
 	"sync/atomic"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
@@ -39,8 +43,24 @@ func TestRebuiltWorkbenchQuoteConfirmWorkerAndBills(t *testing.T) {
 	})}
 	creation := aigateway.Creation{Runtime: runtime, Authorize: fixtureAuthority}
 	input := operationhttp.QuoteItemRequest{ModelKey: model.Name, Capability: "text.generate", Mode: "text_to_text", Prompt: "new code", Params: json.RawMessage(`{"max_tokens":100}`), OutputCount: 1}
-	quote, err := creation.Quote(t.Context(), a, pid, "quote-once", input)
+	engine := gin.New()
+	group := engine.Group("/api", func(c *gin.Context) { c.Set("principal", a) })
+	creation.RegisterCreation(group)
+	body, err := json.Marshal(input)
 	require.NoError(t, err)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/projects/"+pid.String()+"/free-operations", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", "quote-once")
+	res := httptest.NewRecorder()
+	engine.ServeHTTP(res, req)
+	require.Equal(t, http.StatusCreated, res.Code, res.Body.String())
+	var quote operationhttp.QuoteResponse
+	require.NoError(t, json.Unmarshal(res.Body.Bytes(), &quote))
+	require.NotEqual(t, uuid.Nil, quote.OperationID)
+	require.NotNil(t, quote.ConfirmKey)
+	require.EqualValues(t, 100000, quote.QuoteMicros)
+	require.True(t, quote.Confirmable)
+	require.Contains(t, res.Body.String(), `"confirmable":true`)
 	replay, err := creation.Quote(t.Context(), a, pid, "quote-once", input)
 	require.NoError(t, err)
 	require.Equal(t, quote.OperationID, replay.OperationID)

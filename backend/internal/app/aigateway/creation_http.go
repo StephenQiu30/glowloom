@@ -31,7 +31,7 @@ func (c Creation) RegisterCreation(g *gin.RouterGroup) {
 			creationProblem(ctx, err)
 			return
 		}
-		ctx.JSON(201, out)
+		ctx.JSON(201, operationhttp.NewQuoteResponse(out))
 	})
 	g.POST("/operations/:id/confirm", func(ctx *gin.Context) {
 		id, ok := httpapi.PathUUID(ctx, "id")
