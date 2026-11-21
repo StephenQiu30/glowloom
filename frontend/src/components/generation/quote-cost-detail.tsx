@@ -12,6 +12,7 @@ const unitLabels: Record<string, string> = {
   per_image: "每张图片",
   per_second: "每秒",
   per_1k_tokens: "每千 Token",
+  per_million_video_tokens: "每百万视频 Token",
   per_1k_chars: "每千字符",
 };
 
@@ -36,8 +37,11 @@ export function QuoteCostDetail({
     typeof exact === "string" && /^(0|[1-9]\d*)(\.\d{1,5})?$/.test(exact)
       ? exact
       : null;
-  const cap = detail?.max_charge_credits;
-  const capped = exactCredits !== null && cap === exactCredits;
+  const max = detail?.max_charge_credits;
+  const cap =
+    typeof max === "string" && /^(0|[1-9]\d*)(\.\d{1,5})?$/.test(max)
+      ? max
+      : null;
   if (!known && exactCredits === null)
     return (
       <p role="status" className="text-sm text-muted-foreground">
@@ -70,7 +74,8 @@ export function QuoteCostDetail({
       aria-label="本次费用"
     >
       <p>
-        {capped &&
+        {cap !== null &&
+        cap === exactCredits &&
         !knownCredits &&
         detail?.pricing_strategy === "original_duration_v1"
           ? `最多扣 ${exactCredits} 积分`
@@ -80,6 +85,9 @@ export function QuoteCostDetail({
               ? `预计消耗 ${credits} 积分`
               : `预计预留 ${formatBillingMicros(amount)}`}
       </p>
+      {cap !== null && detail?.unit === "per_million_video_tokens" && (
+        <p className="text-muted-foreground">本次最多扣 {cap} 积分</p>
+      )}
       {typeof detail?.before_discount_credits === "number" && (
         <p className="text-muted-foreground">
           折前 {detail.before_discount_credits} 积分
@@ -106,8 +114,8 @@ export function QuoteCostDetail({
               <p>预计预留 {formatBillingMicros(amount)}</p>
             )}
             <p className="text-muted-foreground">
-              {capped
-                ? `本次最多扣 ${exactCredits} 积分，按实际用量结算。费用待核查时保留冻结。`
+              {cap !== null
+                ? `本次最多扣 ${cap} 积分，按实际用量结算。费用待核查时保留冻结。`
                 : "预留金额不代表最终实扣或费用上限。"}
               {exactCredits === null && knownCredits
                 ? "积分按本次报价规则向上取整。"
@@ -138,6 +146,8 @@ export function QuoteCostDetail({
                 参考图计费范围: detail?.reference_scope,
                 输入Token预估: detail?.estimated_input_tokens,
                 最大输出Token: detail?.max_output_tokens,
+                预计视频Token: detail?.estimated_tokens,
+                实际视频Token: detail?.actual_tokens,
                 输入千Token单价: detail?.input_unit_price_micros,
                 输出千Token单价: detail?.output_unit_price_micros,
               })

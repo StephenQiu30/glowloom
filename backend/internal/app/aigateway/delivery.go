@@ -13,11 +13,13 @@ import (
 
 	subject "github.com/StephenQiu30/glowloom-server/backend/creation/subject/application"
 	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
+	pggateway "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
 	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 	objectplatform "github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/media/adapter/objectstorage"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
@@ -109,11 +111,14 @@ func (r *Runtime) deliverySource(ctx context.Context, id uuid.UUID) (deliverySou
 	if q.Error != nil {
 		return out, q.Error
 	}
-	if q.RowsAffected != 1 || row.State != "settled" {
+	if q.RowsAffected != 1 {
 		return out, domain.ErrUnavailable
 	}
 	if json.Unmarshal(row.Contract, &out.Call) != nil || out.Call.ID != id || out.Call.Model.Protocol != "media" || json.Unmarshal(row.Receipt, &out.Receipt) != nil || out.Receipt.Pending || json.Unmarshal(row.Route, &out.Route) != nil {
 		return out, domain.ErrInvalid
+	}
+	if row.State != "settled" && (out.Call.Model.VideoMetering == nil || row.State != "received" && row.State != "unknown") {
+		return out, domain.ErrUnavailable
 	}
 	// Hash the canonical saved receipt; the original transport digest remains in ai.attempt.
 	raw, err := domain.CanonicalJSON(row.Receipt)
@@ -127,8 +132,8 @@ func (r *Runtime) deliverySource(ctx context.Context, id uuid.UUID) (deliverySou
 	return out, nil
 }
 
-// Deliver never dispatches a model. It independently archives a settled receipt,
-// retaining the already committed supplier evidence and its single money ledger.
+// Deliver archives the original successful receipt without dispatching a model.
+// Billable video archives wake settlement once the asset is ready.
 func (r *Runtime) Deliver(ctx context.Context, id uuid.UUID) error {
 	source, err := r.deliverySource(ctx, id)
 	if err != nil {
@@ -213,7 +218,13 @@ func (r *Runtime) Deliver(ctx context.Context, id uuid.UUID) error {
 		if err := pgmedia.NewScopedStore(tx, mediawire.NewMediaWorkerScopeAccess).AcceptGatewayOutput(ctx, actor, asset, rends); err != nil {
 			return err
 		}
-		return finishDelivery(tx, id, token, state, summary)
+		if err := finishDelivery(tx, id, token, state, summary); err != nil {
+			return err
+		}
+		if source.Call.Model.VideoMetering != nil && state == "ready" {
+			return taskruntime.Enqueue(ctx, tx, pggateway.SettlementKind, id.String(), time.Now())
+		}
+		return nil
 	})
 }
 

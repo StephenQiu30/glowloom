@@ -42,6 +42,9 @@ type OnboardingPlan struct {
 
 // PurchaseBound uses the full reviewed limits, including the most expensive input bucket.
 func PurchaseBound(m domain.Model, p domain.Price) (int64, error) {
+	if m.Protocol == "media" && !m.AcceptsMediaPrice(p) {
+		return 0, domain.ErrInvalid
+	}
 	p.Input = max(p.Input, p.CacheRead, p.CacheWrite)
 	return p.Cost(domain.Usage{Input: m.MaxInput, Output: m.MaxOutput})
 }

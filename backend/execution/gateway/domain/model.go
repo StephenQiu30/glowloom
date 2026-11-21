@@ -126,19 +126,20 @@ func Digest(raw []byte) string { sum := sha256.Sum256(raw); return hex.EncodeToS
 // Model is a published immutable product contract, independent of old catalogs.
 type Model struct {
 	// OutputPolicy declares the published provider success review contract; empty remains pending.
-	OutputPolicy string               `json:"output_policy,omitempty"`
-	Capability   string               `json:"capability,omitempty"`
-	Modes        []string             `json:"modes,omitempty"`
-	Parameters   map[string]Parameter `json:"parameters,omitempty"`
-	ID           uuid.UUID            `json:"id"`
-	Name         string               `json:"name"`
-	Protocol     string               `json:"protocol"`
-	Price        Price                `json:"price"`
-	MaxInput     int64                `json:"max_input"`
-	MaxOutput    int64                `json:"max_output"`
-	PurchaseCap  int64                `json:"purchase_cap"`
-	Tools        bool                 `json:"tools"`
-	Stream       bool                 `json:"stream"`
+	OutputPolicy  string               `json:"output_policy,omitempty"`
+	Capability    string               `json:"capability,omitempty"`
+	Modes         []string             `json:"modes,omitempty"`
+	Parameters    map[string]Parameter `json:"parameters,omitempty"`
+	VideoMetering *VideoMetering       `json:"video_metering,omitempty"`
+	ID            uuid.UUID            `json:"id"`
+	Name          string               `json:"name"`
+	Protocol      string               `json:"protocol"`
+	Price         Price                `json:"price"`
+	MaxInput      int64                `json:"max_input"`
+	MaxOutput     int64                `json:"max_output"`
+	PurchaseCap   int64                `json:"purchase_cap"`
+	Tools         bool                 `json:"tools"`
+	Stream        bool                 `json:"stream"`
 }
 
 // Validate checks the declared native protocol and bounded product contract.
@@ -155,8 +156,11 @@ func (m Model) Validate() error {
 	if m.OutputPolicy != "" && (m.Protocol != "media" || m.OutputPolicy != "provider_success_v1") {
 		return ErrInvalid
 	}
+	if m.VideoMetering != nil && !m.validVideoContract() {
+		return ErrInvalid
+	}
 	if m.Protocol == "media" {
-		if !slices.Contains([]string{"image.generate", "video.generate", "audio.generate"}, m.Capability) || len(m.Modes) == 0 || m.Tools || m.Stream || m.Price.Request <= 0 || m.Price.Input != 0 || m.Price.CacheRead != 0 || m.Price.CacheWrite != 0 || m.Price.Output != 0 {
+		if !slices.Contains([]string{"image.generate", "video.generate", "audio.generate"}, m.Capability) || len(m.Modes) == 0 || m.Tools || m.Stream || !m.AcceptsMediaPrice(m.Price) {
 			return ErrInvalid
 		}
 		for _, p := range m.Parameters {
@@ -192,29 +196,32 @@ type Route struct {
 
 // Call is a server-authorized logical operation. Its limit is credits, not money.
 type Call struct {
-	ID       uuid.UUID
-	Scope    uuid.UUID
-	Actor    uuid.UUID
-	Project  uuid.UUID
-	Run      uuid.UUID
-	Key      string
-	Hash     string
-	Model    Model
-	Raw      json.RawMessage
-	Limit    int64
-	Stream   bool
-	Origin   string
-	Deadline time.Time
+	ID                   uuid.UUID
+	Scope                uuid.UUID
+	Actor                uuid.UUID
+	Project              uuid.UUID
+	Run                  uuid.UUID
+	Key                  string
+	Hash                 string
+	Model                Model
+	Raw                  json.RawMessage
+	Limit                int64
+	EstimatedVideoTokens int64 `json:",omitempty"`
+	Stream               bool
+	Origin               string
+	Deadline             time.Time
 }
 
 // Receipt persists protocol output before settlement so crash recovery never buys it again.
 type Receipt struct {
-	Pending        bool              `json:"pending,omitempty"`
-	Body           json.RawMessage   `json:"body"`
-	Events         []json.RawMessage `json:"events,omitempty"`
-	Usage          Usage             `json:"usage"`
-	UpstreamID     string            `json:"upstream_id"`
-	PurchaseMicros int64             `json:"purchase_micros"`
+	Pending         bool              `json:"pending,omitempty"`
+	Body            json.RawMessage   `json:"body"`
+	Events          []json.RawMessage `json:"events,omitempty"`
+	Usage           Usage             `json:"usage"`
+	UpstreamID      string            `json:"upstream_id"`
+	PurchaseMicros  int64             `json:"purchase_micros"`
+	PurchasePending bool              `json:"purchase_pending,omitempty"`
+	DeliveryFailed  bool              `json:"delivery_failed,omitempty"`
 }
 
 // Record is the durable response returned by submission, replay or recovery.

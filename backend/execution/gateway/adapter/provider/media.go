@@ -100,7 +100,9 @@ func (t *mediaTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 
 func (c *Client) sendMedia(ctx context.Context, d application.Dispatch, key string) (domain.Receipt, error) {
 	var config catalog.ProviderConfig
-	if json.Unmarshal(d.Route.DriverConfig, &config) != nil || config.Validate() != nil || config.BaseURL != d.Route.BaseURL || !slices.Contains([]string{"image.generate", "video.generate", "audio.generate"}, d.Call.Model.Capability) || !slices.Contains(config.Capabilities, strings.TrimSuffix(d.Call.Model.Capability, ".generate")) || !fixedMediaPrice(d.Route.Purchase) || !fixedMediaPrice(d.Call.Model.Price) || d.Call.Stream {
+	model := d.Call.Model
+	if json.Unmarshal(d.Route.DriverConfig, &config) != nil || config.Validate() != nil || config.BaseURL != d.Route.BaseURL || !slices.Contains([]string{"image.generate", "video.generate", "audio.generate"}, model.Capability) || !slices.Contains(config.Capabilities, strings.TrimSuffix(model.Capability, ".generate")) || !model.AcceptsMediaPrice(d.Route.Purchase) || !model.AcceptsMediaPrice(model.Price) ||
+		model.VideoMetering != nil && config.AdapterKey != "volcengine_ark" || d.Call.Stream {
 		return domain.Receipt{}, mediaPreflightError(d)
 	}
 	if _, installed := providerhttp.GetDriver(config.AdapterKey); !installed {
@@ -166,13 +168,12 @@ func (c *Client) mediaRequest(ctx context.Context, d application.Dispatch, confi
 			if ref.Role != in.References[i].Role || ref.URL == "" && len(ref.ImageBytes) == 0 {
 				return input, application.ErrNotSent
 			}
+			if d.Call.Model.VideoMetering != nil && ref.MediaKind != "image" {
+				return input, application.ErrNotSent
+			}
 		}
 	}
 	return input, nil
-}
-
-func fixedMediaPrice(p domain.Price) bool {
-	return p.Validate() == nil && p.Request > 0 && p.Input == 0 && p.CacheRead == 0 && p.CacheWrite == 0 && p.Output == 0
 }
 
 func mediaReceipt(d application.Dispatch, result operation.GenerationResult) (domain.Receipt, error) {
@@ -192,6 +193,11 @@ func mediaReceipt(d application.Dispatch, result operation.GenerationResult) (do
 			return receipt, domain.ErrUnknown
 		}
 		result.Outcome = operation.ProviderOutcomeCompleted
+	case operation.ProviderTaskFailed, operation.ProviderTaskCancelled, operation.ProviderTaskExpired:
+		if d.Call.Model.VideoMetering == nil || d.PollTask == "" {
+			return receipt, domain.ErrUnknown
+		}
+		receipt.DeliveryFailed = true
 	default:
 		return receipt, domain.ErrUnknown
 	}
@@ -204,9 +210,20 @@ func mediaReceipt(d application.Dispatch, result operation.GenerationResult) (do
 		receipt.UpstreamID = result.ProviderLogID
 	}
 	if !receipt.Pending {
-		// Media v1 is priced explicitly per request. Provider-native usage is
-		// retained in Body for audit and is never fabricated into token usage.
-		receipt.PurchaseMicros, err = d.Route.Purchase.Cost(domain.Usage{})
+		if d.Call.Model.VideoMetering != nil {
+			var usage struct {
+				CompletionTokens int64 `json:"completion_tokens"`
+			}
+			if json.Unmarshal(result.Usage, &usage) == nil {
+				receipt.Usage = domain.Usage{Output: usage.CompletionTokens}
+			}
+			if !receipt.Usage.IsVideoUsage() {
+				receipt.Usage = domain.Usage{}
+				receipt.PurchasePending = true
+				return receipt, nil
+			}
+		}
+		receipt.PurchaseMicros, err = d.Route.Purchase.Cost(receipt.Usage)
 	}
 	return receipt, err
 }

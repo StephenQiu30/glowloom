@@ -269,7 +269,7 @@ SRC-WS-15已按隔离兼容→更新需求／设计／PRD／Plan→替换实现�
 <a id="video-second-price-review"></a>
 <a id="video-token-price-review"></a>
 
-短剧视频已确认按实际计费 Token 结算（SRC-AI-56）。已更新设计、PRD 与验收计划。销售费率和首批可售规格待评审，实际采购账单待核对，网关的 Token 报价、用量回执与交付后结算待实施和验收。 [研究66](workspace/content/research/66-2026-11-21-短剧视频秒价与模型接入对照.md) · [设计41 §7.5](workspace/content/design/41-模型销售定价与结算设计.md#video-token-price) · [Plan36 T-SALE-06](workspace/content/plan/36-模型销售定价与结算执行计划.md#video-token-price)
+短剧视频按实际计费 Token 结算（SRC-AI-56）。一期已接入现有 Go 网关、归档任务和积分账本。隔离 PostgreSQL 与模拟方舟 HTTP 回执覆盖报价、幂等冻结、可播放 MP4 交付后核销、实际用量超限、缺用量保留冻结及凭原任务补录、明确供应商失败释放。Chrome 验证配置表单和预计积分、最高扣费及实际用量展示。首批售卖版本与实际采购账单待核验。 [设计41 §7.5](workspace/content/design/41-模型销售定价与结算设计.md#video-token-price) · [Plan36 T-SALE-06](workspace/content/plan/36-模型销售定价与结算执行计划.md#video-token-price) · [网关验证](backend/tests/aigateway/README.md)
 
 <a id="agent-shot-first-wave-20261112"></a>
 

@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import type {
   GatewayModel,
   GatewayParameter,
+  GatewayVideoMetering,
   ParameterType,
   ParameterValue,
 } from "@/lib/ai-gateway-admin";
@@ -23,6 +24,7 @@ import {
   InputField,
   SelectField,
   TextField,
+  num,
   text,
   uuidPattern,
 } from "./gateway-fields";
@@ -59,8 +61,13 @@ export type MediaDraft = {
   output_policy?: string;
 };
 
-export function MediaModelFields() {
-  const [capability, setCapability] = useState<string>("image.generate");
+export function MediaModelFields({
+  capability,
+  onCapabilityChange,
+}: {
+  capability: string;
+  onCapabilityChange: (capability: string) => void;
+}) {
   const [modes, setModes] = useState([0]);
   const [params, setParams] = useState<number[]>([]);
   const [sequence, setSequence] = useState(1);
@@ -76,7 +83,7 @@ export function MediaModelFields() {
         name="capability"
         options={capabilities}
         value={capability}
-        onChange={(event) => setCapability(event.currentTarget.value)}
+        onChange={(event) => onCapabilityChange(event.currentTarget.value)}
       />
       <FieldSet>
         <FieldLegend variant="label">支持的生成模式</FieldLegend>
@@ -119,6 +126,129 @@ export function MediaModelFields() {
       </FormDetails>
     </FieldGroup>
   );
+}
+
+export function VideoMeterFields() {
+  const [rows, setRows] = useState(["initial"]);
+  return (
+    <FieldSet>
+      <FieldLegend variant="label">视频 Token 计量</FieldLegend>
+      <FieldDescription>
+        填写已核验的估量参数。输出分辨率和画幅从这里生成，时长由创作者选择。
+      </FieldDescription>
+      <FieldGroup className="grid sm:grid-cols-2">
+        <InputField label="输出分辨率" name="video_resolution" />
+        <InputField label="计量帧率" name="meter_fps" type="number" min={1} />
+        <InputField
+          label="每 Token 像素量"
+          name="pixels_per_token"
+          type="number"
+          min={1}
+        />
+        <InputField
+          label="最低计费 Token"
+          name="minimum_tokens"
+          type="number"
+          min={0}
+          required={false}
+        />
+        <InputField
+          label="最短生成时长（秒）"
+          name="video_min_seconds"
+          type="number"
+          min={1}
+        />
+        <InputField
+          label="最长生成时长（秒）"
+          name="video_max_seconds"
+          type="number"
+          min={1}
+        />
+        <InputField
+          label="单次视频 Token 上限"
+          name="max_output"
+          type="number"
+          min={1}
+        />
+      </FieldGroup>
+      <FieldGroup>
+        {rows.map((id, index) => (
+          <FieldGroup
+            key={id}
+            className="grid items-end sm:grid-cols-[1fr_1fr_1fr_auto]"
+          >
+            <Input type="hidden" name="geometry_row" value={id} readOnly />
+            <InputField label={`画幅 ${index + 1}`} name={`ratio_${id}`} />
+            <InputField
+              label={`宽度 ${index + 1}`}
+              name={`width_${id}`}
+              type="number"
+              min={1}
+            />
+            <InputField
+              label={`高度 ${index + 1}`}
+              name={`height_${id}`}
+              type="number"
+              min={1}
+            />
+            {rows.length > 1 && (
+              <RemoveButton
+                label={`移除画幅 ${index + 1}`}
+                onClick={() =>
+                  setRows((items) => items.filter((item) => item !== id))
+                }
+              />
+            )}
+          </FieldGroup>
+        ))}
+        <AddButton
+          label="添加画幅"
+          onClick={() => setRows((items) => [...items, crypto.randomUUID()])}
+        />
+      </FieldGroup>
+    </FieldSet>
+  );
+}
+
+export function readVideoMetering(form: FormData, draft: MediaDraft) {
+  const rows = form.getAll("geometry_row");
+  const ratios = rows.map((id) => text(form, `ratio_${id}`));
+  const resolution = text(form, "video_resolution");
+  const min = num(form, "video_min_seconds");
+  const max = num(form, "video_max_seconds");
+  if (
+    !ratios.length ||
+    new Set(ratios).size !== ratios.length ||
+    min < 1 ||
+    min > max
+  ) {
+    throw new Error("请填写不同画幅和有效的生成时长范围。");
+  }
+  const metering: GatewayVideoMetering = {
+    resolution,
+    frames_per_second: num(form, "meter_fps"),
+    pixels_per_token: num(form, "pixels_per_token"),
+    minimum_tokens: num(form, "minimum_tokens"),
+    geometries: Object.fromEntries(
+      rows.map((id, i) => [
+        ratios[i],
+        { width: num(form, `width_${id}`), height: num(form, `height_${id}`) },
+      ]),
+    ),
+  };
+  const parameters: MediaDraft["parameters"] = {
+    resolution: { type: "string", default: resolution, enum: [resolution] },
+    ratio: { type: "string", default: ratios[0], enum: ratios },
+    duration: { type: "integer", min, max },
+  };
+  if (Object.keys(parameters).some((key) => key in draft.parameters)) {
+    throw new Error("分辨率、画幅和时长请在视频 Token 计量中设置。");
+  }
+  return {
+    ...draft,
+    parameters: { ...draft.parameters, ...parameters },
+    video_metering: metering,
+  };
 }
 
 function AddButton({

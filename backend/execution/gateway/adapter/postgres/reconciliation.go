@@ -32,9 +32,10 @@ func (s *Store) Reconcile(ctx context.Context, in Reconciliation) (domain.Record
 		var row struct {
 			ScopeID, ActorID uuid.UUID
 			ProjectID, RunID *uuid.UUID
-			InputHash, State string
+			InputHash        string
+			Contract         []byte
 		}
-		q := tx.Raw("SELECT scope_id,actor_id,project_id,run_id,input_hash,state FROM ai.request WHERE id=?", in.Request).Scan(&row)
+		q := tx.Raw("SELECT scope_id,actor_id,project_id,run_id,input_hash,contract FROM ai.request WHERE id=?", in.Request).Scan(&row)
 		if q.Error != nil {
 			return q.Error
 		}
@@ -47,7 +48,8 @@ func (s *Store) Reconcile(ctx context.Context, in Reconciliation) (domain.Record
 		if err := tx.Exec("SELECT scope_id FROM ai.account WHERE scope_id=? FOR UPDATE", row.ScopeID).Error; err != nil {
 			return err
 		}
-		if err := tx.Exec("SELECT id FROM ai.request WHERE id=? FOR UPDATE", in.Request).Error; err != nil {
+		var state string
+		if err := tx.Raw("SELECT state FROM ai.request WHERE id=? FOR UPDATE", in.Request).Row().Scan(&state); err != nil {
 			return err
 		}
 		var prior string
@@ -62,6 +64,15 @@ func (s *Store) Reconcile(ctx context.Context, in Reconciliation) (domain.Record
 			var e error
 			out, e = scanRecord(tx, in.Request)
 			return e
+		}
+		var model domain.Model
+		if json.Unmarshal(row.Contract, &model) != nil {
+			return domain.ErrInvalid
+		}
+		if model.VideoMetering != nil && !in.NotCharged {
+			var err error
+			out, err = s.reconcileVideoUsage(ctx, tx, in, digest, state)
+			return err
 		}
 		var attempt struct {
 			Contract []byte
@@ -107,31 +118,36 @@ func (s *Store) Reconcile(ctx context.Context, in Reconciliation) (domain.Record
 		if row.RunID != nil {
 			call.Run = *row.RunID
 		}
-		if err := budgetChange(tx, call, -out.Held, 0); err != nil {
-			return err
-		}
-		if err := money(tx, call, "release", out.Held, -out.Held, 0); err != nil {
-			return err
-		}
-		r := tx.Exec("UPDATE ai.account SET available=available+?,held=held-?,version=version+1 WHERE scope_id=? AND held>=?", out.Held, out.Held, row.ScopeID, out.Held)
-		if r.Error != nil {
-			return r.Error
-		}
-		if r.RowsAffected != 1 {
-			return domain.ErrConflict
-		}
-		if err := tx.Exec("UPDATE ai.hold SET released=amount,closed=true WHERE request_id=? AND NOT closed", in.Request).Error; err != nil {
-			return err
-		}
 		if err := tx.Exec("UPDATE ai.attempt SET state='reconciled' WHERE request_id=? AND state='unknown'", in.Request).Error; err != nil {
 			return err
 		}
-		if err := tx.Exec("UPDATE ai.request SET state='released',updated_at=clock_timestamp() WHERE id=?", in.Request).Error; err != nil {
-			return err
-		}
-		out.State = "released"
-		out.Released = out.Held
-		return nil
+		return releaseHeld(tx, call, &out)
 	})
 	return out, err
+}
+
+// releaseHeld closes the original hold after affirmative terminal evidence.
+func releaseHeld(tx *gorm.DB, call domain.Call, out *domain.Record) error {
+	if err := budgetChange(tx, call, -out.Held, 0); err != nil {
+		return err
+	}
+	if err := money(tx, call, "release", out.Held, -out.Held, 0); err != nil {
+		return err
+	}
+	r := tx.Exec("UPDATE ai.account SET available=available+?,held=held-?,version=version+1 WHERE scope_id=? AND held>=?", out.Held, out.Held, call.Scope, out.Held)
+	if r.Error != nil {
+		return r.Error
+	}
+	if r.RowsAffected != 1 {
+		return domain.ErrConflict
+	}
+	if err := tx.Exec("UPDATE ai.hold SET released=amount,closed=true WHERE request_id=? AND NOT closed", call.ID).Error; err != nil {
+		return err
+	}
+	if err := tx.Exec("UPDATE ai.request SET state='released',updated_at=clock_timestamp() WHERE id=?", call.ID).Error; err != nil {
+		return err
+	}
+	out.State = "released"
+	out.Released = out.Held
+	return nil
 }

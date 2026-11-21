@@ -138,7 +138,22 @@ func (c Creation) Quote(ctx context.Context, a identity.Principal, p uuid.UUID, 
 			return err
 		}
 		confirm := uuid.New()
-		detail := canonical(map[string]any{"version": "gateway.v1", "unit": "credits", "maximum_credits": quote.Credits, "exact_credits": strconv.FormatInt(quote.Credits, 10), "model_version": model.ID})
+		details := map[string]any{"version": "gateway.v1", "unit": "credits", "maximum_credits": quote.Credits, "exact_credits": strconv.FormatInt(quote.Credits, 10), "model_version": model.ID}
+		if call.EstimatedVideoTokens > 0 {
+			price := call.Model.Price
+			credits, err := call.VideoEstimatedCredits()
+			if err != nil {
+				return err
+			}
+			details["unit"] = "per_million_video_tokens"
+			details["currency"] = price.Currency
+			details["unit_price_micros"] = price.Output
+			details["estimated_tokens"] = call.EstimatedVideoTokens
+			details["estimated_credits"] = credits
+			details["exact_credits"] = strconv.FormatInt(credits, 10)
+			details["max_charge_credits"] = strconv.FormatInt(quote.Credits, 10)
+		}
+		detail := canonical(details)
 		out = operation.CreateFreeQuoteResult{OperationID: quote.ID, QuoteMicros: quote.Credits * 100000, QuoteDetail: detail, AvailableMicros: quote.Available * 100000, ExpiresAt: quote.Expires, Confirmable: quote.Available >= quote.Credits, EditorDraft: draft, ConfirmKey: &confirm, FinalPrompt: nativePrompt(model, raw)}
 		if draft != nil {
 			compiled, _ := draft.Compile()

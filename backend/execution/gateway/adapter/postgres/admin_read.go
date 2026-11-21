@@ -74,12 +74,18 @@ func (s *Store) Configuration(ctx context.Context) (map[string]any, error) {
 		}
 		out["quotas"] = quotas
 		var unknown []struct {
-			RequestID uuid.UUID `json:"request_id"`
-			AttemptID uuid.UUID `json:"attempt_id"`
-			ScopeID   uuid.UUID `json:"scope_id"`
-			State     string    `json:"state"`
+			RequestID  uuid.UUID `json:"request_id"`
+			AttemptID  uuid.UUID `json:"attempt_id"`
+			ScopeID    uuid.UUID `json:"scope_id"`
+			State      string    `json:"state"`
+			UpstreamID string    `json:"upstream_id,omitempty"`
 		}
-		if err := tx.Raw("SELECT r.id AS request_id,a.id AS attempt_id,r.scope_id,a.state FROM ai.request r JOIN ai.attempt a ON a.request_id=r.id WHERE a.state='unknown' ORDER BY a.started_at LIMIT 100").Scan(&unknown).Error; err != nil {
+		if err := tx.Raw(`SELECT r.id AS request_id,a.id AS attempt_id,r.scope_id,r.state,
+ COALESCE(a.receipt->>'upstream_id',p.task_id,'') AS upstream_id
+ FROM ai.request r JOIN ai.attempt a ON a.request_id=r.id
+ LEFT JOIN ai.pending p ON p.request_id=r.id AND p.attempt_id=a.id
+ WHERE r.state='unknown' AND (a.state='unknown' OR (a.state='received' AND a.receipt->>'purchase_pending'='true'))
+ ORDER BY a.started_at LIMIT 100`).Scan(&unknown).Error; err != nil {
 			return err
 		}
 		out["unknown"] = unknown

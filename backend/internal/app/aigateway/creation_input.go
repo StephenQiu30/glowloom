@@ -158,7 +158,7 @@ func (c Creation) quoteInput(ctx context.Context, tx *gorm.DB, a identity.Princi
 		if len(params) > 0 && json.Unmarshal(params, &values) != nil {
 			return model, nil, draft, domain.ErrInvalid
 		}
-		resolved, err := c.Runtime.freezeReferences(ctx, tx, a, p, refs)
+		resolved, err := c.Runtime.freezeReferences(ctx, tx, a, p, model, refs)
 		if err != nil {
 			return model, nil, draft, err
 		}

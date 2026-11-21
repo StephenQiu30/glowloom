@@ -74,8 +74,9 @@ func (s *Store) PendingDispatch(ctx context.Context, id uuid.UUID) (application.
 			Route            []byte
 			KeyID            string
 			Ciphertext       []byte
+			HasReceipt       bool
 		}
-		q := tx.Raw(`SELECT r.scope_id,r.actor_id,r.project_id,r.run_id,r.contract AS model,r.deadline,r.state,p.attempt_id AS attempt,p.task_id,a.contract AS route,k.key_id,k.ciphertext FROM ai.request r JOIN ai.pending p ON p.request_id=r.id JOIN ai.attempt a ON a.id=p.attempt_id JOIN ai.credential k ON k.id=a.credential_id WHERE r.id=?`, id).Scan(&row)
+		q := tx.Raw(`SELECT r.scope_id,r.actor_id,r.project_id,r.run_id,r.contract AS model,r.deadline,r.state,p.attempt_id AS attempt,p.task_id,a.contract AS route,k.key_id,k.ciphertext,a.receipt IS NOT NULL AS has_receipt FROM ai.request r JOIN ai.pending p ON p.request_id=r.id JOIN ai.attempt a ON a.id=p.attempt_id JOIN ai.credential k ON k.id=a.credential_id WHERE r.id=?`, id).Scan(&row)
 		if q.Error != nil {
 			return q.Error
 		}
@@ -99,7 +100,7 @@ func (s *Store) PendingDispatch(ctx context.Context, id uuid.UUID) (application.
 		d.Route.KeyID = row.KeyID
 		d.Route.Ciphertext = row.Ciphertext
 		d.PollTask = row.TaskID
-		d.Send = row.State == "pending" || row.State == "unknown"
+		d.Send = !row.HasReceipt && (row.State == "pending" || row.State == "unknown")
 		var err error
 		d.Record, err = scanRecord(tx, id)
 		return err

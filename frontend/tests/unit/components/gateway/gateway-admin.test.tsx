@@ -576,3 +576,38 @@ it("rejects a secret nested inside a nominally supported driver field", async ()
   ).rejects.toThrow();
   expect(send).not.toHaveBeenCalled();
 });
+
+it("stages video Token prices and metering data without using a fixed request price", async () => {
+  const videoMetering = {
+    resolution: "540p",
+    frames_per_second: 30,
+    pixels_per_token: 1024,
+    minimum_tokens: 10,
+    geometries: { "3:2": { width: 810, height: 540 } },
+  };
+  await prepareModel({
+    ...model,
+    protocol: "media",
+    capability: "video.generate",
+    modes: ["text2video"],
+    parameters: {
+      resolution: { type: "string", default: "540p" },
+      ratio: { type: "string", default: "3:2" },
+      duration: { type: "integer" },
+    },
+    output_policy: "provider_success_v1",
+    max_output: 86000,
+    price: { ...price, input: 0, output: 78000000 },
+    video_metering: videoMetering,
+  });
+  expect(send).toHaveBeenCalledWith(
+    "/api/ai/admin/models",
+    expect.objectContaining({
+      data: expect.objectContaining({
+        video_metering: videoMetering,
+        max_output: 86000,
+        price: expect.objectContaining({ output: 78000000, request: 0 }),
+      }),
+    }),
+  );
+});

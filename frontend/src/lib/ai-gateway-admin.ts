@@ -29,6 +29,13 @@ export type MediaDriverOption = {
   parameters: Record<string, string[]>;
   custom_url: boolean;
 };
+export type GatewayVideoMetering = {
+  resolution: string;
+  frames_per_second: number;
+  pixels_per_token: number;
+  minimum_tokens?: number;
+  geometries: Record<string, { width: number; height: number }>;
+};
 export type GatewayModel = {
   id: string;
   name: string;
@@ -43,6 +50,7 @@ export type GatewayModel = {
   modes?: string[];
   parameters?: Record<string, GatewayParameter>;
   output_policy?: string;
+  video_metering?: GatewayVideoMetering;
 };
 export type GatewayRoute = {
   id?: string;
@@ -70,6 +78,7 @@ export type GatewayConfiguration = {
     attempt_id: string;
     scope_id: string;
     state: string;
+    upstream_id?: string;
   }[];
 };
 export type OnboardingSummary = {
@@ -169,6 +178,27 @@ export function validateModel(
     "工具与流式选项须为布尔值",
   );
   const price = validatePrice(value.price);
+  const video = value.video_metering;
+  if (video) {
+    requireValue(
+      value.protocol === "media" &&
+        value.capability === "video.generate" &&
+        value.output_policy === "provider_success_v1" &&
+        video.resolution.trim().length > 0 &&
+        integer(video.frames_per_second, 1) &&
+        integer(video.pixels_per_token, 1) &&
+        integer(video.minimum_tokens ?? 0, 0, value.max_output) &&
+        Object.keys(video.geometries).length > 0 &&
+        Object.entries(video.geometries).every(
+          ([ratio, size]) =>
+            Boolean(ratio.trim()) &&
+            ratio !== "adaptive" &&
+            integer(size.width, 1) &&
+            integer(size.height, 1),
+        ),
+      "视频 Token 计费需要已审核的固定画幅、尺寸、帧率及估量规则",
+    );
+  }
   const result: Omit<GatewayModel, "id"> = {
     name: value.name.trim(),
     protocol: value.protocol,
@@ -194,12 +224,13 @@ export function validateModel(
     requireValue(
       !value.tools &&
         !value.stream &&
-        price.request > 0 &&
         price.input === 0 &&
-        price.output === 0 &&
         price.cache_read === 0 &&
-        price.cache_write === 0,
-      "媒体模型只支持正数按次价，不支持工具或流式",
+        price.cache_write === 0 &&
+        (video
+          ? price.request === 0 && price.output > 0
+          : price.request > 0 && price.output === 0),
+      "请填写与媒体计费方式匹配的正数单价",
     );
     requireValue(
       !value.output_policy || value.output_policy === "provider_success_v1",
@@ -234,6 +265,7 @@ export function validateModel(
       modes: value.modes,
       parameters: value.parameters,
       ...(value.output_policy ? { output_policy: value.output_policy } : {}),
+      ...(video ? { video_metering: video } : {}),
     });
   }
   return result;

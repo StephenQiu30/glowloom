@@ -55,7 +55,19 @@ func prepareMedia(c domain.Call, raw json.RawMessage) (domain.Call, error) {
 	}{c.Scope, c.Actor, c.Project, c.Run, c.Origin, c.Raw}
 	encoded, _ := json.Marshal(hashInput)
 	c.Hash = domain.Digest(encoded)
-	amount, err := c.Model.Price.Cost(domain.Usage{})
+	var bound domain.Usage
+	if c.Model.VideoMetering != nil {
+		if err := c.Model.ValidateVideoInput(c.Project, in); err != nil {
+			return c, err
+		}
+		var err error
+		c.EstimatedVideoTokens, err = c.Model.EstimateVideo(in)
+		if err != nil {
+			return c, err
+		}
+		bound.Output = c.Model.MaxOutput
+	}
+	amount, err := c.Model.Price.Cost(bound)
 	if err != nil {
 		return c, err
 	}

@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	pggateway "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
 	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
@@ -119,10 +120,11 @@ func (c Creation) Control(ctx context.Context, a identity.Principal, p, id uuid.
 			// An active lease, successful completion, or pending review is not reopened.
 			q = tx.Exec(`UPDATE infra.task_work SET failed_at=NULL,failures=0,owner=NULL,lease_until=NULL,
     stop_requested_at=NULL,epoch=epoch+1,next_run_at=?
-    WHERE kind='ai.deliver' AND business_id=? AND failed_at IS NOT NULL AND completed_at IS NULL
+    WHERE kind=? AND business_id=? AND failed_at IS NOT NULL AND completed_at IS NULL
     AND (lease_until IS NULL OR lease_until<=clock_timestamp())
-    AND EXISTS(SELECT 1 FROM ai.request r WHERE r.id=? AND r.state='settled'
-     AND r.contract->>'protocol'='media' AND EXISTS(SELECT 1 FROM ai.attempt a WHERE a.request_id=r.id AND a.receipt IS NOT NULL))`, time.Now(), oid.String(), oid)
+    AND EXISTS(SELECT 1 FROM ai.request r WHERE r.id=?
+     AND (r.state='settled' OR (r.contract->'video_metering' IS NOT NULL AND r.state IN ('received','unknown')))
+     AND r.contract->>'protocol'='media' AND EXISTS(SELECT 1 FROM ai.attempt a WHERE a.request_id=r.id AND a.receipt IS NOT NULL))`, time.Now(), pggateway.DeliveryKind, oid.String(), oid)
 			if q.Error != nil {
 				return q.Error
 			}

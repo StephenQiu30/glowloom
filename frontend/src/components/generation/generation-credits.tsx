@@ -26,6 +26,7 @@ const units: Record<string, string> = {
   per_second: "秒",
   per_request: "次",
   per_1k_tokens: "千 Token",
+  video_tokens: "视频 Token",
   per_1k_chars: "千字符",
 };
 

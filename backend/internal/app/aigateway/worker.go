@@ -26,7 +26,7 @@ func (r *Runtime) RegisterWorker(handlers map[string]taskruntime.Handler) {
 		}
 		return pg.New(r.DB, identity.Principal{}, nil).RecoverStale(ctx, id)
 	}
-	handlers["ai.deliver"] = func(ctx context.Context, job taskruntime.Job) (time.Time, error) {
+	handlers[pg.DeliveryKind] = func(ctx context.Context, job taskruntime.Job) (time.Time, error) {
 		id, err := uuid.Parse(job.BusinessID)
 		if err != nil {
 			return time.Time{}, err
@@ -74,7 +74,7 @@ func (r *Runtime) RegisterWorker(handlers map[string]taskruntime.Handler) {
 		return time.Time{}, err
 	}
 	handlers[pg.ExecutionKind] = (Creation{Runtime: r}).Execute
-	handlers["ai.settle"] = func(ctx context.Context, job taskruntime.Job) (time.Time, error) {
+	handlers[pg.SettlementKind] = func(ctx context.Context, job taskruntime.Job) (time.Time, error) {
 		id, err := uuid.Parse(job.BusinessID)
 		if err != nil {
 			return time.Time{}, err

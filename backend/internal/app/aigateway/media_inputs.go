@@ -60,12 +60,15 @@ func (r *Runtime) referenceFact(ctx context.Context, tx *gorm.DB, a identity.Pri
 	fact = operation.ProjectMediaObject{AssetID: ref.ID, ProjectID: p, LocationID: row.LocationID, ProfileID: row.ProfileID, Bucket: row.Bucket, Key: row.Key, SHA256: row.SHA256, Kind: row.Kind, Role: ref.Role, ByteSize: row.ByteSize}
 	return ref, fact, nil
 }
-func (r *Runtime) freezeReferences(ctx context.Context, tx *gorm.DB, a identity.Principal, p uuid.UUID, refs []domain.Reference) ([]domain.Reference, error) {
+func (r *Runtime) freezeReferences(ctx context.Context, tx *gorm.DB, a identity.Principal, p uuid.UUID, model domain.Model, refs []domain.Reference) ([]domain.Reference, error) {
 	result := make([]domain.Reference, 0, len(refs))
 	for _, ref := range refs {
-		resolved, _, err := r.referenceFact(ctx, tx, a, p, ref)
+		resolved, fact, err := r.referenceFact(ctx, tx, a, p, ref)
 		if err != nil {
 			return nil, err
+		}
+		if model.VideoMetering != nil && fact.Kind != "image" {
+			return nil, domain.ErrInvalid
 		}
 		result = append(result, resolved)
 	}

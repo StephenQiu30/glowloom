@@ -60,12 +60,15 @@ func scanRecord(tx *gorm.DB, id uuid.UUID) (domain.Record, error) {
 		ID, Scope, ModelID      uuid.UUID
 		State                   string
 		Held, Charged, Released int64
-		Receipt                 []byte
+		Receipt, Reconciliation []byte
 		Created                 time.Time
 	}
 	r := tx.Raw(`SELECT r.id,r.scope_id AS scope,r.model_id,r.state,h.amount AS held,h.charged,h.released,r.created_at AS created,
- (SELECT a.receipt FROM ai.attempt a WHERE a.request_id=r.id AND a.receipt IS NOT NULL ORDER BY number DESC LIMIT 1) AS receipt
- FROM ai.request r JOIN ai.hold h ON h.request_id=r.id WHERE r.id=?`, id).Scan(&row)
+ a.receipt, evidence.evidence AS reconciliation
+ FROM ai.request r JOIN ai.hold h ON h.request_id=r.id
+ LEFT JOIN LATERAL (SELECT id,receipt FROM ai.attempt WHERE request_id=r.id AND receipt IS NOT NULL ORDER BY number DESC LIMIT 1) a ON true
+ LEFT JOIN ai.reconciliation evidence ON evidence.attempt_id=a.id AND evidence.request_id=r.id
+ WHERE r.id=?`, id).Scan(&row)
 	if r.Error != nil {
 		return domain.Record{}, r.Error
 	}
@@ -77,6 +80,20 @@ func scanRecord(tx *gorm.DB, id uuid.UUID) (domain.Record, error) {
 		var receipt domain.Receipt
 		if json.Unmarshal(row.Receipt, &receipt) != nil {
 			return result, domain.ErrInvalid
+		}
+		if receipt.PurchasePending && len(row.Reconciliation) > 0 {
+			var evidence videoUsageEvidence
+			if json.Unmarshal(row.Reconciliation, &evidence) != nil {
+				return result, domain.ErrInvalid
+			}
+			if evidence.PurchaseMicros != nil {
+				if evidence.Usage == nil || !evidence.Usage.IsVideoUsage() || *evidence.PurchaseMicros < 0 {
+					return result, domain.ErrInvalid
+				}
+				receipt.Usage = *evidence.Usage
+				receipt.PurchaseMicros = *evidence.PurchaseMicros
+				receipt.PurchasePending = false
+			}
 		}
 		result.Receipt = &receipt
 	}
@@ -162,7 +179,7 @@ func (s *Store) Admit(ctx context.Context, call domain.Call) (application.Dispat
 		return result, domain.ErrInvalid
 	}
 	validated, validateErr := application.Prepare(call.Model, call.Actor, call.Scope, call.Project, call.Run, call.Key, call.Origin, call.Raw)
-	if validateErr != nil || validated.Hash != call.Hash || validated.Limit != call.Limit || validated.Stream != call.Stream {
+	if validateErr != nil || validated.Hash != call.Hash || validated.Limit != call.Limit || validated.Stream != call.Stream || validated.EstimatedVideoTokens != call.EstimatedVideoTokens {
 		return result, domain.ErrInvalid
 	}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -387,8 +404,13 @@ func (s *Store) SaveReceipt(ctx context.Context, request, attempt uuid.UUID, rec
 	}
 	hash := domain.Digest(raw)
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec("SELECT id FROM ai.request WHERE id=? FOR UPDATE", request).Error; err != nil {
+		var modelData []byte
+		if err := tx.Raw("SELECT contract FROM ai.request WHERE id=? FOR UPDATE", request).Row().Scan(&modelData); err != nil {
 			return err
+		}
+		var model domain.Model
+		if json.Unmarshal(modelData, &model) != nil {
+			return domain.ErrInvalid
 		}
 		var row struct {
 			Receipt  []byte
@@ -414,6 +436,12 @@ func (s *Store) SaveReceipt(ctx context.Context, request, attempt uuid.UUID, rec
 		}
 		var route domain.Route
 		if json.Unmarshal(row.Contract, &route) != nil {
+			return domain.ErrInvalid
+		}
+		if model.VideoMetering != nil {
+			return saveVideoReceipt(ctx, tx, request, attempt, row.State, route, receipt, raw, hash)
+		}
+		if receipt.PurchasePending {
 			return domain.ErrInvalid
 		}
 		cost, err := route.Purchase.Cost(receipt.Usage)
@@ -469,6 +497,25 @@ func (s *Store) Settle(ctx context.Context, id uuid.UUID) (domain.Record, error)
 		if json.Unmarshal(row.Contract, &model) != nil {
 			return domain.ErrInvalid
 		}
+		call := domain.Call{ID: id, Scope: row.ScopeID, Actor: row.ActorID, Hash: row.InputHash}
+		if row.ProjectID != nil {
+			call.Project = *row.ProjectID
+		}
+		if row.RunID != nil {
+			call.Run = *row.RunID
+		}
+		if model.VideoMetering != nil {
+			if record.Receipt.DeliveryFailed {
+				return releaseHeld(tx, call, &record)
+			}
+			if record.Receipt.PurchasePending || !record.Receipt.Usage.IsVideoUsage() {
+				return nil
+			}
+			ready, err := videoDeliveryReady(tx, id)
+			if err != nil || !ready {
+				return err
+			}
+		}
 		micros, err := model.Price.Cost(record.Receipt.Usage)
 		if err != nil {
 			return err
@@ -481,13 +528,6 @@ func (s *Store) Settle(ctx context.Context, id uuid.UUID) (domain.Record, error)
 			charge = record.Held
 		}
 		released := record.Held - charge
-		call := domain.Call{ID: id, Scope: row.ScopeID, Actor: row.ActorID, Hash: row.InputHash}
-		if row.ProjectID != nil {
-			call.Project = *row.ProjectID
-		}
-		if row.RunID != nil {
-			call.Run = *row.RunID
-		}
 		if err := budgetChange(tx, call, -record.Held, charge); err != nil {
 			return err
 		}
@@ -513,7 +553,7 @@ func (s *Store) Settle(ctx context.Context, id uuid.UUID) (domain.Record, error)
 		if err := tx.Exec("UPDATE ai.request SET state='settled',updated_at=clock_timestamp() WHERE id=?", id).Error; err != nil {
 			return err
 		}
-		if model.Protocol == "media" {
+		if model.Protocol == "media" && model.VideoMetering == nil {
 			var flags struct {
 				ReconciliationOnly bool `json:"reconciliation_only"`
 			}

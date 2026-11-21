@@ -113,3 +113,25 @@ it("shows only the spending cap when original audio duration is unknown", () => 
   expect(screen.getByText("最多扣 20 积分")).toBeTruthy();
   expect(screen.queryByText(/预计消耗/)).toBeNull();
 });
+
+it("shows the video Token estimate and the independently confirmed cap", () => {
+  render(
+    <QuoteCostDetail
+      amount={10_000_000}
+      detail={{
+        unit: "per_million_video_tokens",
+        estimated_tokens: 86_400,
+        actual_tokens: 93_600,
+        estimated_credits: 87,
+        exact_credits: "87",
+        max_charge_credits: "100",
+      }}
+    />,
+  );
+  expect(screen.getByText("预计消耗 87 积分")).toBeTruthy();
+  expect(screen.getByText("本次最多扣 100 积分")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "费用说明" }));
+  expect(screen.getByText("每百万视频 Token")).toBeTruthy();
+  expect(screen.getByText("93600")).toBeTruthy();
+  expect(screen.queryByText(/不代表最终实扣或费用上限/)).toBeNull();
+});

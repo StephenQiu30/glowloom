@@ -54,7 +54,7 @@ func (c Creation) Estimate(ctx context.Context, a identity.Principal, p uuid.UUI
 				}
 				refs = append(refs, input)
 			}
-			refs, err = c.Runtime.freezeReferences(ctx, tx, a, p, refs)
+			refs, err = c.Runtime.freezeReferences(ctx, tx, a, p, m, refs)
 			if err != nil {
 				return err
 			}
@@ -72,6 +72,14 @@ func (c Creation) Estimate(ctx context.Context, a identity.Principal, p uuid.UUI
 			call, err := application.Prepare(m, a.ID, a.ScopeID, p, uuid.Nil, "estimate", "creation", raw)
 			if err != nil {
 				return err
+			}
+			if m.VideoMetering != nil {
+				credits, err := call.VideoEstimatedCredits()
+				if err != nil {
+					return err
+				}
+				out = operation.GenerationEstimate{Credits: strconv.FormatInt(credits, 10), Kind: "estimate", Basis: "video_tokens", Quantity: strconv.FormatInt(call.EstimatedVideoTokens, 10)}
+				return nil
 			}
 			out = operation.GenerationEstimate{Credits: strconv.FormatInt(call.Limit, 10), Kind: "estimate", Basis: "per_request", Quantity: "1"}
 			return nil

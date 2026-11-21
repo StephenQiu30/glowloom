@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	promptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
+	pggateway "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
 	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
@@ -190,14 +191,33 @@ func (c Creation) Task(ctx context.Context, a identity.Principal, p, id uuid.UUI
 		if err != nil {
 			return err
 		}
+		if call.Model.VideoMetering != nil && record.Receipt != nil && record.Receipt.Usage.IsVideoUsage() {
+			var detail map[string]any
+			if json.Unmarshal(quote.QuoteDetail, &detail) != nil || detail == nil {
+				return domain.ErrInvalid
+			}
+			detail["actual_tokens"] = record.Receipt.Usage.Output
+			out.QuoteDetail = canonical(detail)
+		}
 		reserved, charged, released := record.Held*100000, record.Charged*100000, record.Released*100000
 		out.BillingOutcome = operation.BillingOutcome{ReservedMicros: &reserved, ChargedMicros: &charged, ReleasedMicros: &released, ChargeState: "pending", ProviderSettlementState: "unknown", DeliveryState: "pending", Regenerate: "blocked", Reason: "charge_pending", ReconciliationRequired: true}
 		out.Status = "submitted"
 		switch record.State {
 		case "unknown":
 			out.Status = "unknown"
+			if call.Model.VideoMetering != nil && record.Receipt != nil && record.Receipt.PurchasePending {
+				out.BillingOutcome.ChargeState = "unknown"
+				out.BillingOutcome.Reason = "video_usage_pending"
+				out.BillingOutcome.EvidencePresent = true
+				return projectMediaDelivery(tx, p, id, record, &out)
+			}
 		case "received":
 			out.Status = "succeeded"
+			if call.Model.VideoMetering != nil {
+				out.BillingOutcome.ReconciliationRequired = false
+				out.BillingOutcome.EvidencePresent = record.Receipt != nil
+				return projectMediaDelivery(tx, p, id, record, &out)
+			}
 		case "pending":
 			out.Status = "submitted"
 		case "released":
@@ -206,11 +226,20 @@ func (c Creation) Task(ctx context.Context, a identity.Principal, p, id uuid.UUI
 			out.BillingOutcome.ProviderSettlementState = "released"
 			out.BillingOutcome.ReconciliationRequired = false
 			out.BillingOutcome.Regenerate = "confirm"
+			if call.Model.VideoMetering != nil && record.Receipt != nil && record.Receipt.DeliveryFailed {
+				out.Status = "failed"
+				out.BillingOutcome.DeliveryState = "unrecoverable"
+				out.BillingOutcome.ProviderSettlementState = "unknown"
+				out.BillingOutcome.EvidencePresent = true
+			}
 		case "settled":
 			out.Status = "completed"
 			out.SettledMicros = &charged
 			out.BillingOutcome.ChargeState = "settled"
 			out.BillingOutcome.ProviderSettlementState = "settled"
+			if call.Model.VideoMetering != nil {
+				out.BillingOutcome.ProviderSettlementState = "unknown"
+			}
 			out.BillingOutcome.DeliveryState = "ready"
 			out.BillingOutcome.ReconciliationRequired = false
 			out.BillingOutcome.Regenerate = "confirm"
@@ -225,48 +254,7 @@ func (c Creation) Task(ctx context.Context, a identity.Principal, p, id uuid.UUI
 				return nil
 			}
 			if call.Model.Protocol == "media" {
-				out.Status = "ingesting"
-				out.BillingOutcome.DeliveryState = "pending"
-				var work struct{ Failed bool }
-				if err := tx.Raw("SELECT failed_at IS NOT NULL AS failed FROM infra.task_work WHERE kind='ai.deliver' AND business_id=?", id.String()).Scan(&work).Error; err != nil {
-					return err
-				}
-				if work.Failed {
-					out.BillingOutcome.DeliveryState = "recoverable"
-					out.Status = "failed"
-				}
-				var artifact struct {
-					State   string
-					Summary []byte
-				}
-				if err := tx.Raw("SELECT state,summary FROM ai.output WHERE request_id=?", id).Scan(&artifact).Error; err != nil {
-					return err
-				}
-				if len(artifact.Summary) > 0 {
-					var summary OutputSummary
-					if json.Unmarshal(artifact.Summary, &summary) != nil {
-						return domain.ErrInvalid
-					}
-					status := "pending"
-					if artifact.State == "ready" {
-						out.Status = "completed"
-						out.BillingOutcome.DeliveryState = "ready"
-						status = "passed"
-					}
-					aid := summary.AssetID
-					var present int
-					if err := tx.Raw("SELECT 1 FROM media.media_asset WHERE id=? AND project_id=? AND source_ai_request_id=? AND sha256=? AND NOT is_delete AND status='ready' AND moderation_status='passed'", aid, p, id, summary.SHA256).Scan(&present).Error; err != nil {
-						return err
-					}
-					if artifact.State == "ready" && present != 1 {
-						out.BillingOutcome.DeliveryState = "unrecoverable"
-						out.Outputs = append(out.Outputs, operation.TaskOutput{ID: uuid.NewSHA1(id, []byte("output/0")), Sequence: 0, Kind: summary.Kind, ModerationStatus: "unavailable", CreateTime: record.Created})
-						return nil
-					}
-					out.Outputs = append(out.Outputs, operation.TaskOutput{ID: uuid.NewSHA1(id, []byte("output/0")), Sequence: 0, Kind: summary.Kind, MediaAssetID: &aid, ModerationStatus: status, CreateTime: record.Created})
-					out.CanvasResults = []operation.CanvasHistoryResult{{AssetID: aid, Kind: summary.Kind}}
-				}
-				return nil
+				return projectMediaDelivery(tx, p, id, record, &out)
 			}
 			text, e := resultText(record, call.Model)
 			if e != nil {
@@ -283,6 +271,51 @@ func (c Creation) Task(ctx context.Context, a identity.Principal, p, id uuid.UUI
 		return nil
 	})
 	return out, err
+}
+
+func projectMediaDelivery(tx *gorm.DB, project, id uuid.UUID, record domain.Record, out *operation.TaskDetail) error {
+	out.Status = "ingesting"
+	out.BillingOutcome.DeliveryState = "pending"
+	var work struct{ Failed bool }
+	if err := tx.Raw("SELECT failed_at IS NOT NULL AS failed FROM infra.task_work WHERE kind=? AND business_id=?", pggateway.DeliveryKind, id.String()).Scan(&work).Error; err != nil {
+		return err
+	}
+	if work.Failed {
+		out.BillingOutcome.DeliveryState = "recoverable"
+		out.Status = "failed"
+	}
+	var artifact struct {
+		State   string
+		Summary []byte
+	}
+	if err := tx.Raw("SELECT state,summary FROM ai.output WHERE request_id=?", id).Scan(&artifact).Error; err != nil {
+		return err
+	}
+	if len(artifact.Summary) > 0 {
+		var summary OutputSummary
+		if json.Unmarshal(artifact.Summary, &summary) != nil {
+			return domain.ErrInvalid
+		}
+		status := "pending"
+		if artifact.State == "ready" {
+			out.Status = "completed"
+			out.BillingOutcome.DeliveryState = "ready"
+			status = "passed"
+		}
+		aid := summary.AssetID
+		var present int
+		if err := tx.Raw("SELECT 1 FROM media.media_asset WHERE id=? AND project_id=? AND source_ai_request_id=? AND sha256=? AND NOT is_delete AND status='ready' AND moderation_status='passed'", aid, project, id, summary.SHA256).Scan(&present).Error; err != nil {
+			return err
+		}
+		if artifact.State == "ready" && present != 1 {
+			out.BillingOutcome.DeliveryState = "unrecoverable"
+			out.Outputs = append(out.Outputs, operation.TaskOutput{ID: uuid.NewSHA1(id, []byte("output/0")), Sequence: 0, Kind: summary.Kind, ModerationStatus: "unavailable", CreateTime: record.Created})
+			return nil
+		}
+		out.Outputs = append(out.Outputs, operation.TaskOutput{ID: uuid.NewSHA1(id, []byte("output/0")), Sequence: 0, Kind: summary.Kind, MediaAssetID: &aid, ModerationStatus: status, CreateTime: record.Created})
+		out.CanvasResults = []operation.CanvasHistoryResult{{AssetID: aid, Kind: summary.Kind}}
+	}
+	return nil
 }
 
 // List returns the same new task projection used by direct task queries.

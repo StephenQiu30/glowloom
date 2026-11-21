@@ -37,8 +37,10 @@ import {
 import {
   MediaModelFields,
   MediaProbeFields,
+  VideoMeterFields,
   readMediaModel,
   readMediaProbes,
+  readVideoMetering,
 } from "./gateway-media-fields";
 
 export const protocolLabels: Record<string, string> = {
@@ -60,9 +62,11 @@ const currencyOptions = [
 function PriceFields({
   kind,
   media,
+  videoTokens,
 }: {
   kind: "销售" | "采购";
   media: boolean;
+  videoTokens?: boolean;
 }) {
   const [currency, setCurrency] = useState("CNY");
   const unit = currency === "USD" ? "美元" : "元";
@@ -77,9 +81,11 @@ function PriceFields({
     <FieldSet>
       <FieldLegend>{kind}定价</FieldLegend>
       <FieldDescription>
-        {media
-          ? `每次请求按 ${unit} 计价。`
-          : `输入和输出按 ${unit} / 百万 token 计价。`}
+        {videoTokens
+          ? `按 ${unit} / 百万视频 Token 计价。`
+          : media
+            ? `每次请求按 ${unit} 计价。`
+            : `输入和输出按 ${unit} / 百万 token 计价。`}
       </FieldDescription>
       <FieldGroup>
         <SelectField
@@ -89,7 +95,13 @@ function PriceFields({
           value={currency}
           onChange={(event) => setCurrency(event.currentTarget.value)}
         />
-        {media ? (
+        {videoTokens ? (
+          <InputField
+            label={`${kind}视频 Token 单价`}
+            name="output"
+            {...common}
+          />
+        ) : media ? (
           <InputField label={`${kind}按次价`} name="request" {...common} />
         ) : (
           <FieldGroup className="grid sm:grid-cols-2">
@@ -174,8 +186,12 @@ export function ModelForm({
   onPrepared: (id: string) => void;
 }) {
   const [protocol, setProtocol] = useState("chat");
+  const [capability, setCapability] = useState("image.generate");
+  const [billingUnit, setBillingUnit] = useState("video_tokens");
   const attempt = useRef<{ payload: string; id: string } | null>(null);
   const media = protocol === "media";
+  const video = media && capability === "video.generate";
+  const videoTokens = video && billingUnit === "video_tokens";
   return (
     <form
       aria-label="准备模型与销售价"
@@ -183,13 +199,16 @@ export function ModelForm({
         event.preventDefault();
         const form = new FormData(event.currentTarget);
         void run(async () => {
+          const draft = media ? readMediaModel(form) : undefined;
           const model = {
-            ...(media ? readMediaModel(form) : {}),
+            ...(draft && videoTokens ? readVideoMetering(form, draft) : draft),
             name: text(form, "name"),
             protocol,
             price: readPrice(form),
             max_input: Number(text(form, "max_input") || "32768"),
-            max_output: Number(text(form, "max_output") || "4096"),
+            max_output: videoTokens
+              ? num(form, "max_output")
+              : Number(text(form, "max_output") || "4096"),
             purchase_cap: micros(form, "purchase_cap"),
             tools: !media && form.get("tools") === "on",
             stream: !media && form.get("stream") === "on",
@@ -222,7 +241,10 @@ export function ModelForm({
           />
         </FieldGroup>
         {media ? (
-          <MediaModelFields />
+          <MediaModelFields
+            capability={capability}
+            onCapabilityChange={setCapability}
+          />
         ) : (
           <FieldSet>
             <FieldLegend variant="label">文本能力</FieldLegend>
@@ -232,6 +254,18 @@ export function ModelForm({
             </FieldGroup>
           </FieldSet>
         )}
+        {video && (
+          <SelectField
+            label="视频计费方式"
+            value={billingUnit}
+            onChange={(event) => setBillingUnit(event.currentTarget.value)}
+            options={[
+              ["request", "已有按次合同"],
+              ["video_tokens", "按实际视频 Token"],
+            ]}
+          />
+        )}
+        {videoTokens && <VideoMeterFields />}
         <FormDetails label="能力与使用限制">
           <FieldGroup className="grid sm:grid-cols-2">
             {!media && (
@@ -260,11 +294,12 @@ export function ModelForm({
           </FieldGroup>
         </FormDetails>
         <Separator />
-        <PriceFields kind="销售" media={media} />
+        <PriceFields kind="销售" media={media} videoTokens={videoTokens} />
         <InputField
+          key={videoTokens ? "video-procurement-cap" : "default-procurement-cap"}
           label="单次采购上限（元）"
           name="purchase_cap"
-          value="10"
+          value={videoTokens ? undefined : "10"}
           inputMode="decimal"
           maxLength={18}
           pattern="[0-9]+([.][0-9]{1,6})?"
@@ -600,7 +635,11 @@ function PreparedRouteForm({
           </FieldGroup>
         </FormDetails>
         <Separator />
-        <PriceFields kind="采购" media={media} />
+        <PriceFields
+          kind="采购"
+          media={media}
+          videoTokens={Boolean(model.video_metering)}
+        />
         {media && (
           <>
             <Separator />
@@ -800,7 +839,17 @@ export function ReconciliationForm({
             pattern={uuidPattern}
           />
         </FieldGroup>
-        <InputField label="原始供应商账单凭据" name="reference" />
+        <InputField
+          key={`reference-${selected}`}
+          label="原始供应商账单凭据"
+          name="reference"
+          value={pending?.upstream_id}
+          description={
+            pending?.upstream_id
+              ? "请用该原始任务号核对供应商用量。"
+              : undefined
+          }
+        />
         <InputField label="核对原因" name="reason" />
         <SelectField
           label="供应商账单结果"

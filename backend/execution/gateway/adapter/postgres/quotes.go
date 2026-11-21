@@ -25,7 +25,7 @@ type Quote struct {
 func (s *Store) Quote(ctx context.Context, call domain.Call) (Quote, error) {
 	var result Quote
 	prepared, err := application.Prepare(call.Model, call.Actor, call.Scope, call.Project, call.Run, call.Key, call.Origin, call.Raw)
-	if err != nil || prepared.Hash != call.Hash || prepared.Limit != call.Limit {
+	if err != nil || prepared.Hash != call.Hash || prepared.Limit != call.Limit || prepared.EstimatedVideoTokens != call.EstimatedVideoTokens {
 		return result, domain.ErrInvalid
 	}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
