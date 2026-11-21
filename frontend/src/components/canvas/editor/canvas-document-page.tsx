@@ -109,7 +109,7 @@ function DocumentLoader({
   if (!loaded && query.error)
     return (
       <>
-        <PageError error={query.error} reset={() => void query.mutate()} />
+        <PageError reset={query.requalify} />
         <CanvasRecoveryManager />
       </>
     );
@@ -119,20 +119,19 @@ function DocumentLoader({
     expectedProjectId &&
     String(query.data.projectId) !== expectedProjectId
   )
-    return (
-      <PageError
-        error={new Error("项目画布关联尚未确认，请重新读取")}
-        reset={() => void query.mutate()}
-      />
-    );
+    return <PageError title="画布归属待确认" reset={query.requalify} />;
   if (!loaded) return <CanvasLoading />;
   try {
     fromCanvasGraph(loaded.document.graph);
-  } catch (error) {
+  } catch {
     return (
-      <p role="status" className="p-6">
-        {error instanceof Error ? error.message : "无法读取画布"}
-      </p>
+      <PageError
+        title="画布内容读取失败"
+        reset={() => {
+          setLoaded(null);
+          query.requalify();
+        }}
+      />
     );
   }
   return (

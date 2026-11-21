@@ -475,31 +475,44 @@ it("prioritizes local primary and leaves cleared or bound-video subjects as type
 });
 
 it("removes an expired displayed grant and never substitutes its video original", async () => {
-  previewAPI.media.mockResolvedValue({
-    asset: { id: "asset", revision: 2, kind: "video" },
-    url: "https://media.test/original.mp4",
-    renditions: [
-      {
-        kind: "poster",
-        url: "https://media.test/short.jpg",
-        expires_at: new Date(Date.now() + 150).toISOString(),
-      },
-    ],
-  });
-  render(
-    <CanvasNodeSearch nodes={[videoResult()]} onLocate={vi.fn()}>
-      <button>搜索</button>
-    </CanvasNodeSearch>,
-  );
-  fireEvent.click(screen.getByRole("button", { name: "搜索" }));
-  await waitFor(() =>
-    expect(document.querySelector("img")?.src).toBe(
-      "https://media.test/short.jpg",
-    ),
-  );
-  fireEvent.load(document.querySelector("img")!);
-  await waitFor(() => expect(document.querySelector("img")).toBeNull());
-  expect(document.querySelector("video")).toBeNull();
+  vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+  try {
+    const validityMs = 150;
+    const poster = "https://media.test/short.jpg";
+    previewAPI.media.mockResolvedValue({
+      asset: { id: "asset", revision: 2, kind: "video" },
+      url: "https://media.test/original.mp4",
+      renditions: [
+        {
+          kind: "poster",
+          url: poster,
+          expires_at: new Date(Date.now() + validityMs).toISOString(),
+        },
+      ],
+    });
+    render(
+      <CanvasNodeSearch nodes={[videoResult()]} onLocate={vi.fn()}>
+        <button>搜索</button>
+      </CanvasNodeSearch>,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "搜索" }));
+    });
+
+    const image = document.querySelector("img");
+    expect(image?.src).toBe(poster);
+    expect(document.querySelector("video")).toBeNull();
+    fireEvent.load(image!);
+
+    await act(() => vi.advanceTimersByTimeAsync(validityMs - 1));
+    expect(document.querySelector("img")?.src).toBe(poster);
+    await act(() => vi.advanceTimersByTimeAsync(1));
+    expect(document.querySelector("img")).toBeNull();
+    expect(document.querySelector("video")).toBeNull();
+    expect(previewAPI.media).toHaveBeenCalledTimes(1);
+  } finally {
+    vi.useRealTimers();
+  }
 });
 it("ignores a late subject blob after its search owner closes", async () => {
   const create = vi.fn(),

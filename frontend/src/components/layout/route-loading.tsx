@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { ApplicationLoading } from "./application-state";
 import { PageLoading, loadingLayoutForScreen } from "./loading-state";
 import { PageLayout } from "./page-layout";
-import { resolveScreen, type Screen } from "./routes";
+import { resolveAdminSection, resolveScreen, type Screen } from "./routes";
 
 export function ScreenLoading({
   screen,
@@ -23,7 +23,11 @@ export function ScreenLoading({
     >
       <PageLoading
         layout={layout}
-        heading={layout !== "home" && layout !== "canvas"}
+        heading={
+          layout !== "home" &&
+          layout !== "canvas" &&
+          !resolveAdminSection(screen)
+        }
         className={
           fullBleed && layout !== "home" ? "workspace-page" : undefined
         }

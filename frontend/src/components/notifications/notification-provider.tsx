@@ -108,10 +108,20 @@ function NotificationSession({
   );
   const display = useSWR(
     ["notification-display", identity],
-    () =>
-      signedIn
+    async () => {
+      const value = await (signedIn
         ? getNotificationDisplay()
-        : getPublicAnnouncements({ sessionRecovery: "never" }),
+        : getPublicAnnouncements({ sessionRecovery: "never" }));
+      return {
+        sidebar: value?.sidebar,
+        popup: value?.popup
+          ? requireDisplayAnnouncement(value.popup)
+          : undefined,
+        banner: value?.banner
+          ? requireDisplayAnnouncement(value.banner)
+          : undefined,
+      };
+    },
     {
       shouldRetryOnError: false,
       onSuccess: () => setObservedAt(Date.now()),
@@ -123,7 +133,7 @@ function NotificationSession({
     (!popupClaimed &&
     candidate &&
     !handled.has(`${candidate.id}:${candidate.revision}`)
-      ? requireDisplayAnnouncement(candidate)
+      ? candidate
       : undefined);
   const summary = summaryRead.data
     ? mergeNotificationSummary(written, summaryRead.data)
@@ -135,7 +145,7 @@ function NotificationSession({
     (rawBanner.endless ||
       !rawBanner.ends_at ||
       new Date(rawBanner.ends_at).getTime() > observedAt)
-      ? requireDisplayAnnouncement(rawBanner)
+      ? rawBanner
       : undefined;
   const rawSidebar = display.data?.sidebar;
   const sidebarEnd = rawSidebar?.endless
@@ -211,10 +221,7 @@ function NotificationSession({
       command.current = undefined;
       toast.success("已全部标为已读");
     } catch {
-      if (alive.current) {
-        setReadError(true);
-        toast.error("标记失败，请重试");
-      }
+      if (alive.current) setReadError(true);
     } finally {
       flight.current = false;
       if (alive.current) setPending(false);

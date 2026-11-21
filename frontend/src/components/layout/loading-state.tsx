@@ -27,7 +27,14 @@ export function LoadingState({
 }
 
 export type LoadingLayout =
-  "home" | "grid" | "table" | "list" | "form" | "conversation" | "canvas";
+  | "home"
+  | "grid"
+  | "table"
+  | "list"
+  | "form"
+  | "detail"
+  | "conversation"
+  | "canvas";
 
 export function loadingLayoutForScreen(screen: Screen): LoadingLayout {
   switch (screen) {
@@ -107,7 +114,7 @@ function LoadingBody({ layout }: { layout: LoadingLayout }) {
         <div className="home-page">
           <div className="creation-hero flex flex-col items-center gap-4 md:gap-6">
             <Skeleton className="h-9 w-full max-w-sm md:h-12 md:max-w-md" />
-            <Skeleton className="h-10 w-56 rounded-full max-md:h-12 max-md:w-full" />
+            <Skeleton className="h-10 w-[228px] max-w-full rounded-full max-md:h-12" />
             <div className="flex h-40 w-full flex-col justify-between rounded-3xl border bg-card p-4 max-md:h-54">
               <div className="flex items-start gap-3">
                 <Skeleton className="h-12 w-10 shrink-0 rounded-lg max-md:h-16 max-md:w-12" />
@@ -172,6 +179,14 @@ function LoadingBody({ layout }: { layout: LoadingLayout }) {
               <Skeleton className="h-10 w-full max-md:h-11" />
             </div>
           ))}
+        </div>
+      );
+    case "detail":
+      return (
+        <div className="flex min-h-28 flex-col gap-3 py-2">
+          <Skeleton className="h-4 w-11/12" />
+          <Skeleton className="h-4 w-4/5" />
+          <Skeleton className="h-4 w-2/3" />
         </div>
       );
     case "conversation":

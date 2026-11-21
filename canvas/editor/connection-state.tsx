@@ -1,19 +1,18 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { FeedbackToast } from "@glowloom/canvas-host/components/feedback/feedback-toast";
+import { ContentState } from "@glowloom/canvas-host/components/layout/content-state";
 import { CanvasLoading } from "@glowloom/canvas-host/components/layout/loading-state";
 import { Button } from "@glowloom/canvas-host/components/ui/button";
 
 /** Presentation only: never converts an unconfirmed write into a success. */
 export function canvasConnectionMessage(message: string): string {
   const messages: Record<string, string> = {
-    unsupported_protocol_version:
-      "画布服务版本不兼容，请稍后重试或返回画布列表。",
-    dependency_unavailable: "画布服务暂时不可用，请稍后重试。",
-    forbidden: "当前账号没有访问此画布的权限。",
-    unauthorized: "登录已失效，请重新登录后打开画布。",
-    not_found: "画布不存在或当前账号无法访问。",
-    network_error: "连接已中断，请检查网络后重试。",
+    unsupported_protocol_version: "画布服务版本不兼容",
+    dependency_unavailable: "画布服务暂不可用",
+    forbidden: "无权访问此画布",
+    unauthorized: "登录已失效，请重新登录",
+    not_found: "画布不存在或无权访问",
+    network_error: "画布连接中断",
     MAIN_CANVAS_MANAGED_BY_PROJECT:
       "主画布名称由所属项目管理，请从画布菜单重新命名。已有输入保留在待恢复列表中。",
   };
@@ -36,25 +35,29 @@ export function CanvasConnectionState({
   onRetry: () => void;
   scopeControl?: ReactNode;
 }) {
+  if (!message) return <CanvasLoading message="正在连接画布…" />;
+
   return (
-    <div className="relative min-h-dvh bg-background">
-      {!message && <CanvasLoading message="正在连接画布…" />}
-      <FeedbackToast
-        message={message ? canvasConnectionMessage(message) : ""}
-        action={
-          message && message !== "画布访问权限已失效"
-            ? { label: "重新连接", onClick: onRetry }
-            : undefined
-        }
-      />
-      <div className="absolute inset-x-0 bottom-6 flex justify-center gap-2">
-        {scopeControl &&
-          /forbidden|not_found|权限|无权|空间/.test(message) &&
-          scopeControl}
-        <Button asChild variant="secondary">
-          <Link href="/projects">返回画布列表</Link>
-        </Button>
-      </div>
-    </div>
+    <ContentState
+      className="min-h-dvh"
+      state="error"
+      heading="h1"
+      title={canvasConnectionMessage(message)}
+      actions={
+        <>
+          {scopeControl && /forbidden|not_found|权限|无权|空间/.test(message)
+            ? scopeControl
+            : null}
+          <Button asChild variant="outline" size="feedback">
+            <Link href="/projects">返回画布列表</Link>
+          </Button>
+          {message !== "画布访问权限已失效" && (
+            <Button size="feedback" onClick={onRetry}>
+              重新连接
+            </Button>
+          )}
+        </>
+      }
+    />
   );
 }

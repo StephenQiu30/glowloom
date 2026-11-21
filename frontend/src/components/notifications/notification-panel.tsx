@@ -8,6 +8,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { PageLoading } from "@/components/layout/loading-state";
 import { NotificationInbox } from "./notification-inbox";
 
 export function NotificationPanel({
@@ -57,7 +58,9 @@ export function NotificationPanel({
         <SheetHeader>
           <SheetTitle>消息中心</SheetTitle>
         </SheetHeader>
-        <Suspense>
+        <Suspense
+          fallback={<PageLoading className="px-4" message="正在读取消息" />}
+        >
           <NotificationInbox />
         </Suspense>
       </SheetContent>

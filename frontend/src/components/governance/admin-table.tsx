@@ -108,13 +108,17 @@ export function AdminTable<T extends Row, FilterKey extends string>({
       </SelectionBar>
     ) : null;
   const selectionInToolbar = selection?.inToolbar && selectionBar;
+  const showColumnMenu =
+    ready && !mobile && rows.length > 0 && configurable.length > 0;
+  const hasToolbar =
+    toolbarExtra || actions || selectionInToolbar || showColumnMenu;
 
-  const toolbar = (
+  const toolbar = hasToolbar ? (
     <>
       {toolbarExtra}
       {selectionInToolbar || (
         <>
-          {ready && !mobile && rows.length > 0 && configurable.length > 0 ? (
+          {showColumnMenu ? (
             <ColumnMenu
               columns={configurable.map(({ id, header }) => ({
                 id,
@@ -128,16 +132,13 @@ export function AdminTable<T extends Row, FilterKey extends string>({
         </>
       )}
     </>
-  );
+  ) : null;
 
   return (
     <div className="flex min-w-0 flex-col gap-5">
       {showHeading ? (
         <AdminHeading title={title}>{toolbar}</AdminHeading>
-      ) : toolbarExtra ||
-        actions ||
-        selectionInToolbar ||
-        (ready && !mobile && rows.length > 0 && configurable.length > 0) ? (
+      ) : hasToolbar ? (
         <div className="flex flex-wrap items-center justify-end gap-2">
           {toolbar}
         </div>

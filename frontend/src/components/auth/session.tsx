@@ -4,7 +4,6 @@ import {
   createContext,
   useContext,
   useCallback,
-  useId,
   useEffect,
   useEffectEvent,
   useState,
@@ -39,7 +38,8 @@ import {
   ApplicationLoading,
   ApplicationState,
 } from "@/components/layout/application-state";
-import { toast } from "@/components/feedback/notification";
+import { FeedbackAlert } from "@/components/feedback/feedback-alert";
+import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { projectIntentStore } from "@/components/projects/project-intent-store";
 import { projectPresentationStore } from "@/components/projects/project-presentation-store";
 
@@ -433,7 +433,6 @@ export function SessionGate({
   const session = useOptionalSession();
   const status = useContext(SessionStatusContext);
   const router = useRouter();
-  const noticeID = useId();
   if (!status) throw new Error("SessionGate requires SessionProvider");
   const { guest, publicUnavailable, error, canonicalLink, retry } = status;
   useEffect(() => {
@@ -442,40 +441,50 @@ export function SessionGate({
         loginLocation(window.location.pathname + window.location.search),
       );
   }, [guest, allowGuest, router]);
-  useEffect(() => {
-    if (error && (allowGuest || session))
-      toast(error, {
-        id: noticeID,
-        action: { label: "重试", onClick: retry },
-      });
-    return () => {
-      toast.dismiss(noticeID);
-    };
-  }, [error, allowGuest, session, retry, noticeID]);
-  if (!allowGuest && error && !session)
-    return (
-      <ApplicationState title={error} description="请稍后重试。">
+  const blocked = !allowGuest && !session;
+  let content = children;
+  if (blocked && error) {
+    content = (
+      <ApplicationState title={error}>
         {canonicalLink ? (
-          <a href={canonicalLink}>使用可信网站地址打开</a>
+          <Button asChild size="feedback">
+            <a href={canonicalLink}>使用可信网站地址打开</a>
+          </Button>
         ) : (
-          <Button onClick={retry}>重试</Button>
+          <Button size="feedback" onClick={retry}>
+            重试
+          </Button>
         )}
       </ApplicationState>
     );
-  if (!session && (!allowGuest || (!guest && !publicUnavailable)))
-    return loading ?? <ApplicationLoading message="正在验证登录状态…" />;
-  if (admin && session?.actor.platform_role !== "platform_admin")
-    return (
-      <ApplicationState title="无权访问" description="此页面仅向管理员开放。">
+  } else if (!session && (!allowGuest || (!guest && !publicUnavailable))) {
+    content = loading ?? <ApplicationLoading message="正在验证登录状态…" />;
+  } else if (admin && session?.actor.platform_role !== "platform_admin") {
+    content = (
+      <ApplicationState title="需要管理员权限">
         <Button onClick={() => router.replace("/")}>返回创作</Button>
       </ApplicationState>
     );
+  }
+  const recoverInPage = error && !blocked;
   return (
     <>
-      {error && canonicalLink ? (
-        <a href={canonicalLink}>使用可信网站地址打开</a>
+      <FeedbackToast
+        message={recoverInPage && !canonicalLink ? error : ""}
+        action={{ label: "重试", onClick: retry }}
+      />
+      {recoverInPage && canonicalLink ? (
+        <FeedbackAlert
+          title={error}
+          tone="error"
+          actions={
+            <Button asChild variant="outline" size="feedback">
+              <a href={canonicalLink}>使用可信网站地址打开</a>
+            </Button>
+          }
+        />
       ) : null}
-      {children}
+      {content}
     </>
   );
 }

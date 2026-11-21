@@ -20,6 +20,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ContentState } from "@/components/layout/content-state";
+import { PageLoading } from "@/components/layout/loading-state";
+import { FeedbackAlert } from "@/components/feedback/feedback-alert";
 import {
   requireInboxNotification,
   safeNotificationAction,
@@ -81,6 +83,15 @@ export function NotificationDetail({
   }, [detail.data]);
   const item = detail.data;
   const action = safeNotificationAction(item?.action_path);
+  const retryDetail = (
+    <Button
+      variant="outline"
+      size="feedback"
+      onClick={() => void detail.mutate().catch(() => {})}
+    >
+      重试
+    </Button>
+  );
   return (
     <Dialog
       open
@@ -90,6 +101,7 @@ export function NotificationDetail({
     >
       <DialogContent
         className="notification-surface sm:max-w-[560px] [&_[data-slot=dialog-close]]:size-11"
+        {...(!item && { "aria-describedby": undefined })}
         onCloseAutoFocus={(event) => {
           const replacement = Array.from(
             fallbackFocus.current?.querySelectorAll<HTMLElement>(
@@ -109,31 +121,33 @@ export function NotificationDetail({
           <DialogTitle size="lg" className="pr-10">
             {item?.title ?? "通知详情"}
           </DialogTitle>
-          <DialogDescription>
-            {item
-              ? `${categoryLabel(item.category)} · ${notificationDate(item.occurred_at)}`
-              : "正在读取通知内容"}
-          </DialogDescription>
+          {item ? (
+            <DialogDescription>
+              {categoryLabel(item.category)} ·{" "}
+              {notificationDate(item.occurred_at)}
+            </DialogDescription>
+          ) : null}
         </DialogHeader>
-        {detail.error ? (
+        {!item && detail.isValidating ? (
+          <PageLoading layout="detail" message="正在读取通知" />
+        ) : !item && detail.error ? (
           <ContentState
             className="min-h-32"
             state="error"
             title="通知暂时无法查看"
-            actions={
-              <Button variant="outline" onClick={() => void detail.mutate()}>
-                重试
-              </Button>
-            }
+            actions={retryDetail}
           />
         ) : !item ? (
-          <ContentState
-            className="min-h-32"
-            state="loading"
-            title="正在读取通知"
-          />
+          <PageLoading layout="detail" message="正在读取通知" />
         ) : (
           <>
+            {detail.error && !detail.isValidating ? (
+              <FeedbackAlert
+                tone="error"
+                title="通知刷新失败"
+                actions={retryDetail}
+              />
+            ) : null}
             {item.status === "disabled" || item.status === "expired" ? (
               <p className="text-sm text-muted-foreground">
                 {item.status === "expired" ? "此通知已结束" : "此通知已下线"}

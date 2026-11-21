@@ -69,7 +69,7 @@ it("standalone consumers fall back inline while a pending shell host waits", () 
 });
 
 it("全部管理页导航进入共享顶栏，正文只保留页面内容", async () => {
-  const { AdminWorkspace } =
+  const { AdminHeading, AdminWorkspace } =
     await import("@/components/governance/admin-layout");
   const host = document.createElement("header");
   document.body.appendChild(host);
@@ -77,6 +77,10 @@ it("全部管理页导航进入共享顶栏，正文只保留页面内容", asyn
     const view = render(
       <PageToolbarContext.Provider value={host}>
         <AdminWorkspace active="providers">
+          <AdminHeading title="AI 服务接入" />
+          <AdminHeading title="接入详情">
+            <button>刷新详情</button>
+          </AdminHeading>
           <p>服务管理内容</p>
         </AdminWorkspace>
       </PageToolbarContext.Provider>,
@@ -89,6 +93,18 @@ it("全部管理页导航进入共享顶栏，正文只保留页面内容", asyn
         .getByRole("link", { name: "AI 服务接入" })
         .getAttribute("aria-current"),
     ).toBe("page");
+    const redundantTitle = screen.getByRole("heading", {
+      name: "AI 服务接入",
+      level: 1,
+    });
+    expect(redundantTitle.classList.contains("sr-only")).toBe(true);
+    expect(redundantTitle.closest("header")).toBeNull();
+    const detailTitle = screen.getByRole("heading", {
+      name: "接入详情",
+      level: 1,
+    });
+    expect(detailTitle.classList.contains("sr-only")).toBe(false);
+    expect(screen.getByRole("button", { name: "刷新详情" })).toBeTruthy();
     expect(screen.getByText("服务管理内容")).toBeTruthy();
   } finally {
     host.remove();

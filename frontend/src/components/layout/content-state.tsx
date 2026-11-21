@@ -15,9 +15,10 @@ import { PageLoading, type LoadingLayout } from "./loading-state";
 export function ContentState({
   title,
   description,
-  icon: Icon = Inbox,
+  icon,
   state = "empty",
   variant = "default",
+  heading = "h2",
   actions,
   className,
   loadingLayout,
@@ -27,6 +28,7 @@ export function ContentState({
   icon?: LucideIcon | null;
   state?: "empty" | "error" | "loading";
   variant?: "default" | "workspace";
+  heading?: "h1" | "h2";
   actions?: ReactNode;
   className?: string;
   loadingLayout?: LoadingLayout;
@@ -40,23 +42,22 @@ export function ContentState({
       />
     );
 
+  const Icon =
+    icon === undefined ? (state === "error" ? CircleAlert : Inbox) : icon;
+  const Heading = heading;
   return (
     <Empty
       className={cn("workspace-content-state min-h-64", className)}
       role={state === "error" ? "alert" : undefined}
     >
       <EmptyHeader>
-        {state === "error" ? (
-          <EmptyMedia variant="icon" aria-hidden="true">
-            <CircleAlert />
-          </EmptyMedia>
-        ) : Icon ? (
+        {Icon ? (
           <EmptyMedia variant="icon" aria-hidden="true">
             <Icon />
           </EmptyMedia>
         ) : null}
         <EmptyTitle variant={state === "empty" ? variant : "default"}>
-          <h2>{title}</h2>
+          <Heading>{title}</Heading>
         </EmptyTitle>
         {description ? (
           <EmptyDescription>{description}</EmptyDescription>

@@ -1,11 +1,33 @@
 "use client";
 import Link from "next/link";
 import type { AdminSection } from "@/components/layout/routes";
-import { useEffect, useRef, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  type ReactNode,
+} from "react";
 import { PageToolbar } from "@/components/layout/page-toolbar";
 import { PageHeader } from "@/components/canvas/runtime/components/layout/workspace/page-header";
 import { Toolbar, ToolbarGroup } from "@/components/ui/toolbar";
 import { Button } from "@/components/ui/button";
+
+const adminLinks = [
+  { id: "users", href: "/users", label: "用户管理" },
+  { id: "teams", href: "/platform/teams", label: "团队管理" },
+  { id: "providers", href: "/providers", label: "AI 服务接入" },
+  { id: "models", href: "/models", label: "模型管理" },
+  { id: "settings", href: "/platform/settings", label: "平台设置" },
+  { id: "notifications", href: "/platform/notifications", label: "通知管理" },
+  { id: "health", href: "/health", label: "运行日志", heading: "运行诊断" },
+  { id: "audit", href: "/audit", label: "审计日志" },
+];
+const AdminNavigationTitle = createContext<string | undefined>(undefined);
+
+export function useAdminHeadingInNavigation(title: string) {
+  return title === useContext(AdminNavigationTitle);
+}
 
 function revealNavigationLink(navigation: HTMLElement, link: Element) {
   const viewport = navigation.getBoundingClientRect();
@@ -31,16 +53,6 @@ export function AdminNavigation({ active }: { active: AdminSection }) {
     return () => observer.disconnect();
   }, [active]);
 
-  const links = [
-    { id: "users", href: "/users", label: "用户管理" },
-    { id: "teams", href: "/platform/teams", label: "团队管理" },
-    { id: "providers", href: "/providers", label: "AI 服务接入" },
-    { id: "models", href: "/models", label: "模型管理" },
-    { id: "settings", href: "/platform/settings", label: "平台设置" },
-    { id: "notifications", href: "/platform/notifications", label: "通知管理" },
-    { id: "health", href: "/health", label: "运行日志" },
-    { id: "audit", href: "/audit", label: "审计日志" },
-  ];
   return (
     <nav
       ref={navigationRef}
@@ -50,7 +62,7 @@ export function AdminNavigation({ active }: { active: AdminSection }) {
         revealNavigationLink(event.currentTarget, event.target)
       }
     >
-      {links.map((link) => (
+      {adminLinks.map((link) => (
         <Button
           key={link.id}
           variant={active === link.id ? "secondary" : "ghost"}
@@ -77,12 +89,15 @@ export function AdminWorkspace({
   active: AdminSection;
   children: ReactNode;
 }) {
+  const link = adminLinks.find((item) => item.id === active);
   return (
     <div className="admin-workspace">
       <PageToolbar inHeader>
         <AdminNavigation active={active} />
       </PageToolbar>
-      {children}
+      <AdminNavigationTitle.Provider value={link?.heading ?? link?.label}>
+        {children}
+      </AdminNavigationTitle.Provider>
     </div>
   );
 }
@@ -90,13 +105,20 @@ export function AdminHeading({
   title,
   description,
   children,
+  detail = false,
 }: {
   title: string;
   description?: ReactNode;
   children?: ReactNode;
+  detail?: boolean;
 }) {
+  const inNavigation = useAdminHeadingInNavigation(title);
   return (
-    <PageHeader title={title} description={description}>
+    <PageHeader
+      title={title}
+      description={description}
+      hideTitle={inNavigation && !detail}
+    >
       {children ? (
         <ToolbarGroup
           appearance="plain"

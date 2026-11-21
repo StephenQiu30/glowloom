@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Layers, Plus, RefreshCw } from "lucide-react";
 import { useOptionalSession } from "@/components/auth/session";
 import { ContentState } from "@/components/layout/content-state";
+import { useAdminHeadingInNavigation } from "@/components/governance/admin-layout";
 import { useSpace } from "@/components/spaces/space-context";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -212,6 +213,7 @@ function GatewayConfigurationPage({
 
   const isProviders = entry === "providers";
   const title = isProviders ? "AI 服务接入" : "模型管理";
+  const titleInNavigation = useAdminHeadingInNavigation(title);
   const showListing =
     !inDetail && !stage && (tab !== "onboarding" || !candidate);
   const currentStep =
@@ -239,15 +241,21 @@ function GatewayConfigurationPage({
           <h1
             ref={heading}
             tabIndex={-1}
-            className="text-2xl font-semibold tracking-tight"
+            className={
+              titleInNavigation
+                ? "sr-only"
+                : "text-2xl font-semibold tracking-tight"
+            }
           >
             {title}
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {isProviders
-              ? "管理供应商路由、采购费用和上线验证。"
-              : "管理模型预设、支持能力与销售定价。"}
-          </p>
+          {!titleInNavigation ? (
+            <p className="mt-1 text-sm text-muted-foreground">
+              {isProviders
+                ? "管理供应商路由、采购费用和上线验证。"
+                : "管理模型预设、支持能力与销售定价。"}
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-wrap gap-2">
           <Button

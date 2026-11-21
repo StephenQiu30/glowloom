@@ -93,6 +93,18 @@ it("首次请求失败后，切换创作范围会自动恢复摘要和公告", a
   expect(api.getNotificationDisplay).toHaveBeenCalledTimes(2);
 });
 
+it("无效公告不会中断应用页面或通知摘要", async () => {
+  vi.mocked(api.getNotificationDisplay).mockResolvedValue({
+    banner: { id: "invalid-announcement", title: "无效公告" },
+  });
+  render(tree());
+  await waitFor(() =>
+    expect(screen.getByTestId("count").textContent).toBe("2"),
+  );
+  expect(api.getNotificationDisplay).toHaveBeenCalledOnce();
+  expect(screen.queryByText("无效公告")).toBeNull();
+});
+
 it("暂时断网后的周期重试不被SWR错误缓存停止", async () => {
   vi.useFakeTimers();
   vi.mocked(api.getNotificationSummary)

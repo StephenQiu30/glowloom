@@ -144,7 +144,7 @@ export function AnnouncementAdministration({ id }: { id: string }) {
   }
   return (
     <div className="notification-surface flex min-w-0 flex-col gap-6">
-      <AdminHeading title={content.title ?? "通知详情"}>
+      <AdminHeading title={content.title ?? "通知详情"} detail>
         <Button variant="outline" asChild>
           <Link href={`/platform/notifications/${id}/edit`}>编辑</Link>
         </Button>

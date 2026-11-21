@@ -1,49 +1,58 @@
-import { CircleAlert } from "lucide-react";
+import Link from "next/link";
 import type { ReactNode } from "react";
 import { Brand, BrandMark } from "@/components/brand/brand";
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ContentState } from "./content-state";
 import { PageLoading, type LoadingLayout } from "./loading-state";
 
 /** Shared full-page boundary for session, route and editor startup states. */
 export function ApplicationState({
   title,
-  description,
   children,
 }: {
   title: string;
-  description: ReactNode;
   children?: ReactNode;
 }) {
   return (
     <main className="application-state">
       <div className="application-state-content">
         <Brand wordmark />
-        <Empty role="alert">
-          <EmptyHeader>
-            <EmptyMedia variant="icon" aria-hidden="true">
-              <CircleAlert />
-            </EmptyMedia>
-            <EmptyTitle>
-              <h1>{title}</h1>
-            </EmptyTitle>
-            <EmptyDescription>{description}</EmptyDescription>
-          </EmptyHeader>
-          {children ? (
-            <EmptyContent className="flex-row flex-wrap justify-center gap-2">
-              {children}
-            </EmptyContent>
-          ) : null}
-        </Empty>
+        <ContentState
+          className="min-h-0"
+          state="error"
+          heading="h1"
+          title={title}
+          actions={children}
+        />
       </div>
     </main>
+  );
+}
+
+export function PageFailure({
+  retry,
+  standalone = false,
+  title = "页面加载失败",
+}: {
+  retry: () => void;
+  standalone?: boolean;
+  title?: string;
+}) {
+  const actions = (
+    <>
+      <Button asChild variant="outline" size="feedback">
+        <Link href="/">返回工作台</Link>
+      </Button>
+      <Button size="feedback" onClick={retry}>
+        重试
+      </Button>
+    </>
+  );
+  return standalone ? (
+    <ApplicationState title={title}>{actions}</ApplicationState>
+  ) : (
+    <ContentState state="error" title={title} actions={actions} />
   );
 }
 

@@ -8,7 +8,7 @@ export default function NotFound() {
       <ContentState
         className="min-h-dvh"
         title="页面不存在"
-        description="链接可能已失效，请返回工作区。"
+        heading="h1"
         actions={
           <Button asChild>
             <Link href="/">返回首页</Link>

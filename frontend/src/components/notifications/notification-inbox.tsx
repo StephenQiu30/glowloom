@@ -10,6 +10,9 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ContentState } from "@/components/layout/content-state";
+import { PageLoading } from "@/components/layout/loading-state";
+import { FeedbackAlert } from "@/components/feedback/feedback-alert";
+import { RequestError } from "@/lib/request";
 import { NotificationItems } from "./notification-items";
 import { NotificationDetail } from "./notification-detail";
 import { ReadAllButton } from "./read-all-button";
@@ -31,8 +34,17 @@ export function NotificationInbox() {
     center?.signedIn
       ? ["notification-list", center.identity, category, unread, cursor]
       : null,
-    () =>
-      listNotifications({ category, unread_only: unread, cursor, limit: 20 }),
+    async () => {
+      const result = await listNotifications({
+        category,
+        unread_only: unread,
+        cursor,
+        limit: 20,
+      });
+      if (!Array.isArray(result?.items))
+        throw new RequestError("invalid_notification_response");
+      return { ...result, items: result.items.map(requireInboxNotification) };
+    },
     { shouldRetryOnError: false, refreshInterval: 30000 },
   );
   const previousRevision = useRef(center?.revision);
@@ -45,6 +57,15 @@ export function NotificationInbox() {
     void revalidateInbox().catch(() => {});
   }, [center?.revision, revalidateInbox]);
   const detailId = selected ?? params.get("notification") ?? undefined;
+  const retryList = (
+    <Button
+      variant="outline"
+      size="feedback"
+      onClick={() => void page.mutate().catch(() => {})}
+    >
+      重试
+    </Button>
+  );
   function closeDetail() {
     setSelected(undefined);
     if (params.has("notification"))
@@ -82,27 +103,28 @@ export function NotificationInbox() {
           </Field>
           <ReadAllButton />
         </div>
+        {center?.readAllError ? (
+          <FeedbackAlert tone="error" title="标记已读失败" />
+        ) : null}
+        {page.data && page.error && !page.isValidating ? (
+          <FeedbackAlert
+            tone="error"
+            title="消息刷新失败"
+            actions={retryList}
+          />
+        ) : null}
         <TabsContent value={category} className="flex min-h-0 flex-1 flex-col">
           <ScrollArea
             className="min-h-0 flex-1"
             key={`${category}:${unread}:${cursor ?? "first"}`}
           >
-            {page.error ? (
+            {!page.data && page.isValidating ? (
+              <PageLoading message="正在读取消息" />
+            ) : !page.data && page.error ? (
               <ContentState
-                className="min-h-64"
                 state="error"
                 title="消息读取失败"
-                actions={
-                  <Button variant="outline" onClick={() => void page.mutate()}>
-                    重新读取
-                  </Button>
-                }
-              />
-            ) : page.isLoading ? (
-              <ContentState
-                className="min-h-64"
-                state="loading"
-                title="正在读取消息"
+                actions={retryList}
               />
             ) : !page.data?.items?.length ? (
               <ContentState
@@ -111,7 +133,7 @@ export function NotificationInbox() {
               />
             ) : (
               <NotificationItems
-                items={page.data.items.map(requireInboxNotification)}
+                items={page.data.items}
                 onSelect={(item, target) => {
                   focus.current = target;
                   setSelected(item.id);

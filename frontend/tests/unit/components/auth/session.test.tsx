@@ -81,7 +81,7 @@ it("a startup 503 keeps the canvas location and never opens login", async () => 
   }
 });
 vi.mock("@/components/feedback/notification", () => ({
-  toast: Object.assign(notifications.show, { dismiss: notifications.dismiss }),
+  toast: { error: notifications.show, dismiss: notifications.dismiss },
 }));
 afterEach(() => {
   navigation.pathname = "/";
