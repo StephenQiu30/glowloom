@@ -35,12 +35,10 @@ func TestOperationTaskResumesAfterWorkerRestartOnLocalServices(t *testing.T) {
 	if os.Getenv("GLOWLOOM_TEST_OPERATION_STORE_DB_DSN") == "" || os.Getenv("GLOWLOOM_OBJECT_STORAGE_CONFIG") == "" {
 		t.Skip("set isolated PostgreSQL and object-storage fixture configuration")
 	}
-	ctx, cancel := context.WithTimeout(t.Context(), 120*time.Second)
-	defer cancel()
-	database := operationStoreDB(t).WithContext(ctx)
+	testDB := operationStoreDB(t)
 	objects := businessStorageRegistry(t)
 	require.NotNil(t, objects, "configured object-storage profile is required for this explicit fixture")
-	require.NoError(t, objects.Ping(ctx))
+	require.NoError(t, objects.Ping(t.Context()))
 	var picture bytes.Buffer
 	img := image.NewRGBA(image.Rect(0, 0, 2, 3))
 	img.Set(0, 0, color.RGBA{R: 255, A: 255})
@@ -52,11 +50,15 @@ func TestOperationTaskResumesAfterWorkerRestartOnLocalServices(t *testing.T) {
 	defer server.Close()
 	pool := x509.NewCertPool()
 	pool.AddCert(server.Certificate())
-	receipts := operationapp.NewRoutedProviderStageService(staging.NewRoutedFactory(objects, pgmedia.NewStorageRoutes(database)), operationStore(database))
-	media, err := mediaflow.NewRoutedScopedActivitiesWithStaging(database, objects, mediaflow.DownloadPolicy{AllowedOrigins: []string{server.URL}, AllowTestLoopbackTLS: true, TLSRootCAs: pool}, staged.NewReader(receipts), app.NewMediaWorkerScopeAccess)
-	require.NoError(t, err)
 	for _, outcome := range []string{"accepted", "unknown"} {
 		t.Run(outcome, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 120*time.Second)
+			defer cancel()
+			database := testDB.WithContext(ctx)
+			routes := pgmedia.NewStorageRoutes(database)
+			receipts := operationapp.NewRoutedProviderStageService(staging.NewRoutedFactory(objects, routes), operationStore(database))
+			media, err := mediaflow.NewRoutedScopedActivitiesWithStaging(database, objects, mediaflow.DownloadPolicy{AllowedOrigins: []string{server.URL}, AllowTestLoopbackTLS: true, TLSRootCAs: pool}, staged.NewReader(receipts), app.NewMediaWorkerScopeAccess)
+			require.NoError(t, err)
 			id, project := seedLiveMockOperation(t, database, server.URL, outcome)
 			businessPinOperation(t, database, operationapp.ProviderDispatchIdentity{OperationID: id, ProjectID: project})
 			unrelated, unrelatedProject := seedLiveMockOperation(t, database, server.URL, "accepted")
@@ -73,6 +75,15 @@ func TestOperationTaskResumesAfterWorkerRestartOnLocalServices(t *testing.T) {
 			operationflow.RegisterFlow(h, s, f, nil)
 			operationflow.RegisterProvider(h, s, nil)
 			operationflow.RegisterMedia(h, s, media, nil)
+			for kind, handler := range h {
+				h[kind] = func(ctx context.Context, job taskruntime.Job) (time.Time, error) {
+					next, err := handler(ctx, job)
+					if err != nil && ctx.Err() == nil {
+						t.Logf("%s attempt %d: %v", kind, job.Attempt, err)
+					}
+					return next, err
+				}
+			}
 			require.NoError(t, taskruntime.Enqueue(ctx, database, "operation.run", id.String(), time.Now()))
 			stop := operationTestWorker(t, database, id, h)
 			waitForOperationStatus(ctx, t, database, id, "submitted")
