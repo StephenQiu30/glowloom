@@ -266,6 +266,11 @@ SRC-WS-15已按隔离兼容→更新需求／设计／PRD／Plan→替换实现�
 
 后台可发布备用线路、调整 Key 准入、共享并发额度、倍率与折扣。隔离 PostgreSQL 已验证并发争抢、派发前换路、连接未建立时的一次备线尝试及采购价归属。浏览器通过实际接口验证线路发布与 91/114 积分试算。DeepSeek Flash 实单已完成。火山方舟实单、同规格双渠道及采购凭证见[验收记录](workspace/content/research/50-2026-11-13-模型号池与销售计费验收.md)。后台可查看实际尝试、连接及 Key 尾号。连接前失败使用 15 秒冷却。仅销售价格变化时可保留旧报价，已核验冻结线路版本。跨供应商同规格实单及供应商账单验收待完成。[Plan35](workspace/content/plan/35-模型号池接入与路由执行计划.md) · [Plan36](workspace/content/plan/36-模型销售定价与结算执行计划.md)
 
+<a id="video-second-price-review"></a>
+<a id="video-token-price-review"></a>
+
+短剧视频已确认按实际计费 Token 结算（SRC-AI-56）。已更新设计、PRD 与验收计划。销售费率和首批可售规格待评审，实际采购账单待核对，网关的 Token 报价、用量回执与交付后结算待实施和验收。 [研究66](workspace/content/research/66-2026-11-21-短剧视频秒价与模型接入对照.md) · [设计41 §7.5](workspace/content/design/41-模型销售定价与结算设计.md#video-token-price) · [Plan36 T-SALE-06](workspace/content/plan/36-模型销售定价与结算执行计划.md#video-token-price)
+
 <a id="agent-shot-first-wave-20261112"></a>
 
 ## Agent与单镜首轮闭环实施（2026-11-12）
