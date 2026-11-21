@@ -450,6 +450,28 @@ export function AssetCanvasList({
           title="正在读取画布"
         />
       )}
+      {recent &&
+        kind === "short_drama" &&
+        !pending &&
+        !error &&
+        page?.items.length === 0 && (
+          <ContentState
+            icon={null}
+            className="studio-projects-empty"
+            title="暂无短剧"
+            actions={
+              <Button
+                disabled={locked || !writable}
+                onClick={() => {
+                  setTemplate(undefined);
+                  setCreating(true);
+                }}
+              >
+                短剧画布
+              </Button>
+            }
+          />
+        )}
       {!pending &&
         !error &&
         !page?.items.length &&

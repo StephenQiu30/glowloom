@@ -24,7 +24,7 @@ export function ContentState({
 }: {
   title: string;
   description?: ReactNode;
-  icon?: LucideIcon;
+  icon?: LucideIcon | null;
   state?: "empty" | "error" | "loading";
   variant?: "default" | "workspace";
   actions?: ReactNode;
@@ -46,9 +46,15 @@ export function ContentState({
       role={state === "error" ? "alert" : undefined}
     >
       <EmptyHeader>
-        <EmptyMedia variant="icon" aria-hidden="true">
-          {state === "error" ? <CircleAlert /> : <Icon />}
-        </EmptyMedia>
+        {state === "error" ? (
+          <EmptyMedia variant="icon" aria-hidden="true">
+            <CircleAlert />
+          </EmptyMedia>
+        ) : Icon ? (
+          <EmptyMedia variant="icon" aria-hidden="true">
+            <Icon />
+          </EmptyMedia>
+        ) : null}
         <EmptyTitle variant={state === "empty" ? variant : "default"}>
           <h2>{title}</h2>
         </EmptyTitle>

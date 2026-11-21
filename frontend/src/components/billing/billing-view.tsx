@@ -99,7 +99,11 @@ export function BillingView({
       <section className="billing-page">
         <Tabs value={section} activationMode="manual" className="gap-6">
           <div className="overflow-x-auto">
-            <TabsList variant="workspace" aria-label="账务导航">
+            <TabsList
+              variant="surface"
+              aria-label="账务导航"
+              className="min-w-max"
+            >
               {(
                 ["overview", "transactions", "recharge", "membership"] as const
               ).map((key) => (

@@ -153,7 +153,7 @@ it("a bookmarked query restores its media, selected filters and server search on
 
 it("keyboard focus can switch asset-source tabs without losing the current source URL", async () => {
   render(<AssetWorkspace />);
-  await screen.findByText("暂无相关资产");
+  await screen.findByText("暂无生成历史");
   const historyTab = screen.getByRole("tab", { name: "生成历史" });
   act(() => historyTab.focus());
   fireEvent.keyDown(historyTab, { key: "ArrowRight" });
@@ -171,7 +171,7 @@ it("keyboard focus can switch asset-source tabs without losing the current sourc
 
 it("media and legacy-canvas state survive URL navigation back to the asset source", async () => {
   render(<AssetWorkspace />);
-  await screen.findByText("暂无相关资产");
+  await screen.findByText("暂无生成历史");
   fireEvent.click(screen.getByRole("radio", { name: "视频" }));
   await waitFor(() =>
     expect(new URLSearchParams(location.search).get("kind")).toBe("video"),
@@ -204,7 +204,7 @@ it("media and legacy-canvas state survive URL navigation back to the asset sourc
 
 it("date validation stays inline, associates the invalid input and returns keyboard focus", async () => {
   render(<AssetWorkspace />);
-  await screen.findByText("暂无相关资产");
+  await screen.findByText("暂无生成历史");
   fireEvent.click(screen.getByRole("button", { name: "时间" }));
   const from = screen.getByLabelText("开始日期");
   fireEvent.change(from, { target: { value: "2026-10-28" } });
@@ -246,7 +246,10 @@ const task = {
 
 it("默认读取本人图片生成历史，原上传素材不冒充历史", async () => {
   render(<AssetWorkspace />);
-  await screen.findByText("暂无相关资产");
+  await screen.findByText("暂无生成历史");
+  expect(
+    screen.getByRole("link", { name: "开始创作" }).getAttribute("href"),
+  ).toBe("/");
   expect(state.history).toHaveBeenCalledWith(
     expect.objectContaining({ kind: "image", order: "desc" }),
     expect.objectContaining({ signal: expect.any(AbortSignal) }),
@@ -307,15 +310,15 @@ it("错误与空账户分开，重试读取真实接口", async () => {
   state.history.mockRejectedValueOnce(new RequestError("unavailable", 503));
   render(<AssetWorkspace />);
   await screen.findByText("暂时无法读取生成历史");
-  expect(screen.queryByText("暂无相关资产")).toBeNull();
+  expect(screen.queryByText("暂无生成历史")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "重试读取" }));
-  await screen.findByText("暂无相关资产");
+  await screen.findByText("暂无生成历史");
   expect(state.history).toHaveBeenCalledTimes(2);
 });
 
 it("切到短剧只查询显式短剧分类，不用项目或视频列表冒充", async () => {
   render(<AssetWorkspace />);
-  await screen.findByText("暂无相关资产");
+  await screen.findByText("暂无生成历史");
   fireEvent.mouseDown(screen.getByRole("tab", { name: "短剧工作室" }), {
     button: 0,
     ctrlKey: false,
@@ -342,7 +345,7 @@ it("同账号切换空间会取消旧请求，旧结果不能进入新空间", a
   const first = state.history.mock.calls[0][1].signal as AbortSignal;
   state.scope = "55555555-5555-4555-8555-555555555555";
   view.rerender(<AssetWorkspace />);
-  await screen.findByText("暂无相关资产");
+  await screen.findByText("暂无生成历史");
   expect(first.aborted).toBe(true);
   await act(async () => {
     finish?.({ items: [task], next_cursor: null });
@@ -411,7 +414,7 @@ it("未通过审核的媒体身份不能被摘要用来加载预览", async () =
   render(<AssetWorkspace />);
   await screen.findByText("暂时无法读取生成历史");
   expect(screen.queryByText("媒体预览")).toBeNull();
-  expect(screen.queryByText("暂无相关资产")).toBeNull();
+  expect(screen.queryByText("暂无生成历史")).toBeNull();
 });
 
 it("画布卡片使用实际画布ID和项目上下文打开", async () => {
@@ -712,7 +715,7 @@ it("删除结果未知只提示Toast并保留同一请求重试", async () => {
 });
 it("高级筛选按组发CSV，切换媒体清理不兼容条件", async () => {
   render(<AssetWorkspace />);
-  await screen.findByText("暂无相关资产");
+  await screen.findByText("暂无生成历史");
   fireEvent.pointerDown(screen.getByRole("button", { name: "筛选资产" }), {
     button: 0,
     ctrlKey: false,
@@ -1015,7 +1018,7 @@ it("权限拒绝不会显示为空列表或可操作旧数据", async () => {
   state.history.mockRejectedValue(new RequestError("forbidden", 403));
   render(<AssetWorkspace />);
   await screen.findByText("无权查看此空间的生成历史");
-  expect(screen.queryByText("暂无相关资产")).toBeNull();
+  expect(screen.queryByText("暂无生成历史")).toBeNull();
   expect(
     screen.getByRole("button", { name: "批量操作" }).hasAttribute("disabled"),
   ).toBe(true);
@@ -1073,7 +1076,12 @@ it("短剧工作室仅读取最近短剧，并使用真实短剧画布创建合�
   expect(screen.getByRole("link", { name: "全部" }).getAttribute("href")).toBe(
     "/assets?view=short_drama",
   );
-  fireEvent.click(screen.getByRole("button", { name: "短剧画布" }));
+  fireEvent.click(
+    within(screen.getByRole("region", { name: "我的短剧" })).getByRole(
+      "button",
+      { name: "短剧画布" },
+    ),
+  );
   await waitFor(() =>
     expect(state.push).toHaveBeenCalledWith(
       `/canvas?project_id=${task.project_id}&canvas_id=${task.id}`,

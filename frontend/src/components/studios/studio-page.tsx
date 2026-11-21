@@ -1,10 +1,10 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowUpRight, AtSign, Plus, Upload, X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { PageLayout } from "@/components/layout/page-layout";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,7 +24,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useOptionalSession } from "@/components/auth/session";
 import { useSpace } from "@/components/spaces/space-context";
 import { useLoginDialog } from "@/components/layout/basic-layout";
@@ -130,6 +129,7 @@ function StudioWorkspace({
 }) {
   const marketing = kind === "marketing";
   const promptID = useId();
+  const styleTrigger = useRef<HTMLButtonElement>(null);
   const [prompt, setPrompt] = useState("");
   const [style, setStyle] = useState("");
   const [styleOpen, setStyleOpen] = useState(false);
@@ -166,7 +166,6 @@ function StudioWorkspace({
               }
             >
               查看资产
-              <ArrowUpRight aria-hidden="true" data-icon="inline-end" />
             </Link>
           </Button>
         </header>
@@ -177,20 +176,21 @@ function StudioWorkspace({
           <div className="studio-composer-input">
             <div className="studio-references">
               <Button
+                ref={styleTrigger}
                 type="button"
-                variant="secondary"
+                variant="ghost"
                 className="studio-reference"
                 onClick={() => setStyleOpen(true)}
                 aria-label="选择参考风格"
               >
-                {style || (marketing ? "风格" : "参考风格")}
+                {style || "参考风格"}
               </Button>
               {marketing &&
                 ["商品", "角色"].map((target) => (
                   <Button
                     key={target}
                     type="button"
-                    variant="secondary"
+                    variant="ghost"
                     className="studio-reference"
                     onClick={() => chooseSource(target)}
                   >
@@ -214,56 +214,26 @@ function StudioWorkspace({
             </Field>
           </div>
           <div className="studio-parameters">
-            {marketing ? (
-              <>
-                <span className="px-2 text-sm">视频生成</span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => chooseSource("参考内容")}
-                >
-                  <Plus />
-                  参考内容
-                </Button>
-              </>
-            ) : (
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => chooseSource("参考内容")}
-              >
-                <Upload />
-                参考内容
-              </Button>
-            )}
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => chooseSource("参考内容")}
+            >
+              <Plus aria-hidden="true" data-icon="inline-start" />
+              参考内容
+            </Button>
             <Parameter
               label="画幅"
               value={ratio}
               values={["16:9", "9:16", "1:1"]}
               onChange={setRatio}
             />
-            {marketing && (
-              <span className="text-sm text-muted-foreground">720P</span>
-            )}
             <Parameter
               label="时长"
               value={duration}
               values={["5s", "10s", "15s"]}
               onChange={setDuration}
             />
-            {!marketing && (
-              <>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label="引用参考内容"
-                  onClick={() => chooseSource("参考内容")}
-                >
-                  <AtSign />
-                </Button>
-              </>
-            )}
             <div className="studio-submit">
               <span
                 id={`${promptID}-availability`}
@@ -312,37 +282,26 @@ function StudioWorkspace({
             </div>
           )}
         </form>
-        <section
-          aria-labelledby={`${promptID}-templates`}
-          className="flex min-w-0 flex-col gap-3"
-        >
+        <section aria-labelledby={`${promptID}-templates`} className="min-w-0">
           <div className="workspace-section-heading">
             <h2 id={`${promptID}-templates`}>
               {marketing ? "创作模板" : "参考风格"}
             </h2>
+            {marketing && (
+              <Parameter
+                label="营销模板分类"
+                value={category}
+                values={[
+                  "全部",
+                  "社媒营销",
+                  "商品展示",
+                  "创意广告",
+                  "营销海报",
+                ]}
+                onChange={setCategory}
+              />
+            )}
           </div>
-          {marketing && (
-            <ToggleGroup
-              variant="workspace"
-              size="toolbar"
-              spacing={0}
-              type="single"
-              value={category}
-              onValueChange={(value) => {
-                if (value) setCategory(value);
-              }}
-              className="studio-template-categories"
-              aria-label="营销模板分类"
-            >
-              {["全部", "社媒营销", "商品展示", "创意广告", "营销海报"].map(
-                (value) => (
-                  <ToggleGroupItem value={value} key={value}>
-                    {value}
-                  </ToggleGroupItem>
-                ),
-              )}
-            </ToggleGroup>
-          )}
           <div className="studio-template-grid">
             {styles
               .filter(
@@ -385,7 +344,7 @@ function StudioWorkspace({
                 <Button
                   key={title}
                   type="button"
-                  variant="outline"
+                  variant="secondary"
                   onClick={() => setTool(title)}
                 >
                   {title}
@@ -396,7 +355,13 @@ function StudioWorkspace({
         )}
       </div>
       <Dialog open={styleOpen} onOpenChange={setStyleOpen}>
-        <DialogContent className="sm:max-w-3xl">
+        <DialogContent
+          className="sm:max-w-3xl"
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            styleTrigger.current?.focus();
+          }}
+        >
           <DialogTitle>选择参考风格</DialogTitle>
           <DialogDescription>
             选择一个风格，添加到当前创作想法。

@@ -37,7 +37,7 @@ it.each(["actor", "space"] as const)(
     const view = render(<ShortDramaStudio />);
     const editor = screen.getByLabelText("剧本创作要求");
     fireEvent.change(editor, { target: { value: "私人创作要求" } });
-    fireEvent.click(screen.getByRole("button", { name: "立即生成" }));
+    fireEvent.click(screen.getByRole("button", { name: "开始创作" }));
     expect(screen.getByRole("dialog", { name: "新建短剧项目" })).toBeTruthy();
 
     context[field] = `${field}-b`;
@@ -47,7 +47,7 @@ it.each(["actor", "space"] as const)(
       (screen.getByLabelText("剧本创作要求") as HTMLTextAreaElement).value,
     ).toBe("");
     expect(
-      screen.getByRole("button", { name: "立即生成" }).hasAttribute("disabled"),
+      screen.getByRole("button", { name: "开始创作" }).hasAttribute("disabled"),
     ).toBe(true);
   },
 );

@@ -7,6 +7,7 @@ import { Toolbar } from "@/components/ui/toolbar";
 import { AssetToolbarButton } from "./asset-toolbar-button";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import {
   applyPersonalHistoryCommand,
   getOperation,
@@ -611,18 +612,23 @@ export function PersonalHistoryList({
       )}
       {!pending && !error && !cards.length && (
         <ContentState
-          variant="workspace"
+          className="asset-history-empty"
+          icon={null}
           title={
             hasAssetFilters(filters)
               ? "当前已开启筛选，部分内容可能被隐藏"
-              : "暂无相关资产"
+              : "暂无生成历史"
           }
           actions={
             hasAssetFilters(filters) ? (
               <Button variant="ghost" onClick={onClear}>
                 清除全部条件
               </Button>
-            ) : undefined
+            ) : (
+              <Button asChild>
+                <Link href="/">开始创作</Link>
+              </Button>
+            )
           }
         />
       )}

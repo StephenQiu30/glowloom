@@ -28,6 +28,10 @@
   gap: clamp(6px, 1cqi, 12px);
   justify-content: flex-start;
 }
+.categories [data-state="active"] {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
 .sceneList {
   gap: clamp(6px, 1cqi, 12px);
 }

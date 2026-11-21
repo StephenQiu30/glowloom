@@ -20,7 +20,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { StudioComposer } from "./studio-composer";
 import { saveStudioInput, type StudioInput } from "./studio-input";
-import styles from "./studio.module.css";
 
 const modes = [
   { id: "upload", label: "上传剧本", icon: FileText },
@@ -61,16 +60,14 @@ function StudioWorkspace() {
     locked || Boolean(session && (pending || !selected?.writable));
 
   return (
-    <div
-      className={`${styles.studio} mx-auto flex w-full max-w-6xl flex-col gap-8 pb-8 md:gap-10`}
-    >
+    <div className="flex w-full min-w-0 flex-col gap-8 pb-8 md:gap-10">
       <section
         aria-labelledby="short-drama-title"
-        className={`${styles.hero} mx-auto flex w-full max-w-[1000px] flex-col gap-4 md:gap-6`}
+        className="flex w-full flex-col gap-4"
       >
         <h1
           id="short-drama-title"
-          className="text-center text-2xl font-semibold md:text-3xl"
+          className="text-2xl font-semibold md:text-3xl"
         >
           短剧工作室
         </h1>

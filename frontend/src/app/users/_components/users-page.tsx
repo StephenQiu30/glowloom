@@ -22,7 +22,7 @@ import { BatchDialog } from "@/components/governance/batch-dialog";
 import { userBatchAction } from "@/components/governance/batch-actions";
 import { Badge } from "@/components/ui/badge";
 import { ColumnMenu } from "@/components/governance/column-menu";
-import { ChevronDown, Plus } from "lucide-react";
+import { ChevronDown, Ellipsis, Plus } from "lucide-react";
 import {
   Collapsible,
   CollapsibleContent,
@@ -52,6 +52,13 @@ import { useSession } from "@/components/auth/session";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field, FieldLabel } from "@/components/ui/field";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const defaultFilters = {
   search: "",
@@ -98,6 +105,7 @@ function UserAdministration() {
   const [cursors, setCursors] = useState<string[]>([""]);
   const [pageSize, setPageSize] = useState(20);
   const [advanced, setAdvanced] = useState(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const filterId = useId();
   const appliedAdvancedCount =
     Number(filters.verified !== undefined) +
@@ -112,6 +120,12 @@ function UserAdministration() {
       setRetry((n) => n + 1);
     });
   const locked = pending || forbidden || batch.busy || batch.unresolved;
+  const refreshDisabled = pending || batch.busy || batch.unresolved;
+  function refresh() {
+    setPending(true);
+    setForbidden(false);
+    setRetry((n) => n + 1);
+  }
   function canSelectUser(user: API.PlatformUserView) {
     return user.id !== session.actor.id && user.status !== "deleted";
   }
@@ -199,14 +213,24 @@ function UserAdministration() {
       id: "identity",
       header: "用户",
       cell: ({ row }) => (
-        <div className="flex min-w-0 flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1 max-md:min-w-24">
           <span className="break-words whitespace-normal">
             {row.original.display_name}
             {row.original.id === session.actor.id ? " · 当前账号" : ""}
           </span>
-          <span className="text-xs break-all whitespace-normal text-muted-foreground">
+          <span
+            className="text-xs break-all whitespace-normal text-muted-foreground max-md:max-w-24 max-md:truncate"
+            title={row.original.email}
+          >
             {row.original.email}
           </span>
+          {mobile && (
+            <span className="text-xs text-muted-foreground">
+              {row.original.platform_role === "platform_admin"
+                ? "平台管理员"
+                : "创作者"}
+            </span>
+          )}
         </div>
       ),
     },
@@ -264,14 +288,64 @@ function UserAdministration() {
       />
     );
   return (
-    <div className="flex w-full flex-col gap-5">
-      <AdminHeading title="用户管理" />
+    <div className="user-directory flex w-full min-w-0 flex-col gap-5">
+      <AdminHeading title="用户管理">
+        {mobile && (
+          <>
+            <Button
+              ref={registerFallbackTrigger}
+              variant="secondary"
+              size="toolbar"
+              aria-expanded={mobileFiltersOpen}
+              aria-controls={`${filterId}-form`}
+              onClick={() => setMobileFiltersOpen((open) => !open)}
+            >
+              筛选
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="toolbar-icon"
+                  aria-label="用户管理操作"
+                >
+                  <Ellipsis aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuGroup>
+                  <DropdownMenuItem
+                    disabled={refreshDisabled}
+                    onSelect={refresh}
+                  >
+                    刷新
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled={forbidden}
+                    onSelect={() => setToolsOpen((v) => !v)}
+                  >
+                    统计与导出
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled={forbidden}
+                    onSelect={() => setGovernanceOpen((v) => !v)}
+                  >
+                    账号邀请
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        )}
+      </AdminHeading>
       <Collapsible asChild open={advanced} onOpenChange={setAdvanced}>
         <form
-          ref={registerFallbackTrigger}
+          id={`${filterId}-form`}
+          ref={mobile ? undefined : registerFallbackTrigger}
           tabIndex={-1}
           aria-label="用户筛选"
-          className="flex min-w-0 flex-col gap-3"
+          className="flex min-w-0 flex-col gap-3 [&[hidden]]:hidden"
+          hidden={mobile && !mobileFiltersOpen}
           onSubmit={(e) => {
             e.preventDefault();
             if (locked) return;
@@ -381,52 +455,50 @@ function UserAdministration() {
                 </Button>
               </CollapsibleTrigger>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={pending || batch.busy || batch.unresolved}
-              onClick={() => {
-                setPending(true);
-                setForbidden(false);
-                setRetry((n) => n + 1);
-              }}
-            >
-              刷新
-            </Button>
             {!mobile ? (
-              <ColumnMenu
-                columns={[
-                  { id: "role", label: "平台角色" },
-                  { id: "created", label: "注册日期" },
-                ]}
-                visibility={visibility}
-                onChange={setVisibility}
-              />
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={refreshDisabled}
+                  onClick={refresh}
+                >
+                  刷新
+                </Button>
+                <ColumnMenu
+                  columns={[
+                    { id: "role", label: "平台角色" },
+                    { id: "created", label: "注册日期" },
+                  ]}
+                  visibility={visibility}
+                  onChange={setVisibility}
+                />
+                <div
+                  className="ml-auto flex flex-wrap gap-2"
+                  role="group"
+                  aria-label="账号目录操作"
+                >
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={forbidden}
+                    aria-expanded={toolsOpen}
+                    onClick={() => setToolsOpen((v) => !v)}
+                  >
+                    统计与导出
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={forbidden}
+                    aria-expanded={governanceOpen}
+                    onClick={() => setGovernanceOpen((v) => !v)}
+                  >
+                    <Plus data-icon="inline-start" />
+                    账号邀请
+                  </Button>
+                </div>
+              </>
             ) : null}
-            <div
-              className="ml-auto flex flex-wrap gap-2"
-              role="group"
-              aria-label="账号目录操作"
-            >
-              <Button
-                type="button"
-                variant="outline"
-                disabled={forbidden}
-                aria-expanded={toolsOpen}
-                onClick={() => setToolsOpen((v) => !v)}
-              >
-                统计与导出
-              </Button>
-              <Button
-                type="button"
-                disabled={forbidden}
-                aria-expanded={governanceOpen}
-                onClick={() => setGovernanceOpen((v) => !v)}
-              >
-                <Plus data-icon="inline-start" />
-                账号邀请
-              </Button>
-            </div>
           </div>
           <CollapsibleContent className="border-t pt-3">
             <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">

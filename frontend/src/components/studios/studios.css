@@ -1,11 +1,10 @@
 .studio-workspace {
   display: flex;
   width: 100%;
-  max-width: 1120px;
   min-width: 0;
   margin-inline: auto;
   flex-direction: column;
-  gap: clamp(20px, 3cqi, 36px);
+  gap: 16px;
 }
 
 .studio-composer {
@@ -16,13 +15,7 @@
   padding: clamp(12px, 2cqi, 24px);
   border: 1px solid var(--creation-border);
   border-radius: 24px;
-  background:
-    radial-gradient(
-      ellipse at 100% 0%,
-      color-mix(in srgb, var(--studio-ambient) 17%, transparent),
-      transparent 72%
-    ),
-    var(--card);
+  background: var(--card);
 }
 
 .studio-composer-input,
@@ -106,15 +99,22 @@ textarea.studio-prompt {
   background: var(--muted);
 }
 
-.studio-template-categories {
-  max-width: 100%;
-  justify-content: flex-start;
-  overflow-x: auto;
+.studio-workspace > section {
+  margin-block-start: clamp(4px, 1.5cqi, 20px);
+}
+
+@container product-content (width < 700px) {
+  .studio-composer-input {
+    flex-direction: column;
+  }
+  .studio-references {
+    flex-wrap: wrap;
+  }
 }
 
 @media (max-width: 767px) {
-  .studio-composer-input {
-    flex-direction: column;
+  textarea.studio-prompt {
+    font-size: 16px;
   }
 
   .studio-template-grid {
@@ -127,7 +127,7 @@ textarea.studio-prompt {
     justify-content: space-between;
   }
 
-  .studio-parameters :is([data-slot="button"], [data-slot="select-trigger"]) {
+  .studio-workspace :is([data-slot="button"], [data-slot="select-trigger"]) {
     min-height: 44px;
   }
 }

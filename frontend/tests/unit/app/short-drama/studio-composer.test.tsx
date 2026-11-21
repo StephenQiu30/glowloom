@@ -13,7 +13,7 @@ it("500字计价单位不成为创作输入上限，添加推荐后保留已有�
   fireEvent.change(editor, { target: { value: text } });
   fireEvent.click(screen.getByRole("button", { name: "剧本医生" }));
   expect((editor as HTMLTextAreaElement).value).toContain(text);
-  fireEvent.click(screen.getByRole("button", { name: "立即生成" }));
+  fireEvent.click(screen.getByRole("button", { name: "开始创作" }));
   expect(onStart).toHaveBeenCalledWith({
     kind: "create",
     prompt: expect.stringContaining(text),
@@ -21,7 +21,7 @@ it("500字计价单位不成为创作输入上限，添加推荐后保留已有�
 });
 
 it.each([
-  ["create", "立即生成"],
+  ["create", "开始创作"],
   ["upload", "开始导入"],
   ["redraw", "开始转绘"],
 ] as const)("%s没有必要输入时不启动项目创建或生成", (mode, label) => {

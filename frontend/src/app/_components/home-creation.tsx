@@ -445,10 +445,12 @@ function ScopedHomeCreation({ initialType }: { initialType: CreationType }) {
                               draft={homeDraft}
                               onChange={inputRecovery.change}
                               placeholder={
-                                type === "audio" &&
-                                homeDraft.mode === "omni_audio"
-                                  ? "描述角色、台词、音效与时间段，@ 引用音频。"
-                                  : activeType.placeholder
+                                type === "image"
+                                  ? "描述创作想法，或添加参考"
+                                  : type === "audio" &&
+                                      homeDraft.mode === "omni_audio"
+                                    ? "描述角色、台词、音效与时间段，@ 引用音频。"
+                                    : activeType.placeholder
                               }
                               onReady={(value) =>
                                 setHomeEditor({

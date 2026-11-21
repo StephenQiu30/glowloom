@@ -11,7 +11,7 @@ import {
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import Image from "next/image";
-import { ChevronDown, PanelsTopLeft } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { useOptionalSession } from "@/components/auth/session";
 import { useSpace } from "@/components/spaces/space-context";
 import { useLoginDialog } from "@/components/layout/basic-layout";
@@ -288,16 +288,19 @@ function WorkspaceScope({
             </TabsList>
           </div>
         </PageToolbar>
-        {view !== "subjects" && view !== "motion" && view !== "marketing" && (
-          <PageToolbar inHeader slot="actions">
-            <div
-              className="flex min-w-0 flex-wrap items-center gap-1"
-              data-asset-page-actions
-            >
-              <div ref={setToolbarTarget} className="min-w-0" />
-            </div>
-          </PageToolbar>
-        )}
+        {authenticated &&
+          view !== "subjects" &&
+          view !== "motion" &&
+          view !== "marketing" && (
+            <PageToolbar inHeader slot="actions">
+              <div
+                className="flex min-w-0 flex-wrap items-center gap-1"
+                data-asset-page-actions
+              >
+                <div ref={setToolbarTarget} className="min-w-0" />
+              </div>
+            </PageToolbar>
+          )}
         {authenticated && view !== "subjects" && (
           <div aria-label="资产筛选" className="asset-filter-bar">
             {(view === "history" ||
@@ -446,7 +449,8 @@ function WorkspaceScope({
         <TabsContent value={view} className="min-w-0">
           {!authenticated ? (
             <ContentState
-              icon={PanelsTopLeft}
+              icon={null}
+              className="asset-guest-empty"
               title="登录查看你的资产"
               actions={<Button onClick={login}>登录 / 注册</Button>}
             />

@@ -6,7 +6,6 @@ import { Suspense, useRef, useState } from "react";
 import { useSession } from "@/components/auth/session";
 import { getMyAvatar } from "@/api/media";
 import { BoundAvatar } from "@/components/account/avatar-editor";
-import { PageToolbar } from "@/components/layout/page-toolbar";
 import { PageLayout } from "@/components/layout/page-layout";
 import { PageHeading } from "@/components/layout/page-heading";
 import { Button } from "@/components/ui/button";
@@ -80,18 +79,18 @@ export function PersonalSpace() {
           </Button>
         </aside>
         <Tabs defaultValue="works" className="personal-content">
-          <PageToolbar inHeader>
-            <TabsList variant="workspace" aria-label="个人内容">
-              <TabsTrigger value="works">作品</TabsTrigger>
-              <TabsTrigger value="favorites">收藏</TabsTrigger>
-              <TabsTrigger value="canvases">画布</TabsTrigger>
-            </TabsList>
-          </PageToolbar>
+          <TabsList variant="surface" aria-label="个人内容">
+            <TabsTrigger value="works">作品</TabsTrigger>
+            <TabsTrigger value="favorites">收藏</TabsTrigger>
+            <TabsTrigger value="canvases">画布</TabsTrigger>
+          </TabsList>
           <TabsContent value="works">
             <ContentState
+              icon={null}
+              className="personal-works-empty"
               title="作品发布暂未开放"
               actions={
-                <Button asChild variant="secondary">
+                <Button asChild>
                   <Link href="/">开始创作</Link>
                 </Button>
               }

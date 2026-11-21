@@ -34,14 +34,6 @@ export const categories: readonly { name: string; tools: readonly Tool[] }[] = [
         unavailable: "AI 画质增强服务尚未接入，暂时无法选择输出档位。",
       },
       {
-        id: "video-partial-reshoot",
-        name: "视频局部重拍",
-        summary: "重新生成指定片段",
-        media: video,
-        description: "选择需要调整的视频区间，描述要求并重新生成该片段。",
-        unavailable: "视频区间重生成服务尚未接入。",
-      },
-      {
         id: "prompt-reverse",
         name: "提示词反推",
         summary: "解析画面与镜头语言",
@@ -81,6 +73,22 @@ export const categories: readonly { name: string; tools: readonly Tool[] }[] = [
         media: video,
         description: "以已有视频为上下文，生成后续画面与动作。",
         unavailable: "按原片结尾延长视频的服务尚未接入。",
+      },
+      {
+        id: "video-remake",
+        name: "视频复刻",
+        summary: "从参考视频构思新版本",
+        media: video,
+        description: "选择要参考的视频。",
+        unavailable: "视频复刻暂未开放。",
+      },
+      {
+        id: "video-partial-reshoot",
+        name: "视频局部重拍",
+        summary: "重新生成指定片段",
+        media: video,
+        description: "选择需要调整的视频区间，描述要求并重新生成该片段。",
+        unavailable: "视频区间重生成服务尚未接入。",
       },
     ],
   },
@@ -192,4 +200,15 @@ export const categories: readonly { name: string; tools: readonly Tool[] }[] = [
       },
     ],
   },
+];
+
+export const featuredToolIds = [
+  "smart-edit",
+  "super-resolution",
+  "video-remake",
+  "motion-depth-capture",
+  "3d-director",
+  "image-relight",
+  "prompt-reverse",
+  "3d-render-plugin",
 ];

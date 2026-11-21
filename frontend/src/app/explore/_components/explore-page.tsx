@@ -42,7 +42,7 @@ export function ExplorePage({ initialQuery = "" }: { initialQuery?: string }) {
         placeholder: "搜索",
       }}
     >
-      <div className="workspace-page-header mb-6">
+      <div className="workspace-page-header mb-2">
         <div className="workspace-page-heading">
           <h1>探索</h1>
         </div>
@@ -61,7 +61,7 @@ export function ExplorePage({ initialQuery = "" }: { initialQuery?: string }) {
         <PageToolbar inHeader>
           <OverflowNavigation label="探索分类" primary>
             <TabsList
-              variant="line"
+              variant="workspace"
               className={styles.categories}
               aria-label="探索分类"
             >

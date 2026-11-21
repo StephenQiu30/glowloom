@@ -32,7 +32,6 @@ import type {
 } from "@/components/media/personal-reference-picker";
 import { StyleLibraryPopover } from "@/components/styles/style-library-popover";
 import type { StyleDetail } from "@/components/styles/style-api";
-import styles from "./studio.module.css";
 
 const settings = [
   { key: "topic", label: "选题", field: "题材或主题", icon: PenLine },
@@ -198,9 +197,7 @@ export function StudioComposer({
 
   return (
     <div className="space-y-3">
-      <div
-        className={`${styles.panel} overflow-hidden rounded-b-2xl border border-t-0 bg-card`}
-      >
+      <div className="overflow-hidden rounded-b-2xl border border-t-0 bg-card">
         <div className="grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,3fr)] md:p-4">
           <div className="min-w-0">
             {creative ? (
@@ -278,9 +275,7 @@ export function StudioComposer({
               className="h-full min-h-28 resize-y rounded-xl bg-muted/40 p-3 md:min-h-40"
               value={text}
               placeholder={
-                creative
-                  ? "描述你的创作想法，例如角色、情节和故事风格…"
-                  : "粘贴剧本文本，可按「第1集」分集…"
+                creative ? "输入短剧想法" : "粘贴剧本文本，可按「第1集」分集…"
               }
               onChange={(event) => setText(event.target.value)}
             />
@@ -366,7 +361,7 @@ export function StudioComposer({
               }
               onClick={start}
             >
-              {creative ? "立即生成" : uploading ? "开始导入" : "开始转绘"}
+              {creative ? "开始创作" : uploading ? "开始导入" : "开始转绘"}
             </Button>
           </div>
         </div>

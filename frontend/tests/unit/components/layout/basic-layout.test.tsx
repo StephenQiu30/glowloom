@@ -703,7 +703,7 @@ it("asset header options stay stable under the shared login context", async () =
       <AssetWorkspace />
     </BasicLayout>,
   );
-  await screen.findByText("暂无相关资产");
+  await screen.findByText("暂无生成历史");
   await act(async () => {
     await Promise.resolve();
   });

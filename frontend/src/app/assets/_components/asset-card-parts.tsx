@@ -35,7 +35,7 @@ export function AssetCardTitle({
   return (
     <span
       className={cn(
-        "resource-card-title mt-2 w-full truncate text-workspace-foreground",
+        "resource-card-title mt-2 line-clamp-2 w-full [overflow-wrap:anywhere] whitespace-normal text-workspace-foreground",
         reserveAction && "pr-12 max-md:pr-14",
       )}
       title={typeof children === "string" ? children : undefined}
