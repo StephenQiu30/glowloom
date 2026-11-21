@@ -16,7 +16,6 @@ import {
   ArrowUp,
   AtSign,
   ChevronDown,
-  Plus,
   SlidersHorizontal,
   Sparkles,
 } from "lucide-react";
@@ -26,7 +25,7 @@ import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { UnavailableDialog } from "@/components/availability/unavailable";
 import { RecentCanvases } from "@/components/layout/recent-canvases";
 import { useSpace } from "@/components/spaces/space-context";
-import { NewCanvasButton } from "@/components/projects/new-canvas-button";
+import { useProjectCreation } from "@/components/projects/project-creation";
 import { ProjectPicker } from "@/components/projects/project-picker";
 import { requireProject, type Project } from "@/components/projects/project";
 import { ensureIndependentCreation } from "@/api/projects";
@@ -104,6 +103,7 @@ export function HomeCreation({
 
 function ScopedHomeCreation({ initialType }: { initialType: CreationType }) {
   const session = useOptionalSession();
+  const canvasCreation = useProjectCreation();
   const login = useLoginDialog();
   const router = useRouter();
   const conversationMemory = useConversationContext();
@@ -148,7 +148,11 @@ function ScopedHomeCreation({ initialType }: { initialType: CreationType }) {
     .join("\n");
   const canvasPrompt = canvasDraft.document.content
     .map((p) =>
-      (p.content ?? []).map((n) => (n.type === "text" ? n.text : "")).join(""),
+      (p.content ?? [])
+        .map((n) =>
+          n.type === "text" ? n.text : n.type === "hardBreak" ? "\n" : "",
+        )
+        .join(""),
     )
     .join("\n");
   const canRecover = !!session && !!space?.writable;
@@ -314,6 +318,11 @@ function ScopedHomeCreation({ initialType }: { initialType: CreationType }) {
       onChange={(value) => void select(value)}
     />
   );
+  function startCanvas() {
+    if (!canvasCreation.disabled) {
+      void canvasCreation.start(canvasPrompt.trim());
+    }
+  }
 
   return (
     <section className="creation-hero" data-mode={mode} aria-label="开始创作">
@@ -563,67 +572,43 @@ function ScopedHomeCreation({ initialType }: { initialType: CreationType }) {
           hidden={mode !== "canvas"}
           className="creation-panel home-canvas-launch"
         >
-          <div className="home-canvas-heading">
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/assets?view=canvas">全部</Link>
-            </Button>
-          </div>
-          {mode === "canvas" && session && space ? (
-            <RecentCanvases
-              key={`${session.actor.id}/${space.id}`}
-              presentation="cards"
-            >
-              <NewCanvasButton variant="tile" className="home-canvas-new">
-                <span className="home-canvas-new-icon" aria-hidden="true">
-                  <Plus />
-                </span>
-                <span>新建画布</span>
-              </NewCanvasButton>
-            </RecentCanvases>
-          ) : (
-            <div className="home-canvas-list">
-              <NewCanvasButton variant="tile" className="home-canvas-new">
-                <span className="home-canvas-new-icon" aria-hidden="true">
-                  <Plus />
-                </span>
-                <span>新建画布</span>
-              </NewCanvasButton>
-            </div>
-          )}
           <form
             onSubmit={(event) => {
               event.preventDefault();
-              if (!canvasPrompt.trim()) return;
-              if (!session) login();
-              else setFeature("从提示词创建画布");
+              startCanvas();
             }}
           >
             <InputGroup variant="composer" className="canvas-idea">
+              <p className="canvas-idea-label">画布创作想法</p>
               <CreationEntryPrompt
                 label="画布创作想法"
                 contextKey={`${subjectScope}/home-input:canvas`}
                 draft={canvasDraft}
                 onChange={canvasRecovery.change}
-                placeholder="输入想法或上传参考，和 Agent 一起创作"
+                placeholder="描述想法，在画布中继续编辑"
                 onSubmit={() => {
-                  if (!canvasPrompt.trim()) return;
-                  if (!session) login();
-                  else setFeature("从提示词创建画布");
+                  if (canvasPrompt.trim()) startCanvas();
                 }}
               />
-              <InputGroupAddon align="inline-end">
-                <Button
-                  type="submit"
-                  size="icon"
-                  className="creation-submit"
-                  disabled={!canvasPrompt.trim()}
-                  aria-label="从想法创建画布"
-                >
-                  <ArrowUp />
+              <InputGroupAddon
+                align="block-end"
+                className="canvas-idea-actions"
+              >
+                <Button asChild variant="secondary">
+                  <Link href="/assets?view=canvas">全部画布</Link>
+                </Button>
+                <Button type="submit" disabled={canvasCreation.disabled}>
+                  新建画布
                 </Button>
               </InputGroupAddon>
             </InputGroup>
           </form>
+          {mode === "canvas" && session && space ? (
+            <RecentCanvases
+              key={`${session.actor.id}/${space.id}`}
+              presentation="cards"
+            />
+          ) : null}
         </div>
       </div>
       <UnavailableDialog feature={feature} onClose={() => setFeature(null)} />

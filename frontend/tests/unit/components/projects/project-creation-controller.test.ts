@@ -91,7 +91,9 @@ it("initial creation requires a readable recovery contract and sends frozen defa
 it("refresh and unrecorded never automatically retry an uncertain POST", async () => {
   const f = fixture();
   f.create.mockRejectedValue(new Error("connection lost"));
-  await f.controller.start();
+  const description = "海报构图\n深蓝背景";
+  await f.controller.start(description);
+  expect(f.create.mock.calls[0][0]).toMatchObject({ description });
   const key = f.create.mock.calls[0][1];
   expect(f.controller.snapshot().phase).toBe("unknown");
   const restored = new ProjectCreationController(f.ports);
@@ -103,7 +105,7 @@ it("refresh and unrecorded never automatically retry an uncertain POST", async (
     canvas_id: target.canvasId,
   });
   await restored.continueOriginal();
-  expect(f.create.mock.calls[1][1]).toBe(key);
+  expect(f.create.mock.calls[1]).toEqual([f.create.mock.calls[0][0], key]);
   expect(f.navigate).toHaveBeenCalledWith(target);
 });
 it("a created target that cannot open is retried through reads only", async () => {

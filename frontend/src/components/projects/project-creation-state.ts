@@ -51,10 +51,10 @@ export type ProjectCreationState =
     }
   | { phase: "blocked" | "rejected" | "storage_failed"; message: string };
 
-export function blankProjectInput(): API.CreateProjectRequest {
+export function blankProjectInput(description = ""): API.CreateProjectRequest {
   return {
     name: "未命名画布",
-    description: "",
+    description,
     aspect_ratio: "16:9",
     style_type: "realistic",
   };

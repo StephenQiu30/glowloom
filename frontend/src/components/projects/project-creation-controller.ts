@@ -125,7 +125,7 @@ export class ProjectCreationController {
     });
     return flight;
   };
-  start = async () => {
+  start = async (description?: string) => {
     const restoring = this.restoreFlight;
     if (restoring) {
       await restoring;
@@ -149,7 +149,7 @@ export class ProjectCreationController {
       this.publish({ phase: "preparing" });
       const acquired = await this.ports.intents.beginOrResume(
         context,
-        blankProjectInput(),
+        blankProjectInput(description),
       );
       this.assert(context, run);
       await this.lookup(

@@ -47,7 +47,7 @@ import type {
 } from "./project-creation-state";
 
 type CreationActions = {
-  start: () => Promise<void>;
+  start: (description?: string) => Promise<void>;
   state: ProjectCreationState;
   disabled: boolean;
 };
@@ -57,7 +57,7 @@ const CreationContext = createContext<CreationActions>({
   disabled: false,
 });
 export const useProjectCreation = () => useContext(CreationContext);
-let guestCreateIntent = false;
+let guestCreateIntent: { description?: string } | null = null;
 
 export function ProjectCreationProvider({ children }: { children: ReactNode }) {
   const session = useOptionalSession(),
@@ -150,8 +150,9 @@ export function ProjectCreationProvider({ children }: { children: ReactNode }) {
     queueMicrotask(() => {
       if (active) {
         if (guestCreateIntent) {
-          guestCreateIntent = false;
-          void controller.start();
+          const { description } = guestCreateIntent;
+          guestCreateIntent = null;
+          void controller.start(description);
         } else void controller.restore();
       }
     });
@@ -160,14 +161,14 @@ export function ProjectCreationProvider({ children }: { children: ReactNode }) {
       controller.dispose();
     };
   }, [actorId, scopeId, pending, controller]);
-  async function start() {
+  async function start(description?: string) {
     setDismissed(false);
     if (!session) {
-      guestCreateIntent = true;
+      guestCreateIntent = { description };
       setAuth(true);
       return;
     }
-    await controller.start();
+    await controller.start(description);
   }
   const disabled =
     (!!session && (!scopeId || pending || !writable)) ||
@@ -206,7 +207,7 @@ export function ProjectCreationProvider({ children }: { children: ReactNode }) {
         open={auth}
         onOpenChange={(open) => {
           setAuth(open);
-          if (!open) guestCreateIntent = false;
+          if (!open) guestCreateIntent = null;
         }}
         onAuthenticated={(next) => {
           setSession(next);

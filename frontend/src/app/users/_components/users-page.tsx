@@ -107,6 +107,7 @@ function UserAdministration() {
   const [advanced, setAdvanced] = useState(false);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const filterId = useId();
+  const mobileFilterTrigger = useRef<HTMLButtonElement | null>(null);
   const appliedAdvancedCount =
     Number(filters.verified !== undefined) +
     Number(Boolean(filters.from || filters.to)) +
@@ -293,14 +294,18 @@ function UserAdministration() {
         {mobile && (
           <>
             <Button
-              ref={registerFallbackTrigger}
-              variant="secondary"
+              ref={(element) => {
+                mobileFilterTrigger.current = element;
+                registerFallbackTrigger(element);
+              }}
+              variant={mobileFiltersOpen ? "default" : "secondary"}
               size="toolbar"
+              className="min-h-11"
               aria-expanded={mobileFiltersOpen}
               aria-controls={`${filterId}-form`}
               onClick={() => setMobileFiltersOpen((open) => !open)}
             >
-              筛选
+              {mobileFiltersOpen ? "收起筛选" : "筛选"}
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -344,7 +349,7 @@ function UserAdministration() {
           ref={mobile ? undefined : registerFallbackTrigger}
           tabIndex={-1}
           aria-label="用户筛选"
-          className="flex min-w-0 flex-col gap-3 [&[hidden]]:hidden"
+          className="user-directory-filters flex min-w-0 flex-col gap-3 [&[hidden]]:hidden"
           hidden={mobile && !mobileFiltersOpen}
           onSubmit={(e) => {
             e.preventDefault();
@@ -362,64 +367,83 @@ function UserAdministration() {
               ...(from ? { from: new Date(from).toISOString() } : {}),
               ...(to ? { to: new Date(to).toISOString() } : {}),
             });
+            if (mobile) {
+              setMobileFiltersOpen(false);
+              mobileFilterTrigger.current?.focus();
+            }
           }}
         >
-          <div className="flex flex-wrap items-center gap-2">
-            <Input
-              disabled={locked}
-              aria-label="搜索用户邮箱或显示名"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="邮箱或显示名"
-              maxLength={100}
-              className="sm:w-56 xl:w-60"
-            />
-            <Select
-              disabled={locked}
-              value={status || "all"}
-              onValueChange={(value) => setStatus(value === "all" ? "" : value)}
+          <div className="user-directory-filter-row flex flex-wrap items-center gap-2">
+            <Field className="w-full sm:w-56 xl:w-60">
+              <FieldLabel htmlFor={`${filterId}-search`} className="md:sr-only">
+                邮箱或显示名
+              </FieldLabel>
+              <Input
+                id={`${filterId}-search`}
+                disabled={locked}
+                aria-label="搜索用户邮箱或显示名"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="邮箱或显示名"
+                maxLength={100}
+              />
+            </Field>
+            <div
+              className="user-directory-filter-selects md:contents"
+              role="group"
+              aria-labelledby={`${filterId}-account`}
             >
-              <SelectTrigger
-                aria-label="用户状态筛选"
-                className="max-w-full min-w-28"
+              <p id={`${filterId}-account`} className="text-sm md:sr-only">
+                状态和角色
+              </p>
+              <Select
+                disabled={locked}
+                value={status || "all"}
+                onValueChange={(value) =>
+                  setStatus(value === "all" ? "" : value)
+                }
               >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value="all">全部状态</SelectItem>
-                  <SelectItem value="active">启用</SelectItem>
-                  <SelectItem value="disabled">禁用</SelectItem>
-                  <SelectItem value="deleted">已注销</SelectItem>
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-            <Select
-              disabled={locked}
-              value={role || "all"}
-              onValueChange={(value) => setRole(value === "all" ? "" : value)}
-            >
-              <SelectTrigger
-                aria-label="平台角色筛选"
-                className="max-w-full min-w-36"
+                <SelectTrigger
+                  aria-label="用户状态筛选"
+                  className="max-w-full min-w-28"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="all">全部状态</SelectItem>
+                    <SelectItem value="active">启用</SelectItem>
+                    <SelectItem value="disabled">禁用</SelectItem>
+                    <SelectItem value="deleted">已注销</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <Select
+                disabled={locked}
+                value={role || "all"}
+                onValueChange={(value) => setRole(value === "all" ? "" : value)}
               >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value="all">全部角色</SelectItem>
-                  <SelectItem value="creator">创作者</SelectItem>
-                  <SelectItem value="platform_admin">平台管理员</SelectItem>
-                </SelectGroup>
-              </SelectContent>
-            </Select>
+                <SelectTrigger
+                  aria-label="平台角色筛选"
+                  className="max-w-full min-w-36"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="all">全部角色</SelectItem>
+                    <SelectItem value="creator">创作者</SelectItem>
+                    <SelectItem value="platform_admin">平台管理员</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
 
             <div
-              className="flex flex-wrap items-center gap-2"
+              className="user-directory-filter-actions flex flex-wrap items-center gap-2"
               role="group"
               aria-label="筛选操作"
             >
-              <Button disabled={locked}>查询</Button>
               <Button
                 type="button"
                 variant="outline"
@@ -443,7 +467,11 @@ function UserAdministration() {
                   variant="ghost"
                   className="group/filter-toggle"
                 >
-                  {advanced ? "收起筛选" : "更多筛选"}
+                  {advanced
+                    ? mobile
+                      ? "收起更多筛选"
+                      : "收起筛选"
+                    : "更多筛选"}
                   {!advanced && appliedAdvancedCount > 0
                     ? `（${appliedAdvancedCount}）`
                     : null}
@@ -454,6 +482,9 @@ function UserAdministration() {
                   />
                 </Button>
               </CollapsibleTrigger>
+              <Button type="submit" disabled={locked}>
+                查询
+              </Button>
             </div>
             {!mobile ? (
               <>
