@@ -296,7 +296,9 @@ export function ModelForm({
         <Separator />
         <PriceFields kind="销售" media={media} videoTokens={videoTokens} />
         <InputField
-          key={videoTokens ? "video-procurement-cap" : "default-procurement-cap"}
+          key={
+            videoTokens ? "video-procurement-cap" : "default-procurement-cap"
+          }
           label="单次采购上限（元）"
           name="purchase_cap"
           value={videoTokens ? undefined : "10"}
