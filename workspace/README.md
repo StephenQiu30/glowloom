@@ -3,6 +3,9 @@
 This is a Next.js application generated with
 [Create Fumadocs](https://github.com/fuma-nama/fumadocs).
 
+From the repository root, run `docker compose up -d --build --wait workspace`
+to serve the docs at http://localhost:1130/docs.
+
 Run development server:
 
 ```bash

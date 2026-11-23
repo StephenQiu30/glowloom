@@ -52,7 +52,7 @@ cd glowloom
 确认端口可用后，在仓库根目录启动：
 
 ```sh
-lsof -nP -iTCP:1122 -iTCP:1123 -sTCP:LISTEN
+lsof -nP -iTCP:1122 -iTCP:1123 -iTCP:1130 -sTCP:LISTEN
 docker compose up -d --build --wait
 docker compose ps
 ```
@@ -61,6 +61,7 @@ docker compose ps
 | ------------- | ------------------------------------------------------- |
 | 前端工作台    | [localhost:1122](http://localhost:1122)                 |
 | Go Gateway    | [127.0.0.1:1123](http://127.0.0.1:1123)，业务后端仅内网 |
+| Workspace     | [localhost:1130/docs](http://localhost:1130/docs)      |
 | Agent         | Compose 内部 `agent:4401`，无宿主端口                   |
 | Media 计算    | Compose 内部 `media:9091`，健康端口 8081，无宿主端口    |
 | Creation 文档 | Compose 内部 `creation:9092`，健康端口 8083，无宿主端口 |
