@@ -80,7 +80,7 @@ func (c Creation) quoteInput(ctx context.Context, tx *gorm.DB, a identity.Princi
 			return model, nil, nil, domain.ErrInvalid
 		}
 		var row struct{ Document []byte }
-		q := tx.Raw("SELECT document FROM ai.model WHERE id=? AND enabled", *d.ModelVersion).Scan(&row)
+		q := tx.Raw("SELECT document FROM ai.model WHERE id=? AND enabled AND document->>'protocol'<>?", *d.ModelVersion, domain.EmbeddingProtocol).Scan(&row)
 		if q.Error != nil {
 			return model, nil, nil, q.Error
 		}
@@ -132,7 +132,7 @@ func (c Creation) quoteInput(ctx context.Context, tx *gorm.DB, a identity.Princi
 			name = models[in.Capability]
 		}
 		var rows []struct{ Document []byte }
-		if err := tx.Raw("SELECT document FROM ai.model WHERE name=? AND enabled ORDER BY id", name).Scan(&rows).Error; err != nil {
+		if err := tx.Raw("SELECT document FROM ai.model WHERE name=? AND enabled AND document->>'protocol'<>? ORDER BY id", name, domain.EmbeddingProtocol).Scan(&rows).Error; err != nil {
 			return model, nil, nil, err
 		}
 		if len(rows) != 1 || json.Unmarshal(rows[0].Document, &model) != nil {

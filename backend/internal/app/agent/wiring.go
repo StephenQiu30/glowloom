@@ -6,6 +6,7 @@ import (
 	"time"
 
 	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/evidence"
 	script "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	workspacepg "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
 	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
@@ -66,6 +67,7 @@ func (b *Boundary) WithCreditOperationSaga(enabled bool) *Boundary {
 // NewBoundary injects the owning business adapters for the Agent boundary.
 func NewBoundary(database *gorm.DB, model app.ModelCapability) *Boundary {
 	b := &Boundary{Store: pg.NewStore(database, ProvideControlAccess, time.Now), db: database, bindings: append(append(businessTools(), creationTools()...), exportTools()...)}
+	b.Store.WithReceiptValidator(verifyEvidenceReplay)
 	b.bindings = append(b.bindings, evidenceTools()...)
 	b.Store.WithProposalValidator(func(tx *gorm.DB) app.DecisionValidator { return proposalValidator{tx: tx, gateway: b.gateway} })
 	b.Capabilities.Model = model
@@ -158,6 +160,9 @@ func NewBoundary(database *gorm.DB, model app.ModelCapability) *Boundary {
 
 // AtomicTool executes a business tool in the transaction that owns its receipt.
 func (b *Boundary) AtomicTool(c *gin.Context, name string, in domain.CallInput) (domain.CallReceipt, error) {
+	if name == evidence.SearchTool {
+		return b.searchEvidence(c.Request.Context(), in)
+	}
 	if name == "script_source_publish" {
 		return b.executeSourcePublication(c.Request.Context(), in)
 	}

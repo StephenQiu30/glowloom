@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -18,6 +19,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
+	cataloghttp "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/http"
+	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
 	gatewayhttp "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/adapter/http"
 	pg "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/adapter/provider"
@@ -393,4 +396,78 @@ func TestOnboardingReservesSharedQuotaForLiveTraffic(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, dispatched.Send)
 	require.Equal(t, route.ID, dispatched.Route.ID)
+}
+
+// The staged model must pass its real protocol probe before a project can select the release.
+func TestOnboardingArkEmbeddingRequiresSettledVector(t *testing.T) {
+	ctx := t.Context()
+	db, _, _, actor := fixture(t)
+	project := entrypointProject(t, db, actor)
+	entrypointSession(t, db, actor)
+	store := pg.New(db, actor, aigateway.Authority)
+	price := domain.Price{Input: 1000, Currency: "CNY", FX: "1", Multiplier: "1", Discount: "1"}
+	m := domain.Model{ID: uuid.New(), Name: "rag-" + uuid.NewString(), Protocol: domain.EmbeddingProtocol, Capability: "text.embed", MaxInput: 8192, MaxOutput: 1, PurchaseCap: 10000, Price: price}
+	require.NoError(t, store.StageModel(ctx, m))
+	engine := gin.New()
+	session := engine.Group("/api", func(c *gin.Context) { c.Set("principal", actor) })
+	cataloghttp.NewHandler(catalog.NewListModelsQuery(aigateway.Catalog{DB: db})).Register(session)
+	projectSeesModel := func() bool {
+		t.Helper()
+		cursor := ""
+		for {
+			req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/models?capability=text.embed&project_id="+project.String()+"&limit=200&cursor="+cursor, nil)
+			rec := httptest.NewRecorder()
+			engine.ServeHTTP(rec, req)
+			require.Equal(t, http.StatusOK, rec.Code)
+			var page cataloghttp.ModelPage
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &page))
+			for _, item := range page.Items {
+				if item.ID == m.ID {
+					require.True(t, item.Available)
+					require.Equal(t, m.Name, item.Key)
+					require.Equal(t, m.Capability, item.Capability)
+					return true
+				}
+			}
+			if page.NextCursor == nil {
+				return false
+			}
+			require.NotEqual(t, cursor, *page.NextCursor)
+			cursor = *page.NextCursor
+		}
+	}
+	require.False(t, projectSeesModel())
+	in := application.Onboarding{Scope: actor.ScopeID, Concurrency: 2, RPM: 1000, Route: domain.Route{ID: uuid.New(), ModelID: m.ID, Supplier: uuid.New(), Group: uuid.NewString(), Protocol: m.Protocol, BaseURL: domain.EmbeddingBaseURL, UpstreamModel: domain.EmbeddingModel, Purchase: price}}
+	require.NoError(t, store.PrepareOnboarding(ctx, in))
+	review, err := store.ReviewOnboarding(ctx, in.Route.ID)
+	require.NoError(t, err)
+	require.Len(t, review.Plan.Probes, 1)
+	require.NoError(t, store.ConfirmOnboarding(ctx, in.Route.ID, review.Plan.Credits, review.Plan.PurchaseMicros, func(uuid.UUID, uuid.UUID) ([]byte, string, error) { return []byte("sealed-test-value"), "fixture", nil }))
+	sends := 0
+	upstream := provider.New(keyFixture{}, &http.Client{Transport: transportFunc(func(req *http.Request) (*http.Response, error) {
+		require.Equal(t, "/api/v3/embeddings/multimodal", req.URL.Path)
+		sends++
+		v := make([]float32, domain.EmbeddingDimensions)
+		v[1] = 1
+		raw, err := json.Marshal(map[string]any{"id": "probe", "model": domain.EmbeddingModel, "data": map[string]any{"embedding": v}, "usage": map[string]int{"total_tokens": 10, "prompt_tokens": 10}})
+		require.NoError(t, err)
+		return &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(bytes.NewReader(raw))}, nil
+	})}).WithLookup(func(context.Context, string, string) ([]netip.Addr, error) {
+		return []netip.Addr{netip.MustParseAddr("8.8.8.8")}, nil
+	})
+	handlers := map[string]taskruntime.Handler{}
+	(&aigateway.Runtime{DB: db, Provider: upstream}).RegisterWorker(handlers)
+	job := taskruntime.Job{Kind: pg.OnboardingKind, BusinessID: in.Route.ID.String()}
+	for range 3 {
+		_, err := handlers[pg.OnboardingKind](ctx, job)
+		require.NoError(t, err)
+	}
+	review, err = store.ReviewOnboarding(ctx, in.Route.ID)
+	require.NoError(t, err)
+	require.Equal(t, "active", review.State)
+	require.Equal(t, 1, sends)
+	current, err := store.Model(ctx, m.Name, m.Protocol)
+	require.NoError(t, err)
+	require.Equal(t, m.ID, current.ID)
+	require.True(t, projectSeesModel())
 }

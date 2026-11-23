@@ -94,6 +94,8 @@ type Item struct {
 
 // Result distinguishes an empty search, ambiguous names and an outdated locator.
 type Result struct {
+	RetrievalMode      string `json:"retrieval_mode,omitempty"`
+	Exact              bool   `json:"-"` // An exact title, alias or business locator needs no semantic lookup.
 	Status             string `json:"status"`
 	Items              []Item `json:"items"`
 	ScriptIndexPending bool   `json:"script_index_pending,omitempty"`

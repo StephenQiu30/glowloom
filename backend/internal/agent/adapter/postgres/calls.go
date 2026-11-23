@@ -24,6 +24,16 @@ type callRow struct {
 func (r callRow) receipt() domain.CallReceipt {
 	return domain.CallReceipt{MaxMicros: r.MaxMicros, Kind: string(r.Kind), Name: r.Name, ReceiptID: r.ReceiptID, RootRunID: r.RootRunID, SubmissionID: r.SubmissionID, Call: domain.CallIdentity{TaskID: r.TaskID, CallID: r.CallID, CheckpointID: r.CheckpointID, Attempt: r.Attempt, ContractVersion: r.ContractVersion, InputHash: r.InputHash}, CallResult: domain.CallResult{Status: string(r.Status), Result: r.Result, CostMicros: r.CostMicros}}
 }
+func (s *Store) replay(tx *gorm.DB, a domain.Authority, row callRow) (domain.CallReceipt, error) {
+	receipt := row.receipt()
+	if s.verifyReceipt != nil && row.Kind == domain.CallKindTool && row.Status == domain.CallStatusCompleted {
+		if err := s.verifyReceipt(tx, a, receipt); err != nil {
+			return domain.CallReceipt{}, err
+		}
+	}
+	return receipt, nil
+}
+
 func findCall(tx *gorm.DB, rid, segment uuid.UUID, c domain.CallIdentity) (callRow, bool, error) {
 	var row callRow
 	q := tx.Raw(`SELECT * FROM agent_business.call_receipt WHERE root_run_id=? AND submission_id=? AND task_id=? AND call_id=? AND checkpoint_id=? AND attempt=? AND contract_version=?`, rid, segment, c.TaskID, c.CallID, c.CheckpointID, c.Attempt, c.ContractVersion).Scan(&row)
@@ -72,8 +82,8 @@ func (s *Store) executeCall(ctx context.Context, kind, name string, in domain.Ca
 			if old.InputHash != in.Call.InputHash || old.Kind != domain.CallKind(kind) || old.Name != name || old.MaxMicros != in.MaxMicros {
 				return domain.ErrConflict
 			}
-			result = old.receipt()
-			return nil
+			result, err = s.replay(tx, a, old)
+			return err
 		}
 		g, err := s.validate(tx, a, in.Grant)
 		if err != nil {
@@ -168,8 +178,8 @@ func (s *Store) ReadCall(ctx context.Context, rid, segment uuid.UUID, c domain.C
 		if row.InputHash != c.InputHash {
 			return domain.ErrConflict
 		}
-		result = row.receipt()
-		return nil
+		result, err = s.replay(tx, a, row)
+		return err
 	})
 	return result, err
 }
@@ -197,8 +207,8 @@ func (s *Store) ExecuteAtomicTool(ctx context.Context, name string, in domain.Ca
 			if old.InputHash != in.Call.InputHash || old.Kind != domain.CallKindTool || old.Name != name || old.MaxMicros != in.MaxMicros {
 				return domain.ErrConflict
 			}
-			result = old.receipt()
-			return nil
+			result, err = s.replay(tx, a, old)
+			return err
 		}
 		g, err := s.validate(tx, a, in.Grant)
 		if err != nil {

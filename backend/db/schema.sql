@@ -85,6 +85,7 @@ CREATE SCHEMA workspace;
 CREATE EXTENSION IF NOT EXISTS citext WITH SCHEMA public;
 
 CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;
+CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public;
 
 -- Trusted service identity comes only from database memberships, never a GUC.
 -- Offline schema owner/superuser imports retain legacy ownership. Ordinary
@@ -9473,6 +9474,19 @@ CREATE TABLE ai.route (
  document jsonb NOT NULL CHECK(jsonb_typeof(document)='object'),enabled boolean NOT NULL DEFAULT false
 );
 CREATE INDEX ai_route_model ON ai.route(model_id,priority);
+
+-- Project consumers discover only published cloud products with a usable route.
+CREATE VIEW ai.available_model AS
+SELECT m.id,m.name,m.document,route.id AS route_id,route.credential_id,
+       CASE WHEN m.document->>'protocol' IN ('media','ark_embedding') THEN m.document->>'capability'
+            ELSE 'text.generate' END AS capability
+FROM ai.model m
+JOIN LATERAL (SELECT r.id,r.credential_id FROM ai.route r JOIN ai.credential k ON k.id=r.credential_id
+              WHERE r.model_id=m.id AND r.enabled AND k.state='active'
+              ORDER BY r.priority,r.id LIMIT 1) route ON true
+WHERE m.enabled AND m.document->>'protocol'<>'local';
+GRANT SELECT ON ai.available_model TO glowloom_app,glowloom_execution;
+
 CREATE TABLE ai.request (
  id uuid PRIMARY KEY,scope_id uuid NOT NULL REFERENCES ai.account(scope_id),actor_id uuid NOT NULL,
  project_id uuid,run_id uuid,origin text NOT NULL,
@@ -9885,3 +9899,30 @@ SELECT project_id,kind,id,revision,parent_id,part,title,coalesce(body,'') AS exc
 FROM source_rows;
 
 GRANT SELECT ON workspace.current_project_evidence TO glowloom_app;
+
+-- Policy presence authorizes a bounded, project-specific external embedding route.
+CREATE TABLE workspace.evidence_semantic_policy (
+    project_id uuid PRIMARY KEY REFERENCES workspace.project(id) ON DELETE CASCADE,
+    budget_id uuid NOT NULL UNIQUE,
+    generation uuid NOT NULL UNIQUE,
+    actor_id uuid NOT NULL,
+    active_release_id uuid REFERENCES ai.model(id),
+    active_profile text NOT NULL DEFAULT '',
+    scan_cursor text NOT NULL DEFAULT '',
+    CHECK ((active_release_id IS NULL) = (active_profile = '')),
+    limit_credits bigint NOT NULL CHECK (limit_credits > 0),
+    enabled boolean NOT NULL DEFAULT true
+);
+CREATE TABLE workspace.evidence_embedding (
+    project_id uuid NOT NULL REFERENCES workspace.evidence_semantic_policy(project_id) ON DELETE CASCADE,
+    release_id uuid NOT NULL REFERENCES ai.model(id),
+    profile text NOT NULL,
+    kind text NOT NULL,
+    id uuid NOT NULL,
+    part integer NOT NULL CHECK (part>0),
+    version text NOT NULL CHECK (length(version)=64),
+    embedding public.vector(1024) NOT NULL,
+    PRIMARY KEY(project_id,release_id,profile,kind,id,part,version)
+);
+GRANT SELECT,UPDATE(active_release_id,active_profile,scan_cursor) ON workspace.evidence_semantic_policy TO glowloom_app;
+GRANT SELECT,INSERT,DELETE ON workspace.evidence_embedding TO glowloom_app;

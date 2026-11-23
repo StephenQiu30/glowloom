@@ -17,15 +17,22 @@ import (
 
 // Store persists Go-owned Agent authority, grants and permanent business receipts.
 type Store struct {
-	db        *gorm.DB
-	access    func(*gorm.DB) app.ControlAccess
-	now       func() time.Time
-	validator func(*gorm.DB) app.DecisionValidator
+	db            *gorm.DB
+	access        func(*gorm.DB) app.ControlAccess
+	now           func() time.Time
+	validator     func(*gorm.DB) app.DecisionValidator
+	verifyReceipt func(*gorm.DB, domain.Authority, domain.CallReceipt) error
 }
 
 // NewStore injects the database and current access owner for Agent business facts.
 func NewStore(db *gorm.DB, access func(*gorm.DB) app.ControlAccess, now func() time.Time) *Store {
 	return &Store{db: db, access: access, now: now}
+}
+
+// WithReceiptValidator injects the source owner's live checks for replayed tool output.
+func (s *Store) WithReceiptValidator(v func(*gorm.DB, domain.Authority, domain.CallReceipt) error) *Store {
+	s.verifyReceipt = v
+	return s
 }
 
 // WithProposalValidator injects current business checks for proposed changes.
@@ -344,15 +351,21 @@ func (s *Store) validate(tx *gorm.DB, a domain.Authority, in domain.Grant) (doma
 	return in, nil
 }
 
+// ValidateGrantInTransaction holds the same execution authority through a caller's business admission.
+func (s *Store) ValidateGrantInTransaction(tx *gorm.DB, in domain.Grant) (domain.Grant, error) {
+	a, err := load(tx, in.RootRunID)
+	if err != nil {
+		return domain.Grant{}, err
+	}
+	return s.validate(tx, a, in)
+}
+
 // ValidateGrant checks the capability against current durable business authority.
 func (s *Store) ValidateGrant(ctx context.Context, in domain.Grant) (domain.Grant, error) {
 	var g domain.Grant
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		a, err := load(tx, in.RootRunID)
-		if err != nil {
-			return err
-		}
-		g, err = s.validate(tx, a, in)
+		var err error
+		g, err = s.ValidateGrantInTransaction(tx, in)
 		return err
 	})
 	return g, err

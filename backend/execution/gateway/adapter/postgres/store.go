@@ -107,8 +107,11 @@ func (s *Store) Read(ctx context.Context, scope, id uuid.UUID) (domain.Record, e
 		if err := s.check(ctx, tx, scope, uuid.Nil, false); err != nil {
 			return err
 		}
-		var owner struct{ ActorID uuid.UUID }
-		if err := tx.Raw("SELECT actor_id FROM ai.request WHERE id=? AND scope_id=?", id, scope).Scan(&owner).Error; err != nil {
+		var owner struct {
+			ActorID uuid.UUID
+			Origin  string
+		}
+		if err := tx.Raw("SELECT actor_id,origin FROM ai.request WHERE id=? AND scope_id=?", id, scope).Scan(&owner).Error; err != nil {
 			return err
 		}
 		if owner.ActorID != s.actor.ID {
@@ -122,6 +125,9 @@ func (s *Store) Read(ctx context.Context, scope, id uuid.UUID) (domain.Record, e
 		}
 		var err error
 		record, err = scanRecord(tx, id)
+		if owner.Origin == domain.EmbeddingOrigin && record.Receipt != nil {
+			record.Receipt.Body = json.RawMessage("null")
+		}
 		if err == nil && record.Scope != scope {
 			return domain.ErrForbidden
 		}

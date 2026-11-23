@@ -68,7 +68,7 @@ func (d Defaults) SaveModelDefaults(ctx context.Context, a identity.Principal, i
 		}
 		for capability, name := range in.DefaultModels {
 			var n int64
-			if err := tx.Raw("SELECT count(*) FROM ai.model WHERE name=? AND enabled AND COALESCE(document->>'capability','text.generate')=?", name, capability).Scan(&n).Error; err != nil {
+			if err := tx.Raw("SELECT count(*) FROM ai.available_model WHERE name=? AND capability=?", name, capability).Scan(&n).Error; err != nil {
 				return err
 			}
 			if n != 1 {

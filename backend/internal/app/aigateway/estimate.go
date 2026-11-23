@@ -26,7 +26,7 @@ func (c Creation) Estimate(ctx context.Context, a identity.Principal, p uuid.UUI
 			return domain.ErrInvalid
 		}
 		var row struct{ Document []byte }
-		q := tx.Raw("SELECT document FROM ai.model WHERE id=? AND enabled", *d.ModelVersion).Scan(&row)
+		q := tx.Raw("SELECT document FROM ai.model WHERE id=? AND enabled AND document->>'protocol'<>?", *d.ModelVersion, domain.EmbeddingProtocol).Scan(&row)
 		if q.Error != nil {
 			return q.Error
 		}

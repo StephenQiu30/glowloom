@@ -186,6 +186,9 @@ func (c *Client) Send(ctx context.Context, d application.Dispatch, emit func(jso
 	if json.Unmarshal(secret, &envelope) != nil || envelope.APIKey == "" || strings.ContainsAny(envelope.APIKey, "\r\n\x00") {
 		return domain.Receipt{}, mediaPreflightError(d)
 	}
+	if d.Route.Protocol == domain.EmbeddingProtocol {
+		return c.sendEmbedding(ctx, d, envelope.APIKey)
+	}
 	if d.Route.Protocol == "media" {
 		return c.sendMedia(ctx, d, envelope.APIKey)
 	}

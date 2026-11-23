@@ -45,7 +45,7 @@ cd glowloom
 
 启动前，按 [.env.example](.env.example) 与 [PROJECT](PROJECT.md) 准备本地配置：
 
-1. 可用的 PostgreSQL、Redis、Kafka 与对象存储。
+1. 可用的 PostgreSQL（含 pgvector）、Redis、Kafka 与对象存储。
 2. `.env` 中的依赖连接、身份与会话密钥、协作令牌、两个方向独立的 Agent 服务令牌与受限 PostgreSQL DSN，以及独立 API→Media 令牌 `GLOWLOOM_MEDIA_SERVICE_TOKEN`（至少 32 字节可见 ASCII，不含空白，不复用其他凭据）；模型接入另需凭据加密与请求 MAC 密钥。
 3. 与运行版本匹配的 PostgreSQL 结构。空库使用 [schema.sql](backend/db/schema.sql) 初始化。已有库在部署前核对实际结构。
 

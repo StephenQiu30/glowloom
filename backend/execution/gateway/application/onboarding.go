@@ -78,7 +78,12 @@ func PlanOnboarding(in Onboarding, model domain.Model) (OnboardingPlan, error) {
 		if len(in.MediaTests) != 0 {
 			return plan, domain.ErrInvalid
 		}
-		plan.Probes = []Probe{textProbe(model, false, false)}
+		if model.Protocol == domain.EmbeddingProtocol {
+			raw, _ := json.Marshal(EmbeddingInput{Model: model.Name, Text: "项目镜头检索", Purpose: "query"})
+			plan.Probes = []Probe{{Name: "文本向量", Raw: raw}}
+		} else {
+			plan.Probes = []Probe{textProbe(model, false, false)}
+		}
 		if model.Stream {
 			plan.Probes = append(plan.Probes, textProbe(model, true, false))
 		}
@@ -162,6 +167,10 @@ func OnboardingCall(in Onboarding, m domain.Model, actor uuid.UUID, probe Probe,
 func ProbePassed(protocol string, probe Probe, receipt *domain.Receipt) bool {
 	if receipt == nil || receipt.Pending {
 		return false
+	}
+	if protocol == domain.EmbeddingProtocol {
+		_, err := domain.EmbeddingVector(receipt.Body)
+		return err == nil && receipt.Usage.Input > 0
 	}
 	var body struct {
 		ReconciliationOnly bool `json:"reconciliation_only"`

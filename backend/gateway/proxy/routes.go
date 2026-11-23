@@ -195,6 +195,9 @@ POST /style-library
 PATCH /style-library/:id
 DELETE /style-library/:id
 GET /projects/:pid/budget
+GET /projects/:pid/memory
+GET /projects/:pid/memory/:key
+PUT /projects/:pid/memory/:key
 GET /projects/:pid/model-defaults
 PATCH /projects/:pid/model-defaults
 GET /project-creations/:key
@@ -215,6 +218,8 @@ GET /canvases
 GET /canvases/:id
 PATCH /canvases/:id
 DELETE /canvases/:id
+GET /canvases/:id/storyboard
+POST /canvases/:id/storyboard
 GET /canvases/:id/information
 GET /canvases/:id/director-recovery/:nid
 PUT /canvases/:id/director-recovery/:nid

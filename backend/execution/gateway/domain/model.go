@@ -159,6 +159,12 @@ func (m Model) Validate() error {
 	if m.VideoMetering != nil && !m.validVideoContract() {
 		return ErrInvalid
 	}
+	if (m.Capability == EmbeddingCapability) != (m.Protocol == EmbeddingProtocol) {
+		return ErrInvalid
+	}
+	if m.Protocol == EmbeddingProtocol && (m.Tools || m.Stream || len(m.Parameters)+len(m.Modes) != 0 || m.Price.Input <= 0 || m.Price.Request != 0 || m.Price.Output != 0 || m.Price.CacheRead != 0 || m.Price.CacheWrite != 0) {
+		return ErrInvalid
+	}
 	if m.Protocol == "media" {
 		if !slices.Contains([]string{"image.generate", "video.generate", "audio.generate"}, m.Capability) || len(m.Modes) == 0 || m.Tools || m.Stream || !m.AcceptsMediaPrice(m.Price) {
 			return ErrInvalid
@@ -174,7 +180,7 @@ func (m Model) Validate() error {
 
 // Protocol reports whether the native text protocol is supported.
 func Protocol(s string) bool {
-	return s == "chat" || s == "responses" || s == "messages" || s == "media" || s == "local"
+	return s == "chat" || s == "responses" || s == "messages" || s == "media" || s == "local" || s == EmbeddingProtocol
 }
 
 // Route references its own purchase version and encrypted credential identity.

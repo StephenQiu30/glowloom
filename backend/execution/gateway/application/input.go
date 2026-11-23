@@ -17,6 +17,9 @@ func Prepare(model domain.Model, actor, scope, project, run uuid.UUID, key, orig
 	if model.Validate() != nil || len(raw) > 1<<20 || key == "" || len(key) > 160 {
 		return c, domain.ErrInvalid
 	}
+	if model.Protocol == domain.EmbeddingProtocol {
+		return prepareEmbedding(c, raw)
+	}
 	if model.Protocol == "local" {
 		return prepareLocal(c, raw)
 	}

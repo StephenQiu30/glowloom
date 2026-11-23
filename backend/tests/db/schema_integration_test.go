@@ -75,6 +75,16 @@ func TestSchemaInitializesEmptyDatabaseAndRejectsReplay(t *testing.T) {
 			t.Fatalf("%s privileges insert/select/update/delete/truncate = %t/%t/%t/%t/%t", table, canAppend, canRead, canUpdate, canDelete, canTruncate)
 		}
 	}
+	var mayEnable, mayRaiseLimit, mayCutOver, agentCanRead bool
+	if err := tx.QueryRowContext(ctx, `SELECT has_column_privilege('glowloom_app','workspace.evidence_semantic_policy','enabled','UPDATE'),
+ has_column_privilege('glowloom_app','workspace.evidence_semantic_policy','limit_credits','UPDATE'),
+ has_column_privilege('glowloom_app','workspace.evidence_semantic_policy','active_release_id','UPDATE'),
+ has_table_privilege('glowloom_agent','workspace.evidence_embedding','SELECT')`).Scan(&mayEnable, &mayRaiseLimit, &mayCutOver, &agentCanRead); err != nil {
+		t.Fatal(err)
+	}
+	if mayEnable || mayRaiseLimit || !mayCutOver || agentCanRead {
+		t.Fatalf("invalid project embedding policy privileges: enable=%t limit=%t cutover=%t agent=%t", mayEnable, mayRaiseLimit, mayCutOver, agentCanRead)
+	}
 	if _, err := tx.ExecContext(ctx, "SAVEPOINT schema_replay"); err != nil {
 		t.Fatal(err)
 	}

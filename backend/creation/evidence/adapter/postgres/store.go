@@ -38,10 +38,17 @@ const columns = "kind,id,part,version,revision,title,excerpt,parent_id,start_pos
 
 // Search serves only current evidence from a project already authorized by the caller.
 func Search(tx *gorm.DB, project uuid.UUID, query evidence.Query) (evidence.Result, error) {
-	result := evidence.Result{Status: "no_match", Items: []evidence.Item{}}
+	return search(tx, project, query, 0)
+}
+
+func search(tx *gorm.DB, project uuid.UUID, query evidence.Query, candidates int) (evidence.Result, error) {
+	result := evidence.Result{RetrievalMode: "lexical", Status: "no_match", Items: []evidence.Item{}}
 	q, err := query.Normalize()
 	if err != nil {
 		return result, err
+	}
+	if candidates > q.Limit && q.ShotID == nil {
+		q.Limit = candidates
 	}
 	base := tx.Table("workspace.current_project_evidence").Where("project_id=?", project)
 	if len(q.Kinds) > 0 {
@@ -80,6 +87,7 @@ func Search(tx *gorm.DB, project uuid.UUID, query evidence.Query) (evidence.Resu
 	}
 	if len(rows) > 0 {
 		result.Status = "ok"
+		result.Exact = rows[0].Rank >= 4 || q.ShotID != nil
 	}
 	if len(rows) > 1 && rows[0].Rank >= 4 && rows[1].Rank >= 4 && (rows[0].ID != rows[1].ID || rows[0].Kind != rows[1].Kind) {
 		result.Status = "ambiguous"

@@ -3,10 +3,10 @@ package aigateway
 import (
 	"context"
 	"encoding/json"
-	"slices"
 	"sort"
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
@@ -37,11 +37,15 @@ func (c Catalog) ListModelsForProject(ctx context.Context, a identity.Principal,
 		} else if err := Authority(ctx, tx, a, a.ScopeID, in.ProjectID, false); err != nil {
 			return err
 		}
-		query := `SELECT document FROM ai.model m WHERE enabled AND document->>'protocol'<>'local' AND EXISTS(SELECT 1 FROM ai.route r JOIN ai.credential k ON k.id=r.credential_id AND k.state='active' WHERE r.model_id=m.id AND r.enabled)`
+		query := `SELECT document,capability,route_id,credential_id FROM ai.available_model WHERE true`
 		args := []any{}
 		if in.Capability != "" {
-			query += " AND COALESCE(document->>'capability','text.generate')=?"
+			query += " AND capability=?"
 			args = append(args, in.Capability)
+		}
+		if in.Mode != "" {
+			query += " AND (capability='text.generate' AND ?='text_to_text' OR document->>'protocol'='media' AND document->'modes' @> jsonb_build_array(?::text))"
+			args = append(args, in.Mode, in.Mode)
 		}
 		if in.ModelKey != "" {
 			query += " AND name=?"
@@ -56,26 +60,31 @@ func (c Catalog) ListModelsForProject(ctx context.Context, a identity.Principal,
 			limit = 50
 		}
 		query += " ORDER BY name,id LIMIT ?"
-		args = append(args, limit)
-		var rows []struct{ Document []byte }
+		args = append(args, limit+1)
+		var rows []struct {
+			Document              []byte
+			Capability            string
+			RouteID, CredentialID uuid.UUID
+		}
 		if err := tx.Raw(query, args...).Scan(&rows).Error; err != nil {
 			return err
 		}
-		for _, row := range rows {
+		for i, row := range rows {
+			if i == limit {
+				last := result.Models[i-1]
+				result.Next = &catalog.ModelCatalogCursor{Key: last.Key, ID: last.ID}
+				break
+			}
 			var m domain.Model
 			if json.Unmarshal(row.Document, &m) != nil || m.Validate() != nil {
 				return domain.ErrInvalid
 			}
-			capability := "text.generate"
+			capability := row.Capability
 			modes := []string{"text_to_text"}
 			roles := []string{"prompt"}
 			if m.Protocol == "media" {
-				capability = m.Capability
 				modes = m.Modes
 				roles = []string{"prompt", "reference_image", "first_frame", "last_frame", "reference_video", "reference_audio"}
-			}
-			if in.Mode != "" && !slices.Contains(modes, in.Mode) {
-				continue
 			}
 			schema, _ := json.Marshal([]map[string]any{{"field": "max_tokens", "label": "最大输出", "type": "integer", "component": "input", "min": 1, "max": m.MaxOutput, "default": min(int64(8192), m.MaxOutput)}})
 			if m.Protocol == "media" {
@@ -116,9 +125,25 @@ func (c Catalog) ListModelsForProject(ctx context.Context, a identity.Principal,
 				amount, _ := m.Price.Cost(domain.Usage{})
 				price, _ = json.Marshal(map[string]any{"micros": amount, "gateway_quote_required": true})
 			}
-			item := catalog.ModelCatalogItem{ID: m.ID, ReleaseID: m.ID, Key: m.Name, DisplayName: m.Name, Capability: capability, InputRoles: roles, Status: catalogdomain.ModelStatus("active"), ProviderID: m.ID, ProviderName: "AI网关", ProviderAdapterKey: m.Protocol, ProviderRegion: catalogdomain.RegionOverseas, ProviderStatus: catalogdomain.ProviderStatus("active"), CredentialPresent: true,
-				CurrentVersion: &catalog.ModelCatalogVersion{ID: m.ID, VersionNo: 1, ContextWindow: int(m.MaxInput + m.MaxOutput), Modes: modes, Limits: json.RawMessage(`{"max_outputs":1}`), ParamSchema: schema},
+			region := catalogdomain.RegionOverseas
+			limits := json.RawMessage(`{"max_outputs":1}`)
+			window := m.MaxInput + m.MaxOutput
+			var availability catalog.ModelAvailability
+			if capability == domain.EmbeddingCapability {
+				region = catalogdomain.RegionDomestic
+				modes, roles = []string{}, []string{"text"}
+				schema = json.RawMessage("[]")
+				limits, _ = json.Marshal(map[string]int{"dimensions": domain.EmbeddingDimensions})
+				window = m.MaxInput
+				// Vector releases have a qualified route and no generation modes.
+				availability = catalog.ModelAvailability{Available: true, ReleaseID: m.ID, ModelVersionID: m.ID,
+					PriceVersionID: m.ID, ConfigVersionID: row.RouteID, CredentialID: row.CredentialID,
+					ModeAvailability: []catalog.ModeAvailability{}, UnavailableReasons: []string{}}
+			}
+			item := catalog.ModelCatalogItem{ModelAvailability: availability, ID: m.ID, ReleaseID: m.ID, Key: m.Name, DisplayName: m.Name, Capability: capability, InputRoles: roles, Status: catalogdomain.ModelStatus("active"), ProviderID: m.ID, ProviderName: "AI网关", ProviderAdapterKey: m.Protocol, ProviderRegion: region, ProviderStatus: catalogdomain.ProviderStatus("active"), CredentialPresent: true,
+				CurrentVersion: &catalog.ModelCatalogVersion{ID: m.ID, VersionNo: 1, ContextWindow: int(window), Modes: modes, Limits: limits, ParamSchema: schema},
 				CurrentPrice:   &catalog.ModelCatalogPrice{ID: m.ID, VersionNo: 1, Unit: unit, Rule: price, Currency: "CNY", EffectiveFrom: time.Unix(0, 0)}}
+
 			result.Models = append(result.Models, item)
 		}
 		return nil

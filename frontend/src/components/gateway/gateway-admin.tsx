@@ -43,6 +43,7 @@ import {
   setCredentialState,
   type CredentialState,
   type GatewayConfiguration,
+  arkEmbedding,
   type GatewayPrice,
   type OnboardingReview,
 } from "@/lib/ai-gateway-admin";
@@ -661,8 +662,10 @@ function ListRow({
   );
 }
 
-function priceSummary(price: GatewayPrice, media: boolean) {
-  return media
+function priceSummary(price: GatewayPrice, protocol: string) {
+  if (protocol === arkEmbedding.protocol)
+    return `输入 ${money(price.input, price.currency)} / 百万 token`;
+  return protocol === "media"
     ? `${money(price.request, price.currency)} / 次`
     : `输入 ${money(price.input, price.currency)} · 输出 ${money(price.output, price.currency)} / 百万 token`;
 }
@@ -689,7 +692,7 @@ function ModelList({
               <ListRow
                 key={model.id}
                 name={model.name}
-                description={`${protocolLabels[model.protocol] ?? model.protocol}${model.protocol === "local" ? "" : ` · ${priceSummary(model.price, model.protocol === "media")}`}`}
+                description={`${protocolLabels[model.protocol] ?? model.protocol}${model.protocol === "local" ? "" : ` · ${priceSummary(model.price, model.protocol)}`}`}
                 status={enabled ? "已启用" : draft ? "待验证" : "历史版本"}
               >
                 <Button asChild variant="outline" className="max-md:min-h-11">
@@ -744,7 +747,7 @@ function RoutesList({
               <ListRow
                 key={route.id ?? route.model_id}
                 name={route.upstream_model}
-                description={`${route.group}${route.protocol === "local" ? "" : ` · ${priceSummary(route.purchase, route.protocol === "media")}`}`}
+                description={`${route.group}${route.protocol === "local" ? "" : ` · ${priceSummary(route.purchase, route.protocol)}`}`}
                 status={enabled ? "已启用" : "未启用"}
               >
                 {route.id && (
@@ -863,7 +866,7 @@ function EntityDetail({
             {model && (
               <Detail
                 label="销售定价"
-                value={priceSummary(model.price, model.protocol === "media")}
+                value={priceSummary(model.price, model.protocol)}
               />
             )}
             {model && (
@@ -874,10 +877,7 @@ function EntityDetail({
                 <Detail label="供应商地址" value={route.base_url} />
                 <Detail
                   label="采购定价"
-                  value={priceSummary(
-                    route.purchase,
-                    route.protocol === "media",
-                  )}
+                  value={priceSummary(route.purchase, route.protocol)}
                 />
                 <Detail label="共享配额组" value={route.group} />
               </>

@@ -5,19 +5,19 @@ import (
 	"errors"
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
-
-	"github.com/google/uuid"
-
+	evidencepg "github.com/StephenQiu30/glowloom-server/backend/creation/evidence/adapter/postgres"
 	pg "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 )
 
 // RegisterWorker reuses Go Execution leases for dispatch and evidence-only settlement.
 func (r *Runtime) RegisterWorker(handlers map[string]taskruntime.Handler) {
+	handlers[evidencepg.IndexTask] = r.IndexEvidence
 	handlers[pg.OnboardingKind] = r.onboard
 	handlers["ai.recover"] = func(ctx context.Context, job taskruntime.Job) (time.Time, error) {
 		id, err := uuid.Parse(job.BusinessID)

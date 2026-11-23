@@ -90,7 +90,7 @@ func (r *Runtime) AgentModel(ctx context.Context, scope agent.Scope, id uuid.UUI
 	store := pg.New(r.DB, actor, auth).WithRunLimit(ApprovedRunLimit)
 	// Read the exact published product, independently of the old model catalog.
 	var docs []struct{ Document []byte }
-	if err := r.DB.WithContext(ctx).Raw("SELECT document FROM ai.model WHERE name=? AND enabled AND (?='' OR id::text=?)", input.ModelKey, input.ReleaseID, input.ReleaseID).Scan(&docs).Error; err != nil {
+	if err := r.DB.WithContext(ctx).Raw("SELECT document FROM ai.model WHERE name=? AND enabled AND document->>'protocol' IN ('chat','responses','messages') AND (?='' OR id::text=?)", input.ModelKey, input.ReleaseID, input.ReleaseID).Scan(&docs).Error; err != nil {
 		return agentFailure("model_unavailable"), err
 	}
 	if len(docs) != 1 {

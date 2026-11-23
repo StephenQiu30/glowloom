@@ -40,7 +40,7 @@ jobs:
           --health-timeout 10s
           --health-retries 10
       postgres:
-        image: postgres:18-alpine
+        image: pgvector/pgvector:0.8.6-pg18
         env:
           POSTGRES_DB: glowloom_reference
           POSTGRES_HOST_AUTH_METHOD: trust
@@ -155,7 +155,7 @@ jobs:
         run: >-
           go test -race -count=1
           ./tests/workspace ./tests/media ./tests/agentbusiness ./tests/agent/modelgateway ./tests/prompt
-          -run 'TestStyleLibrary|TestMediaReference|TestConversationAdmission|TestVideoLink|TestPublicVideo|TestReferenceVisual|TestChatAllows|TestConversationDocument|TestPersonalUploadNilRequest|TestUploadPublishes|TestPersonalUploadPublishes|TestProjectAgentEvalFixtureDistinguishesResults|TestAgentStoryboardRealPostgresYjs|TestStoryboardAdoptionRealPostgresYjs'
+          -run 'TestStyleLibrary|TestMediaReference|TestConversationAdmission|TestVideoLink|TestPublicVideo|TestReferenceVisual|TestChatAllows|TestConversationDocument|TestPersonalUploadNilRequest|TestUploadPublishes|TestPersonalUploadPublishes|TestProjectAgentEvalFixtureDistinguishesResults|TestProjectRAGIndexesSearchesAndFencesOriginalReceipts|TestProjectEvidenceHTTPResolvesOnlyCurrentProjectSources|TestAgentStoryboardRealPostgresYjs|TestStoryboardAdoptionRealPostgresYjs'
       - name: Verify rebuilt AI core without skipped regressions
         run: |
           set -o pipefail
@@ -190,7 +190,7 @@ jobs:
     timeout-minutes: 15
     services:
       postgres:
-        image: postgres:18-alpine
+        image: pgvector/pgvector:0.8.6-pg18
         env:
           POSTGRES_DB: glowloom_agent_test
           POSTGRES_HOST_AUTH_METHOD: trust

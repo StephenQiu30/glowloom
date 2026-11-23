@@ -9,6 +9,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { GatewayAdmin } from "@/components/gateway/gateway-admin";
 import { SpaceContext } from "@/components/spaces/space-context";
 import {
+  arkEmbedding,
   prepareModel,
   prepareRoute,
   fundCredits,
@@ -610,4 +611,47 @@ it("stages video Token prices and metering data without using a fixed request pr
       }),
     }),
   );
+});
+
+it("prepares an input-priced Ark embedding release and enforces its fixed supplier route", async () => {
+  const inputPrice = { ...price, output: 0 };
+  const embedding = {
+    ...model,
+    protocol: arkEmbedding.protocol,
+    price: inputPrice,
+    max_output: 1,
+  };
+  await prepareModel(embedding);
+  expect(send.mock.calls[0][1].data).toMatchObject({
+    protocol: "ark_embedding",
+    capability: "text.embed",
+    tools: false,
+    stream: false,
+    price: inputPrice,
+  });
+  await expect(prepareModel({ ...embedding, stream: true })).rejects.toThrow();
+  const route = {
+    model_id: modelID,
+    supplier,
+    group: "ark",
+    base_url: arkEmbedding.baseURL,
+    upstream_model: arkEmbedding.model,
+    protocol: arkEmbedding.protocol,
+    purchase: inputPrice,
+    priority: 0,
+  };
+  const options = {
+    scope: supplier,
+    project: credential,
+    concurrency: 2,
+    rpm: 60,
+  };
+  await expect(
+    prepareRoute({ ...route, upstream_model: "different" }, options),
+  ).rejects.toThrow();
+  await prepareRoute(route, options);
+  expect(send.mock.calls[1][1].data.route).toMatchObject({
+    protocol: arkEmbedding.protocol,
+    upstream_model: arkEmbedding.model,
+  });
 });

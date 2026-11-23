@@ -12,6 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
+  arkEmbedding,
   fundCredits,
   prepareModel,
   prepareRoute,
@@ -49,6 +50,7 @@ export const protocolLabels: Record<string, string> = {
   messages: "Messages",
   media: "媒体生成",
   local: "本地运行",
+  [arkEmbedding.protocol]: "豆包文本向量",
 };
 
 const protocolOptions = Object.entries(protocolLabels).filter(
@@ -61,11 +63,13 @@ const currencyOptions = [
 
 function PriceFields({
   kind,
+  embedding = false,
   media,
   videoTokens,
 }: {
   kind: "销售" | "采购";
   media: boolean;
+  embedding?: boolean;
   videoTokens?: boolean;
 }) {
   const [currency, setCurrency] = useState("CNY");
@@ -85,7 +89,9 @@ function PriceFields({
           ? `按 ${unit} / 百万视频 Token 计价。`
           : media
             ? `每次请求按 ${unit} 计价。`
-            : `输入和输出按 ${unit} / 百万 token 计价。`}
+            : embedding
+              ? `输入按 ${unit} / 百万 token 计价。`
+              : `输入和输出按 ${unit} / 百万 token 计价。`}
       </FieldDescription>
       <FieldGroup>
         <SelectField
@@ -101,6 +107,8 @@ function PriceFields({
             name="output"
             {...common}
           />
+        ) : embedding ? (
+          <InputField label={`${kind}输入价`} name="input" {...common} />
         ) : media ? (
           <InputField label={`${kind}按次价`} name="request" {...common} />
         ) : (
@@ -109,9 +117,11 @@ function PriceFields({
             <InputField label={`${kind}输出价`} name="output" {...common} />
           </FieldGroup>
         )}
-        <FormDetails label={media ? "汇率与折扣" : "缓存与其他费率"}>
+        <FormDetails
+          label={media || embedding ? "汇率与折扣" : "缓存与其他费率"}
+        >
           <FieldGroup>
-            {!media && (
+            {!media && !embedding && (
               <FieldGroup className="grid sm:grid-cols-3">
                 <InputField
                   name="cache_read"
@@ -190,6 +200,7 @@ export function ModelForm({
   const [billingUnit, setBillingUnit] = useState("video_tokens");
   const attempt = useRef<{ payload: string; id: string } | null>(null);
   const media = protocol === "media";
+  const embedding = protocol === arkEmbedding.protocol;
   const video = media && capability === "video.generate";
   const videoTokens = video && billingUnit === "video_tokens";
   return (
@@ -206,12 +217,14 @@ export function ModelForm({
             protocol,
             price: readPrice(form),
             max_input: Number(text(form, "max_input") || "32768"),
-            max_output: videoTokens
-              ? num(form, "max_output")
-              : Number(text(form, "max_output") || "4096"),
+            max_output: embedding
+              ? 1
+              : videoTokens
+                ? num(form, "max_output")
+                : Number(text(form, "max_output") || "4096"),
             purchase_cap: micros(form, "purchase_cap"),
-            tools: !media && form.get("tools") === "on",
-            stream: !media && form.get("stream") === "on",
+            tools: !embedding && !media && form.get("tools") === "on",
+            stream: !embedding && !media && form.get("stream") === "on",
           };
           const payload = JSON.stringify(model);
           if (attempt.current?.payload !== payload)
@@ -246,13 +259,15 @@ export function ModelForm({
             onCapabilityChange={setCapability}
           />
         ) : (
-          <FieldSet>
-            <FieldLegend variant="label">文本能力</FieldLegend>
-            <FieldGroup className="grid sm:grid-cols-2">
-              <CheckField label="支持工具调用" name="tools" />
-              <CheckField label="支持流式输出" name="stream" />
-            </FieldGroup>
-          </FieldSet>
+          !embedding && (
+            <FieldSet>
+              <FieldLegend variant="label">文本能力</FieldLegend>
+              <FieldGroup className="grid sm:grid-cols-2">
+                <CheckField label="支持工具调用" name="tools" />
+                <CheckField label="支持流式输出" name="stream" />
+              </FieldGroup>
+            </FieldSet>
+          )
         )}
         {video && (
           <SelectField
@@ -278,14 +293,16 @@ export function ModelForm({
                   max={1048576}
                   value={32768}
                 />
-                <InputField
-                  label="最大输出 token"
-                  name="max_output"
-                  type="number"
-                  min={1}
-                  max={1048576}
-                  value={4096}
-                />
+                {!embedding && (
+                  <InputField
+                    label="最大输出 token"
+                    name="max_output"
+                    type="number"
+                    min={1}
+                    max={1048576}
+                    value={4096}
+                  />
+                )}
               </>
             )}
             {media && (
@@ -294,7 +311,12 @@ export function ModelForm({
           </FieldGroup>
         </FormDetails>
         <Separator />
-        <PriceFields kind="销售" media={media} videoTokens={videoTokens} />
+        <PriceFields
+          kind="销售"
+          embedding={embedding}
+          media={media}
+          videoTokens={videoTokens}
+        />
         <InputField
           key={
             videoTokens ? "video-procurement-cap" : "default-procurement-cap"
@@ -385,6 +407,7 @@ function PreparedRouteForm({
   const attempt = useRef<{ payload: string; id: string } | null>(null);
   const newSupplier = useRef<string>(undefined);
   const media = model.protocol === "media";
+  const embedding = model.protocol === arkEmbedding.protocol;
   const drivers = configuration.media_drivers.filter(
     (option) =>
       model.capability !== undefined &&
@@ -508,6 +531,8 @@ function PreparedRouteForm({
           <InputField
             label="供应商模型号"
             name="upstream_model"
+            value={embedding ? arkEmbedding.model : undefined}
+            readOnly={embedding}
             placeholder="供应商返回的精确型号"
             maxLength={160}
           />
@@ -539,8 +564,12 @@ function PreparedRouteForm({
               name="base_url"
               type="url"
               placeholder="https://api.example.com/v1"
-              readOnly={Boolean(driver && !driver.custom_url)}
-              value={driver?.base_url ?? draftRoute?.base_url}
+              readOnly={embedding || Boolean(driver && !driver.custom_url)}
+              value={
+                embedding
+                  ? arkEmbedding.baseURL
+                  : (driver?.base_url ?? draftRoute?.base_url)
+              }
             />
             {driver && (
               <div className="flex flex-col gap-2 text-sm">
@@ -639,6 +668,7 @@ function PreparedRouteForm({
         <Separator />
         <PriceFields
           kind="采购"
+          embedding={embedding}
           media={media}
           videoTokens={Boolean(model.video_metering)}
         />

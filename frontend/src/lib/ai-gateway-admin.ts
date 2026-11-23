@@ -100,6 +100,12 @@ export type OnboardingReview = OnboardingSummary & {
   progress: { request_id: string; state: string }[];
 };
 
+export const arkEmbedding = {
+  protocol: "ark_embedding",
+  model: "doubao-embedding-vision-251215",
+  baseURL: "https://ark.cn-beijing.volces.com/api/v3",
+} as const;
+
 const prefix = "/api/ai/admin";
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function requireValue(ok: boolean, message: string): asserts ok {
@@ -164,7 +170,13 @@ export function validateModel(
   requireValue(
     typeof value.name === "string" &&
       Boolean(value.name.trim()) &&
-      ["chat", "responses", "messages", "media"].includes(value.protocol),
+      [
+        "chat",
+        "responses",
+        "messages",
+        "media",
+        arkEmbedding.protocol,
+      ].includes(value.protocol),
     "请填写模型名称与有效协议",
   );
   requireValue(
@@ -209,6 +221,19 @@ export function validateModel(
     tools: value.tools,
     stream: value.stream,
   };
+  if (value.protocol === arkEmbedding.protocol) {
+    requireValue(
+      !value.tools &&
+        !value.stream &&
+        price.input > 0 &&
+        price.output === 0 &&
+        price.cache_read === 0 &&
+        price.cache_write === 0 &&
+        price.request === 0,
+      "豆包向量模型按输入 token 计价",
+    );
+    result.capability = "text.embed";
+  }
   if (value.protocol === "media") {
     requireValue(
       ["image.generate", "video.generate", "audio.generate"].includes(
@@ -441,13 +466,31 @@ export async function prepareRoute(
   requireValue(
     Boolean(value.group.trim()) &&
       Boolean(value.upstream_model.trim()) &&
-      ["chat", "responses", "messages", "media"].includes(value.protocol),
+      [
+        "chat",
+        "responses",
+        "messages",
+        "media",
+        arkEmbedding.protocol,
+      ].includes(value.protocol),
     "请填写配额组、供应商模型号与协议",
   );
   requireValue(
     integer(value.priority) && integer(concurrency, 1, 1000) && integer(rpm, 1),
     "优先级须非负，并发为 1–1000，RPM 须为正整数",
   );
+  if (value.protocol === arkEmbedding.protocol) {
+    requireValue(
+      value.base_url === arkEmbedding.baseURL &&
+        value.upstream_model === arkEmbedding.model &&
+        value.purchase.input > 0 &&
+        value.purchase.output === 0 &&
+        value.purchase.cache_write === 0 &&
+        value.purchase.cache_read === 0 &&
+        value.purchase.request === 0,
+      "请使用方舟文本向量路由与输入单价",
+    );
+  }
   if (value.driver_config) {
     requireValue(
       value.protocol === "media" &&

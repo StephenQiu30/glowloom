@@ -84,6 +84,9 @@ func validateRoute(model domain.Model, route domain.Route, concurrency, rpm int)
 	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || strings.ContainsAny(route.BaseURL, "\r\n\\") || route.ID == uuid.Nil || route.ModelID == uuid.Nil || route.Supplier == uuid.Nil || route.Credential == uuid.Nil || route.Group == "" || len(route.Group) > 160 || route.UpstreamModel == "" || !domain.Protocol(route.Protocol) || route.Purchase.Validate() != nil || route.Priority < 0 || concurrency < 1 || concurrency > 1000 || rpm < 1 {
 		return domain.ErrInvalid
 	}
+	if route.Protocol == domain.EmbeddingProtocol && (route.BaseURL != domain.EmbeddingBaseURL || route.UpstreamModel != domain.EmbeddingModel || route.Purchase.Input <= 0 || route.Purchase.Request != 0 || route.Purchase.Output != 0 || route.Purchase.CacheRead != 0 || route.Purchase.CacheWrite != 0) {
+		return domain.ErrInvalid
+	}
 	if route.Protocol != "local" && route.Purchase.ExplicitFree {
 		return domain.ErrInvalid
 	}
