@@ -59,6 +59,7 @@ func (b *Boundary) WithCreditOperationSaga(enabled bool) *Boundary {
 // NewBoundary injects the owning business adapters for the Agent boundary.
 func NewBoundary(database *gorm.DB, model app.ModelCapability) *Boundary {
 	b := &Boundary{Store: pg.NewStore(database, ProvideControlAccess, time.Now), db: database, bindings: append(append(businessTools(), creationTools()...), exportTools()...)}
+	b.bindings = append(b.bindings, evidenceTools()...)
 	b.Store.WithProposalValidator(func(tx *gorm.DB) app.DecisionValidator { return proposalValidator{tx: tx, gateway: b.gateway} })
 	b.Capabilities.Model = model
 	for _, binding := range b.bindings {

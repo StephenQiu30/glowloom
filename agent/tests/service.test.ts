@@ -15,7 +15,7 @@ class BusinessFixture extends BusinessClient {
   constructor() {
     super('http://127.0.0.1:1', 'fixture');
   }
-  override async tools() {
+  override async tools(): ReturnType<BusinessClient['tools']> {
     return [];
   }
   override async decisions() {
@@ -429,6 +429,101 @@ it('loads current shared project decisions in a fresh conversation and fences a 
     expect((await submit(fresh.id, 0))?.state.status).toBe('completed');
     expect(JSON.stringify(gateway.lastInput)).toContain('开头一镜可用独白');
     expect(JSON.stringify(gateway.lastInput)).not.toContain('全片无旁白');
+    expect(gateway.calls).toBe(2);
+  } finally {
+    await isolated.close();
+  }
+});
+
+it('pins actual evidence receipts in the next model request and reports stale evidence', async () => {
+  class EvidenceBusiness extends BusinessFixture {
+    readonly evidenceReceipt = randomUUID();
+
+    override async tools(): ReturnType<BusinessClient['tools']> {
+      return [
+        {
+          name: 'search_project_evidence',
+          description: 'Find authorized project evidence',
+          contract_version: 'v1',
+          effect: 'read',
+          replay: 'safe',
+          roles: ['producer'],
+          parameters: {
+            type: 'object',
+            properties: { query: { type: 'string' } },
+          },
+        },
+      ];
+    }
+
+    override async execute(
+      ...args: Parameters<BusinessClient['execute']>
+    ): Promise<CallReceipt> {
+      const [kind, , grant, call] = args;
+      if (kind === 'tool') {
+        return {
+          receipt_id: this.evidenceReceipt,
+          root_run_id: grant.root_run_id,
+          submission_id: grant.submission_id,
+          call,
+          status: 'completed',
+          cost_micros: 0,
+          result: {
+            status: 'ok',
+            items: [{ title: '第一幕', excerpt: '浓雾中的渡轮' }],
+          },
+        };
+      }
+      const result = await super.execute(...args);
+      if (this.calls === 1) {
+        result.result = {
+          output: '',
+          usage: { input_tokens: 1, output_tokens: 1 },
+          model_key: 'test-model',
+          stop_reason: 'tool_use',
+          tool_calls: [
+            {
+              id: 'project-evidence',
+              name: 'search_project_evidence',
+              arguments: { query: '渡轮' },
+            },
+          ],
+        };
+      } else {
+        expect(this.lastInput).toMatchObject({
+          project_evidence_receipts: [this.evidenceReceipt],
+        });
+        expect(JSON.stringify(this.lastInput)).toContain('浓雾中的渡轮');
+        result.status = 'failed';
+        result.result = { code: 'project_evidence_changed' };
+      }
+      return result;
+    }
+  }
+  const gateway = new EvidenceBusiness();
+  const isolated = new SessionService(pool, gateway, { leaseMs: 30000 });
+  try {
+    const session = await isolated.createSession({
+      ...scope,
+      request_id: randomUUID(),
+      content_hash: '3'.repeat(64),
+      title: '按证据继续创作',
+    });
+    const run = await isolated.createRun(session.id, {
+      ...scope,
+      input: authorizedText('找开场证据'),
+      request_id: randomUUID(),
+      content_hash: '4'.repeat(64),
+      expected_execution_revision: 0,
+      goal: '找开场证据',
+      manifest: { model_key: 'test-model' },
+    });
+    await isolated.waitForRun(run.root_run_id);
+    const snapshot = await isolated.readRun(run.root_run_id, scope);
+    expect(snapshot?.state).toMatchObject({
+      status: 'failed',
+      failure: { code: 'project_evidence_changed' },
+    });
     expect(gateway.calls).toBe(2);
   } finally {
     await isolated.close();

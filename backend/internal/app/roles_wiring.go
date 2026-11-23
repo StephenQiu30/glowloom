@@ -6,9 +6,12 @@ import (
 	"strings"
 	"time"
 
+	evidencepg "github.com/StephenQiu30/glowloom-server/backend/creation/evidence/adapter/postgres"
+	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/objects"
 	scripttask "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/task"
 	workspacetask "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/task"
 	operationtask "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/task"
+	agentwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/agent"
 	maintenancetask "github.com/StephenQiu30/glowloom-server/backend/internal/infra/maintenance/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 	mediatask "github.com/StephenQiu30/glowloom-server/backend/media/adapter/task"
@@ -95,6 +98,7 @@ func buildBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Conne
 		}
 		context.AfterFunc(ctx, objects.Close)
 		registry := objects.Registry()
+		handlers[evidencepg.ScriptIndexTask] = agentwire.EvidenceIndexHandler(dbConn.DB, scriptobjects.NewRoutedStorage(registry, pgmedia.NewStorageRoutes(dbConn.DB)))
 		var origins []string
 		for _, raw := range strings.Split(cfg.MediaResultAllowedOrigins, ",") {
 			if origin := strings.TrimSpace(raw); origin != "" {

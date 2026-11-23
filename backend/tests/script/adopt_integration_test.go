@@ -7,8 +7,12 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/evidence"
+	evidencepg "github.com/StephenQiu30/glowloom-server/backend/creation/evidence/adapter/postgres"
 	app "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
+	agentwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/agent"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 )
 
 func TestScriptAdoptPGFirstFormalPublicationReplayAndMissingOwnerPreservesOldFacts(t *testing.T) {
@@ -19,6 +23,8 @@ func TestScriptAdoptPGFirstFormalPublicationReplayAndMissingOwnerPreservesOldFac
 	sources := app.NewSourceService(store, objects, time.Now)
 	_, input := sourceCommand()
 	input.ProjectID = pid
+	input.Sources[0].Status = domain.SourceStatusReady
+	input.Sources[0].Document.Content[0].Content[0].Text = "清晨渡轮穿过浓雾，码头渐显。"
 	saved, err := sources.Write(t.Context(), scriptActor(actor), input)
 	if err != nil {
 		t.Fatal(err)
@@ -36,6 +42,21 @@ func TestScriptAdoptPGFirstFormalPublicationReplayAndMissingOwnerPreservesOldFac
 	first, err := adopt.Adopt(t.Context(), scriptActor(actor), command)
 	if err != nil || !first.Changed || first.ScriptRevision != 3 || first.ProjectRevision != 4 || first.SplitSetID != formal.SplitSetID || first.PreviousVersionID != nil || len(first.Mappings) != 1 || first.Mappings[0].InheritStatus != "not_inherited" {
 		t.Fatal("first real adopted content", first, err)
+	}
+	ref := evidencepg.ScriptIndexRequest{ActorID: actor.ID, OrgID: actor.OrgID, ProjectID: pid, VersionID: saved.VersionID}
+	var job taskruntime.Job
+	if err := db.Raw("SELECT kind,business_id,reference FROM infra.task_work WHERE kind=? AND business_id=?", evidencepg.ScriptIndexTask, ref.BusinessID()).Scan(&job).Error; err != nil || len(job.Reference) == 0 {
+		t.Fatal("adopt did not enqueue script indexing", job, err)
+	}
+	index := agentwire.EvidenceIndexHandler(db, objects)
+	for range 2 {
+		if _, err := index(t.Context(), job); err != nil {
+			t.Fatal("indexing adopted version", err)
+		}
+	}
+	result, err := evidencepg.Search(db, pid, evidence.Query{Text: "渡轮穿过浓雾", Kinds: []string{"script_source"}})
+	if err != nil || len(result.Items) != 1 || result.Items[0].Excerpt != "清晨渡轮穿过浓雾，码头渐显。" || result.Items[0].Start == nil || *result.Items[0].Start != 0 {
+		t.Fatal("adopted script text not searchable", result, err)
 	}
 	repeat, err := app.NewAdoptService(scriptStore(db), time.Now).Adopt(t.Context(), scriptActor(actor), command)
 	if err != nil || repeat.VersionID != first.VersionID || repeat.ScriptRevision != first.ScriptRevision {
@@ -80,5 +101,15 @@ func TestScriptAdoptPGFirstFormalPublicationReplayAndMissingOwnerPreservesOldFac
 	var count int64
 	if err := owner.Raw(`SELECT count(*) FROM script.review_command WHERE project_id=? AND action='adopt'`, pid).Scan(&count).Error; err != nil || count != 2 {
 		t.Fatal("missing owner wrote receipt", count, err)
+	}
+	if err := owner.Exec("UPDATE script.project_state SET adopted_version_id=NULL WHERE project_id=?", pid).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := index(t.Context(), job); err != nil {
+		t.Fatal("late job should finish without reactivating the old version", err)
+	}
+	removed, err := evidencepg.Read(db, pid, result.Items[0].Reference)
+	if err != nil || removed.Status != "unavailable" || len(removed.Items) != 0 {
+		t.Fatal("old indexed text was still visible", removed, err)
 	}
 }

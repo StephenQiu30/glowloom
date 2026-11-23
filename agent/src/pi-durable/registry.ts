@@ -109,6 +109,26 @@ export function buildRegistry(
             ),
           );
           const result = receipt.result as JsonObject;
+          if (
+            ['search_project_evidence', 'read_project_evidence'].includes(
+              descriptor.name,
+            ) &&
+            Array.isArray(result?.items) &&
+            result.items.length > 0
+          ) {
+            await gate.harness().commit(async (tx) => {
+              const state = await tx.doc(StateDoc, gate.rootId());
+              const ids = Array.isArray(state.project_evidence_receipts)
+                ? state.project_evidence_receipts
+                : [];
+              if (ids.includes(receipt.receipt_id)) return;
+              if (ids.length >= 64)
+                throw new Error(
+                  'Project evidence limit reached; start a new conversation',
+                );
+              state.project_evidence_receipts = [...ids, receipt.receipt_id];
+            }, context);
+          }
           if (result && typeof result.proposal_id === 'string')
             await gate.proposal(result.proposal_id, api.taskId, result);
           const state = await gate

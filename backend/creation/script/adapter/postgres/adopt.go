@@ -8,6 +8,7 @@ import (
 
 	"gorm.io/gorm"
 
+	evidencepg "github.com/StephenQiu30/glowloom-server/backend/creation/evidence/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
 )
@@ -110,6 +111,9 @@ func (s *SourceStore) Adopt(ctx context.Context, actor application.Actor, input 
 				return err
 			}
 			result.ScriptRevision, result.ProjectRevision, result.Changed = state.Revision+1, projectRevision, true
+			if err := evidencepg.ScheduleScriptIndex(ctx, tx, evidencepg.ScriptIndexRequest{ActorID: actor.ID, OrgID: actor.OrgID, ProjectID: input.ProjectID, VersionID: input.VersionID}, now); err != nil {
+				return err
+			}
 		}
 		for _, e := range episodes {
 			status := domain.EpisodeInheritStatusNotInherited

@@ -14,6 +14,8 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
+	"github.com/StephenQiu30/glowloom-server/backend/creation/evidence"
+	evidencepg "github.com/StephenQiu30/glowloom-server/backend/creation/evidence/adapter/postgres"
 	workspacepg "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
 	pg "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/adapter/postgres"
 	aiapp "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/application"
@@ -36,7 +38,7 @@ func (f rebuiltProvider) Send(ctx context.Context, d aiapp.Dispatch, emit func(j
 // production Agent entrypoint and ai ledger; old reservation/runtime assertions
 // are retired explicitly in final-fix-report.md, never restored as a funds path.
 func TestModelGatewayPersistsDialogueUsageAndAtomicSettlement(t *testing.T) {
-	for _, scenario := range []string{"complete", "runtime_role", "memory_changed", "pool_backup", "pool_pinned", "response_lost", "response_lost_credential_changed", "settlement_interrupted", "budget_rejected", "grant_revoked", "wrong_release", "params_tampered", "model_tampered", "tokens_tampered", "identity_revoked_before_send", "identity_revoked_after_send", "skill_disabled_before_dispatch", "skill_enabled_before_dispatch", "thinking_explicit", "max_tokens_bound", "max_tokens_exceeded", "credential_invalid", "price_frozen"} {
+	for _, scenario := range []string{"complete", "runtime_role", "memory_changed", "evidence_changed", "evidence_current", "pool_backup", "pool_pinned", "response_lost", "response_lost_credential_changed", "settlement_interrupted", "budget_rejected", "grant_revoked", "wrong_release", "params_tampered", "model_tampered", "tokens_tampered", "identity_revoked_before_send", "identity_revoked_after_send", "skill_disabled_before_dispatch", "skill_enabled_before_dispatch", "thinking_explicit", "max_tokens_bound", "max_tokens_exceeded", "credential_invalid", "price_frozen"} {
 		t.Run(scenario, func(t *testing.T) {
 			dsn := os.Getenv("GLOWLOOM_TEST_MODEL_GATEWAY_DB_DSN")
 			if dsn == "" {
@@ -63,7 +65,8 @@ func TestModelGatewayPersistsDialogueUsageAndAtomicSettlement(t *testing.T) {
 				require.NoError(t, publish.PublishRoute(t.Context(), route, []byte("fixture"), "fixture", 10, 10000))
 				routes = append(routes, route)
 			}
-			root, segment, id := uuid.New(), uuid.New(), uuid.New()
+			root, segment, id, session := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+			evidenceReceipt := uuid.New()
 			scope := agent.Scope{ActorID: a.ID, OrgID: a.OrgID, ScopeID: a.ScopeID, ProjectID: p}
 			scopeRaw, _ := json.Marshal(scope)
 			params := map[string]any{}
@@ -80,6 +83,8 @@ func TestModelGatewayPersistsDialogueUsageAndAtomicSettlement(t *testing.T) {
 			selection, _ := json.Marshal(map[string]any{"model_key": m.Name, "release_id": m.ID, "max_tokens": tokens, "params": params})
 			input := map[string]any{"model_key": m.Name, "release_id": m.ID, "max_tokens": tokens, "params": params, "messages": []any{map[string]any{"role": "user", "content": "read the scene"}}, "tools": []any{map[string]any{"name": "read_context", "parameters": map[string]any{"type": "object"}}}}
 			switch scenario {
+			case "evidence_changed", "evidence_current":
+				input["project_evidence_receipts"] = []uuid.UUID{evidenceReceipt}
 			case "runtime_role", "memory_changed":
 				input["project_memory_version"] = workspacepg.ProjectMemoryVersion(nil)
 			case "wrong_release":
@@ -96,9 +101,23 @@ func TestModelGatewayPersistsDialogueUsageAndAtomicSettlement(t *testing.T) {
 			if scenario == "budget_rejected" {
 				maximum = 1
 			}
-			require.NoError(t, database.Exec("INSERT INTO agent_business.run_authorization(root_run_id,session_id,submission_id,request_id,content_hash,scope,budget_micros,owner_epoch,model_selection) VALUES(?,?,?,?,?,?::jsonb,2000000,1,?::jsonb)", root, uuid.New(), segment, uuid.New(), agent.Hash(raw), string(scopeRaw), string(selection)).Error)
+			require.NoError(t, database.Exec("INSERT INTO agent_business.run_authorization(root_run_id,session_id,submission_id,request_id,content_hash,scope,budget_micros,owner_epoch,model_selection) VALUES(?,?,?,?,?,?::jsonb,2000000,1,?::jsonb)", root, session, segment, uuid.New(), agent.Hash(raw), string(scopeRaw), string(selection)).Error)
 			require.NoError(t, database.Exec("INSERT INTO agent_business.execution_grant(grant_id,root_run_id,submission_id,owner_epoch,authorization_revision,expires_at) VALUES(?,?,?,1,1,clock_timestamp()+interval '1 hour')", uuid.New(), root, segment).Error)
 			require.NoError(t, database.Exec("INSERT INTO agent_business.call_receipt(receipt_id,root_run_id,submission_id,task_id,call_id,checkpoint_id,attempt,contract_version,input_hash,kind,name,max_micros,status) VALUES(?,?,?,'task','call','checkpoint',1,'v1',?,'model','model',?,'in_flight')", id, root, segment, agent.Hash(raw), maximum).Error)
+			if strings.HasPrefix(scenario, "evidence_") {
+				item, err := evidencepg.Read(database, p, evidence.Reference{Kind: "brief", ID: p})
+				require.NoError(t, err)
+				require.Len(t, item.Items, 1)
+				result, err := json.Marshal(item)
+				require.NoError(t, err)
+				require.NoError(t, database.Exec(`INSERT INTO agent_business.call_receipt(
+					receipt_id,root_run_id,submission_id,task_id,call_id,checkpoint_id,attempt,contract_version,input_hash,kind,name,max_micros,status,result)
+					VALUES(?,?,?,'search','evidence','checkpoint',1,'v1',?,'tool','read_project_evidence',0,'completed',?::jsonb)`,
+					evidenceReceipt, root, segment, agent.Hash(raw), string(result)).Error)
+				if scenario == "evidence_changed" {
+					require.NoError(t, database.Exec("UPDATE workspace.project SET description='new source',revision=revision+1 WHERE id=?", p).Error)
+				}
+			}
 			if scenario == "memory_changed" {
 				require.NoError(t, database.Exec(`INSERT INTO workspace.project_memory_revision
 					(id,project_id,key,revision,statement,withdrawn,confirmed_by,confirmed_at,request_id)
@@ -143,6 +162,7 @@ func TestModelGatewayPersistsDialogueUsageAndAtomicSettlement(t *testing.T) {
 				sends++
 				require.Contains(t, string(d.Call.Raw), "read the scene")
 				require.NotContains(t, string(d.Call.Raw), "project_memory_version")
+				require.NotContains(t, string(d.Call.Raw), "project_evidence_receipts")
 				if scenario == "pool_backup" {
 					require.Equal(t, routes[1].ID, d.Route.ID)
 				}
@@ -170,11 +190,14 @@ func TestModelGatewayPersistsDialogueUsageAndAtomicSettlement(t *testing.T) {
 			})}
 			result, err := runtime.AgentModel(t.Context(), scope, id, raw, maximum)
 			require.NoError(t, err)
-			rejected := []string{"memory_changed", "budget_rejected", "grant_revoked", "wrong_release", "params_tampered", "model_tampered", "tokens_tampered", "identity_revoked_before_send", "skill_disabled_before_dispatch", "thinking_explicit", "max_tokens_exceeded", "credential_invalid"}
+			rejected := []string{"memory_changed", "evidence_changed", "budget_rejected", "grant_revoked", "wrong_release", "params_tampered", "model_tampered", "tokens_tampered", "identity_revoked_before_send", "skill_disabled_before_dispatch", "thinking_explicit", "max_tokens_exceeded", "credential_invalid"}
 			if slices.Contains(rejected, scenario) {
 				require.Equal(t, agent.CallStatusFailed, result.Status)
 				if scenario == "memory_changed" {
 					require.JSONEq(t, `{"code":"project_memory_changed"}`, string(result.Result))
+				}
+				if scenario == "evidence_changed" {
+					require.JSONEq(t, `{"code":"project_evidence_changed"}`, string(result.Result))
 				}
 				require.Zero(t, sends)
 				var n int64
@@ -227,9 +250,18 @@ func TestModelGatewayPersistsDialogueUsageAndAtomicSettlement(t *testing.T) {
 				require.NoError(t, e)
 				require.EqualValues(t, 100000, snapshot.SettledCharge)
 				require.Zero(t, snapshot.PendingCommitment)
-				require.Len(t, snapshot.Evidence, 1)
-				require.Equal(t, &id, snapshot.Evidence[0].OperationID)
-				require.NotNil(t, snapshot.Evidence[0].SettlementID)
+				expectedEvidence := 1
+				if scenario == "evidence_current" {
+					expectedEvidence++
+				}
+				require.Len(t, snapshot.Evidence, expectedEvidence)
+				var settled bool
+				for _, item := range snapshot.Evidence {
+					if item.OperationID != nil && *item.OperationID == id && item.SettlementID != nil {
+						settled = true
+					}
+				}
+				require.True(t, settled, "model settlement missing")
 			}
 		})
 	}

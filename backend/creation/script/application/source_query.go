@@ -109,24 +109,58 @@ func (s *SourceService) Source(ctx context.Context, actor Actor, project, lineag
 		return SourceDetail{}, ErrNotFound
 	}
 	record := base.Sources[index]
-	data, err := s.readObject(ctx, record.Rich)
+	document, plain, err := s.verifiedSourceText(ctx, record)
 	if err != nil {
 		return SourceDetail{}, err
-	}
-	document, err := domain.DecodeRichDocument(data)
-	if err != nil {
-		return SourceDetail{}, err
-	}
-	plain, err := document.PlainText()
-	if err != nil {
-		return SourceDetail{}, err
-	}
-	if domain.ContentSHA([]byte(plain)) != record.ContentHash {
-		return SourceDetail{}, ErrObjectMismatch
 	}
 	spanIndex := slices.IndexFunc(base.Version.Spans, func(s domain.SourceSpan) bool { return s.SourceID == record.ID })
 	if spanIndex < 0 {
 		return SourceDetail{}, ErrUnavailable
 	}
 	return SourceDetail{SourceSummary: summary(record, index), Document: document, PlainText: plain, Span: base.Version.Spans[spanIndex], Provenance: record.Provenance}, nil
+}
+
+// VisitAdoptedSourceText reads verified published source text from one
+// authoritative manifest, reusing the source owner's object and hash checks.
+func (s *SourceService) VisitAdoptedSourceText(ctx context.Context, actor Actor, project, version uuid.UUID, visit func(uuid.UUID, string)) error {
+	if s == nil || s.store == nil || s.objects == nil || visit == nil {
+		return ErrUnavailable
+	}
+	base, err := s.store.LoadBase(ctx, actor, project, &version)
+	if err != nil {
+		return err
+	}
+	if base.State.AdoptedVersionID == nil || *base.State.AdoptedVersionID != version {
+		return ErrConflict
+	}
+	for _, record := range base.Sources {
+		if record.Status != domain.SourceStatusReady && record.Status != domain.SourceStatusCompleted {
+			continue
+		}
+		_, plain, err := s.verifiedSourceText(ctx, record)
+		if err != nil {
+			return err
+		}
+		visit(record.ID, plain)
+	}
+	return nil
+}
+
+func (s *SourceService) verifiedSourceText(ctx context.Context, record domain.SourceRecord) (domain.RichDocument, string, error) {
+	data, err := s.readObject(ctx, record.Rich)
+	if err != nil {
+		return domain.RichDocument{}, "", err
+	}
+	document, err := domain.DecodeRichDocument(data)
+	if err != nil {
+		return domain.RichDocument{}, "", err
+	}
+	plain, err := document.PlainText()
+	if err != nil {
+		return domain.RichDocument{}, "", err
+	}
+	if domain.ContentSHA([]byte(plain)) != record.ContentHash {
+		return domain.RichDocument{}, "", ErrObjectMismatch
+	}
+	return document, plain, nil
 }

@@ -428,7 +428,8 @@ export function ConversationThread({
                   ) : null}
                   {terminalStatuses.has(state.status) &&
                   s.input &&
-                  state.failure?.code !== "project_memory_changed" ? (
+                  state.failure?.code !== "project_memory_changed" &&
+                  state.failure?.code !== "project_evidence_changed" ? (
                     <Button
                       variant="outline"
                       disabled={
@@ -457,6 +458,11 @@ export function ConversationThread({
                   {state.failure?.code === "project_memory_changed" ? (
                     <p className="text-sm text-muted-foreground">
                       项目约定已变更。请新建会话，按当前约定继续创作。
+                    </p>
+                  ) : null}
+                  {state.failure?.code === "project_evidence_changed" ? (
+                    <p className="text-sm text-muted-foreground">
+                      之前使用的项目证据已变更或不可访问。请新建会话并选择当前来源。
                     </p>
                   ) : null}
                   {!s.execution_available ? (

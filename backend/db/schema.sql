@@ -9740,3 +9740,106 @@ CREATE UNIQUE INDEX project_memory_slot_revision
     ON workspace.project_memory_revision (project_id, key, revision DESC);
 
 GRANT SELECT,INSERT ON TABLE workspace.project_memory_revision TO glowloom_app;
+
+-- Derived, versioned excerpts of verified adopted script objects.
+CREATE TABLE workspace.script_evidence_index (
+    project_id uuid NOT NULL REFERENCES workspace.project(id) ON DELETE CASCADE,
+    version_id uuid NOT NULL,
+    PRIMARY KEY (project_id,version_id)
+);
+CREATE TABLE workspace.script_evidence_chunk (
+    project_id uuid NOT NULL,
+    version_id uuid NOT NULL,
+    source_id uuid NOT NULL,
+    part integer NOT NULL CHECK (part BETWEEN 1 AND 10000),
+    start_pos bigint NOT NULL CHECK (start_pos >= 0),
+    end_pos bigint NOT NULL CHECK (end_pos > start_pos),
+    body text NOT NULL CHECK (char_length(body) BETWEEN 1 AND 1200),
+    PRIMARY KEY (project_id,version_id,source_id,part),
+    FOREIGN KEY (project_id,version_id) REFERENCES workspace.script_evidence_index(project_id,version_id) ON DELETE CASCADE
+);
+GRANT SELECT,INSERT,DELETE ON workspace.script_evidence_index TO glowloom_app;
+GRANT SELECT,INSERT ON workspace.script_evidence_chunk TO glowloom_app;
+
+-- Current published project evidence. This projection reads the authoritative
+-- rows using the invoking role and requires consumers to authorize the project.
+CREATE VIEW workspace.current_project_evidence WITH (security_invoker=true) AS
+WITH adopted_script AS NOT MATERIALIZED (
+    SELECT s.project_id,s.org_id,v.id,v.version_no,v.source_ids
+    FROM script.project_state s
+    JOIN script.script_version v ON v.id=s.adopted_version_id AND v.project_id=s.project_id AND v.org_id=s.org_id
+), scenes AS NOT MATERIALIZED (
+    SELECT s.project_id,s.org_id,s.id,s.scene_key,s.heading,s.location_text,s.time_of_day,s.span_start,s.span_end,e.id AS episode_id,h.version_no
+    FROM adopted_script v
+    JOIN script.version_head sh ON sh.version_id=v.id AND sh.project_id=v.project_id AND sh.org_id=v.org_id
+    JOIN script.episode e ON e.script_version_id=v.id AND e.split_set_id=sh.confirmed_split_set_id AND e.project_id=v.project_id AND e.org_id=v.org_id AND NOT e.is_delete
+    JOIN script.episode_structure h ON h.id=e.confirmed_structure_id AND h.episode_id=e.id AND h.project_id=e.project_id AND h.org_id=e.org_id
+    JOIN script.scene s ON s.episode_structure_id=h.id AND s.project_id=h.project_id AND s.org_id=h.org_id
+), source_rows(project_id, kind, id, revision, parent_id, part, title, body, aliases, start_pos, end_pos, position_unit, draft, identity_version) AS (
+    SELECT p.id,'brief',p.id,p.revision::bigint,NULL::uuid,i,p.name,substring(p.description FROM ((i-1)*1000+1) FOR 1200),'',
+        ((i-1)*1000)::bigint,least((i-1)*1000+1200,length(p.description))::bigint,'character',false,''
+    FROM workspace.project p
+    CROSS JOIN LATERAL generate_series(1,least(64,greatest(1,(greatest(0,length(p.description)-200)+999)/1000))) i
+    WHERE NOT p.is_delete AND p.status IN ('active','archived')
+    UNION ALL
+    SELECT m.project_id,'decision',m.id,m.revision,NULL,1,m.key,m.statement,'',NULL,NULL,'',false,m.id::text
+    FROM (SELECT DISTINCT ON (project_id,key) * FROM workspace.project_memory_revision ORDER BY project_id,key,revision DESC) m
+    WHERE NOT m.withdrawn
+    UNION ALL
+    SELECT d.project_id,'canvas_node',n.id,n.content_version,d.id,i,n.title,substring(coalesce(n.config->>'text','') FROM ((i-1)*1000+1) FOR 1200),
+        n.node_type,((i-1)*1000)::bigint,least((i-1)*1000+1200,length(coalesce(n.config->>'text','')))::bigint,'character',false,''
+    FROM canvas.node n JOIN canvas.document d ON d.id=n.document_id AND NOT d.is_delete
+    CROSS JOIN LATERAL generate_series(1,least(64,greatest(1,(greatest(0,length(coalesce(n.config->>'text',''))-200)+999)/1000))) i
+    WHERE NOT n.is_delete
+    UNION ALL
+    SELECT s.project_id,'script_source',s.source_lineage_id,s.source_revision,v.id,coalesce(c.part,1),s.title,coalesce(c.body,''),s.source_kind,
+        c.start_pos,c.end_pos,CASE WHEN c.part IS NULL THEN '' ELSE 'character' END,false,s.id::text
+    FROM adopted_script v
+    JOIN script.script_source s ON s.project_id=v.project_id AND s.org_id=v.org_id AND s.id=ANY(v.source_ids) AND s.status IN ('ready','completed')
+    LEFT JOIN workspace.script_evidence_chunk c ON c.project_id=s.project_id AND c.version_id=v.id AND c.source_id=s.id
+    UNION ALL
+    SELECT s.project_id,'scene',s.scene_key,s.version_no,s.episode_id,1,s.heading,concat_ws(' ',s.location_text,s.time_of_day),'',
+        s.span_start::bigint,s.span_end::bigint,'character',false,s.id::text FROM scenes s
+    UNION ALL
+    SELECT s.project_id,'script_line',l.id,s.version_no,s.scene_key,1,s.heading,left(l.content,1200),'',
+        l.span_start::bigint,l.span_end::bigint,'character',false,l.id::text
+    FROM scenes s JOIN script.action_line l ON l.scene_id=s.id AND l.project_id=s.project_id AND l.org_id=s.org_id
+    UNION ALL
+    SELECT s.project_id,'script_line',l.id,s.version_no,s.scene_key,1,concat_ws(' · ',s.heading,l.speaker_text),left(l.content,1200),l.kind,
+        l.span_start::bigint,l.span_end::bigint,'character',false,l.id::text
+    FROM scenes s JOIN script.dialogue_line l ON l.scene_id=s.id AND l.project_id=s.project_id AND l.org_id=s.org_id
+    UNION ALL
+    SELECT e.project_id,'character',e.id,v.version_no,NULL,1,coalesce(v.content->>'name',''),left(coalesce(v.content->>'description',''),1200),
+        CASE WHEN jsonb_typeof(v.content->'aliases')='array' THEN v.content->>'aliases' ELSE '' END,NULL,NULL,'',false,v.id::text
+    FROM bible."character" e JOIN bible.character_version v ON v.id=e.confirmed_version_id AND v.entry_id=e.id AND v.project_id=e.project_id AND v.org_id=e.org_id
+    WHERE NOT e.is_delete AND e.redirect_id IS NULL
+    UNION ALL
+    SELECT e.project_id,'location',e.id,v.version_no,NULL,1,coalesce(v.content->>'name',''),left(concat_ws(' ',v.content->>'description',v.content->>'prompt'),1200),
+        CASE WHEN jsonb_typeof(v.content->'aliases')='array' THEN v.content->>'aliases' ELSE '' END,NULL,NULL,'',false,v.id::text
+    FROM bible.location e JOIN bible.location_version v ON v.id=e.confirmed_version_id AND v.entry_id=e.id AND v.project_id=e.project_id AND v.org_id=e.org_id WHERE NOT e.is_delete
+    UNION ALL
+    SELECT e.project_id,'prop',e.id,v.version_no,NULL,1,coalesce(v.content->>'name',''),left(concat_ws(' ',v.content->>'description',v.content->>'prompt'),1200),
+        CASE WHEN jsonb_typeof(v.content->'aliases')='array' THEN v.content->>'aliases' ELSE '' END,NULL,NULL,'',false,v.id::text
+    FROM bible.prop e JOIN bible.prop_version v ON v.id=e.confirmed_version_id AND v.entry_id=e.id AND v.project_id=e.project_id AND v.org_id=e.org_id WHERE NOT e.is_delete
+    UNION ALL
+    SELECT a.project_id,'media',a.id,a.revision::bigint,NULL,1,left(a.file_name,512),'',a.kind,NULL,NULL,'',false,coalesce(a.sha256,'')
+    FROM media.media_asset a WHERE a.project_id IS NOT NULL AND a.status='ready' AND NOT a.is_delete AND a.moderation_status='passed' AND NOT a.contains_real_person AND a.consent_record_id IS NULL
+    UNION ALL
+    SELECT j.project_id,'transcript',j.id,j.revision,a.id,c.n::integer,left(a.file_name,512),left(c.elem->>'text',1200),a.kind,
+        (c.elem->>'start_ms')::bigint,(c.elem->>'end_ms')::bigint,'millisecond',true,j.result_sha256
+    FROM mediatool.transcription_job j
+    JOIN canvas.document d ON d.id=j.canvas_id AND d.project_id=j.project_id AND NOT d.is_delete
+    JOIN canvas.node n ON n.id=j.node_id AND n.document_id=d.id AND NOT n.is_delete
+    JOIN media.media_asset a ON a.project_id=j.project_id AND a.id::text=j.frozen#>>'{input,asset_id}'
+        AND a.revision::text=j.frozen#>>'{input,revision}' AND a.sha256=j.frozen#>>'{input,sha256}'
+        AND d.revision=j.source_revision AND n.ref_type='media_asset' AND n.ref_id=a.id AND n.node_type=a.kind
+        AND a.kind=j.frozen#>>'{input,kind}' AND a.status='ready' AND NOT a.is_delete AND a.moderation_status='passed' AND NOT a.contains_real_person AND a.consent_record_id IS NULL
+    CROSS JOIN LATERAL jsonb_array_elements(j.result->'segments') WITH ORDINALITY AS c(elem,n)
+    WHERE j.status='succeeded' AND j.inference_state='terminal' AND j.result_sha256 IS NOT NULL
+)
+SELECT project_id,kind,id,revision,parent_id,part,title,coalesce(body,'') AS excerpt,coalesce(aliases,'') AS aliases,
+    start_pos,end_pos,position_unit,draft,
+    encode(sha256(convert_to(jsonb_build_array(kind,id,revision,parent_id,part,title,body,aliases,start_pos,end_pos,position_unit,draft,identity_version)::text,'UTF8')),'hex') AS version
+FROM source_rows;
+
+GRANT SELECT ON workspace.current_project_evidence TO glowloom_app;

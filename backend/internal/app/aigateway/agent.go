@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	evidencepg "github.com/StephenQiu30/glowloom-server/backend/creation/evidence/adapter/postgres"
 	workspacepg "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
 	pg "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/application"
@@ -53,11 +54,12 @@ func (r *Runtime) AgentModel(ctx context.Context, scope agent.Scope, id uuid.UUI
 		}
 		var approved struct {
 			RootRunID    uuid.UUID
+			SessionID    uuid.UUID
 			BudgetMicros int64
 			Selection    []byte
 		}
 		scopeRaw, _ := json.Marshal(scope)
-		q := tx.Raw(`SELECT a.root_run_id,a.budget_micros,a.model_selection AS selection FROM agent_business.call_receipt c JOIN agent_business.run_authorization a ON a.root_run_id=c.root_run_id
+		q := tx.Raw(`SELECT a.root_run_id,a.session_id,a.budget_micros,a.model_selection AS selection FROM agent_business.call_receipt c JOIN agent_business.run_authorization a ON a.root_run_id=c.root_run_id
    JOIN agent_business.execution_grant g ON g.root_run_id=a.root_run_id AND g.submission_id=a.submission_id AND g.owner_epoch=a.owner_epoch AND g.authorization_revision=a.authorization_revision AND g.expires_at>clock_timestamp()
    WHERE c.receipt_id=? AND c.kind='model' AND c.status='in_flight' AND c.input_hash=? AND c.max_micros=? AND c.submission_id=a.submission_id AND a.scope=?::jsonb AND NOT a.barrier AND NOT a.terminal FOR SHARE OF a,g`, id, agent.Hash(raw), maxMicros, string(scopeRaw)).Scan(&approved)
 		if q.Error != nil {
@@ -77,6 +79,9 @@ func (r *Runtime) AgentModel(ctx context.Context, scope agent.Scope, id uuid.UUI
 		}
 		if err := agentpg.ValidatePinnedSkills(tx, approved.RootRunID, scope); err != nil {
 			return domain.ErrForbidden
+		}
+		if err := evidencepg.VerifyModelReceipts(tx, a.ID, a.OrgID, sid, pid, approved.SessionID, input.ProjectEvidenceReceipts); err != nil {
+			return err
 		}
 		root = approved.RootRunID
 
@@ -121,6 +126,9 @@ func (r *Runtime) AgentModel(ctx context.Context, scope agent.Scope, id uuid.UUI
 		if errors.Is(err, errProjectMemoryChanged) {
 			return agentFailure("project_memory_changed"), nil
 		}
+		if errors.Is(err, evidencepg.ErrStale) {
+			return agentFailure("project_evidence_changed"), nil
+		}
 		return agentFailure("model_admission_failed"), nil
 	}
 	return agentResult(record, input.ModelKey, model.Protocol)
@@ -155,12 +163,13 @@ func agentFailure(code string) agent.CallResult {
 }
 
 type agentInput struct {
-	ProjectMemoryVersion string            `json:"project_memory_version,omitempty"`
-	ModelKey             string            `json:"model_key"`
-	ReleaseID            string            `json:"release_id"`
-	MaxTokens            int               `json:"max_tokens"`
-	Messages             []json.RawMessage `json:"messages"`
-	Tools                []struct {
+	ProjectEvidenceReceipts []uuid.UUID       `json:"project_evidence_receipts,omitempty"`
+	ProjectMemoryVersion    string            `json:"project_memory_version,omitempty"`
+	ModelKey                string            `json:"model_key"`
+	ReleaseID               string            `json:"release_id"`
+	MaxTokens               int               `json:"max_tokens"`
+	Messages                []json.RawMessage `json:"messages"`
+	Tools                   []struct {
 		Name        string          `json:"name"`
 		Description string          `json:"description"`
 		Parameters  json.RawMessage `json:"parameters"`

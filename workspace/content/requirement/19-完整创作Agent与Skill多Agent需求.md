@@ -284,3 +284,14 @@ SRC-AGH-22 用户原文：
 > 先阅读一下我们的workspace下的相关服务的设计，先对我们的agent服务进行完整，保证我们的项目的上下文以及项目记忆可以完整的落地
 
 沿 [设计32 §7.18](../design/32-完整创作AgentHarness与Skill多Agent架构设计.md#creative-context-design) 和 [Plan28 §11](../plan/28-完整创作Agent与Skill多Agent实施计划.md#harness-module-plan) 实施。复用现行项目成员权限、画布和脚本来源、Pi 会话和 Go 模型受理回执。普通画布的镜头级作用范围依赖稳定镜头身份和写入归属合同。
+
+
+<a id="src-agh-30"></a>
+
+## SRC-AGH-30 落实项目 RAG 服务
+
+2026-11-23 用户原文
+
+> 然后对我们的rag服务全面的展开实现
+
+承接 AGH-049、AGH-050 和 [Plan28 的 RAG 任务](../plan/28-完整创作Agent与Skill多Agent实施计划.md#harness-module-plan)。落地当前项目资料检索、引用回源、剧本正文索引及入模时的版本核对。语义向量和重排沿既定评测门槛比较。

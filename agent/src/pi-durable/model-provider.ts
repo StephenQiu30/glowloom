@@ -68,6 +68,14 @@ class ProjectMemoryChanged extends Error {
   }
 }
 
+class ProjectEvidenceChanged extends Error {
+  constructor() {
+    super(
+      'Project evidence is no longer current. Start a new conversation and select current sources.',
+    );
+  }
+}
+
 function projectMemoryBasis(snapshot: Readonly<DurableJsonObject>) {
   const version = snapshot.project_memory_version;
   const items = snapshot.project_memory;
@@ -152,10 +160,13 @@ export async function completedReceipt(
     receipt.status === 'failed' &&
     receipt.result &&
     typeof receipt.result === 'object' &&
-    'code' in receipt.result &&
-    receipt.result.code === 'project_memory_changed'
-  )
-    throw new ProjectMemoryChanged();
+    'code' in receipt.result
+  ) {
+    if (receipt.result.code === 'project_memory_changed')
+      throw new ProjectMemoryChanged();
+    if (receipt.result.code === 'project_evidence_changed')
+      throw new ProjectEvidenceChanged();
+  }
   if (receipt.status !== 'completed')
     throw new Error(
       receipt.status === 'failed'
@@ -222,13 +233,19 @@ export function createBusinessModels(
         const snapshotHash = canonicalHash(fresh);
         const contextKey = `${grant.submission_id}:${phase.taskId}:${checkpoint}:${phase.attempt}`;
         let projectContext: DurableJsonObject = {};
+        let evidenceReceipts: string[] = [];
         await harness.commit(async (tx) => {
           const state = await tx.doc(StateDoc, ROOT_CONVERSATION_ID);
           const saved = state.model_contexts.find(
             (item) => item.key === contextKey,
           );
           if (saved) {
-            projectContext = saved.snapshot as DurableJsonObject;
+            projectContext = JSON.parse(
+              JSON.stringify(saved.snapshot),
+            ) as DurableJsonObject;
+            evidenceReceipts = Array.isArray(saved.evidence_receipts)
+              ? saved.evidence_receipts.map(String)
+              : [];
             return;
           }
           const raw = JSON.stringify(fresh);
@@ -240,9 +257,13 @@ export function createBusinessModels(
             business_snapshot: fresh as DurableJsonObject,
             changed_since_previous: state.context_hash !== snapshotHash,
           };
+          evidenceReceipts = Array.isArray(state.project_evidence_receipts)
+            ? state.project_evidence_receipts.map(String)
+            : [];
           state.model_contexts.push({
             key: contextKey,
             snapshot: projectContext,
+            evidence_receipts: evidenceReceipts,
           });
           state.context_hash = snapshotHash;
         }, BACKGROUND_CONTEXT);
@@ -276,6 +297,9 @@ export function createBusinessModels(
           ...(manifest.release_id ? { release_id: manifest.release_id } : {}),
           ...(frozenMemory
             ? { project_memory_version: frozenMemory.version }
+            : {}),
+          ...(Array.isArray(evidenceReceipts) && evidenceReceipts.length
+            ? { project_evidence_receipts: evidenceReceipts }
             : {}),
           ...transcriptInput,
           max_tokens: options?.maxTokens ?? manifest.max_tokens,
@@ -380,12 +404,20 @@ export function createBusinessModels(
           message,
         });
       } catch (error) {
-        if (error instanceof ProjectMemoryChanged) {
+        if (
+          error instanceof ProjectMemoryChanged ||
+          error instanceof ProjectEvidenceChanged
+        ) {
           await gate
             .harness()
             .commit(async (tx) => {
               const state = await tx.doc(StateDoc, ROOT_CONVERSATION_ID);
-              state.failure = { code: 'project_memory_changed' };
+              state.failure = {
+                code:
+                  error instanceof ProjectMemoryChanged
+                    ? 'project_memory_changed'
+                    : 'project_evidence_changed',
+              };
             }, BACKGROUND_CONTEXT)
             .catch(() => {});
         }
