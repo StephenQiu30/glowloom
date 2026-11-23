@@ -57,10 +57,15 @@ agent/
     server.ts          进程入口，拥有连接池、监听、信号及有界退出
     config.ts          环境配置解析和校验
     http/              Nest 装配、Controller、DTO、鉴权、错误映射、SSE 与 Swagger
-    sessions/          会话、run、控制、恢复和应用接口
-      persistence/     会话与运行记录、分页及公开消息投影
-    pi-durable/        Pi Harness、工具、扩展和事件
+    sessions/          会话与 run 用例及应用接口
+      execution/       Harness 生命周期、审批控制、交付等待和原调用核对
+      recovery/        恢复循环、候选扫描与退避诊断
+      persistence/     会话、运行记录及公开消息和事件读模型
+    pi-durable/        Pi 文档、模型适配、回执和事件投影
+      context/         提示词段、项目快照、记忆修订与检索证据依赖
+      tools/           工具装配、委派、Skill 与受信扩展
       storage/         Pi 原子批次、记录编码、租约与 owner fencing
+    database/          Prisma 连接、类型化查询编译与数据库类型
     business/          Go 客户端、请求传输和模型请求转换
       generated/       从 Go 内部 Swagger 生成的 TypeScript 请求和类型
   tests/               单元、合同、Storage 与恢复测试
@@ -69,6 +74,7 @@ agent/
 - Nest 模块随 `http/app.ts` 装配，在边界注册会话应用与 HTTP 生命周期。健康探针随应用装配。会话应用由进程创建，经一个端口注入控制器。
 - `http/` 持有全部入站协议。Controller 调用 `sessions/` 的应用端口，后者协调持久化、Pi 和 Go 客户端。应用与存储层只依赖普通 TypeScript 类型。
 - HTTP 生命周期停止接单并关闭订阅，随后等待会话应用退出。连接池由 `server.ts` 在 HTTP 关闭后释放。Pi Storage 和会话持久化分别拥有执行记录与业务投影。
+- 会话服务保有运行实例和执行槽。恢复循环读取持久候选并调用同一控制和运行入口，审批控制负责决策、暂停和继续的回执顺序；公开事件读取在会话持久化内维护游标验证与降敏。Pi 的项目上下文代码同时拥有证据回执登记和单次模型调用快照冻结。沿[需求22 SRC-ATS-11](../requirement/22-Agent服务目录与TypeScript规范需求.md#src-ats-11)维护目录分工。
 - Go 请求生成物随 Go 客户端归入 `business/generated/`，用于请求、类型和可重复生成检查。
 
 ### 7.3 HTTP 合同、校验与 Swagger
@@ -88,6 +94,7 @@ agent/
 
 - 保留数据库 schema、角色、run ID、幂等键、业务回执、事件与消息的事务边界及 owner/epoch fencing。框架迁移不需要结构变更。
 - `DEFINITION_HASH` 受参与文件的文件名和内容影响。比较当前生产构建与候选构建的冻结定义。对参与文件的重命名、导入改写和格式化重算，开发 `.ts` 的结果与生产 `.js` 分别记录。
+- 生产构建先清理 `dist/src` 的编译产物，确保已经移动的模块不会作为旧文件参与指纹和镜像构建。
 - 切换前停止旧版本新受理，继续在旧版本处理既有控制、读取及回执核对。盘点所有仍可接续的 run、冻结 manifest、等待审批或暂停的运行、未决子会话、控制 inbox 与未知接单。候选构建不能读取的状态由原构建按既有控制协议先收束。缺少合法收束路径则延后切换。单次切换后由新构建拥有运行，保持稳定业务键。禁止修改存量指纹或重派未知收费请求来规避门禁。
 - 切换后仅运行 NestJS。移除旧应用、TypeBox HTTP schema、旧生成链及旧配置入口。禁止双轨、别名、双读双写、协议转换、旧定义加载器和新旧实现回退。切换验证失败时停止发布并修复目标版本。
 
@@ -159,18 +166,16 @@ Go 端通过锁定的 `go tool oapi-codegen` 生成当前模型和普通 HTTP �
 
 本轮工程检查：宿主Node **24.19.0**、pnpm **12.4.2**；在`agent/`执行`pnpm typecheck`与`pnpm build`均退出0，证明现有手写/生成代码可类型检查和生产编译。Dockerfile仍固定Node24.22.2/digest，本轮没有构建该镜像、启动生产JS、执行完整PG/恢复测试或容量测试，不将宿主编译结果写成容器/生产验证。
 
-### 7.9 当前目录评价与最小调整
+### 7.9 模块职责与组织规则
 
-§7.2目录已与当前源码基本一致，合理且可继续使用；不存在必须先搬成`services/`或全局Controller/Service/DAO结构的依据。保持`http → sessions → Pi/持久化/Go端口`依赖，`business/generated`只放可重生成产物；HTTP类型不进入Pi Storage，Node不导入Go数据库模型。
+§7.2 按会话应用、执行、恢复、公开读模型及 Pi 能力组织。依赖遵循 `http → sessions → Pi/持久化/Go 客户端`。生成请求与类型随 `business/generated/` 维护。Pi Storage 消费自身协议与数据库类型。
 
-只有承接实际能力时才细分下列职责；这里是设计位置，不预建空文件/目录：
-
-| 现有位置 | 有行为增量时的最小整理 |
+| 模块 | 职责 |
 | --- | --- |
-| `pi-durable/registry.ts` | 保留注册组合；批量委派及branch映射收敛到已有`delegation.ts`，避免继续向431行注册文件堆完整编排 |
-| `pi-durable/` | 增加`policy.ts`拥有执行步数、委派深度/默认分支分配等策略类型与默认值；实际策略在manifest冻结，不建立通用constants包 |
-| `sessions/runtime.ts` | 保持官方Harness生命周期/授权出口；已有delivery.ts继续拥有交付判定，其他持久等待按真实需要抽到`waits.ts`，不另造运行时 |
-| `sessions/service.ts` | 会话/控制用例与recovery pump职责过载时将扫描抽到`recovery.ts`；端口/注入保持普通TS，停机和资源所有权仍唯一 |
+| `pi-durable/tools/` | Registry 注册业务工具与受信工具，委派额度和角色约束归 `delegation.ts`，Skill 校验与装载归所属模块。 |
+| `pi-durable/context/` | 提示词、单次模型调用的冻结快照、项目记忆修订与已读证据回执。记忆和检索授权由 Go 判断。 |
+| `sessions/execution/` | 持有官方 Harness 生命周期、授权、控制回执、交付等待和原业务调用核对。 |
+| `sessions/service.ts` 与 `sessions/recovery/` | 会话服务管理执行槽和在途实例，恢复模块管理扫描、退避和停机排空。自动与手动恢复共享当次扫描。 |
 | `pi-durable/storage/`、`sessions/persistence/` | 前者官方执行批次、owner/epoch；后者会话/消息投影；不合并成可跨越业务schema的全局repository |
 | Go `app/agent/` | 仅组合现有正式工具及事务；制作核心随真正交付下沉`production`领域，MCP连接/外部调用随真正接入落`mcp`领域，均遵循adapter→application→domain |
 

@@ -2,8 +2,8 @@ import {
   defineExtension,
   type ConversationId,
 } from '@earendil-works/pi-durable';
-import { StateDoc } from './docs.js';
-import type { FrozenManifest } from '../sessions/manifest.js';
+import { StateDoc } from '../docs.js';
+import type { FrozenManifest } from '../../sessions/manifest.js';
 
 export const creativeContextSection = 'glowloom_constraints';
 export const creativeContextInstructions =

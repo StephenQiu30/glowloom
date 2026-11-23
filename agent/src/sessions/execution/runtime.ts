@@ -1,9 +1,9 @@
 import { reconcileInterrupted } from './reconciliation.js';
 import { resolve } from 'node:path';
-import { loadTrustedExtensions } from '../pi-durable/trusted-extensions.js';
+import { loadTrustedExtensions } from '../../pi-durable/tools/trusted-extensions.js';
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
-import { database } from '../database/connection.js';
+import { database } from '../../database/connection.js';
 import {
   Harness,
   configure,
@@ -12,37 +12,40 @@ import {
   type JsonObject,
 } from '@earendil-works/pi-durable';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
-import { openPostgresStorage } from '../pi-durable/storage/postgres.js';
+import { openPostgresStorage } from '../../pi-durable/storage/postgres.js';
 import {
   claimSessionOwner,
   renewSessionOwner,
   releaseSessionOwner,
   type SessionOwner,
-} from '../pi-durable/storage/ownership.js';
+} from '../../pi-durable/storage/ownership.js';
 import {
   BusinessClient,
   BusinessError,
   type Grant,
   type CallIdentity,
-} from '../business/client.js';
-import { runRow, type RunRow } from './persistence/store.js';
+} from '../../business/client.js';
+import { runRow, type RunRow } from '../persistence/store.js';
 import {
   StateDoc,
   RunStatus,
   releaseOwnedAllocations,
-} from '../pi-durable/docs.js';
-import { PhaseTelemetry } from '../pi-durable/telemetry.js';
-import { createBusinessModels } from '../pi-durable/model-provider.js';
-import { buildRegistry, type HarnessGate } from '../pi-durable/registry.js';
-import { eventProjection } from '../pi-durable/events.js';
-import { canonicalHash, hasCurrentDefinitions, stableId } from './manifest.js';
-import { resolveConversationContent } from './input.js';
+} from '../../pi-durable/docs.js';
+import { PhaseTelemetry } from '../../pi-durable/telemetry.js';
+import { createBusinessModels } from '../../pi-durable/model-provider.js';
+import {
+  buildRegistry,
+  type HarnessGate,
+} from '../../pi-durable/tools/registry.js';
+import { eventProjection } from '../../pi-durable/events.js';
+import { canonicalHash, hasCurrentDefinitions, stableId } from '../manifest.js';
+import { resolveConversationContent } from '../input.js';
 import {
   deliveryOutcome,
   deliveryCreateTool,
   type DeliveryOptions,
 } from './delivery.js';
-import { publicProductionFacts } from '../business/goal.js';
+import { publicProductionFacts } from '../../business/goal.js';
 const context = BACKGROUND_CONTEXT;
 
 export class SessionRuntime {

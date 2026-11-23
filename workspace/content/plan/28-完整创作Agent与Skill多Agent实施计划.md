@@ -109,7 +109,7 @@
 
 ### Task 5：Go 模型网关、工具和原调用回执
 
-文件：backend/internal/agent 业务模型/工具适配，复用 catalog/operation/canvas/script/subject/media 的正式应用命令；agent/src/business/client.ts、agent/src/pi-durable/model-provider.ts、registry.ts；对应双方测试。
+文件：backend/internal/agent 业务模型/工具适配，复用 catalog/operation/canvas/script/subject/media 的正式应用命令；agent/src/business/client.ts、agent/src/pi-durable/model-provider.ts、tools/registry.ts；对应双方测试。
 
 接口：/internal/agent-business 的 grants、snapshot、tools、skills、proposals、decisions、models 与 calls。调用键固定 run/执行段/Pi task/call/请求边界，并绑定不可变参数哈希；未知结果先查 calls，不换 ID。
 
@@ -122,7 +122,7 @@
 
 ### Task 6：官方 Harness 与执行段生命周期
 
-文件：agent/src/pi-durable/registry.ts、trusted-extensions.ts、model-provider.ts、docs.ts；agent/src/sessions/service.ts、runtime.ts、manifest.ts；agent/tests/controls.test.ts及相关Harness测试。
+文件：agent/src/pi-durable/tools/、model-provider.ts、docs.ts；agent/src/sessions/service.ts、execution/、manifest.ts；agent/tests/controls.test.ts及相关Harness测试。
 
 接口：SessionService 接受输入/控制但不自写模型循环；registry 显式选择工具/扩展，manifest 固定 SDK/定义/工具/模型/Skill/hash；每 session 同时只有一个活动业务 root_run。
 
@@ -136,7 +136,7 @@
 
 ### Task 7：真实专业 Agent、Skill 与压缩
 
-文件：agent/src/pi-durable/delegation.ts、skills.ts、context.ts、trusted-extensions.ts；agent/tests/delegation.test.ts、skills.test.ts及压缩上下文测试。
+文件：agent/src/pi-durable/tools/、context/；agent/tests/delegation.test.ts、skills.test.ts及压缩上下文测试。
 
 接口：委派工具在官方 api.commit 按 ownerTaskId 复用/创建 owned conversation，配置后再 submit。角色输入包含采用来源/目标/模型/工具/预算；根额度向子分配，不能复制总额度。
 
@@ -309,7 +309,7 @@ EX-11不是末尾补文档：原意图/资金及完成判定先于自动批量�
 
 ### P2 失败恢复及交付完成保护
 
-文件：agent/src/pi-durable/{docs,events,definitions}.ts、agent/src/sessions/{runtime,service,delivery}.ts、config.ts与business/client.ts；对应Agent测试。Go正式工具返回原交付身份，StateDoc保留引用/截止/next_wakeup_at；BusinessClient.snapshot提供权威交付事实。
+文件：agent/src/pi-durable/{docs,events,definitions}.ts、agent/src/sessions/{execution/,service.ts}、config.ts与business/client.ts；对应Agent测试。Go正式工具返回原交付身份，StateDoc保留引用/截止/next_wakeup_at；BusinessClient.snapshot提供权威交付事实。
 - [ ] 先测试模型结束但导出queued/review_required不报root completed；隔离PG重开查询原交付，不新增模型/生成/导出，原Review通过后收敛。
 - [ ] 持久等待按到期恢复扫描，复用原submission/回执；Stop/撤权保持围栏。轮次结束与作品完成分别投影。
 - [ ] Agent完整测试、typecheck/build/lint、API合同和跨Go/Node恢复检查；缺真实外部条件单列。
@@ -370,7 +370,7 @@ EX-11不是末尾补文档：原意图/资金及完成判定先于自动批量�
 
 ### R3 策略冻结、恢复泵与关闭失败
 
-文件：Agent `pi-durable/{definitions,delegation,context,registry}.ts`、增量`pi-durable/policy.ts`、`sessions/{manifest,runtime,service,delivery}.ts`、按职责需要增加`waits.ts/recovery.ts`；Go `platform/taskruntime`仅补仍存在的时钟/领取缺口，不新造worker。测试`agent/tests/{manifest,registry-budget,lifecycle-recovery,recovery-process}.test.ts`与新增`recovery-diagnostics.test.ts`。
+文件：Agent `pi-durable/{definitions.ts,context/,tools/}`、增量`pi-durable/policy.ts`、`sessions/{execution/,recovery/,manifest.ts,service.ts}`；Go `platform/taskruntime`仅补仍存在的时钟/领取缺口，不新造worker。测试`agent/tests/{manifest,registry-budget,lifecycle-recovery,recovery-process}.test.ts`与新增`recovery-diagnostics.test.ts`。
 
 消费原owner/epoch/控制/交付等待，产出ExecutionPolicy、完整定义摘要及WaitRecord。R1/R2的协议变化一起纳入新定义，在发布前盘点原run。
 
@@ -380,7 +380,7 @@ EX-11不是末尾补文档：原意图/资金及完成判定先于自动批量�
 
 ### R4 真实分支并行与有界收费准入
 
-文件：`agent/src/pi-durable/{delegation,registry,policy}.ts`、`docs.ts`、`sessions/manifest.ts`；Go R1原费用准入。测试扩展`agent/tests/delegation.test.ts`、新增`delegation-parallel.test.ts`及Go `root_cost_projection_test.go`。
+文件：`agent/src/pi-durable/{tools/,policy.ts}`、`docs.ts`、`sessions/manifest.ts`；Go R1原费用准入。测试扩展`agent/tests/delegation.test.ts`、新增`delegation-parallel.test.ts`及Go `root_cost_projection_test.go`。
 
 消费R1/R3，产出DelegationBatch；保留单模型默认，角色模型覆盖仅在真实目录/授权合同扩展后启用。
 
@@ -422,7 +422,7 @@ SRC-AGH-23已授权R1/R2/R3与Plan33 D1实现和本地验证；原文档调研�
 
 - `agent/prisma/schema.prisma` 映射既有九张 Agent 表，构建只运行 `prisma generate`；`database/schema.ts` 从生成模型派生 Kysely 类型，`connection.ts` 装配 Prisma，`pg-adapter.ts` 隔离失败连接，`query-driver.ts` 只执行编译结果和参数，不执行 DDL。
 - `pi-durable/storage/{ownership,records,entries,documents,postgres}.ts` 使用 ORM 读写、锁和嵌套事务；祖先扫描保持单一只读快照及可见性裁剪。
-- `sessions/persistence/*`、`sessions/recovery.ts`、`sessions/{service,runtime}.ts` 使用 ORM 构建授权查询、历史/消息 CTE、有界投影与恢复扫描。
+- `sessions/persistence/*`、`sessions/recovery/`、`sessions/execution/`、`sessions/service.ts` 使用 ORM 构建授权查询、历史/消息 CTE、有界投影与恢复扫描。
 - 测试增加源码架构门禁与微秒分页；故障注入同时识别 pg 文本与 QueryConfig、大小写及带引号标识符，不放宽故障时点、SIGKILL 或超时断言。
 
 **执行与检查步骤**：
@@ -456,7 +456,7 @@ SRC-AGH-23已授权R1/R2/R3与Plan33 D1实现和本地验证；原文档调研�
 
 **责任文件与验证入口。**
 
-- Agent 复用 `agent/src/pi-durable/context.ts`、`model-provider.ts`、`telemetry.ts`、`agent/src/business/transcript.ts` 与 `agent/src/sessions/runtime.ts`。基于现有 `compaction-context.test.ts`、`transcript.test.ts`、`delegation.test.ts`、`delivery-contract.test.ts` 扩充目标场景。验证命令包括 `pnpm --dir agent test`，涉及跨服务 DTO 时再跑 `pnpm --dir agent api:check`。
+- Agent 复用 `agent/src/pi-durable/context/`、`model-provider.ts`、`telemetry.ts`、`agent/src/business/transcript.ts` 与 `agent/src/sessions/execution/runtime.ts`。基于现有 `compaction-context.test.ts`、`transcript.test.ts`、`delegation.test.ts`、`delivery-contract.test.ts` 扩充目标场景。验证命令包括 `pnpm --dir agent test`，涉及跨服务 DTO 时再跑 `pnpm --dir agent api:check`。
 - Go 建议由 `backend/creation/workspace` 持有共享项目约定。剧本、角色、画布、媒体领域提供各自的权威读口；`backend/internal/app/agent` 装配只读与正式写入合同，`backend/internal/platform/outbox` 驱动索引派生。原项目归档、作用域读取、原资金回执直接复用。领域测试与 `go -C backend test -race ./tests/workspace ./tests/agentbusiness ./tests/operation` 配合隔离 PG；如有数据库结构变动，维护唯一的 `backend/db/schema.sql` 并运行 `go -C backend test ./tests/db`。
 - Evals 从同一应用入口读取测试材料，以 Go／Vitest 做确定性断言，Promptfoo 为建议的案例驱动器。每次保留案例与策略版本、运行条件、授权变化时间、实际来源清单、目标修订、原订单及采用指针。按需保存可重放的脱敏夹具。缺少隔离数据库、模型、真实作品或人工接受时，分别标识缺失环节。
 

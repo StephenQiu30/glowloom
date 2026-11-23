@@ -10,7 +10,7 @@
     "dev": "pnpm run build && sh -c 'node_modules/.bin/tsc --watch -p tsconfig.build.json & compiler=$!; trap \"kill $compiler 2>/dev/null || true\" EXIT; node --watch --enable-source-maps dist/src/server.js'",
     "start": "node --enable-source-maps dist/src/server.js",
     "typecheck": "pnpm db:generate && tsc --noEmit",
-    "build": "pnpm db:generate && tsc -p tsconfig.build.json",
+    "build": "pnpm db:generate && node --input-type=module -e 'import { rmSync } from \"node:fs\"; rmSync(\"dist/src\", { recursive: true, force: true })' && tsc -p tsconfig.build.json",
     "lint": "eslint .",
     "format:check": "prettier --check .",
     "test": "pnpm run build && vitest run",

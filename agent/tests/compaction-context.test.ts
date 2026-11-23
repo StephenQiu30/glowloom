@@ -7,7 +7,10 @@ import {
   type Grant,
   type CallReceipt,
 } from '../src/business/client.js';
-import { buildRegistry, type HarnessGate } from '../src/pi-durable/registry.js';
+import {
+  buildRegistry,
+  type HarnessGate,
+} from '../src/pi-durable/tools/registry.js';
 import { StateDoc } from '../src/pi-durable/docs.js';
 import { createBusinessModels } from '../src/pi-durable/model-provider.js';
 import { PhaseTelemetry } from '../src/pi-durable/telemetry.js';

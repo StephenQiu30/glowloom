@@ -1,8 +1,5 @@
 import { StateDoc } from './docs.js';
-import {
-  ROOT_CONVERSATION_ID,
-  type JsonObject as DurableJsonObject,
-} from '@earendil-works/pi-durable';
+import { ROOT_CONVERSATION_ID } from '@earendil-works/pi-durable';
 import { businessTranscript } from '../business/transcript.js';
 import {
   createModels,
@@ -24,7 +21,6 @@ import {
   BusinessClient,
   type Grant,
   type CallIdentity,
-  type CallReceipt,
 } from '../business/client.js';
 import {
   canonicalHash,
@@ -35,7 +31,15 @@ import { modelPhase } from './telemetry.js';
 import {
   creativeContextSection,
   creativeContextInstructions,
-} from './context.js';
+} from './context/prompt.js';
+import {
+  assertCurrentProjectMemory,
+  freezeProjectContext,
+  ProjectEvidenceChanged,
+  ProjectMemoryChanged,
+} from './context/project.js';
+import { completedReceipt } from './receipts.js';
+
 export interface ModelGate {
   harness: () => Harness;
   grant: () => Grant;
@@ -58,45 +62,6 @@ interface ModelResult {
   };
   stop_reason: 'stop' | 'tool_use' | 'length';
   model_key: string;
-}
-
-class ProjectMemoryChanged extends Error {
-  constructor() {
-    super(
-      'Project memory changed. Open a new conversation to continue with current project decisions.',
-    );
-  }
-}
-
-class ProjectEvidenceChanged extends Error {
-  constructor() {
-    super(
-      'Project evidence is no longer current. Start a new conversation and select current sources.',
-    );
-  }
-}
-
-function projectMemoryBasis(snapshot: Readonly<DurableJsonObject>) {
-  const version = snapshot.project_memory_version;
-  const items = snapshot.project_memory;
-  if (version === undefined && items === undefined) return undefined;
-  if (
-    typeof version !== 'string' ||
-    !/^[a-f0-9]{64}$/.test(version) ||
-    !Array.isArray(items)
-  )
-    throw new Error('Invalid project memory snapshot');
-  const ids = items.map((item) => {
-    if (
-      !item ||
-      typeof item !== 'object' ||
-      Array.isArray(item) ||
-      typeof item.id !== 'string'
-    )
-      throw new Error('Invalid project memory revision');
-    return item.id;
-  });
-  return { version, ids };
 }
 
 const imageTokenEstimate = estimateTextAndImageContentTokens([
@@ -132,49 +97,6 @@ function assertContextFits(
     );
 }
 
-export async function completedReceipt(
-  client: BusinessClient,
-  grant: Grant,
-  call: CallIdentity,
-  send: () => Promise<CallReceipt>,
-): Promise<CallReceipt> {
-  let receipt = await client.findCall(grant, call);
-  if (!receipt) receipt = await send();
-  if (
-    receipt.root_run_id !== grant.root_run_id ||
-    receipt.submission_id !== grant.submission_id ||
-    (
-      [
-        'task_id',
-        'call_id',
-        'checkpoint_id',
-        'attempt',
-        'contract_version',
-        'input_hash',
-      ] as const
-    ).some((key) => receipt.call[key] !== call[key])
-  )
-    throw new Error('Business receipt identity mismatch');
-  // An unknown outcome is reconciled by the original identity; never submit another call.
-  if (
-    receipt.status === 'failed' &&
-    receipt.result &&
-    typeof receipt.result === 'object' &&
-    'code' in receipt.result
-  ) {
-    if (receipt.result.code === 'project_memory_changed')
-      throw new ProjectMemoryChanged();
-    if (receipt.result.code === 'project_evidence_changed')
-      throw new ProjectEvidenceChanged();
-  }
-  if (receipt.status !== 'completed')
-    throw new Error(
-      receipt.status === 'failed'
-        ? 'Business call failed'
-        : 'Business call requires reconciliation',
-    );
-  return receipt;
-}
 export function createBusinessModels(
   client: BusinessClient,
   manifest: Readonly<FrozenManifest>,
@@ -230,43 +152,12 @@ export function createBusinessModels(
         const checkpoint = canonicalHash(task.state.checkpoint);
         const grant = gate.grant();
         const fresh = await client.snapshot(grant);
-        const snapshotHash = canonicalHash(fresh);
         const contextKey = `${grant.submission_id}:${phase.taskId}:${checkpoint}:${phase.attempt}`;
-        let projectContext: DurableJsonObject = {};
-        let evidenceReceipts: string[] = [];
-        await harness.commit(async (tx) => {
-          const state = await tx.doc(StateDoc, ROOT_CONVERSATION_ID);
-          const saved = state.model_contexts.find(
-            (item) => item.key === contextKey,
-          );
-          if (saved) {
-            projectContext = JSON.parse(
-              JSON.stringify(saved.snapshot),
-            ) as DurableJsonObject;
-            evidenceReceipts = Array.isArray(saved.evidence_receipts)
-              ? saved.evidence_receipts.map(String)
-              : [];
-            return;
-          }
-          const raw = JSON.stringify(fresh);
-          if (Buffer.byteLength(raw) > 131072)
-            throw new Error(
-              'Business context exceeds the request limit; read specific resources through tools',
-            );
-          projectContext = {
-            business_snapshot: fresh as DurableJsonObject,
-            changed_since_previous: state.context_hash !== snapshotHash,
-          };
-          evidenceReceipts = Array.isArray(state.project_evidence_receipts)
-            ? state.project_evidence_receipts.map(String)
-            : [];
-          state.model_contexts.push({
-            key: contextKey,
-            snapshot: projectContext,
-            evidence_receipts: evidenceReceipts,
-          });
-          state.context_hash = snapshotHash;
-        }, BACKGROUND_CONTEXT);
+        const projectContext = await freezeProjectContext(
+          harness,
+          contextKey,
+          fresh,
+        );
         const transcriptInput = businessTranscript(
           transcript,
           creativeContextSection,
@@ -285,21 +176,17 @@ export function createBusinessModels(
         transcriptInput.messages.splice(1, 0, {
           role: 'user',
           content:
-            'Current project snapshot:\n' + JSON.stringify(projectContext),
+            'Current project snapshot:\n' +
+            JSON.stringify(projectContext.snapshot),
         });
-        const snapshot = projectContext.business_snapshot;
-        const frozenMemory =
-          snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot)
-            ? projectMemoryBasis(snapshot)
-            : undefined;
         const input = {
           model_key: model.id,
           ...(manifest.release_id ? { release_id: manifest.release_id } : {}),
-          ...(frozenMemory
-            ? { project_memory_version: frozenMemory.version }
+          ...(projectContext.memoryVersion
+            ? { project_memory_version: projectContext.memoryVersion }
             : {}),
-          ...(Array.isArray(evidenceReceipts) && evidenceReceipts.length
-            ? { project_evidence_receipts: evidenceReceipts }
+          ...(projectContext.evidenceReceipts.length
+            ? { project_evidence_receipts: projectContext.evidenceReceipts }
             : {}),
           ...transcriptInput,
           max_tokens: options?.maxTokens ?? manifest.max_tokens,
@@ -335,22 +222,11 @@ export function createBusinessModels(
           async () => {
             await gate.assertActive();
             await gate.assertSources();
-            const currentMemory = projectMemoryBasis(
-              fresh as DurableJsonObject,
+            await assertCurrentProjectMemory(
+              harness,
+              projectContext.memoryVersion,
+              fresh,
             );
-            if (input.project_memory_version !== currentMemory?.version)
-              throw new ProjectMemoryChanged();
-            if (currentMemory)
-              await harness.commit(async (tx) => {
-                const state = await tx.doc(StateDoc, ROOT_CONVERSATION_ID);
-                const prior = state.project_memory_revision_ids;
-                if (
-                  Array.isArray(prior) &&
-                  prior.some((id) => !currentMemory.ids.includes(String(id)))
-                )
-                  throw new ProjectMemoryChanged();
-                state.project_memory_revision_ids = currentMemory.ids;
-              }, BACKGROUND_CONTEXT);
             return client.execute(
               'model',
               '',

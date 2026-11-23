@@ -9,12 +9,14 @@ import {
   type ToolExecutionApi,
 } from '@earendil-works/pi-durable';
 import { Type } from 'typebox';
-import { BusinessClient, type CallIdentity } from '../business/client.js';
-import { canonicalHash, type FrozenManifest } from '../sessions/manifest.js';
-import { StateDoc } from './docs.js';
-import { completedReceipt, type ModelGate } from './model-provider.js';
+import { BusinessClient, type CallIdentity } from '../../business/client.js';
+import { canonicalHash, type FrozenManifest } from '../../sessions/manifest.js';
+import { StateDoc } from '../docs.js';
+import type { ModelGate } from '../model-provider.js';
+import { completedReceipt } from '../receipts.js';
+import { rememberProjectEvidence } from '../context/project.js';
 import { businessToolContent, readPinnedSkill } from './skills.js';
-import { contextExtension } from './context.js';
+import { contextExtension } from '../context/prompt.js';
 import {
   ROLES,
   explicitRoleToolNames,
@@ -109,26 +111,14 @@ export function buildRegistry(
             ),
           );
           const result = receipt.result as JsonObject;
-          if (
-            ['search_project_evidence', 'read_project_evidence'].includes(
-              descriptor.name,
-            ) &&
-            Array.isArray(result?.items) &&
-            result.items.length > 0
-          ) {
-            await gate.harness().commit(async (tx) => {
-              const state = await tx.doc(StateDoc, gate.rootId());
-              const ids = Array.isArray(state.project_evidence_receipts)
-                ? state.project_evidence_receipts
-                : [];
-              if (ids.includes(receipt.receipt_id)) return;
-              if (ids.length >= 64)
-                throw new Error(
-                  'Project evidence limit reached; start a new conversation',
-                );
-              state.project_evidence_receipts = [...ids, receipt.receipt_id];
-            }, context);
-          }
+          await rememberProjectEvidence(
+            gate.harness(),
+            gate.rootId(),
+            descriptor.name,
+            receipt.receipt_id,
+            result,
+            context,
+          );
           if (result && typeof result.proposal_id === 'string')
             await gate.proposal(result.proposal_id, api.taskId, result);
           const state = await gate

@@ -9,14 +9,14 @@ import {
   type CallReceipt,
   type BusinessDecision,
 } from '../src/business/client.js';
-import { SessionRuntime } from '../src/sessions/runtime.js';
+import { SessionRuntime } from '../src/sessions/execution/runtime.js';
 import { SessionService } from '../src/sessions/service.js';
 import { SessionStore } from '../src/sessions/persistence/store.js';
 import { freezeManifest, canonicalHash } from '../src/sessions/manifest.js';
 import { StateDoc } from '../src/pi-durable/docs.js';
 import { testPool } from './storage/database.js';
 import { recoveryDefaults } from '../src/config.js';
-import { RecoveryStore } from '../src/sessions/recovery.js';
+import { RecoveryStore } from '../src/sessions/recovery/store.js';
 import { recoveryPumpPool } from './helpers/recovery-database.js';
 import { postgresQueryText } from './helpers/postgres-query-text.js';
 

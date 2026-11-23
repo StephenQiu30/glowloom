@@ -1,13 +1,13 @@
 import type { JsonObject } from '@earendil-works/pi-durable';
-import { RunStatus } from '../pi-durable/docs.js';
-import { deliveryDefaults } from '../config.js';
-import { canonicalHash } from './manifest.js';
+import { RunStatus } from '../../pi-durable/docs.js';
+import { deliveryDefaults } from '../../config.js';
+import { canonicalHash } from '../manifest.js';
 import {
   GoalKind,
   OperationStatus,
   type GoalContract,
   businessLimits,
-} from '../business/goal.js';
+} from '../../business/goal.js';
 
 // Wire values of Go's agent/domain.DeliveryStatus. They are business facts,
 // distinct from the Harness run and submission states.

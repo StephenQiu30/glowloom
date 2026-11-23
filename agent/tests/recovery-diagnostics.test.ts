@@ -3,7 +3,7 @@ import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { expect, it, vi } from 'vitest';
 import { BusinessClient } from '../src/business/client.js';
 import { SessionStore } from '../src/sessions/persistence/store.js';
-import { SessionRuntime } from '../src/sessions/runtime.js';
+import { SessionRuntime } from '../src/sessions/execution/runtime.js';
 import { SessionService } from '../src/sessions/service.js';
 import { freezeManifest } from '../src/sessions/manifest.js';
 import {
@@ -14,7 +14,7 @@ import {
   RecoveryStore,
   RecoveryKind,
   RecoveryCode,
-} from '../src/sessions/recovery.js';
+} from '../src/sessions/recovery/store.js';
 import { testPool } from './storage/database.js';
 import { authorizedText } from './helpers/conversation-input.js';
 
@@ -121,6 +121,38 @@ it('reports recovery scan errors without swallowing them or leaking the error te
   } finally {
     query.mockRestore();
     await service.close();
+    await pool.end();
+  }
+});
+
+it('shares the timer scan with manual recovery and stops before loading more work', async () => {
+  const pool = testPool();
+  const service = new SessionService(
+    pool,
+    new BusinessClient('http://fixture.invalid', 'fixture'),
+    { leaseMs: 30000 },
+  );
+  const hold = Promise.withResolvers<void>();
+  const controls = vi
+    .spyOn(RecoveryStore.prototype, 'pendingControls')
+    .mockImplementation(async () => {
+      await hold.promise;
+      return [];
+    });
+  const runs = vi.spyOn(RecoveryStore.prototype, 'pendingRuns');
+  try {
+    service.startRecovery();
+    const manual = service.recoverOnce();
+    expect(controls).toHaveBeenCalledTimes(1);
+    const closing = service.close();
+    hold.resolve();
+    await Promise.all([manual, closing]);
+    expect(runs).not.toHaveBeenCalled();
+  } finally {
+    hold.resolve();
+    await service.close();
+    controls.mockRestore();
+    runs.mockRestore();
     await pool.end();
   }
 });

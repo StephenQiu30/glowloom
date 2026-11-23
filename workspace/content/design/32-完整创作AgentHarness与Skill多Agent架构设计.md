@@ -35,7 +35,7 @@ Go 业务服务保留账号/团队权限、模型目录与调用网关、业务�
 4. 当前空库结构为 schema.sql，已有库采用离线审阅 SQL，服务不自动 DDL；历史数据/在途任务不由源码迁移自动接管或删除。
 5. 本文定义技术合同，实施与实际验证证据在 Plan28/BACKLOG 分别维护；不以历史测试或旧部署健康状态证明新架构接受。
 
-源码入口：[公开 API](../../../backend/internal/app/public_api.go)、[官方 Harness 接线](../../../agent/src/sessions/runtime.ts)、[数据库任务](../../../backend/internal/platform/taskruntime/worker.go)、[Compose](../../../docker-compose.yml)。
+源码入口：[公开 API](../../../backend/internal/app/public_api.go)、[官方 Harness 接线](../../../agent/src/sessions/execution/runtime.ts)、[数据库任务](../../../backend/internal/platform/taskruntime/worker.go)、[Compose](../../../docker-compose.yml)。
 
 ### 3.2 一手依据与采用边界
 
@@ -690,9 +690,9 @@ Agent消费前查询原批次/采用状态，经§7.12的同一等待点或conti
 
 | 风险/当前证据 | 评估与修订决定 | 实现责任 |
 | --- | --- | --- |
-| [runtime](../../../agent/src/sessions/runtime.ts)已有官方Harness、Storage故障封闭、owner和grant；[ownership](../../../agent/src/pi-durable/storage/ownership.ts)已有DB时钟/epoch | 复用并验证，不另造调度器；围栏阻止新受理，不能撤回已出站的外部请求 | Agent存储/Go准入 |
-| [registry](../../../agent/src/pi-durable/registry.ts)实际先提交一个child再等待；[delegation](../../../agent/src/pi-durable/delegation.ts)目前有步数分配 | 步数额度不是货币预算，配置并发上限不是实际并行；新增分支映射/Go预算准入必须验证 | Agent委派/Go资金准入 |
-| [reconciliation](../../../agent/src/sessions/reconciliation.ts)可核对原调用，部分完成判断依最终模型回复及工具回执 | 该判断只能证明模型轮次收束，完整创作完成另需正式交付清单；不得原样上升为作品完成 | Agent公共投影/制作领域 |
+| [runtime](../../../agent/src/sessions/execution/runtime.ts)已有官方Harness、Storage故障封闭、owner和grant；[ownership](../../../agent/src/pi-durable/storage/ownership.ts)已有DB时钟/epoch | 复用并验证，不另造调度器；围栏阻止新受理，不能撤回已出站的外部请求 | Agent存储/Go准入 |
+| [registry](../../../agent/src/pi-durable/tools/registry.ts)实际先提交一个child再等待；[delegation](../../../agent/src/pi-durable/tools/delegation.ts)目前有步数分配 | 步数额度不是货币预算，配置并发上限不是实际并行；新增分支映射/Go预算准入必须验证 | Agent委派/Go资金准入 |
+| [reconciliation](../../../agent/src/sessions/execution/reconciliation.ts)可核对原调用，部分完成判断依最终模型回复及工具回执 | 该判断只能证明模型轮次收束，完整创作完成另需正式交付清单；不得原样上升为作品完成 | Agent公共投影/制作领域 |
 | [service恢复循环](../../../agent/src/sessions/service.ts)已有控制补读/过期owner扫描，部分异常被捕获 | 是恢复基础，不是完整等待调度；新增持久截止、失败分类、公平有界扫描和异常指标，不能静默卡住 | Agent恢复循环 |
 | [Go worker](../../../backend/internal/platform/taskruntime/worker.go)支持未来时点释放槽，[store](../../../backend/internal/platform/taskruntime/store.go)已有重试后停放 | 复用数据库任务；框架重试只重新进入原业务步骤，绝不意味着供应商提交可重发。恢复时分类由业务适配器决定 | 原领域worker |
 | 已有完整角色、阶段和MCP目标 | 简单任务直接用主Agent+正式工具；复杂且可独立验收时才委派；稳定交付固定顺序，避免每步额外LLM判断 | Agent计划/复合工具 |
@@ -830,13 +830,13 @@ RPO/RTO、备份周期、保留期限及媒体存储容量需通过实际环境�
 
 | 能力 | 当前源码事实 | 调整及复用落点 |
 | --- | --- | --- |
-| 独立服务/官方执行 | `agent/src/server.ts:27–94`、`agent/src/sessions/runtime.ts:119–177`已装配Nest、池、Harness；无第二个coding-agent会话 | 保留；技术/目录按设计37评价，不引入另一Agent或工作流框架 |
-| 主子Agent | `agent/src/pi-durable/registry.ts:260–389`有task-owned子conversation、稳定submit、结果entry和显式采用；深度1，子工具不含delegate/plan | 当前delegate和整轮工具均串行；4个子任务上限不证明4路并行，批量分支须新增稳定映射 |
-| Skill | `agent/src/pi-durable/skills.ts:6–33`、`agent/src/pi-durable/context.ts:8–45`已有版本/hash校验和压缩后提示；Go保存私有不可变版本 | 复用发现/授权/加载；自动匹配、依赖闭包与冲突求解尚缺，不能把目录发现算自动编排 |
-| MCP | `agent/src/pi-durable/trusted-extensions.ts:140–147`拒绝SDK MCP注册；请求manifest不能指定任意扩展 | 这只是防线；正式连接/发现/调用/异步恢复未完成，沿Go出口补齐 |
+| 独立服务/官方执行 | `agent/src/server.ts:27–94`、`agent/src/sessions/execution/runtime.ts`已装配Nest、池、Harness；无第二个coding-agent会话 | 保留；技术/目录按设计37评价，不引入另一Agent或工作流框架 |
+| 主子Agent | `agent/src/pi-durable/tools/registry.ts`有task-owned子conversation、稳定submit、结果entry和显式采用；深度1，子工具不含delegate/plan | 当前delegate和整轮工具均串行；4个子任务上限不证明4路并行，批量分支须新增稳定映射 |
+| Skill | `agent/src/pi-durable/tools/skills.ts`、`agent/src/pi-durable/context/`已有版本/hash校验和压缩后提示；Go保存私有不可变版本 | 复用发现/授权/加载；自动匹配、依赖闭包与冲突求解尚缺，不能把目录发现算自动编排 |
+| MCP | `agent/src/pi-durable/tools/trusted-extensions.ts`拒绝SDK MCP注册；请求manifest不能指定任意扩展 | 这只是防线；正式连接/发现/调用/异步恢复未完成，沿Go出口补齐 |
 | 原请求/费用 | `backend/internal/agent/adapter/postgres/calls.go:25–142,207–269`及`backend/internal/agent/adapter/modelgateway/gateway.go:277–410`已有原回执、unknown停车、实际超额记账及一次结算 | 保留；根额度混有实际收费/报价承诺，补分类投影和原operation终态收敛，不新建钱包 |
 | 单镜交付 | `backend/internal/app/agent/shot_delivery.go:226–336`真实采用/Yjs/两个export及回执原子提交，query核对原job/资源/审阅 | 保留；仅无RowID的CanvasSource节点链，不代表正式叙事Shot/Take或浏览器单集已贯通 |
-| 失败恢复 | `agent/src/sessions/delivery.ts:28–111`已有持久绝对截止；reconciliation只查原调用；Storage有owner/epoch | 扩展其他等待类型；补扫描吞错、停放诊断、公平性与关闭失败的租约策略 |
+| 失败恢复 | `agent/src/sessions/execution/delivery.ts`已有持久绝对截止；reconciliation只查原调用；Storage有owner/epoch | 扩展其他等待类型；补扫描吞错、停放诊断、公平性与关闭失败的租约策略 |
 | 完成保护 | Go快照包含成功create及已批准未create义务；Node等待原交付，不再调模型 | 尚未覆盖“制作目标未形成交付提案”；须在制作受理时固定必需清单，保留纯聊天空集合 |
 
 #### 7.17.2 主任务书、执行来源与正式完成义务

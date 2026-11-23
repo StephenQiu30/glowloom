@@ -1,4 +1,4 @@
-import { RecoveryStore } from '../recovery.js';
+import { RecoveryStore } from '../recovery/store.js';
 import { publicState } from '../../pi-durable/events.js';
 import type { Pool } from 'pg';
 import { sql } from 'kysely';
@@ -328,6 +328,16 @@ export class SessionStore {
       .orderBy('event_ordinal', 'desc')
       .execute();
     return { ...base, messages_page, events: events.reverse() };
+  }
+
+  async recordControlReceipt(
+    decisionId: string,
+    receipt: Record<string, unknown>,
+  ) {
+    await database(this.pool).serviceControlInbox.updateMany({
+      where: { decision_id: decisionId },
+      data: { receipt: receipt as Prisma.InputJsonObject },
+    });
   }
 
   async acceptControl(input: ControlInput) {

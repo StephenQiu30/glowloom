@@ -1,6 +1,6 @@
-import { executionPolicy } from './policy.js';
+import { executionPolicy } from '../policy.js';
 import type { JsonObject } from '@earendil-works/pi-durable';
-import type { BusinessTool } from '../business/client.js';
+import type { BusinessTool } from '../../business/client.js';
 export const ROLES = [
   'script',
   'art',

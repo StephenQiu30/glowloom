@@ -1,7 +1,7 @@
 import { authorizedText } from './helpers/conversation-input.js';
 import { randomUUID } from 'node:crypto';
 import { expect, it, vi } from 'vitest';
-import { SessionRuntime } from '../src/sessions/runtime.js';
+import { SessionRuntime } from '../src/sessions/execution/runtime.js';
 import { SessionService } from '../src/sessions/service.js';
 import {
   BusinessClient,
@@ -16,7 +16,7 @@ import {
   RecoveryStore,
   RecoveryKind,
   RecoveryCode,
-} from '../src/sessions/recovery.js';
+} from '../src/sessions/recovery/store.js';
 import { testPool } from './storage/database.js';
 
 it.each([

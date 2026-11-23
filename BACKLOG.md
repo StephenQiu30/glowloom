@@ -317,8 +317,8 @@ Git：基线74837bb5，首轮在detached临时工作树验证后按允许清单�
 - [agent/src/pi-durable/docs.ts](agent/src/pi-durable/docs.ts)
 - [agent/src/pi-durable/events.ts](agent/src/pi-durable/events.ts)
 - [agent/src/server.ts](agent/src/server.ts)
-- [agent/src/sessions/delivery.ts](agent/src/sessions/delivery.ts)
-- [agent/src/sessions/runtime.ts](agent/src/sessions/runtime.ts)
+- [agent/src/sessions/execution/delivery.ts](agent/src/sessions/execution/delivery.ts)
+- [agent/src/sessions/execution/runtime.ts](agent/src/sessions/execution/runtime.ts)
 - [agent/src/sessions/service.ts](agent/src/sessions/service.ts)
 - [agent/tests/business-client.test.ts](agent/tests/business-client.test.ts)
 - [agent/tests/delivery-contract.test.ts](agent/tests/delivery-contract.test.ts)
@@ -622,6 +622,14 @@ Git：基线74837bb5，首轮在detached临时工作树验证后按允许清单�
 | 正式切换   | 待盘点目标环境可接续运行、未决控制及未知业务回执。目标镜像定义指纹为 `4bb42e794eb9db16c658ae71fa412c01d6878bc5d5904dfa54c321bb7a72f6bf`，与切换前源码重建的编译指纹不同。按设计37 §7.5 收束无法接续的运行后执行单版本切换。 |
 
 生成 TypeScript 声明通过独立 `pnpm api:typecheck` 严格校验。全项目关闭 `skipLibCheck` 时，外部 Pi、Chord 和 Google GenAI 声明仍报错。Agent 相关 Go 包的 `govulncheck` 无可达结果。
+
+### Agent 目录与职责调整（2026-11-23）
+
+[需求22 SRC-ATS-11](workspace/content/requirement/22-Agent服务目录与TypeScript规范需求.md#src-ats-11) 与[设计37 §7.2](workspace/content/design/37-Agent服务目录与TypeScript规范设计.md#72-目录与依赖)已落实。会话应用集中管理受理和执行槽，审批、恢复和公开事件分别归入职责模块。Pi 的快照冻结、记忆修订校验和检索证据登记归项目上下文。恢复计时器和手动触发共享同一轮扫描。
+
+隔离 PostgreSQL 上通过 34 个测试文件、202 个用例，包含 Storage conformance、真实进程恢复、会话控制及项目记忆和检索证据。类型、lint、格式、生产构建和双向接口生成通过。使用编译后的 `server.js` 验证真实监听、就绪、内部鉴权及 SIGTERM。构建清理已移动的旧模块产物。
+
+基线 `2a4ee2c55` 到候选的开发指纹 `bc742c53…` → `92e39178…`，生产编译指纹 `58227e78…` → `2906cb69…`。待盘点目标环境现有运行、控制和未知业务回执，按设计37 §7.5 由原版本收束无法接续的运行后切换。目标镜像与业务环境尚未发布验收。
 
 <a id="model-onboarding-alignment"></a>
 

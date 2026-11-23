@@ -1,8 +1,5 @@
-import { publicState } from '../pi-durable/events.js';
 import type { Pool } from 'pg';
-import { sql } from 'kysely';
 import { database, queries } from '../database/connection.js';
-import type { Prisma } from '../database/generated/client.js';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type {
   RuntimeEvent,
@@ -23,37 +20,34 @@ import {
   runRow,
   type RunRow,
 } from './persistence/store.js';
-import { SessionRuntime } from './runtime.js';
-import { freezeManifest, stableId, hasCurrentDefinitions } from './manifest.js';
-import {
-  StateDoc,
-  RunStatus,
-  releaseOwnedAllocations,
-} from '../pi-durable/docs.js';
+import { SessionRuntime } from './execution/runtime.js';
+import { freezeManifest } from './manifest.js';
+import { StateDoc } from '../pi-durable/docs.js';
 import { ConversationStore } from './persistence/conversations.js';
-import type { DeliveryOptions } from './delivery.js';
-import { recoveryDefaults, runtimeDefaults } from '../config.js';
+import type { DeliveryOptions } from './execution/delivery.js';
+import { runtimeDefaults } from '../config.js';
 import {
   RecoveryStore,
   RecoveryKind,
   RecoveryCode,
   type RecoveryEvent,
-} from './recovery.js';
+} from './recovery/store.js';
+import { SessionControls } from './execution/controls.js';
+import { readRunEvents } from './persistence/public-events.js';
+import { RecoveryPump } from './recovery/pump.js';
+
 const context = BACKGROUND_CONTEXT;
+
 export class SessionService implements AgentApplication {
   readonly store: SessionStore;
   readonly conversations: ConversationStore;
   private readonly backoff: RecoveryStore;
-  readonly recoveryStatus = {
-    last_success_at: null as string | null,
-    consecutive_failures: 0,
-  };
+  private readonly controls: SessionControls;
+  private readonly recovery: RecoveryPump;
   private active = new Map<string, SessionRuntime>();
   private opening = new Map<string, Promise<SessionRuntime>>();
   private jobs = new Map<string, Promise<void>>();
   private stopping = false;
-  private pump: NodeJS.Timeout | undefined;
-  private recovery: Promise<void> | undefined;
   private closing: Promise<void> | undefined;
   constructor(
     private pool: Pool,
@@ -66,6 +60,18 @@ export class SessionService implements AgentApplication {
     this.store = new SessionStore(pool);
     this.backoff = new RecoveryStore(pool);
     this.conversations = new ConversationStore(pool, this.store);
+    this.controls = new SessionControls(
+      this.store,
+      business,
+      this.backoff,
+      (run) => this.runtime(run),
+      (run) => this.launch(run),
+    );
+    this.recovery = new RecoveryPump(this.backoff, this.store, {
+      command: (id, input) => this.command(id, input),
+      launch: (run) => this.launch(run),
+      onEvent: options.onRecoveryEvent,
+    });
   }
   async ready() {
     try {
@@ -190,7 +196,7 @@ export class SessionService implements AgentApplication {
       {
         ...this.options,
         onCloseFailure: () =>
-          this.noteRecoveryFailure(
+          this.recovery.failed(
             RecoveryKind.Run,
             run.id,
             run.id,
@@ -223,7 +229,7 @@ export class SessionService implements AgentApplication {
       await this.backoff.succeeded(RecoveryKind.Run, run.id);
     })()
       .catch(async () => {
-        await this.noteRecoveryFailure(
+        await this.recovery.failed(
           RecoveryKind.Run,
           run.id,
           run.id,
@@ -248,7 +254,7 @@ export class SessionService implements AgentApplication {
               }
             }, context)
             .catch(() =>
-              this.noteRecoveryFailure(
+              this.recovery.failed(
                 RecoveryKind.Run,
                 run.id,
                 run.id,
@@ -271,7 +277,7 @@ export class SessionService implements AgentApplication {
               }
             })
             .catch(() =>
-              this.noteRecoveryFailure(
+              this.recovery.failed(
                 RecoveryKind.Run,
                 run.id,
                 run.id,
@@ -290,153 +296,11 @@ export class SessionService implements AgentApplication {
   async waitForRun(id: string) {
     await this.jobs.get(id);
   }
-  async command(id: string, input: ControlInput) {
-    if (this.stopping) throw new AgentError('shutting_down');
-    if (input.root_run_id !== id)
-      throw new AgentError('decision_scope_conflict');
-    const run = await this.store.run(id, input);
-    if (!run || run.session_id !== input.session_id)
-      throw new AgentError('run_not_found');
-    const cached = await this.store.acceptControl(input);
-    if (cached)
-      return this.finishControl(input, cached as Record<string, unknown>);
-    const runtime = await this.runtime(run);
-    return runtime.serialize(async () => {
-      const saved = (await runtime.state())?.applied_decisions.find(
-        (d) => d.decision_id === input.decision_id,
-      );
-      if (saved) return this.finishControl(input, saved);
-      const current = await this.business.decisions(id);
-      if (
-        current.authorization_revision !== input.authorization_revision ||
-        current.current?.decision_id !== input.decision_id ||
-        current.current.action !== input.action
-      ) {
-        if (current.authorization_revision < input.authorization_revision)
-          throw new AgentError('authorization_revision_gap');
-        const receipt = {
-          decision_id: input.decision_id,
-          authorization_revision: input.authorization_revision,
-          status: 'superseded',
-          execution_revision: (await runtime.state())?.execution_revision ?? 0,
-          receipt_id: stableId(id, 'receipt:' + input.decision_id),
-        };
-        await runtime.harness.commit(async (tx) => {
-          const state = await tx.doc(StateDoc, runtime.root.id);
-          state.applied_decisions.push(receipt);
-        }, context);
-        return this.finishControl(input, receipt);
-      }
-      runtime.block();
-      await runtime.root.abort(context);
-      const continuation = stableId(id, 'continuation:' + input.decision_id);
-      const receiptId = stableId(id, 'receipt:' + input.decision_id);
-      await runtime.harness.commit(async (tx) => {
-        const state = await tx.doc(StateDoc, runtime.root.id);
-        if (state.quiesced?.decision_id === input.decision_id) {
-          state.quiesced.owner_epoch = runtime.epoch();
-          return;
-        }
-        state.status =
-          input.action === 'stop'
-            ? 'stopped'
-            : input.action === 'reject'
-              ? 'rejected'
-              : 'paused';
-        releaseOwnedAllocations(state, input.action);
-        state.authorization_revision = input.authorization_revision;
-        state.execution_revision++;
-        state.quiesced = {
-          receipt_id: receiptId,
-          decision_id: input.decision_id,
-          authorization_revision: input.authorization_revision,
-          owner_epoch: runtime.epoch(),
-          continuation_id: continuation,
-        };
-      }, context);
-      let receipt: Record<string, unknown> | undefined;
-      if (input.action === 'approve' || input.action === 'resume') {
-        await runtime.announceControlOwner(
-          input.authorization_revision,
-          current.barrier ? undefined : continuation,
-        );
-        const grant = await this.business.quiesced(id, {
-          receipt_id: receiptId,
-          decision_id: input.decision_id,
-          authorization_revision: input.authorization_revision,
-          owner_epoch: runtime.epoch(),
-          continuation_id: continuation,
-          lease_until: runtime.owner.leaseUntil.toISOString(),
-        });
-        runtime.setGrant(grant);
-        await runtime.harness.commit(async (tx) => {
-          const state = await tx.doc(StateDoc, runtime.root.id);
-          const resumingDelivery =
-            input.action === 'resume' &&
-            state.submission_status === RunStatus.Completed &&
-            state.delivery_wait !== null;
-          if (!resumingDelivery)
-            await runtime.root.submit(tx, {
-              type: 'input',
-              content:
-                'Continue the unfinished adopted plan under the current approval. Query original business receipts before generating or writing again.',
-              requestId: continuation,
-              whenBusy: 'reject',
-            });
-          state.segment_id = continuation;
-          state.status = resumingDelivery
-            ? RunStatus.WaitingDelivery
-            : RunStatus.Running;
-          state.pending_proposal = null;
-          state.pending_production_continuation = null;
-          state.execution_revision++;
-          const applied = {
-            decision_id: input.decision_id,
-            authorization_revision: input.authorization_revision,
-            status: 'applied',
-            execution_revision: state.execution_revision,
-            receipt_id: receiptId,
-          };
-          state.applied_decisions.push(applied);
-          receipt = applied;
-        }, context);
-      } else {
-        await runtime.harness.commit(async (tx) => {
-          const state = await tx.doc(StateDoc, runtime.root.id);
-          const applied = {
-            decision_id: input.decision_id,
-            authorization_revision: input.authorization_revision,
-            status: 'applied',
-            execution_revision: state.execution_revision,
-            receipt_id: receiptId,
-          };
-          state.applied_decisions.push(applied);
-          receipt = applied;
-        }, context);
-      }
-      if (!receipt) throw new Error('Control receipt was not committed');
-      const result = await this.finishControl(input, receipt);
-      if (input.action === 'approve' || input.action === 'resume')
-        this.launch(run);
-      return result;
-    });
+  command(id: string, input: ControlInput) {
+    if (this.stopping) return Promise.reject(new AgentError('shutting_down'));
+    return this.controls.command(id, input);
   }
-  private async finishControl(
-    input: ControlInput,
-    receipt: Record<string, unknown>,
-  ) {
-    await database(this.pool).serviceControlInbox.updateMany({
-      where: { decision_id: input.decision_id },
-      data: { receipt: receipt as Prisma.InputJsonObject },
-    });
-    await this.business.receipt(
-      input.root_run_id,
-      receipt as Parameters<BusinessClient['receipt']>[1],
-    );
-    if (input.action === 'resume' && receipt.status === 'applied')
-      await this.backoff.succeeded(RecoveryKind.Run, input.root_run_id);
-    return receipt;
-  }
+
   async events(
     id: string,
     who: Identity,
@@ -444,285 +308,24 @@ export class SessionService implements AgentApplication {
   ): Promise<RuntimeEvent[]> {
     const run = await this.store.run(id, who);
     if (!run) throw new AgentError('run_not_found');
-    const match = /^(0|[1-9]\d*):(0|[1-9]\d*)$/.exec(after ?? '0:0');
-    if (!match) throw new AgentError('invalid_event_cursor');
-    const seq = BigInt(match[1]!);
-    const ordinal = BigInt(match[2]!);
-    if (seq > 9007199254740991n || ordinal > 2147483647n)
-      throw new AgentError('invalid_event_cursor');
-    const aggregate = await database(this.pool).runtimeEvent.aggregate({
-      where: { session_id: run.session_id },
-      _min: { commit_seq: true },
-    });
-    if (
-      seq > 0n &&
-      aggregate._min.commit_seq &&
-      seq < aggregate._min.commit_seq
-    )
-      throw new AgentError('snapshot_required');
-    const result = await database(this.pool).runtimeEvent.findMany({
-      select: {
-        commit_seq: true,
-        event_ordinal: true,
-        event_type: true,
-        payload: true,
-      },
-      where: {
-        session_id: run.session_id,
-        OR: [
-          { commit_seq: { gt: seq } },
-          { commit_seq: seq, event_ordinal: { gt: Number(ordinal) } },
-        ],
-        payload: { path: ['root_run_id'], equals: id },
-      },
-      orderBy: [{ commit_seq: 'asc' }, { event_ordinal: 'asc' }],
-      take: 100,
-    });
-    return result.map((row) => ({
-      cursor: `${row.commit_seq}:${row.event_ordinal}`,
-      type: row.event_type,
-      payload:
-        row.event_type === 'agent.state'
-          ? publicState(
-              row.payload as import('@earendil-works/pi-durable').JsonObject,
-            )
-          : row.payload,
-    }));
-  }
-  private async noteRecoveryFailure(
-    kind: (typeof RecoveryKind)[keyof typeof RecoveryKind],
-    subject: string,
-    root: string,
-    code: (typeof RecoveryCode)[keyof typeof RecoveryCode],
-    terminal = false,
-  ) {
-    this.options.onRecoveryEvent?.({
-      kind,
-      subject_id: subject,
-      root_run_id: root,
-      code,
-    });
-    try {
-      await this.backoff.failed(kind, subject, root, code, terminal);
-    } catch {
-      this.options.onRecoveryEvent?.({
-        kind: 'scan',
-        code: RecoveryCode.ScanUnavailable,
-      });
-    }
+    return readRunEvents(this.pool, run, after);
   }
 
-  async recoverOnce() {
-    if (this.stopping) return;
-    try {
-      await this.scanRecovery();
-      this.recoveryStatus.last_success_at = new Date().toISOString();
-      this.recoveryStatus.consecutive_failures = 0;
-    } catch {
-      this.recoveryStatus.consecutive_failures++;
-      this.options.onRecoveryEvent?.({
-        kind: 'scan',
-        code: RecoveryCode.ScanUnavailable,
-        consecutive_failures: this.recoveryStatus.consecutive_failures,
-      });
-    }
+  get recoveryStatus() {
+    return this.recovery.status;
   }
 
-  private async scanRecovery() {
-    const db = queries(this.pool);
-    const controls = await db
-      .selectFrom('service_control_inbox as controls')
-      .leftJoin('recovery_backoff as backoff', (join) =>
-        join
-          .on('backoff.kind', '=', RecoveryKind.Control)
-          .onRef('backoff.subject_id', '=', 'controls.decision_id'),
-      )
-      .select('controls.input')
-      .where('controls.receipt', 'is', null)
-      .where('backoff.parked_at', 'is', null)
-      .where((expression) =>
-        expression.or([
-          expression('backoff.next_attempt_at', 'is', null),
-          expression(
-            'backoff.next_attempt_at',
-            '<=',
-            sql<Date>`clock_timestamp()`,
-          ),
-        ]),
-      )
-      .orderBy((expression) =>
-        expression.fn.coalesce(
-          'backoff.next_attempt_at',
-          'controls.created_at',
-        ),
-      )
-      .orderBy('controls.decision_id')
-      .limit(recoveryDefaults.controlBatch)
-      .execute();
-    for (const row of controls) {
-      if (this.stopping) return;
-      try {
-        await this.command(row.input.root_run_id, row.input);
-        await this.backoff.succeeded(
-          RecoveryKind.Control,
-          row.input.decision_id,
-        );
-      } catch {
-        await this.noteRecoveryFailure(
-          RecoveryKind.Control,
-          row.input.decision_id,
-          row.input.root_run_id,
-          RecoveryCode.ControlUnavailable,
-        );
-      }
-    }
-    const runs = await db
-      .with('latest', (query) =>
-        query
-          .selectFrom('service_runs')
-          .distinctOn('session_id')
-          .selectAll()
-          .orderBy('session_id')
-          .orderBy('accepted_revision', 'desc'),
-      )
-      .selectFrom('latest')
-      .leftJoinLateral(
-        (expression) =>
-          expression
-            .selectFrom('runtime_events as events')
-            .select((event) => [
-              sql<string | null>`${event.ref('events.payload')}->>'status'`.as(
-                'status',
-              ),
-              sql<
-                string | null
-              >`${event.ref('events.payload')}->'delivery_wait'->>'next_wakeup_at'`.as(
-                'wakeup',
-              ),
-            ])
-            .whereRef(
-              'events.session_id',
-              '=',
-              sql<string>`${expression.ref('latest.session_id')}::text`,
-            )
-            .where(
-              (event) =>
-                sql<string>`${event.ref('events.payload')}->>'root_run_id'`,
-              '=',
-              sql<string>`${expression.ref('latest.id')}::text`,
-            )
-            .where('events.event_type', '=', 'agent.state')
-            .orderBy('events.commit_seq', 'desc')
-            .orderBy('events.event_ordinal', 'desc')
-            .limit(1)
-            .as('state'),
-        (join) => join.onTrue(),
-      )
-      .leftJoin('runtime_sessions as owner', (join) =>
-        join.onRef(
-          'owner.session_id',
-          '=',
-          sql<string>`${sql.ref('latest.session_id')}::text`,
-        ),
-      )
-      .leftJoin('recovery_backoff as backoff', (join) =>
-        join
-          .on('backoff.kind', '=', RecoveryKind.Run)
-          .onRef('backoff.subject_id', '=', 'latest.id'),
-      )
-      .selectAll('latest')
-      .where((expression) =>
-        expression.or([
-          expression(
-            expression.fn.coalesce('state.status', expression.val('accepted')),
-            'in',
-            [RunStatus.Accepted, RunStatus.Running],
-          ),
-          expression.and([
-            expression('state.status', '=', RunStatus.WaitingDelivery),
-            expression(
-              expression.fn.coalesce('state.wakeup', expression.val('')),
-              '<=',
-              sql<string>`to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
-            ),
-          ]),
-        ]),
-      )
-      .where((expression) =>
-        expression.or([
-          expression('owner.session_id', 'is', null),
-          expression('owner.lease_until', '<=', sql<Date>`clock_timestamp()`),
-        ]),
-      )
-      .where('backoff.parked_at', 'is', null)
-      .where((expression) =>
-        expression.or([
-          expression('backoff.next_attempt_at', 'is', null),
-          expression(
-            'backoff.next_attempt_at',
-            '<=',
-            sql<Date>`clock_timestamp()`,
-          ),
-        ]),
-      )
-      .orderBy(
-        (expression) =>
-          sql<Date>`coalesce(${expression.ref('backoff.next_attempt_at')}, CASE WHEN ${expression.ref('state.status')}=${RunStatus.WaitingDelivery} THEN ${expression.ref('state.wakeup')}::timestamptz ELSE ${expression.ref('latest.created_at')} END)`,
-      )
-      .orderBy('latest.id')
-      .limit(recoveryDefaults.runBatch)
-      .execute();
-    for (const run of runs) {
-      if (this.stopping) return;
-      if (!hasCurrentDefinitions(run.manifest) || !run.input) {
-        await this.noteRecoveryFailure(
-          RecoveryKind.Run,
-          run.id,
-          run.id,
-          RecoveryCode.DefinitionsUnavailable,
-          true,
-        );
-        continue;
-      }
-      try {
-        const snapshot = await this.store.snapshot(run);
-        if (
-          (
-            [
-              RunStatus.Accepted,
-              RunStatus.Running,
-              RunStatus.WaitingDelivery,
-            ] as string[]
-          ).includes(snapshot.state.status)
-        )
-          this.launch(run);
-      } catch {
-        await this.noteRecoveryFailure(
-          RecoveryKind.Run,
-          run.id,
-          run.id,
-          RecoveryCode.ExecutionUnavailable,
-        );
-      }
-    }
+  recoverOnce() {
+    return this.recovery.scanOnce();
   }
 
   startRecovery() {
-    if (this.pump || this.stopping) return;
-    const tick = () => {
-      if (this.stopping || this.recovery) return;
-      this.recovery = this.recoverOnce().finally(() => {
-        this.recovery = undefined;
-      });
-    };
-    this.pump = setInterval(tick, recoveryDefaults.pollMs);
-    this.pump.unref();
-    tick();
+    this.recovery.start();
   }
 
   stopAccepting() {
     this.stopping = true;
-    if (this.pump) clearInterval(this.pump);
+    this.recovery.stop();
   }
 
   close(): Promise<void> {
@@ -732,7 +335,7 @@ export class SessionService implements AgentApplication {
   }
 
   private async drain() {
-    await this.recovery;
+    await this.recovery.close();
     await Promise.allSettled([...this.opening.values()]);
     const closed = await Promise.allSettled(
       [...this.active.values()].map((runtime) => runtime.close()),

@@ -1,6 +1,6 @@
 import { Pool } from 'pg';
 import { BusinessClient } from '../../src/business/client.js';
-import { SessionRuntime } from '../../src/sessions/runtime.js';
+import { SessionRuntime } from '../../src/sessions/execution/runtime.js';
 import type { RunRow } from '../../src/sessions/persistence/store.js';
 import { postgresQueryText } from './postgres-query-text.js';
 

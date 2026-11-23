@@ -18,6 +18,7 @@
 5. Pino 日志带排障所需的 request/session/run 标识。脱敏服务令牌、数据库 DSN、提示词、模型输入输出和用户内容。Agent 使用独立 schema 与受限角色，Go 保留身份、预算、审批、模型出站、业务工具和业务数据权威。
 
 6. 普通数据增删改查使用 Prisma；行锁、数据库时钟、条件冲突更新、JSON/窗口与微秒游标等查询使用 Kysely 类型化构建器，并通过同一 Prisma 客户端/事务执行。pg 仅管理连接池与底层传输，不直接执行应用 SQL。禁止完整手写 SQL、业务原生 query/execute 旁路、自动结构同步与迁移执行器；私有查询驱动仅接收构建器编译结果及独立绑定参数。`prisma/schema.prisma` 仅为客户端映射，`src/database/schema.ts` 从生成模型派生构建器类型；结构唯一来源仍为 `backend/db/schema.sql`。只运行 `prisma generate`，不运行 db push/migrate，不读取业务库生成客户端。
+7. 运行实例、执行槽和受理停机归会话服务。控制和交付等待归 `sessions/execution/`，扫描、扫描生命周期和退避归 `sessions/recovery/`，公开事件读取归 `sessions/persistence/`。Pi 工具归 `pi-durable/tools/`，项目快照、记忆与证据依赖归 `pi-durable/context/`。移动参与指纹的文件时清理编译产物，并沿设计37 §7.5 核验发布。
 
 ## 接口生成
 

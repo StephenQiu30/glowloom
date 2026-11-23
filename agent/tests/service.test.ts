@@ -296,7 +296,8 @@ it('keeps historical input readable while refusing execution with unavailable pi
   expect(
     (await service.readSession(session.id, scope))?.run?.execution_available,
   ).toBe(false);
-  const { SessionRuntime } = await import('../src/sessions/runtime.js');
+  const { SessionRuntime } =
+    await import('../src/sessions/execution/runtime.js');
   await expect(
     SessionRuntime.open(pool, new BusinessFixture(), run, 60000),
   ).rejects.toThrow(/Pinned Harness definitions/);
