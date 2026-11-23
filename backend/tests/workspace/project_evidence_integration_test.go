@@ -133,8 +133,9 @@ func TestProjectEvidenceHTTPResolvesOnlyCurrentProjectSources(t *testing.T) {
 
 	docID, nodeID, assetID, asrID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
 	assetKey := "evidence/" + assetID.String() + ".wav"
-	profile := mediaapp.StorageProfile{ID: "evidence-fixture", Provider: "cos", Endpoint: "http://127.0.0.1:2",
-		SigningEndpoint: "http://127.0.0.1:2", Bucket: "evidence-fixture", Region: "us-east-1"}
+	const endpoint = "https://evidence-fixture-1250000000.cos.ap-shanghai.myqcloud.com"
+	profile := mediaapp.StorageProfile{ID: "evidence-fixture", Provider: "cos", Endpoint: endpoint,
+		SigningEndpoint: endpoint, Bucket: "evidence-fixture-1250000000", Region: "ap-shanghai"}
 	if err := pgmedia.NewStorageRoutes(db).RegisterProfiles(ctx, []mediaapp.StorageProfile{profile}); err != nil {
 		t.Fatal(err)
 	}

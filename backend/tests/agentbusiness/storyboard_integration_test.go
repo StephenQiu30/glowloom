@@ -131,7 +131,7 @@ func TestAgentStoryboardRealPostgresYjs(t *testing.T) {
 	require.Equal(t, "只在本镜加入一句独白", localSearch.Items[0].Excerpt)
 	status, siblingEvidence, message := businessToolRequest(t, router, grant, evidence.SearchTool, "sibling-rule", evidence.Query{ShotID: &left.ID})
 	require.Equal(t, http.StatusOK, status, message)
-	require.JSONEq(t, `{"status":"no_match","items":[]}`, string(siblingEvidence.Result))
+	require.JSONEq(t, `{"status":"no_match","retrieval_mode":"lexical","items":[]}`, string(siblingEvidence.Result))
 	lexical, err := evidencepg.Search(db, scope.ProjectID, evidence.Query{Text: "audio"})
 	require.NoError(t, err)
 	require.NotEmpty(t, lexical.Items)
