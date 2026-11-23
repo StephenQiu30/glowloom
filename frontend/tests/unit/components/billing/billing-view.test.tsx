@@ -1,6 +1,12 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { BillingView } from "@/components/billing/billing-view";
+import BillingLayout from "@/app/billing/layout";
+import { PageToolbarContext } from "@/components/layout/page-toolbar";
+
+vi.mock("next/navigation", () => ({
+  useSelectedLayoutSegment: () => "recharge",
+}));
 afterEach(cleanup);
 
 it("积分服务未开放不把原型数字或零余额作为账号事实", () => {
@@ -8,8 +14,21 @@ it("积分服务未开放不把原型数字或零余额作为账号事实", () =
   expect(screen.getAllByLabelText(/暂不可查询/)).toHaveLength(3);
   expect(screen.queryByText("120")).toBeNull();
   expect(screen.queryByText("0")).toBeNull();
+});
+
+it("账务导航只挂载到共享顶栏，并标记当前路由", () => {
+  const header = document.createElement("header");
+  const { container } = render(
+    <PageToolbarContext.Provider value={header}>
+      <BillingLayout>
+        <BillingView section="recharge" />
+      </BillingLayout>
+    </PageToolbarContext.Provider>,
+  );
+  expect(container.querySelector("nav")).toBeNull();
+  expect(header.querySelectorAll("nav a")).toHaveLength(4);
   expect(
-    screen.getByRole("link", { name: "充值积分" }).getAttribute("href"),
+    header.querySelector('[aria-current="page"]')?.getAttribute("href"),
   ).toBe("/billing/recharge");
 });
 

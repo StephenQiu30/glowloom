@@ -741,9 +741,9 @@ button:not(:disabled),
 }
 @media (min-width: 768px) {
   @container product-content (width < 1120px) {
-    .product-header:not(:where([data-admin-layout])):has(
-        .product-header-toolbar:not(:empty)
-      ) {
+    .product-header:not(
+        :where([data-admin-layout], [data-inline-navigation])
+      ):has(.product-header-toolbar:not(:empty)) {
       grid-template-columns: minmax(0, 1fr) auto;
       row-gap: 12px;
 
@@ -3659,37 +3659,67 @@ button:not(:disabled),
   }
 }
 
-/* Billing uses actual availability; account totals require a service response. */
-.billing-page {
-  width: 100%;
-  max-width: 1360px;
-  margin-inline: auto;
-  padding: 12px var(--layout-content-x) var(--layout-content-y);
-  min-width: 0;
+/* Route links share the account row. Only the links scroll when space runs out. */
+[data-product-navigation="billing"] {
+  --product-header-space: 60px;
 }
-.billing-heading {
+[data-product-navigation="billing"] > .product-header {
+  min-height: 60px;
+  padding-block: 10px;
+  align-items: center;
+}
+.billing-navigation {
   display: flex;
-  flex-direction: column;
+  min-width: 0;
+  align-items: center;
   gap: 4px;
+  overflow-x: auto;
+  padding: 2px;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
 }
-.billing-heading h1 {
-  font-size: 28px;
-  font-weight: 600;
-  line-height: 42px;
+.billing-page {
+  min-width: 0;
+  padding: 8px var(--layout-content-x) var(--layout-content-y);
 }
-.billing-heading p {
-  font-size: 14px;
-  color: var(--muted-foreground);
+@media (max-width: 767px) {
+  [data-product-navigation="billing"] {
+    --product-header-space: 0px;
+
+    > .product-header {
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 2px;
+      padding: 5px 6px;
+    }
+    .product-header-location {
+      min-height: 44px;
+    }
+    .product-header-toolbar:not(:empty) {
+      grid-area: 1 / 2;
+    }
+    .product-header-actions {
+      display: flex;
+      grid-area: 1 / 3;
+      gap: 2px;
+    }
+    .product-header [data-account-actions] {
+      align-self: center;
+      margin-top: 0;
+    }
+    .billing-navigation {
+      gap: 0;
+    }
+    .billing-navigation a {
+      min-width: 44px;
+      padding-inline: 6px;
+    }
+  }
 }
-.billing-metrics {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-}
-.billing-metric {
-  font-size: 32px;
-  line-height: 40px;
-  font-variant-numeric: tabular-nums;
+@media (max-width: 479px) {
+  [data-product-navigation="billing"] .product-header-location .product-brand,
+  [data-product-navigation="billing"] .product-credit-action {
+    display: none;
+  }
 }
 .product-page .workspace-content-state:not([aria-busy="true"]) {
   border-radius: 16px;
@@ -3732,19 +3762,6 @@ button:not(:disabled),
 .policy-table [data-slot="table-head"]:first-child {
   width: 22%;
 }
-@media (max-width: 767px) {
-  .billing-page {
-    padding: 24px 16px;
-  }
-  .billing-heading h1 {
-    font-size: 24px;
-    line-height: 34px;
-  }
-  .billing-metrics {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 .canvas-tile:not([data-managing="true"]):not(:hover):not(:focus-within)
   .canvas-tile-check {
   opacity: 0;

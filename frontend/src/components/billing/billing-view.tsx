@@ -2,56 +2,17 @@ import Link from "next/link";
 import { PageLayout } from "@/components/layout/page-layout";
 import { ContentState } from "@/components/layout/content-state";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 
-const sections = {
-  overview: {
-    title: "积分总览",
-    href: "/billing",
-  },
-  membership: {
-    title: "会员中心",
-    href: "/billing/membership",
-  },
-  transactions: {
-    title: "积分明细",
-    href: "/billing/transactions",
-  },
-  recharge: {
-    title: "充值积分",
-    href: "/billing/recharge",
-  },
-} as const;
-type Section = keyof typeof sections;
-
-function BillingAvailability({
-  section,
-}: {
-  section: "membership" | "recharge";
-}) {
-  const member = section === "membership";
-  return (
-    <ContentState
-      title={member ? "会员计划即将上线" : "充值即将开放"}
-      description={
-        member
-          ? "套餐价格与权益将在开放时公布。"
-          : "积分套餐尚未发布，开放后可在这里充值。"
-      }
-      actions={
-        <Button variant="secondary" asChild>
-          <Link href="/billing">返回积分总览</Link>
-        </Button>
-      }
-    />
-  );
-}
+import { billingSections, type BillingSection } from "./billing-sections";
 
 const entryLabels: Record<string, string> = {
   issue: "入账",
@@ -77,127 +38,116 @@ export function BillingView({
   walletError,
   onNext,
   onPrevious,
+  onRetry,
 }: {
-  section?: Section;
+  section?: BillingSection;
   wallet?: API.WalletView;
   walletLoading?: boolean;
   walletError?: boolean;
   onNext?: () => void;
   onPrevious?: () => void;
+  onRetry?: () => void;
 }) {
-  const current = sections[section];
-  const values = wallet?.enabled
-    ? [wallet.general_credits, wallet.held_credits, wallet.redeemed_today]
-    : [];
+  const activeWallet = wallet?.enabled ? wallet : undefined;
+  const secondaryBalances = [
+    { label: "预占积分", value: activeWallet?.held_credits },
+    { label: "今日消耗", value: activeWallet?.redeemed_today },
+  ];
   const balanceState = walletLoading
-    ? "正在读取积分"
+    ? "正在读取积分…"
     : walletError
       ? "积分暂不可读取"
       : "积分服务暂未开放";
+  const retry = walletError && !walletLoading && onRetry && (
+    <Button size="workspace" variant="outline" onClick={onRetry}>
+      重新读取
+    </Button>
+  );
   return (
     <PageLayout screen="billing" fullBleed>
-      <section className="billing-page">
-        <Tabs value={section} activationMode="manual" className="gap-6">
-          <div className="overflow-x-auto">
-            <TabsList
-              variant="surface"
-              aria-label="账务导航"
-              className="min-w-max"
-            >
-              {(
-                ["overview", "transactions", "recharge", "membership"] as const
-              ).map((key) => (
-                <TabsTrigger key={key} value={key} asChild>
-                  <Link href={sections[key].href}>{sections[key].title}</Link>
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </div>
-          <TabsContent value={section} className="flex flex-col gap-6">
-            <div className="billing-heading">
-              <h1>{current.title}</h1>
-              {section === "overview" && (
-                <p role="status">
-                  {wallet?.enabled
-                    ? wallet.payer === "team"
-                      ? "团队付款账户"
-                      : "个人付款账户"
-                    : balanceState}
+      <section className="billing-page flex flex-col gap-3">
+        <h1 className="text-2xl font-semibold md:text-[1.75rem]">
+          {billingSections[section].title}
+        </h1>
+        {section === "overview" ? (
+          <Card className="max-w-2xl">
+            <CardHeader>
+              <CardTitle>可用积分</CardTitle>
+              <CardDescription role="status">
+                {activeWallet
+                  ? activeWallet.payer === "team"
+                    ? "团队付款账户"
+                    : "个人付款账户"
+                  : balanceState}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              {walletLoading ? (
+                <Skeleton aria-hidden="true" className="h-10 w-28" />
+              ) : (
+                <p
+                  className="text-4xl break-all tabular-nums"
+                  aria-label={activeWallet ? undefined : "可用积分暂不可查询"}
+                >
+                  {activeWallet?.general_credits ?? "—"}
                 </p>
               )}
-            </div>
-            {section === "overview" ? (
-              <>
-                <div className="billing-metrics">
-                  {["可用积分", "预占积分", "今日消耗"].map((label, index) => (
-                    <Card key={label}>
-                      <CardHeader>
-                        <CardTitle>{label}</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <p
-                          className="billing-metric"
-                          aria-label={
-                            values[index] === undefined
-                              ? `${label}暂不可查询`
-                              : undefined
-                          }
-                        >
-                          {values[index] ?? "—"}
-                        </p>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-                {wallet?.enabled && wallet.restricted_credits !== "0" && (
-                  <p className="text-sm text-muted-foreground">
-                    限模型积分 {wallet.restricted_credits}
-                    ，仅适用于发放时指定的模型。
-                  </p>
-                )}
-                <div className="flex flex-wrap gap-2">
-                  <Button asChild>
-                    <Link href="/billing/recharge">充值积分</Link>
-                  </Button>
-                  <Button asChild variant="outline">
-                    <Link href="/billing/transactions">查看明细</Link>
-                  </Button>
-                </div>
-                <Collapsible>
-                  <CollapsibleTrigger asChild>
-                    <Button variant="ghost">积分如何计算</Button>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="flex flex-col gap-2 px-2 pt-2">
-                    <p>每次报价按当时发布并冻结的规则提供积分预估。</p>
-                    <p className="text-sm text-muted-foreground">
-                      积分展示与人民币微元账本分别核对。预留释放不等于已扣款退款；未知费用需要继续核查。
-                    </p>
-                  </CollapsibleContent>
-                </Collapsible>
-              </>
-            ) : section === "transactions" ? (
-              wallet?.enabled && wallet.history_available ? (
-                <div className="flex flex-col gap-4">
-                  {wallet.entries?.length ? (
-                    <ul className="divide-y rounded-lg border">
-                      {wallet.entries.map((entry) => (
+              <dl className="grid grid-cols-2 gap-4">
+                {secondaryBalances.map(({ label, value }) => (
+                  <div key={label} className="flex min-w-0 flex-col gap-1">
+                    <dt className="text-muted-foreground">{label}</dt>
+                    <dd
+                      aria-label={
+                        value === undefined && !walletLoading
+                          ? `${label}暂不可查询`
+                          : undefined
+                      }
+                      className="break-all tabular-nums"
+                    >
+                      {walletLoading ? (
+                        <Skeleton aria-hidden="true" className="h-5 w-16" />
+                      ) : (
+                        (value ?? "—")
+                      )}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </CardContent>
+            {activeWallet?.restricted_credits &&
+            activeWallet.restricted_credits !== "0" ? (
+              <CardFooter className="break-all tabular-nums">
+                限模型积分 {activeWallet.restricted_credits}
+              </CardFooter>
+            ) : retry ? (
+              <CardFooter>{retry}</CardFooter>
+            ) : null}
+          </Card>
+        ) : section === "transactions" ? (
+          activeWallet?.history_available ? (
+            <div className="flex max-w-2xl flex-col gap-4">
+              {activeWallet.entries?.length ? (
+                <Card className="py-0">
+                  <CardContent className="px-0">
+                    <ul className="divide-y">
+                      {activeWallet.entries.map((entry) => (
                         <li
                           key={entry.id}
                           className="flex flex-wrap justify-between gap-2 p-4"
                         >
                           <div className="min-w-0">
                             <p>{entryLabels[entry.kind ?? ""] ?? entry.kind}</p>
-                            <p className="text-sm break-words text-muted-foreground">
+                            <p className="break-words text-muted-foreground">
                               {sourceLabels[entry.source ?? ""] ?? entry.source}
                               {entry.model_key ? ` · ${entry.model_key}` : ""}
                             </p>
                           </div>
-                          <div className="text-right">
-                            <p>{entry.credits} 积分</p>
+                          <div className="min-w-0 text-right tabular-nums">
+                            <p className="break-words">{entry.credits} 积分</p>
                             {entry.created_at && (
                               <time
                                 dateTime={entry.created_at}
-                                className="text-sm text-muted-foreground"
+                                className="text-muted-foreground"
                               >
                                 {entry.created_at.slice(0, 10)}
                               </time>
@@ -206,40 +156,56 @@ export function BillingView({
                         </li>
                       ))}
                     </ul>
-                  ) : (
-                    <ContentState
-                      title="暂无积分流水"
-                      description="入账、冻结和结算后会在这里显示。"
-                    />
-                  )}
-                  <div className="flex gap-2">
-                    {onPrevious && (
-                      <Button variant="outline" onClick={onPrevious}>
-                        上一页
-                      </Button>
-                    )}
-                    {onNext && (
-                      <Button variant="outline" onClick={onNext}>
-                        下一页
-                      </Button>
-                    )}
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
               ) : (
-                <ContentState
-                  title={
-                    wallet?.enabled
-                      ? "积分明细由团队付款管理员查看"
-                      : balanceState
-                  }
-                  description="明细包含积分预占、结算和返还记录。"
-                />
-              )
-            ) : (
-              <BillingAvailability section={section} />
-            )}
-          </TabsContent>
-        </Tabs>
+                <ContentState title="暂无积分流水" />
+              )}
+              {(onPrevious || onNext) && (
+                <div className="flex gap-2">
+                  {onPrevious && (
+                    <Button
+                      size="workspace"
+                      variant="outline"
+                      onClick={onPrevious}
+                    >
+                      上一页
+                    </Button>
+                  )}
+                  {onNext && (
+                    <Button size="workspace" variant="outline" onClick={onNext}>
+                      下一页
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <ContentState
+              className="max-w-2xl"
+              title={
+                activeWallet ? "积分明细由团队付款管理员查看" : balanceState
+              }
+              state={
+                walletLoading ? "loading" : walletError ? "error" : "empty"
+              }
+              loadingLayout="list"
+              actions={retry}
+            />
+          )
+        ) : (
+          <ContentState
+            className="max-w-2xl"
+            title={
+              section === "membership" ? "会员计划即将上线" : "充值即将开放"
+            }
+            actions={
+              <Button size="workspace" variant="secondary" asChild>
+                <Link href={billingSections.overview.href}>返回积分总览</Link>
+              </Button>
+            }
+          />
+        )}
       </section>
     </PageLayout>
   );

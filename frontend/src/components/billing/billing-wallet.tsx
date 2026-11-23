@@ -28,10 +28,11 @@ function WalletQuery({ section }: { section: "overview" | "transactions" }) {
     <BillingView
       section={section}
       wallet={query.data}
-      walletLoading={query.isLoading}
+      walletLoading={query.isLoading || (!query.data && query.isValidating)}
       walletError={Boolean(query.error)}
       onNext={next ? () => setCursors([...cursors, next]) : undefined}
       onPrevious={cursor ? () => setCursors(cursors.slice(0, -1)) : undefined}
+      onRetry={() => void query.mutate()}
     />
   );
 }

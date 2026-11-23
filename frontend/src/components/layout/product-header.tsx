@@ -14,6 +14,7 @@ export function ProductHeader({
   floating = false,
   adminLayout = false,
   assetLayout = false,
+  inlineNavigation = false,
   toolbarRef,
   pageActionsRef,
   replaceBase = false,
@@ -32,6 +33,7 @@ export function ProductHeader({
   floating?: boolean;
   adminLayout?: boolean;
   assetLayout?: boolean;
+  inlineNavigation?: boolean;
   toolbarRef?: Ref<HTMLDivElement>;
   pageActionsRef?: Ref<HTMLDivElement>;
   replaceBase?: boolean;
@@ -68,6 +70,7 @@ export function ProductHeader({
     <div
       data-asset-layout={assetLayout || undefined}
       data-admin-layout={adminLayout || undefined}
+      data-inline-navigation={inlineNavigation || undefined}
       data-replace-base={replaceBase || undefined}
       className={floating ? "product-global-actions" : "product-header"}
       role={floating ? "group" : "banner"}
@@ -91,7 +94,7 @@ export function ProductHeader({
           </>
         ) : null}
       </div>
-      {isMobile && !adminLayout
+      {isMobile && !adminLayout && !inlineNavigation
         ? [common, navigation, assetLayout ? null : pageActions]
         : [navigation, assetLayout ? null : pageActions, common]}
     </div>
