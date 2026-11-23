@@ -1,10 +1,13 @@
 package http
 
 import (
+	"context"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
 	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
+	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/runtimeclient"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
@@ -34,6 +37,12 @@ func (h *PublicHandler) WithControlStatus(reader app.ControlStatusReader) *Publi
 // WithConversationInputs injects current draft, source, quote and model authorization.
 func (h *PublicHandler) WithConversationInputs(inputs app.ConversationInputFreezer) *PublicHandler {
 	h.inputs = inputs
+	return h
+}
+
+// WithStoryboardTargets freezes ordinary canvas shot references at submission.
+func (h *PublicHandler) WithStoryboardTargets(read func(context.Context, identity.Principal, uuid.UUID, uuid.UUID, string) ([]app.StoryboardTarget, error)) *PublicHandler {
+	h.storyboardTargets = read
 	return h
 }
 

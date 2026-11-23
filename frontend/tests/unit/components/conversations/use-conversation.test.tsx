@@ -542,6 +542,14 @@ it("blocks new input when an existing session cannot be read", async () => {
 });
 
 it("pins the production obligation on the original request across an uncertain response", async () => {
+  const canvasID = "00000000-0000-4000-8000-000000000099";
+  calls.create.mockResolvedValue({
+    id: sid,
+    project_id: pid,
+    canvas_id: canvasID,
+    title: "写一个故事",
+    execution_revision: 0,
+  });
   calls.start.mockRejectedValue(new RequestError("network_error"));
   calls.submission.mockResolvedValue(undefined);
   const original = { kind: "production", required_deliveries: 1 } as const;
@@ -551,7 +559,7 @@ it("pins the production obligation on the original request across an uncertain r
         ownerKey: "actor/space",
         projectID: pid,
         enabled: true,
-        canvasID: "00000000-0000-4000-8000-000000000099",
+        canvasID,
         initialDraft: draft(),
         goalContract,
       }),

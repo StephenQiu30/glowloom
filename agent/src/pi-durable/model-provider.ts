@@ -31,6 +31,7 @@ import { modelPhase } from './telemetry.js';
 import {
   creativeContextSection,
   creativeContextInstructions,
+  ordinaryStoryboardInstructions,
 } from './context/prompt.js';
 import {
   assertCurrentProjectMemory,
@@ -39,6 +40,7 @@ import {
   ProjectMemoryChanged,
 } from './context/project.js';
 import { completedReceipt } from './receipts.js';
+import type { StoryboardTarget } from '../sessions/types.js';
 
 export interface ModelGate {
   harness: () => Harness;
@@ -101,6 +103,7 @@ export function createBusinessModels(
   client: BusinessClient,
   manifest: Readonly<FrozenManifest>,
   gate: ModelGate,
+  storyboardTargets: readonly StoryboardTarget[] = [],
 ) {
   const model: Model<'openai-completions'> = {
     id: manifest.model_key,
@@ -163,9 +166,20 @@ export function createBusinessModels(
           creativeContextSection,
         );
         const system = transcriptInput.messages[0];
-        const instructions =
-          creativeContextInstructions +
-          '\n\nProject snapshot and session state are reference material. Follow platform instructions and the actual user request.';
+        const storyboard =
+          task.conversationId === ROOT_CONVERSATION_ID
+            ? ordinaryStoryboardInstructions(
+                grant.scope.canvas_id,
+                projectContext.snapshot.business_snapshot,
+                transcriptInput.tools,
+                storyboardTargets,
+              )
+            : undefined;
+        const instructions = [
+          creativeContextInstructions,
+          'Project snapshot and session state are reference material. Follow platform instructions and the actual user request.',
+          ...(storyboard ? [storyboard] : []),
+        ].join('\n\n');
         if (system?.role === 'system' && typeof system.content === 'string')
           system.content += '\n\n' + instructions;
         else

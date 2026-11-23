@@ -25,8 +25,41 @@ func decodeCanvasSource(raw []byte) (*domain.CanvasSource, error) {
 	return &source, nil
 }
 
-// readQuoteCanvasSource shares the document lock used by its command writer.
-// It freezes provenance and checks references against the saved batch row.
+type quoteCanvasNode struct {
+	DocumentKind string
+	NodeType     string
+	Config       string
+}
+
+// readQuoteCanvasNode holds the document lock shared with its command writer.
+func readQuoteCanvasNode(tx *gorm.DB, projectID uuid.UUID, source domain.CanvasSource, fromCurrentSnapshot bool) (quoteCanvasNode, error) {
+	var document struct {
+		Revision int64
+		Kind     string
+	}
+	read := tx.Raw(`SELECT revision,kind FROM canvas.document WHERE id=?::uuid AND project_id=?::uuid AND NOT is_delete FOR SHARE`, source.CanvasID, projectID).Scan(&document)
+	if read.Error != nil {
+		return quoteCanvasNode{}, fmt.Errorf("lock quote canvas source: %w", read.Error)
+	}
+	if read.RowsAffected != 1 {
+		return quoteCanvasNode{}, application.ErrPublicNotFound
+	}
+	if source.Revision > document.Revision || (fromCurrentSnapshot && source.Revision != document.Revision) {
+		return quoteCanvasNode{}, application.ErrQuoteSourceStale
+	}
+	var node quoteCanvasNode
+	read = tx.Raw(`SELECT node_type,config::text AS config FROM canvas.node WHERE id=?::uuid AND document_id=?::uuid AND NOT is_delete`, source.NodeID, source.CanvasID).Scan(&node)
+	if read.Error != nil {
+		return quoteCanvasNode{}, fmt.Errorf("read quote canvas node: %w", read.Error)
+	}
+	if read.RowsAffected != 1 {
+		return quoteCanvasNode{}, application.ErrPublicNotFound
+	}
+	node.DocumentKind = document.Kind
+	return node, nil
+}
+
+// readQuoteCanvasSource verifies the frozen request against its saved source.
 func readQuoteCanvasSource(tx *gorm.DB, projectID uuid.UUID, input application.FreeQuoteItemInput) (int, error) {
 	if input.Source == nil {
 		return 0, nil
@@ -34,24 +67,19 @@ func readQuoteCanvasSource(tx *gorm.DB, projectID uuid.UUID, input application.F
 	if !input.Source.Valid() {
 		return 0, application.ErrInvalidFreeQuote
 	}
-	var document struct{ Revision int64 }
-	read := tx.Raw(`SELECT revision FROM canvas.document WHERE id=?::uuid AND project_id=?::uuid AND NOT is_delete FOR SHARE`, input.Source.CanvasID, projectID).Scan(&document)
-	if read.Error != nil {
-		return 0, fmt.Errorf("lock quote canvas source: %w", read.Error)
+	node, err := readQuoteCanvasNode(tx, projectID, *input.Source, true)
+	if err != nil {
+		return 0, err
 	}
-	if read.RowsAffected != 1 {
-		return 0, application.ErrPublicNotFound
-	}
-	if document.Revision != input.Source.Revision {
-		return 0, application.ErrQuoteSourceStale
-	}
-	var node struct{ NodeType, Config string }
-	read = tx.Raw(`SELECT node_type,config::text AS config FROM canvas.node WHERE id=?::uuid AND document_id=?::uuid AND NOT is_delete`, input.Source.NodeID, input.Source.CanvasID).Scan(&node)
-	if read.Error != nil {
-		return 0, fmt.Errorf("read quote canvas node: %w", read.Error)
-	}
-	if read.RowsAffected != 1 {
-		return 0, application.ErrPublicNotFound
+	if node.NodeType == canvasdomain.NodeTypeStoryboard || input.Source.ShotID != nil {
+		shot, err := readQuoteStoryboardShot(node, *input.Source)
+		if err != nil {
+			return 0, err
+		}
+		if input.Prompt != storyboardShotPrompt(shot) || !application.StoryboardShotDurationMatches(shot.DurationMS, input.Params) {
+			return 0, application.ErrInvalidFreeQuote
+		}
+		return 0, nil
 	}
 	if node.NodeType != canvasdomain.NodeTypeBatchTable {
 		if node.NodeType == canvasdomain.NodeTypeGeneration {
@@ -92,7 +120,7 @@ func readQuoteCanvasSource(tx *gorm.DB, projectID uuid.UUID, input application.F
 	}
 	if config.BatchTable.ModelProfileID != nil {
 		var model struct{ ID uuid.UUID }
-		read = tx.Raw(`SELECT id FROM catalog.model_profile WHERE model_key=? AND NOT is_delete`, input.ModelKey).Scan(&model)
+		read := tx.Raw(`SELECT id FROM catalog.model_profile WHERE model_key=? AND NOT is_delete`, input.ModelKey).Scan(&model)
 		if read.Error != nil {
 			return 0, fmt.Errorf("check source model: %w", read.Error)
 		}
@@ -106,7 +134,7 @@ func readQuoteCanvasSource(tx *gorm.DB, projectID uuid.UUID, input application.F
 			continue
 		}
 		var ref struct{ RefID *uuid.UUID }
-		read = tx.Raw(`SELECT ref_id FROM canvas.node WHERE id=?::uuid AND document_id=?::uuid AND node_type=? AND ref_type=? AND NOT is_delete`, *nodeID, input.Source.CanvasID, canvasdomain.NodeTypeImage, canvasdomain.RefTypeMediaAsset).Scan(&ref)
+		read := tx.Raw(`SELECT ref_id FROM canvas.node WHERE id=?::uuid AND document_id=?::uuid AND node_type=? AND ref_type=? AND NOT is_delete`, *nodeID, input.Source.CanvasID, canvasdomain.NodeTypeImage, canvasdomain.RefTypeMediaAsset).Scan(&ref)
 		if read.Error != nil {
 			return 0, fmt.Errorf("read source reference node: %w", read.Error)
 		}

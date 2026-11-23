@@ -170,7 +170,7 @@ it("shows the exact selected shot and frozen edit before allowing approval", () 
       },
     },
   } as typeof c.runMap.old.snapshot.state;
-  render(<ConversationThread conversation={c} projectID="project" />);
+  render(<ConversationThread conversation={c} projectID="project" writable />);
   expect(screen.getByTestId("selected-shot").getAttribute("data-asset")).toBe(
     asset,
   );

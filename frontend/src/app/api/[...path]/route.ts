@@ -945,6 +945,21 @@ async function proxy(
       query: [],
     },
     {
+      pattern: `canvases/${identityUUID}/storyboard`,
+      methods: ["GET", "POST"],
+      query: [],
+    },
+    {
+      pattern: `canvases/${identityUUID}/storyboard/(quote|adopt)`,
+      methods: ["POST"],
+      query: [],
+    },
+    {
+      pattern: `canvases/${identityUUID}/storyboard/candidates`,
+      methods: ["GET"],
+      query: ["board_id", "shot_id"],
+    },
+    {
       pattern: `canvases/${identityUUID}/assistant-sessions/${identityUUID}`,
       methods: ["GET"],
       query: [],

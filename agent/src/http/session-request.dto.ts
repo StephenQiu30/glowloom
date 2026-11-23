@@ -24,6 +24,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { ClosedDto, queryInteger, whenPresent } from './validation.js';
+import type { StoryboardTarget } from '../sessions/types.js';
 
 export class ScopeDto {
   @ApiProperty({ type: 'string', format: 'uuid' })
@@ -196,6 +197,38 @@ export class QuotedMessage {
 }
 
 @ClosedDto()
+export class StoryboardTargetDto implements StoryboardTarget {
+  @ApiProperty({ type: 'integer', format: 'int64', minimum: 1, maximum: 64 })
+  @Expose()
+  @IsInt()
+  @Min(1)
+  @Max(64)
+  ordinal!: number;
+
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  @Expose()
+  @IsUUID()
+  board_id!: string;
+
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  @Expose()
+  @IsUUID()
+  shot_id!: string;
+
+  @ApiProperty({
+    type: 'integer',
+    format: 'int64',
+    minimum: 1,
+    maximum: Number.MAX_SAFE_INTEGER,
+  })
+  @Expose()
+  @IsInt()
+  @Min(1)
+  @Max(Number.MAX_SAFE_INTEGER)
+  shot_revision!: number;
+}
+
+@ClosedDto()
 export class AuthorizedInput {
   @ApiProperty({ type: 'integer', format: 'int64', enum: [1] })
   @Expose()
@@ -240,6 +273,21 @@ export class AuthorizedInput {
   @ValidateNested({ each: true })
   @Type(() => MediaPin)
   media_pins!: MediaPin[];
+
+  @ApiProperty({
+    required: false,
+    type: () => StoryboardTargetDto,
+    isArray: true,
+    maxItems: 6,
+  })
+  @Expose()
+  @ValidateIf(whenPresent)
+  @IsArray()
+  @ArrayMaxSize(6)
+  @IsObject({ each: true })
+  @ValidateNested({ each: true })
+  @Type(() => StoryboardTargetDto)
+  storyboard_targets?: StoryboardTargetDto[];
 
   @ApiProperty({ required: false, type: () => QuotedMessage })
   @Expose()

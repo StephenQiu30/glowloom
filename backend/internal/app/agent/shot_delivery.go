@@ -114,7 +114,7 @@ func loadShotCandidate(ctx context.Context, tx *gorm.DB, s domain.Scope, in Shot
 	if err != nil {
 		return task, mediadomain.MediaAsset{}, businessError(err)
 	}
-	if task.Status != operationdomain.StatusCompleted || task.Capability != operationdomain.CapabilityVideoGenerate || task.Source == nil || task.Source.CanvasID != in.CanvasID || task.Source.NodeID != in.NodeID || task.Source.RowID != nil {
+	if task.Status != operationdomain.StatusCompleted || task.Capability != operationdomain.CapabilityVideoGenerate || task.Source == nil || task.Source.CanvasID != in.CanvasID || task.Source.NodeID != in.NodeID || task.Source.RowID != nil || task.Source.ShotID != nil {
 		return task, mediadomain.MediaAsset{}, domain.ErrBlocked
 	}
 	var assetID uuid.UUID

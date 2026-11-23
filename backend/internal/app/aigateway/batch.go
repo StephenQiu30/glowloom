@@ -75,7 +75,7 @@ func (c Creation) BatchQuote(ctx context.Context, a identity.Principal, p uuid.U
 		out.Confirmable = true
 		ids := []uuid.UUID{}
 		for i, item := range items {
-			if item.InputSource != nil {
+			if item.InputSource != nil || (item.Source != nil && item.Source.ShotID != nil) {
 				return domain.ErrInvalid
 			}
 			quote, err := inner.Quote(ctx, a, p, fmt.Sprintf("%s/%d", key, i), item)

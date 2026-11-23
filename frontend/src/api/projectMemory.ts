@@ -12,7 +12,9 @@ export async function listProjectMemory(
   const { pid: param0, ...queryParams } = params;
   return request<API.ProjectMemoryView>(`/api/projects/${param0}/memory`, {
     method: "GET",
-    params: { ...queryParams },
+    params: {
+      ...queryParams,
+    },
     ...(options || {}),
   });
 }

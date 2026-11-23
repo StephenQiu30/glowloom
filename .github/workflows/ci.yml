@@ -146,7 +146,7 @@ jobs:
       - name: Install the production Agent used by boundary tests
         working-directory: agent
         run: pnpm install --frozen-lockfile
-      - name: Verify multimedia references and style library
+      - name: Verify multimedia references, style library, storyboards and Agent eval fixtures
         env:
           GLOWLOOM_TEST_WORKSPACE_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_studio_inputs_test?sslmode=disable
           GLOWLOOM_TEST_MEDIA_STORE_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_studio_inputs_test?sslmode=disable
@@ -155,7 +155,7 @@ jobs:
         run: >-
           go test -race -count=1
           ./tests/workspace ./tests/media ./tests/agentbusiness ./tests/agent/modelgateway ./tests/prompt
-          -run 'TestStyleLibrary|TestMediaReference|TestConversationAdmission|TestVideoLink|TestPublicVideo|TestReferenceVisual|TestChatAllows|TestConversationDocument|TestPersonalUploadNilRequest|TestUploadPublishes|TestPersonalUploadPublishes'
+          -run 'TestStyleLibrary|TestMediaReference|TestConversationAdmission|TestVideoLink|TestPublicVideo|TestReferenceVisual|TestChatAllows|TestConversationDocument|TestPersonalUploadNilRequest|TestUploadPublishes|TestPersonalUploadPublishes|TestProjectAgentEvalFixtureDistinguishesResults|TestAgentStoryboardRealPostgresYjs|TestStoryboardAdoptionRealPostgresYjs'
       - name: Verify rebuilt AI core without skipped regressions
         run: |
           set -o pipefail

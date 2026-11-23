@@ -27,6 +27,10 @@ type CanvasCommandsInput struct {
 // Yjs computation adapter was installed by the process composition.
 func (b *Boundary) WithCanvasRuntime(runtime canvas.YjsCommandRuntime) *Boundary {
 	b.canvasRuntime = runtime
+	for _, binding := range storyboardTools() {
+		b.bindings = append(b.bindings, binding)
+		b.Capabilities.Tools = append(b.Capabilities.Tools, app.Tool{Descriptor: binding.descriptor})
+	}
 	for _, binding := range shotDeliveryTools() {
 		b.bindings = append(b.bindings, binding)
 		b.Capabilities.Tools = append(b.Capabilities.Tools, app.Tool{Descriptor: binding.descriptor})

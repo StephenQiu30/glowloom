@@ -117,7 +117,7 @@ func YjsProjectionOperations(before domain.Document, after DocumentDTO) ([]domai
 			_, present := ac[key]
 			set([]string{"config", key}, pickFields(ac, key), pickFields(bc, key), true, present)
 		}
-		for _, key := range []string{"subject", "draft", "generation", "batch_table", "timeline", "director"} {
+		for _, key := range []string{"subject", "draft", "generation", "batch_table", "timeline", "director", "storyboard"} {
 			set([]string{"config", key}, pickFields(ac, key), pickFields(bc, key), true, true)
 		}
 		set([]string{"config", "collapsed"}, ac["collapsed"], bc["collapsed"], false, true)

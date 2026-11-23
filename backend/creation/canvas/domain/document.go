@@ -39,6 +39,7 @@ type NodeConfig struct {
 	Timeline      *TimelineConfig         `json:"timeline,omitempty"`
 	Director      *DirectorConfig         `json:"director,omitempty"`
 	Generation    *GenerationConfig       `json:"generation,omitempty"`
+	Storyboard    *Storyboard             `json:"storyboard,omitempty"`
 	unknown       json.RawMessage
 }
 
@@ -418,7 +419,7 @@ func editable(n Node) bool {
 	if n.NodeType == NodeTypeImageGeneration || n.NodeType == NodeTypeVideoGeneration {
 		return n.NodeAction == NodeActionGenerate && (n.RefType == "" && n.RefID == nil || n.Config.Editor != nil && n.RefType == RefTypeMediaAsset && n.RefID != nil && *n.RefID != uuid.Nil)
 	}
-	if n.NodeType == NodeTypeCinemaStudio || n.NodeType == NodeTypeBatchTable || n.NodeType == NodeTypeTimeline || n.NodeType == NodeTypeDirector || n.NodeType == NodeTypeGeneration {
+	if n.NodeType == NodeTypeCinemaStudio || n.NodeType == NodeTypeBatchTable || n.NodeType == NodeTypeTimeline || n.NodeType == NodeTypeDirector || n.NodeType == NodeTypeGeneration || n.NodeType == NodeTypeStoryboard {
 		return n.NodeAction == NodeActionTool && n.RefType == "" && n.RefID == nil
 	}
 	if n.NodeAction != NodeActionResource {
@@ -437,6 +438,14 @@ func annotation(e Edge) bool {
 	return e.EdgeType == "annotation" && e.Role == "" && (len(e.Binding) == 0 || validEditorConnection(e.Binding))
 }
 func validConfig(kind string, c NodeConfig) bool {
+	if kind == NodeTypeStoryboard {
+		board := c.Storyboard
+		c.Storyboard = nil
+		return board != nil && validStoryboard(*board) && string(effectJSON(c)) == "{}"
+	}
+	if c.Storyboard != nil {
+		return false
+	}
 	if c.Container != nil && (kind != NodeTypeGroup || !validContainer(c.Container)) {
 		return false
 	}

@@ -384,14 +384,19 @@ export function ConversationThread({
                       ) : null}
                       <div className="flex gap-2">
                         <Button
-                          disabled={!latest || c.stopping || unreadableDelivery}
+                          disabled={
+                            !writable ||
+                            !latest ||
+                            c.stopping ||
+                            unreadableDelivery
+                          }
                           onClick={() => void c.command("approve")}
                         >
                           批准方案
                         </Button>
                         <Button
                           variant="outline"
-                          disabled={!latest || c.stopping}
+                          disabled={!writable || !latest || c.stopping}
                           onClick={() => void c.command("reject")}
                         >
                           驳回方案

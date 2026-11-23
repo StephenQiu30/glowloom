@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "case_id": "ST-AH-82-ferry",
+  "source_name": "渡轮开场",
+  "foreign_text": "同名参考属于另一项目",
+  "shot_versions": [
+    { "revision": 1, "text": "乘客走过潮湿甲板" },
+    { "revision": 2, "text": "乘客伸手握住潮湿栏杆" }
+  ],
+  "timeline": [
+    "team_member_can_read",
+    "shot_revision_changes",
+    "team_member_is_revoked",
+    "owner_replays_original_call"
+  ]
+}

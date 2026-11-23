@@ -51,6 +51,9 @@ func (s *Store) persistYjsProjection(ctx context.Context, tx *gorm.DB, a identit
 	if err != nil {
 		return 0, err
 	}
+	if !input.StoryboardCommand && domain.StoryboardContentChanged(doc, candidate.Document) {
+		return 0, &domain.OperationError{Code: "protected_storyboard"}
+	}
 	if err := s.projectionIdentities(tx, doc, operations); err != nil {
 		return 0, err
 	}

@@ -13,16 +13,19 @@ import (
 
 // Consumption identity excludes editable input, model, revision and request key.
 const billingTargetSQL = `CASE WHEN o.source_context IS NOT NULL THEN
- 'canvas/'||(o.source_context->>'canvas_id')||'/'||(o.source_context->>'node_id')||'/'||COALESCE(o.source_context->>'row_id','')
+ 'canvas/'||(o.source_context->>'canvas_id')||'/'||(o.source_context->>'node_id')||'/'||
+ CASE WHEN (o.source_context->>'shot_id') IS NOT NULL THEN 'shot/'||(o.source_context->>'shot_id') ELSE COALESCE(o.source_context->>'row_id','') END
  WHEN o.target_id IS NOT NULL THEN COALESCE(o.target_type,'')||'/'||o.target_id::text||'/'||COALESCE(o.target_key,'') ELSE '' END`
 
 func billingTarget(op domain.Operation) string {
 	if op.Source != nil {
-		row := ""
+		slot := ""
 		if op.Source.RowID != nil {
-			row = op.Source.RowID.String()
+			slot = op.Source.RowID.String()
+		} else if op.Source.ShotID != nil {
+			slot = "shot/" + op.Source.ShotID.String()
 		}
-		return "canvas/" + op.Source.CanvasID.String() + "/" + op.Source.NodeID.String() + "/" + row
+		return "canvas/" + op.Source.CanvasID.String() + "/" + op.Source.NodeID.String() + "/" + slot
 	}
 	if op.TargetID != nil {
 		slot := ""

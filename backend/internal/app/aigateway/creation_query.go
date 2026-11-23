@@ -169,9 +169,9 @@ func (c Creation) Task(ctx context.Context, a identity.Principal, p, id uuid.UUI
 		if json.Unmarshal(row.Source, &source) == nil && source.Kind == "canvas_input" {
 			out.Source = &operationdomain.CanvasSource{CanvasID: source.CanvasID, NodeID: source.NodeID, Revision: source.CanvasRevision}
 		} else {
-			var legacy operationdomain.CanvasSource
-			if json.Unmarshal(row.Source, &legacy) == nil && legacy.Valid() {
-				out.Source = &legacy
+			var canvasSource operationdomain.CanvasSource
+			if json.Unmarshal(row.Source, &canvasSource) == nil && canvasSource.Valid() {
+				out.Source = &canvasSource
 			}
 		}
 		var created time.Time
@@ -185,6 +185,9 @@ func (c Creation) Task(ctx context.Context, a identity.Principal, p, id uuid.UUI
 			return err
 		}
 		if n == 0 {
+			if out.Source != nil && out.Source.ShotID != nil && !time.Now().Before(quote.ExpiresAt) {
+				out.Status = operationdomain.StatusExpired
+			}
 			return nil
 		}
 		record, err := c.store(tx, a).ReadProjectResult(ctx, a.ScopeID, p, id)
@@ -320,7 +323,6 @@ func projectMediaDelivery(tx *gorm.DB, project, id uuid.UUID, record domain.Reco
 
 // List returns the same new task projection used by direct task queries.
 func (c Creation) List(ctx context.Context, a identity.Principal, p uuid.UUID) ([]operation.TaskSummary, error) {
-	result := []operation.TaskSummary{}
 	var ids []uuid.UUID
 	err := c.Runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := c.auth()(ctx, tx, a, a.ScopeID, p, false); err != nil {
@@ -329,10 +331,36 @@ func (c Creation) List(ctx context.Context, a identity.Principal, p uuid.UUID) (
 		return tx.Raw("SELECT id FROM ai.creation WHERE project_id=? AND scope_id=? ORDER BY created_at DESC,id DESC LIMIT 100", p, a.ScopeID).Scan(&ids).Error
 	})
 	if err != nil {
-		return result, err
+		return nil, err
 	}
+	return c.taskSummaries(ctx, a, p, ids)
+}
+
+// StoryboardCandidates restores the original quotes and tasks for a stable shot.
+func (c Creation) StoryboardCandidates(ctx context.Context, a identity.Principal, projectID, canvasID, boardID, shotID uuid.UUID) ([]operation.TaskSummary, error) {
+	if projectID == uuid.Nil || canvasID == uuid.Nil || boardID == uuid.Nil || shotID == uuid.Nil {
+		return nil, domain.ErrInvalid
+	}
+	var ids []uuid.UUID
+	err := c.Runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := c.auth()(ctx, tx, a, a.ScopeID, projectID, false); err != nil {
+			return err
+		}
+		return tx.Raw(`SELECT id FROM ai.creation
+			WHERE project_id=? AND scope_id=? AND source->>'canvas_id'=? AND source->>'node_id'=? AND source->>'shot_id'=?
+			ORDER BY created_at DESC,id DESC`,
+			projectID, a.ScopeID, canvasID.String(), boardID.String(), shotID.String()).Scan(&ids).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+	return c.taskSummaries(ctx, a, projectID, ids)
+}
+
+func (c Creation) taskSummaries(ctx context.Context, a identity.Principal, projectID uuid.UUID, ids []uuid.UUID) ([]operation.TaskSummary, error) {
+	result := make([]operation.TaskSummary, 0, len(ids))
 	for _, id := range ids {
-		task, err := c.Task(ctx, a, p, id)
+		task, err := c.Task(ctx, a, projectID, id)
 		if err != nil {
 			return result, err
 		}

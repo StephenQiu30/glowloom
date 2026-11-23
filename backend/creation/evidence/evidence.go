@@ -11,21 +11,25 @@ import (
 	"github.com/google/uuid"
 )
 
+// ErrInvalid reports a malformed or out-of-range evidence request.
 var ErrInvalid = errors.New("invalid project evidence request")
 
+// The tool names and receipt bound are shared by the project evidence contract.
 const (
-	SearchTool  = "search_project_evidence"
-	ReadTool    = "read_project_evidence"
-	MaxReceipts = 64
+	SearchTool       = "search_project_evidence"
+	ReadTool         = "read_project_evidence"
+	MaxReceipts      = 64
+	MaxShotDecisions = 12
 )
 
-var kinds = []string{"brief", "decision", "canvas_node", "script_source", "scene", "script_line", "character", "location", "prop", "media", "transcript"}
+var kinds = []string{"brief", "decision", "canvas_node", "storyboard_shot", "shot_decision", "script_source", "scene", "script_line", "character", "location", "prop", "media", "transcript"}
 
 // Query searches published sources or locates an exact object by stable ID.
 type Query struct {
-	Text  string   `json:"query"`
-	Kinds []string `json:"kinds,omitempty"`
-	Limit int      `json:"limit,omitempty"`
+	Text   string     `json:"query"`
+	ShotID *uuid.UUID `json:"shot_id,omitempty"`
+	Kinds  []string   `json:"kinds,omitempty"`
+	Limit  int        `json:"limit,omitempty"`
 }
 
 // Normalize bounds retrieval work before accessing the project corpus.
@@ -37,11 +41,18 @@ func (q Query) Normalize() (Query, error) {
 	if q.Limit == 0 {
 		q.Limit = 6
 	}
+	if q.ShotID != nil {
+		if *q.ShotID == uuid.Nil || q.Text != "" || len(q.Kinds) > 0 {
+			return Query{}, ErrInvalid
+		}
+		q.Limit = MaxShotDecisions
+		return q, nil
+	}
 	if q.Text == "" || utf8.RuneCountInString(q.Text) > 160 || q.Limit < 1 || q.Limit > 12 || len(q.Kinds) > len(kinds) {
 		return Query{}, ErrInvalid
 	}
 	for _, k := range q.Kinds {
-		if !slices.Contains(kinds, k) {
+		if !slices.Contains(kinds, k) || k == "shot_decision" {
 			return Query{}, ErrInvalid
 		}
 	}

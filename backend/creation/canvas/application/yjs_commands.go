@@ -38,6 +38,10 @@ type YjsCommandRuntime interface {
 
 // PrepareCommands performs isolated computation outside any database transaction.
 func (s *YjsService) PrepareCommands(ctx context.Context, a identity.Principal, id uuid.UUID, in YjsCommandInput) (PreparedYjsCommands, error) {
+	return s.prepareCommands(ctx, a, id, in, false)
+}
+
+func (s *YjsService) prepareCommands(ctx context.Context, a identity.Principal, id uuid.UUID, in YjsCommandInput, storyboard bool) (PreparedYjsCommands, error) {
 	runtime, ok := s.runtime.(YjsCommandRuntime)
 	if !ok {
 		return PreparedYjsCommands{}, fmt.Errorf("canvas command runtime unavailable")
@@ -78,6 +82,9 @@ func (s *YjsService) PrepareCommands(ctx context.Context, a identity.Principal, 
 	if err != nil {
 		return PreparedYjsCommands{}, err
 	}
+	if !storyboard && domain.StoryboardContentChanged(base.CommandDocument, evaluated.Document) {
+		return PreparedYjsCommands{}, domain.ErrUnsupportedCommand
+	}
 	if err = ValidateSnapshotCapacity(evaluated.Document); err != nil {
 		return PreparedYjsCommands{}, err
 	}
@@ -91,7 +98,7 @@ func (s *YjsService) PrepareCommands(ctx context.Context, a identity.Principal, 
 	if err = validateYjsCandidate(base, candidate); err != nil {
 		return PreparedYjsCommands{}, err
 	}
-	update := YjsUpdate{Epoch: base.Epoch, SessionID: in.SessionID, UpdateID: in.CommandID, Update: candidate.CommandUpdate, PayloadHash: candidate.PayloadHash}
+	update := YjsUpdate{StoryboardCommand: storyboard, Epoch: base.Epoch, SessionID: in.SessionID, UpdateID: in.CommandID, Update: candidate.CommandUpdate, PayloadHash: candidate.PayloadHash}
 	if candidate.UpdateID != in.CommandID || validYjsUpdate(update) != nil {
 		return PreparedYjsCommands{}, domain.ErrInvalidCommand
 	}

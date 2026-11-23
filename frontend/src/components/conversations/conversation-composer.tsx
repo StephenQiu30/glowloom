@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { cn } from "cn";
 import { PromptEditor } from "@/components/generation/prompt-editor";
+import type { ReferenceBinding } from "@/components/generation/prompt-document";
 import type { ComposerSession } from "@/components/generation/composer-session";
 import { canonical } from "@/components/generation/draft-save";
 import { ReferenceControls } from "@/components/generation/reference-controls";
@@ -48,7 +49,10 @@ import {
   selectSkillVersion,
 } from "./conversation-state";
 
-export type ConversationComposerHandle = { focusPrompt: () => void };
+export type ConversationComposerHandle = {
+  focusPrompt: () => void;
+  attachReference: (reference: ReferenceBinding) => boolean;
+};
 
 export function ConversationComposer({
   ref,
@@ -97,6 +101,9 @@ export function ConversationComposer({
       focusPrompt() {
         if (session && !session.editor.isDestroyed)
           session.editor.commands.focus();
+      },
+      attachReference(reference) {
+        return session?.insertReference(reference, false) ?? false;
       },
     }),
     [session],

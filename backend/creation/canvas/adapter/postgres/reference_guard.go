@@ -214,6 +214,13 @@ func configMediaReferences(config domain.NodeConfig) ([]uuid.UUID, error) {
 		return nil, domain.ErrUnsupportedCommand
 	}
 	var ids []uuid.UUID
+	if board := config.Storyboard; board != nil {
+		for _, shot := range board.Shots {
+			if shot.Adopted != nil {
+				ids = append(ids, shot.Adopted.AssetID)
+			}
+		}
+	}
 	if config.Subject != nil && config.Subject.Local != nil {
 		for _, media := range config.Subject.Local.Media() {
 			ids = append(ids, media.AssetID)

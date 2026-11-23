@@ -197,6 +197,9 @@ func (s *Store) CommitYjsRestore(ctx context.Context, a identity.Principal, base
 		if !yjsEditableProjectionEqual(application.Snapshot(target), candidate.Projection) {
 			return domain.ErrInvalidCommand
 		}
+		if domain.StoryboardContentChanged(current, target) {
+			return domain.ErrStoryboardConflict
+		}
 		if err = domain.ValidateGraph(target); err != nil {
 			return err
 		}

@@ -22,6 +22,13 @@ export interface MessageInput extends Identity {
   through: string;
 }
 
+export interface StoryboardTarget {
+  ordinal: number;
+  board_id: string;
+  shot_id: string;
+  shot_revision: number;
+}
+
 export interface AuthorizedInput {
   schema_version: 1;
   references_unavailable?: boolean;
@@ -35,6 +42,7 @@ export interface AuthorizedInput {
     mediaKind: 'image' | 'video' | 'audio' | 'document';
     bindingId?: string;
   }>;
+  storyboard_targets?: StoryboardTarget[];
   quote?: {
     run_id: string;
     message_id: string;

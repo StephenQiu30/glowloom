@@ -183,6 +183,9 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	socketRoutes.Use(auth.RequireSession())
 	live.Register(socketLifetime, socketRoutes)
 	canvashttp.NewHandler(canvasService).WithNotification(live.Notify).Register(protected)
+	storyboardCanvas := canvasapp.NewYjsService(canvasStore, yjsruntime.New(cfg.CanvasRuntimeURL, cfg.CanvasRuntimeToken))
+	canvashttp.NewStoryboardHandler(storyboardCanvas, live.Notify).Register(protected)
+	canvaswire.RegisterStoryboardDelivery(protected, storyboardCanvas, live.Notify, aigateway.Creation{Runtime: gatewayRuntime}, mediawire.LegacyAssetReader(mediaapp.NewAssetQuery(pgmedia.NewScopedStore(database, mediawire.NewMediaScopeAccess))), aigateway.WriteCreationProblem)
 	canvashttp.NewAssistantHandler(canvasapp.NewAssistant(pgcanvas.NewAssistantStore(database, mediawire.NewCanvasProjectAccess))).Register(protected)
 	canvashttp.NewAssetHandler(canvasapp.NewAssetQuery(pgcanvas.NewAssetStore(database, canvaswire.AssetAuthority))).Register(protected)
 	canvashttp.NewAssetCreationHandler(canvasapp.NewAssetCreator(pgcanvas.NewAssetCreationStore(database, canvaswire.AssetCreationAuthority))).Register(protected)
@@ -265,7 +268,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	if err != nil {
 		return nil, fmt.Errorf("configure Creation extraction: %w", err)
 	}
-	if err := RegisterAgentBoundary(socketLifetime, router, protected, database, AgentBoundaryOptions{Gateway: gatewayRuntime, DocumentExtractor: documentExtractor, Origin: cfg.AgentOrigin, ServiceToken: cfg.AgentServiceToken, BusinessToken: cfg.AgentBusinessToken, Model: agentModel, ModelRecover: agentRecover, MediaObjects: subjectObjects.Routed, SourceObjects: scriptobjects.NewRoutedStorage(registry, pgmedia.NewStorageRoutes(database)), CanvasRuntime: yjsruntime.New(cfg.CanvasRuntimeURL, cfg.CanvasRuntimeToken), CreditOperationSagaEnabled: cfg.CreditOperationSagaEnabled}, logger); err != nil {
+	if err := RegisterAgentBoundary(socketLifetime, router, protected, database, AgentBoundaryOptions{Gateway: gatewayRuntime, DocumentExtractor: documentExtractor, Origin: cfg.AgentOrigin, ServiceToken: cfg.AgentServiceToken, BusinessToken: cfg.AgentBusinessToken, Model: agentModel, ModelRecover: agentRecover, MediaObjects: subjectObjects.Routed, SourceObjects: scriptobjects.NewRoutedStorage(registry, pgmedia.NewStorageRoutes(database)), CanvasRuntime: yjsruntime.New(cfg.CanvasRuntimeURL, cfg.CanvasRuntimeToken), CanvasNotify: live.Notify, CreditOperationSagaEnabled: cfg.CreditOperationSagaEnabled}, logger); err != nil {
 		return nil, fmt.Errorf("configure agent boundary: %w", err)
 	}
 	(aigateway.Creation{Runtime: gatewayRuntime}).RegisterCreation(protected)

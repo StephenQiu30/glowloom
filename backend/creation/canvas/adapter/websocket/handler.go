@@ -268,6 +268,8 @@ func problem(err error) (int, string) {
 		return 403, "forbidden"
 	case errors.Is(err, application.ErrNotFound), errors.Is(err, media.ErrNotFound):
 		return 404, "not_found"
+	case errors.Is(err, domain.ErrStoryboardConflict):
+		return 409, "protected_storyboard"
 	case errors.Is(err, application.ErrYjsContention):
 		return 409, "review_stale"
 	case errors.Is(err, application.ErrIdempotencyConflict):

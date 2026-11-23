@@ -26,13 +26,16 @@ type Draft = { key: string; statement: string; revision: number };
 export function ProjectMemoryDialog({
   projectID,
   initialStatement,
+  shot,
   onClose,
 }: {
   projectID: string;
   initialStatement: string;
+  shot?: { id: string; title: string };
   onClose: () => void;
 }) {
   const fieldID = useId();
+  const shotID = shot?.id;
   const [draft, setDraft] = useState<Draft>({
     key: "",
     statement: initialStatement,
@@ -44,13 +47,15 @@ export function ProjectMemoryDialog({
   const busy = useRef(false);
   const attempt = useRef<{ input: string; id: string } | null>(null);
   const { data, error, mutate } = useSWR(
-    ["project-memory", projectID],
-    ([, pid]) => listProjectMemory({ pid }),
+    ["project-memory", projectID, shotID],
+    ([, pid, shot_id]) => listProjectMemory({ pid, shot_id }),
   );
   const history = useSWR(
-    historyKey ? ["project-memory-history", projectID, historyKey] : null,
-    ([, pid, key]) =>
-      listProjectMemoryHistory({ pid, key: encodeURIComponent(key) }),
+    historyKey
+      ? ["project-memory-history", projectID, historyKey, shotID]
+      : null,
+    ([, pid, key, shot_id]) =>
+      listProjectMemoryHistory({ pid, key: encodeURIComponent(key), shot_id }),
   );
 
   const key = draft.key.trim();
@@ -75,6 +80,7 @@ export function ProjectMemoryDialog({
       return;
     const input = {
       expected_revision: draft.revision,
+      ...(shotID ? { shot_id: shotID } : {}),
       ...(withdraw ? { withdraw: true } : { statement }),
     };
     const identity = JSON.stringify([key, input]);
@@ -100,7 +106,11 @@ export function ProjectMemoryDialog({
       }
       attempt.current = null;
       setFeedback(
-        withdraw ? "已撤回项目约定。" : "已发布。下一次新会话将读取这条约定。",
+        withdraw
+          ? "已撤回约定。"
+          : shotID
+            ? "已发布镜头约定。"
+            : "已发布。下一次新会话将读取这条约定。",
       );
       setDraft({ key: "", statement: "", revision: 0 });
       setHistoryKey(key);
@@ -115,7 +125,11 @@ export function ProjectMemoryDialog({
         cause instanceof RequestError &&
         cause.code === "project_memory_limit"
       ) {
-        setFeedback("项目已有 24 条有效约定，请先撤回一条。");
+        setFeedback(
+          shotID
+            ? "此镜头已有 12 条有效约定，请先撤回一条。"
+            : "项目已有 24 条有效约定，请先撤回一条。",
+        );
       } else if (
         cause instanceof RequestError &&
         cause.code === "state_conflict"
@@ -150,15 +164,19 @@ export function ProjectMemoryDialog({
     >
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>项目记忆</DialogTitle>
+          <DialogTitle>
+            {shot ? `镜头约定 · ${shot.title}` : "项目记忆"}
+          </DialogTitle>
           <DialogDescription>
-            发布的内容会共享给有权查看此项目的成员，并带入他们的新会话。
+            {shot
+              ? "此约定与项目成员共享，只用于当前镜头。同名的项目约定以此镜头的值为准。"
+              : "发布的内容会共享给有权查看此项目的成员，并带入他们的新会话。"}
           </DialogDescription>
         </DialogHeader>
         {error ? (
           <p role="alert">{readErrorMessage(error)}</p>
         ) : !data ? (
-          <p role="status">正在读取项目约定…</p>
+          <p role="status">正在读取约定…</p>
         ) : (
           <ul className="divide-y">
             {items.length === 0 && (
@@ -256,7 +274,9 @@ export function ProjectMemoryDialog({
               <Textarea
                 id={fieldID + "-statement"}
                 value={draft.statement}
-                placeholder="例如：全片保留同期声"
+                placeholder={
+                  shot ? "例如：此镜保留一句独白" : "例如：全片保留同期声"
+                }
                 disabled={saving}
                 onChange={(event) =>
                   setDraft({ ...draft, statement: event.target.value })

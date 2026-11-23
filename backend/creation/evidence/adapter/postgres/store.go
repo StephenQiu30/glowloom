@@ -10,6 +10,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/creation/evidence"
 )
 
+// ErrStale reports an evidence receipt that fails current model admission.
 var ErrStale = errors.New("project evidence is no longer current")
 
 type row struct {
@@ -47,8 +48,14 @@ func Search(tx *gorm.DB, project uuid.UUID, query evidence.Query) (evidence.Resu
 		base = base.Where("kind IN ?", q.Kinds)
 	}
 	var rows []row
-	if id, err := uuid.Parse(q.Text); err == nil {
-		err = base.Select(columns).Where("id=?", id).Order("kind,part").Limit(q.Limit).Scan(&rows).Error
+	if q.ShotID != nil {
+		err := base.Select(columns).Where("kind=? AND parent_id=?", "shot_decision", *q.ShotID).
+			Order("title,id").Limit(q.Limit).Scan(&rows).Error
+		if err != nil {
+			return result, err
+		}
+	} else if id, err := uuid.Parse(q.Text); err == nil {
+		err = base.Select(columns).Where("id=? AND kind<>?", id, "shot_decision").Order("kind,part").Limit(q.Limit).Scan(&rows).Error
 		if err != nil {
 			return result, err
 		}
@@ -64,7 +71,7 @@ func Search(tx *gorm.DB, project uuid.UUID, query evidence.Query) (evidence.Resu
 		 WHEN strpos(lower(excerpt),lower(?))>0 THEN 2
 		 WHEN char_length(?)>=3 THEN greatest(word_similarity(lower(?),lower(title)),word_similarity(lower(?),lower(aliases)),word_similarity(lower(?),lower(excerpt)))
 		 ELSE 0 END`
-		scored := base.Select(columns+", "+score+" AS rank", q.Text, q.Text, q.Text, q.Text, q.Text, q.Text, q.Text, q.Text, q.Text)
+		scored := base.Where("kind<>?", "shot_decision").Select(columns+", "+score+" AS rank", q.Text, q.Text, q.Text, q.Text, q.Text, q.Text, q.Text, q.Text, q.Text)
 		err = tx.Table("(?) AS scored", scored).Where("rank >= ?", 0.35).
 			Order("rank DESC,part,kind,id").Limit(max(q.Limit, 2)).Scan(&rows).Error
 		if err != nil {

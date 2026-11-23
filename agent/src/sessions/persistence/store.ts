@@ -145,7 +145,13 @@ export class SessionStore {
         .forUpdate()
         .executeTakeFirst();
       if (!session) throw new AgentError('session_not_found');
-      const hash = canonicalHash(input);
+      let draft = input.input;
+      // Storyboard ordinals resolve at acceptance. The same request can be
+      // delivered again after a reorder and must still return its first run.
+      const hash = canonicalHash({
+        ...input,
+        input: { ...draft, storyboard_targets: undefined },
+      });
       const prior = await db.serviceRun.findUnique({
         where: {
           session_id_request_id: {
@@ -193,7 +199,16 @@ export class SessionStore {
           )
         )
           throw new AgentError('retry_input_changed');
+        const targets = original.input.storyboard_targets;
+        draft = { ...draft };
+        if (targets) draft.storyboard_targets = targets;
+        else delete draft.storyboard_targets;
       }
+      if (
+        draft.storyboard_targets?.length &&
+        (!session.canvas_id || session.canvas_id !== input.canvas_id)
+      )
+        throw new AgentError('session_not_found');
       const run = stableId(id, 'run:' + input.request_id);
       const submission = stableId(run, 'submission:initial');
       const row = await db.serviceRun.create({
@@ -206,9 +221,7 @@ export class SessionStore {
           manifest: manifest as unknown as Prisma.InputJsonObject,
           submission_id: submission,
           accepted_revision: BigInt(revision + 1),
-          ...(input.input
-            ? { input: input.input as unknown as Prisma.InputJsonObject }
-            : {}),
+          input: draft as unknown as Prisma.InputJsonObject,
           retry_of_run_id: input.retry_of_run_id ?? null,
         },
       });

@@ -100,6 +100,8 @@ declare namespace AgentBusinessApi {
     node_id?: string;
     revision?: number;
     row_id?: string;
+    shot_id?: string;
+    shot_revision?: number;
   };
 
   type Decision = {

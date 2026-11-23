@@ -10,6 +10,7 @@ var operationFields = map[string]fieldPolicy{
 	"config.batch_table":             {kind: "set", group: []string{"batch_table"}, cas: true},
 	"config.timeline":                {kind: "set", group: []string{"timeline"}, cas: true},
 	"config.director":                {kind: "set", group: []string{"director"}, cas: true},
+	"config.storyboard":              {kind: "set", group: []string{"storyboard"}, cas: true},
 	"config.editor":                  {kind: "set", cas: true, optional: true},
 	"config.text_content":            {kind: "set", group: []string{"text", "composer", "format", "format_version", "rich_text"}, cas: true},
 	"title":                          {kind: "set"},

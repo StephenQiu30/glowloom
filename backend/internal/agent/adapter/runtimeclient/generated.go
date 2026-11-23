@@ -340,6 +340,7 @@ type AuthorizedInput struct {
 	Quote                 *QuotedMessage               `json:"quote,omitempty"`
 	ReferencesUnavailable *bool                        `json:"references_unavailable,omitempty"`
 	SchemaVersion         AuthorizedInputSchemaVersion `binding:"required" json:"schema_version"`
+	StoryboardTargets     *[]StoryboardTargetDto       `json:"storyboard_targets,omitempty"`
 }
 
 // AuthorizedInputSchemaVersion defines model for AuthorizedInput.SchemaVersion.
@@ -539,6 +540,14 @@ type SessionView struct {
 	Run               *RunSnapshot `json:"run,omitempty"`
 	ScopeId           string       `binding:"required" json:"scope_id"`
 	Title             string       `binding:"required" json:"title"`
+}
+
+// StoryboardTargetDto defines model for StoryboardTargetDto.
+type StoryboardTargetDto struct {
+	BoardId      string `binding:"required" json:"board_id"`
+	Ordinal      int64  `binding:"required" json:"ordinal"`
+	ShotId       string `binding:"required" json:"shot_id"`
+	ShotRevision int64  `binding:"required" json:"shot_revision"`
 }
 
 // UpdateSessionRequest defines model for UpdateSessionRequest.

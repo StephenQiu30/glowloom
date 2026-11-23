@@ -79,7 +79,7 @@ func (s *Store) confirmSingleQuote(ctx context.Context, actor identityapp.Princi
 			       o.output_count, o.input_hash, o.origin, o.status, o.quote_micros,
 			       o.quote_detail, o.quote_expires_at, o.reused_from_id,
 			       o.force_regenerate, o.reservation_id, o.confirmed_at,
-			       o.settled_micros, o.region, o.create_time
+			       o.settled_micros, o.region, o.create_time, o.source_context
 			FROM operation.operation AS o
 			JOIN workspace.project AS p ON p.id = o.project_id
 			WHERE o.id = ?::uuid AND o.project_id = ?::uuid AND p.org_id = ?::uuid
@@ -93,6 +93,10 @@ func (s *Store) confirmSingleQuote(ctx context.Context, actor identityapp.Princi
 			return ErrNotFound
 		}
 		quoted := row.domain()
+		quoted.Source, err = decodeCanvasSource(row.SourceContext)
+		if err != nil {
+			return err
+		}
 		if err := quoted.Validate(); err != nil {
 			return fmt.Errorf("validate locked quote: %w", err)
 		}
@@ -103,6 +107,13 @@ func (s *Store) confirmSingleQuote(ctx context.Context, actor identityapp.Princi
 		if quoted.TargetType != "free" || quoted.TargetVersionNo != nil ||
 			quoted.ModelProfileVersionID == nil {
 			return application.ErrConfirmationTargetUnavailable
+		}
+		var sourceChanged bool
+		if quoted.Source != nil && quoted.Source.ShotID != nil {
+			sourceChanged, err = storyboardSourceChanged(tx, quoted)
+			if err != nil {
+				return err
+			}
 		}
 		if err := checkStoredBillingBarrier(tx, quoted.ProjectID, quoted.ID); err != nil {
 			return err
@@ -120,6 +131,7 @@ func (s *Store) confirmSingleQuote(ctx context.Context, actor identityapp.Princi
 			Now: confirmedAt, ModelProfileVersionID: currentModel,
 			PriceRuleVersionID:     currentPrice,
 			ReuseSourceUnavailable: !reuseAvailable,
+			CanvasSourceChanged:    sourceChanged,
 		})
 		if err != nil {
 			return err

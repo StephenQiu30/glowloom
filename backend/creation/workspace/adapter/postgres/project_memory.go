@@ -17,8 +17,11 @@ import (
 	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
-const memoryHeads = `SELECT DISTINCT ON (key) id,project_id,key,revision,statement,withdrawn,confirmed_by,confirmed_at
-	FROM workspace.project_memory_revision WHERE project_id=? ORDER BY key,revision DESC`
+const memoryColumns = "id,project_id,shot_id,key,revision,statement,withdrawn,confirmed_by,confirmed_at"
+
+const memoryHeads = `SELECT DISTINCT ON (key) ` + memoryColumns + `
+	FROM workspace.project_memory_revision WHERE project_id=? AND shot_id IS NOT DISTINCT FROM CAST(? AS uuid)
+	ORDER BY key,revision DESC`
 
 // ProjectMemoryVersion identifies the ordered active revision set by its immutable IDs.
 func ProjectMemoryVersion(items []application.ProjectMemory) string {
@@ -32,8 +35,14 @@ func ProjectMemoryVersion(items []application.ProjectMemory) string {
 // ReadActiveProjectMemories reads only the heads of an already-authorized project.
 // The caller holds the project lock through this read.
 func ReadActiveProjectMemories(tx *gorm.DB, project uuid.UUID) ([]application.ProjectMemory, error) {
+	return ReadActiveMemoriesForShot(tx, project, nil)
+}
+
+// ReadActiveMemoriesForShot returns the published values at this exact scope.
+// The caller has already authorized the project and pinned a live shot, if any.
+func ReadActiveMemoriesForShot(tx *gorm.DB, project uuid.UUID, shot *uuid.UUID) ([]application.ProjectMemory, error) {
 	items := make([]application.ProjectMemory, 0)
-	err := tx.Raw(`SELECT * FROM (`+memoryHeads+`) heads WHERE NOT withdrawn ORDER BY key`, project).Scan(&items).Error
+	err := tx.Raw(`SELECT * FROM (`+memoryHeads+`) heads WHERE NOT withdrawn ORDER BY key`, project, shot).Scan(&items).Error
 	return items, err
 }
 
@@ -51,11 +60,14 @@ func (s *Store) readMemory(ctx context.Context, actor identity.Principal, projec
 }
 
 // ListProjectMemories returns active decisions even for a read-only project member.
-func (s *Store) ListProjectMemories(ctx context.Context, actor identity.Principal, project uuid.UUID) (application.ProjectMemoryView, error) {
+func (s *Store) ListProjectMemories(ctx context.Context, actor identity.Principal, project uuid.UUID, shot *uuid.UUID) (application.ProjectMemoryView, error) {
 	var view application.ProjectMemoryView
 	err := s.readMemory(ctx, actor, project, func(tx *gorm.DB) error {
 		var err error
-		view.Items, err = ReadActiveProjectMemories(tx, project)
+		if err := verifyMemoryShot(tx, project, shot); err != nil {
+			return err
+		}
+		view.Items, err = ReadActiveMemoriesForShot(tx, project, shot)
 		if err != nil {
 			return err
 		}
@@ -73,12 +85,15 @@ func (s *Store) ListProjectMemories(ctx context.Context, actor identity.Principa
 }
 
 // ProjectMemoryHistory pages immutable versions without changing the active value.
-func (s *Store) ProjectMemoryHistory(ctx context.Context, actor identity.Principal, project uuid.UUID, key string, before int64) ([]application.ProjectMemory, error) {
+func (s *Store) ProjectMemoryHistory(ctx context.Context, actor identity.Principal, project uuid.UUID, shot *uuid.UUID, key string, before int64) ([]application.ProjectMemory, error) {
 	items := make([]application.ProjectMemory, 0)
 	err := s.readMemory(ctx, actor, project, func(tx *gorm.DB) error {
-		return tx.Raw(`SELECT id,project_id,key,revision,statement,withdrawn,confirmed_by,confirmed_at
-			FROM workspace.project_memory_revision WHERE project_id=? AND key=? AND (?=0 OR revision<?)
-			ORDER BY revision DESC LIMIT 30`, project, key, before, before).Scan(&items).Error
+		if err := verifyMemoryShot(tx, project, shot); err != nil {
+			return err
+		}
+		return tx.Raw(`SELECT `+memoryColumns+` FROM workspace.project_memory_revision
+			WHERE project_id=? AND shot_id IS NOT DISTINCT FROM CAST(? AS uuid) AND key=? AND (?=0 OR revision<?)
+			ORDER BY revision DESC LIMIT 30`, project, shot, key, before, before).Scan(&items).Error
 	})
 	return items, err
 }
@@ -97,21 +112,24 @@ func (s *Store) ChangeProjectMemory(ctx context.Context, actor identity.Principa
 		if _, err := access.Authorize(ctx, actor, project, true); err != nil {
 			return err
 		}
-		read := tx.Raw(`SELECT id,project_id,key,revision,statement,withdrawn,confirmed_by,confirmed_at
+		if err := verifyMemoryShot(tx, project, input.ShotID); err != nil {
+			return err
+		}
+		read := tx.Raw(`SELECT `+memoryColumns+`
 			FROM workspace.project_memory_revision WHERE project_id=? AND confirmed_by=? AND request_id=?`, project, actor.ID, request).Scan(&result)
 		if read.Error != nil {
 			return read.Error
 		}
 		if read.RowsAffected != 0 {
-			if result.Key != key || result.Revision-1 != *input.ExpectedRevision || result.Statement != input.Statement || result.Withdrawn != input.Withdraw {
+			if !sameMemoryShot(result.ShotID, input.ShotID) || result.Key != key || result.Revision-1 != *input.ExpectedRevision || result.Statement != input.Statement || result.Withdrawn != input.Withdraw {
 				return source.ErrIdempotencyConflict
 			}
 			return nil
 		}
 
 		var current application.ProjectMemory
-		if err := tx.Raw(`SELECT revision,withdrawn FROM workspace.project_memory_revision WHERE project_id=? AND key=?
-			ORDER BY revision DESC LIMIT 1`, project, key).Scan(&current).Error; err != nil {
+		if err := tx.Raw(`SELECT revision,withdrawn FROM workspace.project_memory_revision WHERE project_id=? AND shot_id IS NOT DISTINCT FROM CAST(? AS uuid) AND key=?
+			ORDER BY revision DESC LIMIT 1`, project, input.ShotID, key).Scan(&current).Error; err != nil {
 			return err
 		}
 		if current.Revision != *input.ExpectedRevision || (input.Withdraw && (current.Revision == 0 || current.Withdrawn)) {
@@ -119,20 +137,45 @@ func (s *Store) ChangeProjectMemory(ctx context.Context, actor identity.Principa
 		}
 		if !input.Withdraw && (current.Revision == 0 || current.Withdrawn) {
 			var count int
-			if err := tx.Raw(`SELECT count(*) FROM (`+memoryHeads+`) heads WHERE NOT withdrawn`, project).Scan(&count).Error; err != nil {
+			if err := tx.Raw(`SELECT count(*) FROM (`+memoryHeads+`) heads WHERE NOT withdrawn`, project, input.ShotID).Scan(&count).Error; err != nil {
 				return err
 			}
-			if count >= application.MaxActiveProjectMemories {
+			limit := application.MaxActiveProjectMemories
+			if input.ShotID != nil {
+				limit = application.MaxActiveShotMemories
+			}
+			if count >= limit {
 				return application.ErrProjectMemoryLimit
 			}
 		}
 		return tx.Raw(`INSERT INTO workspace.project_memory_revision
-			(id,project_id,key,revision,statement,withdrawn,confirmed_by,confirmed_at,request_id)
-			VALUES (?,?,?,?,?,?,?,?,?) RETURNING id,project_id,key,revision,statement,withdrawn,confirmed_by,confirmed_at`,
-			uuid.New(), project, key, current.Revision+1, input.Statement, input.Withdraw, actor.ID, now, request).Scan(&result).Error
+			(id,project_id,shot_id,key,revision,statement,withdrawn,confirmed_by,confirmed_at,request_id)
+			VALUES (?,?,?,?,?,?,?,?,?,?) RETURNING `+memoryColumns,
+			uuid.New(), project, input.ShotID, key, current.Revision+1, input.Statement, input.Withdraw, actor.ID, now, request).Scan(&result).Error
 	})
 	if err != nil {
 		return application.ProjectMemory{}, fmt.Errorf("change project memory: %w", err)
 	}
 	return result, nil
+}
+
+// The owning project lock keeps canvas writers and confirmation ordered.
+func verifyMemoryShot(tx *gorm.DB, project uuid.UUID, shot *uuid.UUID) error {
+	if shot == nil {
+		return nil
+	}
+	var exists bool
+	err := tx.Raw(`SELECT EXISTS (
+		SELECT 1 FROM canvas.node n JOIN canvas.document d ON d.id=n.document_id AND NOT d.is_delete
+		WHERE d.project_id=? AND NOT n.is_delete AND n.node_type='storyboard'
+		  AND n.config#>'{storyboard,shots}' @> jsonb_build_array(jsonb_build_object('id',?::text))
+	)`, project, shot.String()).Scan(&exists).Error
+	if err == nil && !exists {
+		return source.ErrProjectNotFound
+	}
+	return err
+}
+
+func sameMemoryShot(first, second *uuid.UUID) bool {
+	return first == nil && second == nil || first != nil && second != nil && *first == *second
 }

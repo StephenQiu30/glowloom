@@ -1,5 +1,12 @@
 "use client";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type ReactNode,
+  type Ref,
+} from "react";
 import {
   ConversationComposer,
   type ConversationComposerHandle,
@@ -13,7 +20,14 @@ import { FeedbackNotice } from "@/components/feedback/feedback-notice";
 import { ConversationMessageSkeleton } from "@/components/layout/loading-state";
 import { Button } from "@/components/ui/button";
 import { ProjectMemoryDialog } from "./project-memory-dialog";
+import type { ReferenceBinding } from "@/components/generation/prompt-document";
+
+export type ConversationWorkspaceHandle = ConversationComposerHandle & {
+  appendText: (text: string) => boolean;
+};
+
 export function ConversationWorkspace({
+  ref,
   onChooseProject,
   headerActions,
   projectControl,
@@ -23,8 +37,10 @@ export function ConversationWorkspace({
   onUseReply,
   useReplyLabel,
   embedded = false,
+  panel = false,
   ...options
 }: ConversationOptions & {
+  ref?: Ref<ConversationWorkspaceHandle>;
   onChooseProject: () => void;
   headerActions?: ReactNode;
   projectControl?: ReactNode;
@@ -34,16 +50,17 @@ export function ConversationWorkspace({
   onUseReply?: (text: string) => void;
   useReplyLabel?: string;
   embedded?: boolean;
+  panel?: boolean;
 }) {
   const c = useConversation(options);
   useEffect(() => {
     onLock?.(c.phase !== "idle");
     return () => onLock?.(false);
   }, [c.phase, onLock]);
-  const identity = `${options.ownerKey}/${options.projectID}/${options.sessionID ?? "new"}`;
+  const identity = `${options.ownerKey}/${options.projectID}/${options.sessionID ?? options.canvasID ?? "new"}`;
   const hasMessages = c.summaries.length > 0;
-  const welcome = !embedded && !options.sessionID && !hasMessages;
-  const authorized = options.enabled && !c.denied;
+  const welcome = !embedded && !panel && !options.sessionID && !hasMessages;
+  const authorized = options.enabled && options.writable !== false && !c.denied;
   const [memory, setMemory] = useState<{
     project: string;
     statement: string;
@@ -57,6 +74,36 @@ export function ConversationWorkspace({
       </Button>
     ) : null;
   const composer = useRef<ConversationComposerHandle>(null);
+  useImperativeHandle(ref, () => ({
+    focusPrompt: () => composer.current?.focusPrompt(),
+    attachReference: (reference: ReferenceBinding) =>
+      authorized && (composer.current?.attachReference(reference) ?? false),
+    appendText: (text) => {
+      if (!authorized || !text.trim()) return false;
+      const content = c.draft.document.content;
+      if (
+        !content.some(
+          (paragraph) =>
+            paragraph.content?.length === 1 &&
+            paragraph.content[0]?.type === "text" &&
+            paragraph.content[0].text === text,
+        )
+      )
+        c.changeDraft({
+          ...c.draft,
+          document: {
+            ...c.draft.document,
+            content: [
+              ...(content.some((paragraph) => paragraph.content?.length)
+                ? content
+                : []),
+              { type: "paragraph", content: [{ type: "text", text }] },
+            ],
+          },
+        });
+      return true;
+    },
+  }));
   return (
     <div
       data-conversation-welcome={welcome || undefined}
@@ -129,7 +176,13 @@ export function ConversationWorkspace({
       ) : c.loading ? (
         <ConversationMessageSkeleton className="mx-auto w-full max-w-[800px] flex-1 px-4 py-6" />
       ) : !embedded ? (
-        <div className="flex-1" />
+        panel && authorized ? (
+          <div className="flex flex-1 items-center justify-center px-4 text-center text-muted-foreground">
+            聊聊你想拍什么，或直接请 AI 写分镜。
+          </div>
+        ) : (
+          <div className="flex-1" />
+        )
       ) : null}
       {c.phase === "unknown" ||
       c.error ||
@@ -183,25 +236,31 @@ export function ConversationWorkspace({
           welcome ? "max-w-[800px]" : "max-w-[960px]",
         )}
       >
-        {alternateComposer ?? (
-          <ConversationComposer
-            key={identity}
-            ref={composer}
-            conversation={c}
-            contextKey={identity}
-            projectID={options.projectID}
-            authorized={authorized}
-            onChooseProject={onChooseProject}
-            headerActions={
-              <>
-                {headerActions}
-                {memoryAction}
-              </>
-            }
-            projectControl={projectControl}
-            projectSetting={projectSetting}
-            welcome={welcome}
-          />
+        {options.writable === false ? (
+          <p className="px-4 pb-4 text-sm text-muted-foreground">
+            当前画布为只读。
+          </p>
+        ) : (
+          (alternateComposer ?? (
+            <ConversationComposer
+              key={identity}
+              ref={composer}
+              conversation={c}
+              contextKey={identity}
+              projectID={options.projectID}
+              authorized={authorized}
+              onChooseProject={onChooseProject}
+              headerActions={
+                <>
+                  {headerActions}
+                  {memoryAction}
+                </>
+              }
+              projectControl={projectControl}
+              projectSetting={projectSetting}
+              welcome={welcome}
+            />
+          ))
         )}
         {alternateComposer && memoryAction}
       </div>

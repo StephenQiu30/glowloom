@@ -26,6 +26,19 @@ describe('Agent Swagger contract', () => {
           expected_execution_revision: { type: 'integer', format: 'int64' },
         },
       });
+      expect(spec.components?.schemas?.AuthorizedInput).toMatchObject({
+        properties: {
+          storyboard_targets: {
+            type: 'array',
+            maxItems: 6,
+            items: { $ref: '#/components/schemas/StoryboardTargetDto' },
+          },
+        },
+      });
+      expect(spec.components?.schemas?.StoryboardTargetDto).toMatchObject({
+        additionalProperties: false,
+        required: ['ordinal', 'board_id', 'shot_id', 'shot_revision'],
+      });
       expect(spec.components?.schemas?.AgentState).toMatchObject({
         properties: {
           pending_proposal: { type: 'string', nullable: true },

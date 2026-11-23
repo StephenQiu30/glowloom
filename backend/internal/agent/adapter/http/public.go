@@ -35,15 +35,16 @@ type Runtime interface {
 
 // PublicHandler serves private Agent conversations under current business authority.
 type PublicHandler struct {
-	store      app.BusinessStore
-	access     ProjectAccess
-	runtime    Runtime
-	canvas     func(context.Context, identity.Principal, uuid.UUID, uuid.UUID) error
-	controls   app.ControlStatusReader
-	inputs     app.ConversationInputFreezer
-	history    app.ConversationHistoryReader
-	unresolved app.UnresolvedConversationReader
-	concurrent chan struct{}
+	store             app.BusinessStore
+	access            ProjectAccess
+	runtime           Runtime
+	canvas            func(context.Context, identity.Principal, uuid.UUID, uuid.UUID) error
+	controls          app.ControlStatusReader
+	inputs            app.ConversationInputFreezer
+	storyboardTargets func(context.Context, identity.Principal, uuid.UUID, uuid.UUID, string) ([]app.StoryboardTarget, error)
+	history           app.ConversationHistoryReader
+	unresolved        app.UnresolvedConversationReader
+	concurrent        chan struct{}
 }
 
 // NewPublicHandler injects business authority, project access and the runtime client.
@@ -551,6 +552,14 @@ func (h *PublicHandler) Start(c *gin.Context) {
 		send(c, nil, err)
 		return
 	}
+	if scope.CanvasID != nil && h.storyboardTargets != nil && in.RetryOfRunID == nil {
+		frozen.StoryboardTargets, err = h.storyboardTargets(c.Request.Context(), identityhttp.Principal(c), scope.ProjectID, *scope.CanvasID, frozen.PlainText)
+		if err != nil {
+			send(c, nil, err)
+			return
+		}
+	}
+
 	if in.RetryOfRunID != nil {
 		if release, ok := manifest["release_id"].(string); !ok || release != model.ReleaseID.String() {
 			send(c, nil, domain.ErrConflict)

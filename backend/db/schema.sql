@@ -2528,7 +2528,28 @@ CREATE TABLE operation.operation (
     is_delete boolean DEFAULT false NOT NULL,
     source_context jsonb,
     prompt_preparation jsonb,
-    CONSTRAINT ck_operation_canvas_source CHECK (((source_context IS NULL) OR ((target_type = 'free'::text) AND (origin = 'canvas'::text) AND (jsonb_typeof(source_context) = 'object'::text) AND (source_context ?& ARRAY['canvas_id'::text, 'node_id'::text, 'revision'::text]) AND ((source_context - ARRAY['canvas_id'::text, 'node_id'::text, 'row_id'::text, 'revision'::text]) = '{}'::jsonb) AND (jsonb_typeof((source_context -> 'canvas_id'::text)) = 'string'::text) AND (jsonb_typeof((source_context -> 'node_id'::text)) = 'string'::text) AND (jsonb_typeof((source_context -> 'revision'::text)) = 'number'::text) AND (((source_context ->> 'revision'::text))::bigint > 0) AND ((NOT (source_context ? 'row_id'::text)) OR (jsonb_typeof((source_context -> 'row_id'::text)) = 'string'::text))))),
+    CONSTRAINT ck_operation_canvas_source CHECK (
+        source_context IS NULL OR (
+            target_type = 'free' AND origin = 'canvas'
+            AND jsonb_typeof(source_context) = 'object'
+            AND source_context ?& ARRAY['canvas_id', 'node_id', 'revision']
+            AND source_context - ARRAY['canvas_id', 'node_id', 'row_id', 'revision', 'shot_id', 'shot_revision'] = '{}'::jsonb
+            AND jsonb_typeof(source_context->'canvas_id') = 'string'
+            AND jsonb_typeof(source_context->'node_id') = 'string'
+            AND jsonb_typeof(source_context->'revision') = 'number'
+            AND (source_context->>'revision')::bigint > 0
+            AND (NOT (source_context ? 'row_id') OR jsonb_typeof(source_context->'row_id') = 'string')
+            AND ((NOT (source_context ?| ARRAY['shot_id', 'shot_revision'])) OR (
+                source_context ?& ARRAY['shot_id', 'shot_revision']
+                AND NOT (source_context ? 'row_id')
+                AND jsonb_typeof(source_context->'shot_id') = 'string'
+                AND source_context->>'shot_id' ~ '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$'
+                AND source_context->>'shot_id' <> '00000000-0000-0000-0000-000000000000'
+                AND jsonb_typeof(source_context->'shot_revision') = 'number'
+                AND (source_context->>'shot_revision')::bigint > 0
+            ))
+        )
+    ),
     CONSTRAINT ck_operation_prompt_preparation CHECK (((prompt_preparation IS NULL) OR (((jsonb_typeof(prompt_preparation) = 'object'::text) AND (octet_length((prompt_preparation)::text) <= 4096) AND ((prompt_preparation - ARRAY['version'::text, 'operation'::text, 'policy'::text, 'template_id'::text, 'template_version'::text, 'customization_id'::text, 'customization_revision'::text, 'request_sha256'::text, 'user_prompt_sha256'::text, 'content_sha256'::text]) = '{}'::jsonb) AND ((prompt_preparation -> 'version'::text) = '1'::jsonb) AND (origin = 'canvas'::text) AND (target_type = 'free'::text) AND ((prompt_preparation ->> 'operation'::text) = ANY (ARRAY['chapter_assets_extract'::text, 'character_extract'::text, 'character_turnaround'::text, 'storyboard_plan'::text, 'storyboard_repair'::text, 'storyboard_first_frame'::text, 'storyboard_video'::text, 'short_drama_outline'::text, 'skill_draft'::text])) AND ((prompt_preparation ->> 'request_sha256'::text) ~ '^[0-9a-f]{64}$'::text) AND ((prompt_preparation ->> 'user_prompt_sha256'::text) ~ '^[0-9a-f]{64}$'::text) AND ((prompt_preparation ->> 'content_sha256'::text) ~ '^[0-9a-f]{64}$'::text) AND ((((prompt_preparation ->> 'operation'::text) = ANY (ARRAY['character_turnaround'::text, 'storyboard_first_frame'::text])) AND (capability = 'image.generate'::text)) OR (((prompt_preparation ->> 'operation'::text) = 'storyboard_video'::text) AND (capability = 'video.generate'::text)) OR (((prompt_preparation ->> 'operation'::text) <> ALL (ARRAY['character_turnaround'::text, 'storyboard_first_frame'::text, 'storyboard_video'::text])) AND (capability = 'text.structured'::text))) AND ((((prompt_preparation ->> 'policy'::text) = 'bypass_video'::text) AND ((prompt_preparation ->> 'operation'::text) = 'storyboard_video'::text) AND (NOT (prompt_preparation ?| ARRAY['template_id'::text, 'template_version'::text, 'customization_id'::text, 'customization_revision'::text])) AND ((prompt_preparation ->> 'content_sha256'::text) = (prompt_preparation ->> 'user_prompt_sha256'::text))) OR (((prompt_preparation ->> 'policy'::text) = 'compiled'::text) AND ((prompt_preparation ->> 'operation'::text) <> 'storyboard_video'::text) AND ((prompt_preparation ->> 'template_id'::text) ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'::text) AND ((prompt_preparation ->> 'template_id'::text) <> '00000000-0000-0000-0000-000000000000'::text) AND ((prompt_preparation -> 'template_version'::text) = '1'::jsonb) AND (((NOT (prompt_preparation ? 'customization_id'::text)) AND (NOT (prompt_preparation ? 'customization_revision'::text))) OR (((prompt_preparation ->> 'customization_id'::text) ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'::text) AND ((prompt_preparation ->> 'customization_id'::text) <> '00000000-0000-0000-0000-000000000000'::text) AND (jsonb_typeof((prompt_preparation -> 'customization_revision'::text)) = 'number'::text) AND ((prompt_preparation ->> 'customization_revision'::text) ~ '^[1-9][0-9]{0,9}$'::text) AND (((prompt_preparation ->> 'customization_revision'::text))::numeric <= (2147483647)::numeric)))))) IS TRUE))),
     CONSTRAINT ck_operation_quote_amount CHECK (((status <> 'quoted'::text) OR ((quote_micros IS NOT NULL) AND (quote_expires_at IS NOT NULL) AND (quote_expires_at > create_time)))),
     CONSTRAINT ck_operation_reuse_self CHECK ((reused_from_id IS DISTINCT FROM id)),
@@ -4609,7 +4630,7 @@ CREATE INDEX ix_operation_project_status ON operation.operation USING btree (pro
 
 CREATE INDEX ix_operation_reuse ON operation.operation USING btree (project_id, input_hash) WHERE (status = 'completed'::text);
 
-CREATE INDEX ix_operation_canvas_billing_target ON operation.operation (project_id, (source_context->>'canvas_id'), (source_context->>'node_id'), (COALESCE(source_context->>'row_id',''))) WHERE NOT is_delete AND source_context IS NOT NULL;
+CREATE INDEX ix_operation_canvas_billing_target ON operation.operation (project_id, (source_context->>'canvas_id'), (source_context->>'node_id'), (CASE WHEN source_context ? 'shot_id' THEN 'shot/' || (source_context->>'shot_id') ELSE COALESCE(source_context->>'row_id','') END)) WHERE NOT is_delete AND source_context IS NOT NULL;
 
 CREATE INDEX ix_operation_target ON operation.operation USING btree (target_type, target_id, create_time DESC);
 
@@ -9725,6 +9746,7 @@ GRANT SELECT,INSERT ON ai.work TO glowloom_app,glowloom_execution;
 CREATE TABLE workspace.project_memory_revision (
     id uuid PRIMARY KEY,
     project_id uuid NOT NULL REFERENCES workspace.project(id) ON DELETE CASCADE,
+    shot_id uuid CHECK (shot_id IS NULL OR shot_id <> '00000000-0000-0000-0000-000000000000'),
     key text NOT NULL CHECK (char_length(key) BETWEEN 1 AND 48),
     revision bigint NOT NULL CHECK (revision > 0),
     statement text NOT NULL CHECK (char_length(statement) <= 512),
@@ -9737,7 +9759,7 @@ CREATE TABLE workspace.project_memory_revision (
 );
 
 CREATE UNIQUE INDEX project_memory_slot_revision
-    ON workspace.project_memory_revision (project_id, key, revision DESC);
+    ON workspace.project_memory_revision (project_id, shot_id, key, revision DESC) NULLS NOT DISTINCT;
 
 GRANT SELECT,INSERT ON TABLE workspace.project_memory_revision TO glowloom_app;
 
@@ -9782,15 +9804,35 @@ WITH adopted_script AS NOT MATERIALIZED (
     CROSS JOIN LATERAL generate_series(1,least(64,greatest(1,(greatest(0,length(p.description)-200)+999)/1000))) i
     WHERE NOT p.is_delete AND p.status IN ('active','archived')
     UNION ALL
-    SELECT m.project_id,'decision',m.id,m.revision,NULL,1,m.key,m.statement,'',NULL,NULL,'',false,m.id::text
-    FROM (SELECT DISTINCT ON (project_id,key) * FROM workspace.project_memory_revision ORDER BY project_id,key,revision DESC) m
-    WHERE NOT m.withdrawn
+    SELECT m.project_id,CASE WHEN m.shot_id IS NULL THEN 'decision' ELSE 'shot_decision' END,
+        m.id,m.revision,m.shot_id,1,m.key,m.statement,'',NULL,NULL,'',false,m.id::text
+    FROM (SELECT DISTINCT ON (project_id,shot_id,key) * FROM workspace.project_memory_revision ORDER BY project_id,shot_id,key,revision DESC) m
+    WHERE NOT m.withdrawn AND (m.shot_id IS NULL OR EXISTS (
+        SELECT 1 FROM canvas.node n JOIN canvas.document d ON d.id=n.document_id AND NOT d.is_delete
+        WHERE d.project_id=m.project_id AND NOT n.is_delete AND n.node_type='storyboard'
+          AND n.config#>'{storyboard,shots}' @> jsonb_build_array(jsonb_build_object('id',m.shot_id::text))
+    ))
     UNION ALL
     SELECT d.project_id,'canvas_node',n.id,n.content_version,d.id,i,n.title,substring(coalesce(n.config->>'text','') FROM ((i-1)*1000+1) FOR 1200),
         n.node_type,((i-1)*1000)::bigint,least((i-1)*1000+1200,length(coalesce(n.config->>'text','')))::bigint,'character',false,''
     FROM canvas.node n JOIN canvas.document d ON d.id=n.document_id AND NOT d.is_delete
     CROSS JOIN LATERAL generate_series(1,least(64,greatest(1,(greatest(0,length(coalesce(n.config->>'text',''))-200)+999)/1000))) i
     WHERE NOT n.is_delete
+    UNION ALL
+    SELECT d.project_id,'storyboard_shot',shot.id,shot.revision,n.id,i,shot.title,
+        substring(shot.body FROM ((i-1)*1000+1) FOR 1200),'',
+        ((i-1)*1000)::bigint,least((i-1)*1000+1200,length(shot.body))::bigint,'character',false,d.id::text
+    FROM canvas.node n JOIN canvas.document d ON d.id=n.document_id AND NOT d.is_delete
+    CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(n.config#>'{storyboard,shots}')='array'
+        THEN n.config#>'{storyboard,shots}' ELSE '[]'::jsonb END) AS shot_item(value)
+    CROSS JOIN LATERAL (SELECT
+        CASE WHEN pg_input_is_valid(shot_item.value->>'id','uuid') THEN (shot_item.value->>'id')::uuid END AS id,
+        CASE WHEN pg_input_is_valid(shot_item.value->>'revision','bigint') THEN (shot_item.value->>'revision')::bigint END AS revision,
+        shot_item.value->>'title' AS title,
+        concat_ws(E'\n',shot_item.value->>'action',shot_item.value->>'dialogue',shot_item.value->>'camera',shot_item.value->>'sound') AS body
+    ) shot
+    CROSS JOIN LATERAL generate_series(1,least(12,greatest(1,(greatest(0,length(shot.body)-200)+999)/1000))) i
+    WHERE NOT n.is_delete AND n.node_type='storyboard' AND shot.id IS NOT NULL AND shot.revision>0 AND shot.title IS NOT NULL
     UNION ALL
     SELECT s.project_id,'script_source',s.source_lineage_id,s.source_revision,v.id,coalesce(c.part,1),s.title,coalesce(c.body,''),s.source_kind,
         c.start_pos,c.end_pos,CASE WHEN c.part IS NULL THEN '' ELSE 'character' END,false,s.id::text

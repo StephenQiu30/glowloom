@@ -22,6 +22,7 @@ type QuoteCurrentFacts struct {
 	PriceRuleVersionID     *uuid.UUID
 	ConsentRevoked         bool
 	ReuseSourceUnavailable bool
+	CanvasSourceChanged    bool
 }
 
 // QuoteFreshnessReasons returns stable, ordered reasons to expire a quote.
@@ -43,6 +44,9 @@ func QuoteFreshnessReasons(quoted domain.Operation, current QuoteCurrentFacts) (
 	if quoted.TargetVersionNo != nil &&
 		(current.TargetVersionNo == nil || *current.TargetVersionNo != *quoted.TargetVersionNo) {
 		reasons = append(reasons, "target_version_changed")
+	}
+	if current.CanvasSourceChanged {
+		reasons = append(reasons, "canvas_source_changed")
 	}
 	if quoted.ModelProfileVersionID != nil {
 		switch {

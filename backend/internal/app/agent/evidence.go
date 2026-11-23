@@ -16,12 +16,14 @@ import (
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 )
 
-const evidenceKinds = `["brief","decision","canvas_node","script_source","scene","script_line","character","location","prop","media","transcript"]`
+const searchableEvidenceKinds = `["brief","decision","canvas_node","storyboard_shot","script_source","scene","script_line","character","location","prop","media","transcript"]`
+
+const readableEvidenceKinds = `["brief","decision","canvas_node","storyboard_shot","shot_decision","script_source","scene","script_line","character","location","prop","media","transcript"]`
 
 func evidenceTools() []toolBinding {
 	return []toolBinding{
-		tool(evidence.SearchTool, "在当前项目的可读资料中按稳定 ID、名称、别名或原词查找证据。带回来源 ID、版本及段落或时间位置。无匹配时说明缺少依据。剧本正文仍在索引时说明材料尚未就绪。遇到歧义让用户选择。", "read",
-			`{"type":"object","properties":{"query":{"type":"string","maxLength":160},"kinds":{"type":"array","items":{"type":"string","enum":`+evidenceKinds+`}},"limit":{"type":"integer","minimum":1,"maximum":12}},"required":["query"],"additionalProperties":false}`,
+		tool(evidence.SearchTool, "在当前项目的可读资料中按稳定 ID、名称、别名或原词查找证据。用已核实的 shot_id 单独读取该镜已确认的局部约定。带回来源 ID、版本及定位。遇到歧义让用户选择。", "read",
+			`{"type":"object","properties":{"query":{"type":"string","maxLength":160},"shot_id":{"type":"string","format":"uuid"},"kinds":{"type":"array","items":{"type":"string","enum":`+searchableEvidenceKinds+`}},"limit":{"type":"integer","minimum":1,"maximum":12}},"oneOf":[{"required":["query"]},{"required":["shot_id"]}],"additionalProperties":false}`,
 			func(ctx context.Context, tx *gorm.DB, s domain.Scope, _ uuid.UUID, raw json.RawMessage) (any, error) {
 				var q evidence.Query
 				if err := decode(raw, &q); err != nil {
@@ -34,8 +36,8 @@ func evidenceTools() []toolBinding {
 				if errors.Is(err, evidence.ErrInvalid) {
 					return nil, domain.ErrInvalid
 				}
-				if err != nil {
-					return nil, err
+				if err != nil || q.ShotID != nil {
+					return result, err
 				}
 				version, err := evidencepg.PendingScriptIndex(tx, s.ProjectID)
 				if err != nil {
@@ -50,7 +52,7 @@ func evidenceTools() []toolBinding {
 				return result, nil
 			}),
 		tool(evidence.ReadTool, "按 kind、id 和 part 打开项目证据。引用之前搜索结果时提供其 version。只会返回当前可读的同版内容。", "read",
-			`{"type":"object","properties":{"kind":{"type":"string","enum":`+evidenceKinds+`},"id":{"type":"string","format":"uuid"},"part":{"type":"integer","minimum":1,"maximum":10000},"version":{"type":"string","pattern":"^[a-f0-9]{64}$"}},"required":["kind","id"],"additionalProperties":false}`,
+			`{"type":"object","properties":{"kind":{"type":"string","enum":`+readableEvidenceKinds+`},"id":{"type":"string","format":"uuid"},"part":{"type":"integer","minimum":1,"maximum":10000},"version":{"type":"string","pattern":"^[a-f0-9]{64}$"}},"required":["kind","id"],"additionalProperties":false}`,
 			func(ctx context.Context, tx *gorm.DB, s domain.Scope, _ uuid.UUID, raw json.RawMessage) (any, error) {
 				var ref evidence.Reference
 				if err := decode(raw, &ref); err != nil {

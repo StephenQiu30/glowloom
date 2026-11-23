@@ -52,6 +52,7 @@ export interface ConversationOptions {
   canvasID?: string;
   sessionID?: string;
   enabled: boolean;
+  writable?: boolean;
   initialDraft?: PromptDraft;
   goalContract?: API.GoalContract;
   onDraftChange?: (draft: PromptDraft) => void;
@@ -162,14 +163,15 @@ export function useConversation({
   canvasID,
   sessionID,
   enabled,
+  writable = true,
   initialDraft,
   goalContract,
   onDraftChange,
   onAccepted,
 }: ConversationOptions) {
   const memory = useConversationContext();
-  const identity = `${ownerKey}/${projectID}/${sessionID ?? "new"}`;
-  const draftKey = `${projectID}/${sessionID ?? "new"}`;
+  const draftKey = `${projectID}/${sessionID ?? (canvasID ? `canvas/${canvasID}/new` : "new")}`;
+  const identity = `${ownerKey}/${draftKey}`;
   const [view, setView] = useState(() => initialView(identity, sessionID));
   const state =
     view.identity === identity ? view : initialView(identity, sessionID);
@@ -237,7 +239,7 @@ export function useConversation({
   const allowed = canSubmitConversation({
     draft,
     planningModel: model,
-    authorized: enabled && !!projectID && !state.denied,
+    authorized: enabled && writable && !!projectID && !state.denied,
     budget: settings.budget,
     busy:
       state.loading ||
@@ -425,7 +427,11 @@ export function useConversation({
         }
         if (!history.value) return;
         const [session, page, submission] = history.value;
-        if (session.id !== lookupSession || session.project_id !== projectID)
+        if (
+          session.id !== lookupSession ||
+          session.project_id !== projectID ||
+          (canvasID && session.canvas_id !== canvasID)
+        )
           throw new Error("session_scope_mismatch");
         sid.current = session.id;
         patch((old) => ({
@@ -459,7 +465,16 @@ export function useConversation({
           patch((old) => ({ ...old, error: message(error), loading: false }));
       });
     return () => controller.abort();
-  }, [identity, projectID, sessionID, enabled, refreshKey, patch, applyRun]);
+  }, [
+    identity,
+    projectID,
+    canvasID,
+    sessionID,
+    enabled,
+    refreshKey,
+    patch,
+    applyRun,
+  ]);
 
   const receiveEvent = useCallback(
     (event: ServerEvent) => {
@@ -585,7 +600,11 @@ export function useConversation({
         { signal: signal.current ?? undefined },
       );
       if (!current()) return;
-      if (!session.id || session.project_id !== projectID)
+      if (
+        !session.id ||
+        session.project_id !== projectID ||
+        (command.body.canvas_id && session.canvas_id !== command.body.canvas_id)
+      )
         throw new Error("invalid_session_receipt");
       command.sessionID = session.id;
       sid.current = session.id;
@@ -627,7 +646,7 @@ export function useConversation({
     await accepted(command, receipt);
   }
   async function send() {
-    if (flight.current || !current()) return;
+    if (flight.current || !writable || !current()) return;
     let command = pending.current;
     if (!command) {
       if (!allowed.allowed || !model) return;
@@ -817,7 +836,7 @@ export function useConversation({
   async function command(action: API.DecisionInput["action"]) {
     const runID = state.activeRunID,
       session = sid.current;
-    if (!runID || !session || flight.current || !current()) return;
+    if (!runID || !session || flight.current || !writable || !current()) return;
     flight.current = true;
     let requested: API.DecisionInput | undefined;
     try {
@@ -963,6 +982,7 @@ export function useConversation({
       !terminalStatuses.has(previous.state.status) ||
       active ||
       flight.current ||
+      !writable ||
       !sid.current
     )
       return;

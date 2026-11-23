@@ -77,6 +77,11 @@ func (i FreeQuoteItemInput) Validate() error {
 	if i.Source != nil && !i.Source.Valid() {
 		return ErrInvalidFreeQuote
 	}
+	if i.Source != nil && i.Source.ShotID != nil &&
+		(i.Capability != "video.generate" || i.Mode != "text2video" || i.OutputCount != 1 ||
+			len(i.MediaInputs) != 0 || i.PromptTemplate != nil) {
+		return ErrInvalidFreeQuote
+	}
 	if strings.TrimSpace(i.Capability) == "" || strings.TrimSpace(i.Mode) == "" ||
 		(strings.TrimSpace(i.Prompt) == "" && (i.Capability != "video.generate" || (i.Mode != "avatar" && i.Mode != "motion"))) || len(i.Prompt) > 64*1024 ||
 		!utf8.ValidString(i.Prompt) || i.OutputCount < 1 || i.OutputCount > 8 ||

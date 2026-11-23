@@ -3,10 +3,12 @@ package aigateway
 import (
 	"context"
 	"encoding/json"
+	"slices"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
 	prompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
 	promptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
@@ -58,12 +60,14 @@ func (c Creation) quoteInput(ctx context.Context, tx *gorm.DB, a identity.Princi
 		if !in.Source.Valid() || in.Source.RowID != nil {
 			return model, nil, nil, domain.ErrInvalid
 		}
-		var n int64
-		if err := tx.Raw("SELECT count(*) FROM canvas.document d JOIN canvas.node n ON n.document_id=d.id WHERE d.id=? AND d.project_id=? AND d.revision=? AND n.id=? AND NOT d.is_delete AND NOT n.is_delete", in.Source.CanvasID, p, in.Source.Revision, in.Source.NodeID).Scan(&n).Error; err != nil {
-			return model, nil, nil, err
-		}
-		if n != 1 {
-			return model, nil, nil, domain.ErrConflict
+		if in.Source.ShotID == nil {
+			var n int64
+			if err := tx.Raw("SELECT count(*) FROM canvas.document d JOIN canvas.node n ON n.document_id=d.id WHERE d.id=? AND d.project_id=? AND d.revision=? AND n.id=? AND n.node_type<>? AND NOT d.is_delete AND NOT n.is_delete", in.Source.CanvasID, p, in.Source.Revision, in.Source.NodeID, canvasdomain.NodeTypeStoryboard).Scan(&n).Error; err != nil {
+				return model, nil, nil, err
+			}
+			if n != 1 {
+				return model, nil, nil, domain.ErrConflict
+			}
 		}
 	}
 	if in.InputSource != nil {
@@ -138,6 +142,16 @@ func (c Creation) quoteInput(ctx context.Context, tx *gorm.DB, a identity.Princi
 	capability := "text.generate"
 	if model.Protocol == "media" {
 		capability = model.Capability
+	}
+	if in.Source != nil && in.Source.ShotID != nil {
+		if capability != "video.generate" || !slices.Contains(model.Modes, mode) {
+			return model, nil, nil, domain.ErrUnavailable
+		}
+		var err error
+		params, err = storyboardModelParams(model, params)
+		if err != nil {
+			return model, nil, nil, err
+		}
 	}
 	if in.Capability != "" && in.Capability != capability && (capability != "text.generate" || in.Capability != "text.structured") {
 		return model, nil, draft, domain.ErrInvalid

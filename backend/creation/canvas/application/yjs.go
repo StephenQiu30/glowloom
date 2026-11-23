@@ -41,12 +41,13 @@ type YjsState struct {
 
 // YjsUpdate is immutable once dispatched; its identity survives reconnects.
 type YjsUpdate struct {
-	Epoch       uuid.UUID `json:"epoch"`
-	SessionID   uuid.UUID `json:"sessionId"`
-	UpdateID    uuid.UUID `json:"updateId"`
-	Update      []byte    `json:"update"`
-	PayloadHash string    `json:"payloadHash"`
-	ReviewSeq   *Revision `json:"reviewSeq,omitempty"`
+	StoryboardCommand bool      `json:"-"`
+	Epoch             uuid.UUID `json:"epoch"`
+	SessionID         uuid.UUID `json:"sessionId"`
+	UpdateID          uuid.UUID `json:"updateId"`
+	Update            []byte    `json:"update"`
+	PayloadHash       string    `json:"payloadHash"`
+	ReviewSeq         *Revision `json:"reviewSeq,omitempty"`
 }
 
 // YjsRestoration is a runtime-decoded intent; the store must prove the original deletion.

@@ -32,6 +32,7 @@ type projectMemoryHandler struct{ service *application.ProjectMemories }
 // @ID listProjectMemory
 // @Produce json
 // @Param pid path string true "项目 UUID"
+// @Param shot_id query string false "镜头 UUID"
 // @Success 200 {object} application.ProjectMemoryView
 // @Failure 404 {object} httpapi.Problem
 // @Router /api/projects/{pid}/memory [get]
@@ -41,7 +42,11 @@ func (h projectMemoryHandler) list(c *gin.Context) {
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 		return
 	}
-	view, err := h.service.List(c.Request.Context(), identityhttp.Principal(c), id)
+	shot, ok := projectMemoryShot(c)
+	if !ok {
+		return
+	}
+	view, err := h.service.ListForShot(c.Request.Context(), identityhttp.Principal(c), id, shot)
 	if err != nil {
 		writeMemoryError(c, err)
 		return
@@ -56,6 +61,7 @@ func (h projectMemoryHandler) list(c *gin.Context) {
 // @Param pid path string true "项目 UUID"
 // @Param key path string true "约定名称"
 // @Param before query integer false "修订号上界"
+// @Param shot_id query string false "镜头 UUID"
 // @Success 200 {array} application.ProjectMemory
 // @Failure 404 {object} httpapi.Problem
 // @Router /api/projects/{pid}/memory/{key} [get]
@@ -66,7 +72,11 @@ func (h projectMemoryHandler) history(c *gin.Context) {
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 		return
 	}
-	view, err := h.service.History(c.Request.Context(), identityhttp.Principal(c), id, c.Param("key"), before)
+	shot, ok := projectMemoryShot(c)
+	if !ok {
+		return
+	}
+	view, err := h.service.HistoryForShot(c.Request.Context(), identityhttp.Principal(c), id, shot, c.Param("key"), before)
 	if err != nil {
 		writeMemoryError(c, err)
 		return
@@ -124,4 +134,17 @@ func writeMemoryError(c *gin.Context, err error) {
 	default:
 		writeLifecycleError(c, err)
 	}
+}
+
+func projectMemoryShot(c *gin.Context) (*uuid.UUID, bool) {
+	raw, present := c.GetQuery("shot_id")
+	if !present {
+		return nil, true
+	}
+	id, err := uuid.Parse(raw)
+	if err != nil || id == uuid.Nil {
+		httpapi.WriteProblem(c, 422, "invalid_request", nil)
+		return nil, false
+	}
+	return &id, true
 }

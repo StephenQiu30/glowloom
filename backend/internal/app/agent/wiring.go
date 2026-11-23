@@ -32,11 +32,18 @@ type Boundary struct {
 	bindings                   []toolBinding
 	db                         *gorm.DB
 	canvasRuntime              canvas.YjsCommandRuntime
+	canvasNotify               func(uuid.UUID)
 	mediaObjects               media.ObjectReader
 	documentExtractor          script.SourceExtractor
 	sourceObjects              script.PrivateObjects
 	sourceOwner                *script.SourceService
 	creditOperationSagaEnabled bool
+}
+
+// WithCanvasNotification wakes collaboration subscribers after a committed tool write.
+func (b *Boundary) WithCanvasNotification(notify func(uuid.UUID)) *Boundary {
+	b.canvasNotify = notify
+	return b
 }
 
 // WithDocumentExtractor installs the remote Creation document capability.
@@ -165,6 +172,9 @@ func (b *Boundary) AtomicTool(c *gin.Context, name string, in domain.CallInput) 
 	}
 	if name == "canvas_commands" {
 		return b.executeCanvasCommands(c.Request.Context(), in)
+	}
+	if name == storyboardWriteTool {
+		return b.executeStoryboardWrite(c.Request.Context(), in)
 	}
 	for _, binding := range b.bindings {
 		if binding.descriptor.Name != name {

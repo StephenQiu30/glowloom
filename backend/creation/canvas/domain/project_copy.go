@@ -153,6 +153,17 @@ func CopyProjectDocument(source Document, targetProject, job uuid.UUID, assets m
 				}
 			}
 		}
+		if board := node.Config.Storyboard; board != nil {
+			for i := range board.Shots {
+				shot := &board.Shots[i]
+				shot.ID = identity(nodeScope+"/storyboard-shot", shot.ID)
+				shot.Revision = 1
+				if shot.Adopted != nil {
+					shot.Adopted = nil
+					result.ClearedOperationBindings++
+				}
+			}
+		}
 		if c := node.Config.Timeline; c != nil {
 			for j := range c.ImportedAssets {
 				c.ImportedAssets[j] = assetID(c.ImportedAssets[j])

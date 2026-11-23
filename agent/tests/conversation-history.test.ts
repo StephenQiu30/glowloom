@@ -15,13 +15,14 @@ import { openPostgresStorage } from '../src/pi-durable/storage/postgres.js';
 const pool = testPool();
 afterAll(() => pool.end());
 const manifest = freezeManifest({ model_key: 'fixture', max_micros: 100 }, []);
-async function fixture() {
+async function fixture(canvasId?: string) {
   const store = new SessionStore(pool);
   const who = {
     actor_id: randomUUID(),
     org_id: randomUUID(),
     scope_id: randomUUID(),
     project_id: randomUUID(),
+    ...(canvasId ? { canvas_id: canvasId } : {}),
   };
   const session = await store.createSession({
     ...who,
@@ -63,6 +64,75 @@ it('atomically retains the exact accepted input and replays the same admission',
   const snapshot = await store.snapshot(run);
   expect(snapshot.input).toEqual(input);
   expect(snapshot.messages_page).toMatchObject({ items: [], through: '0:0' });
+});
+
+it('retains the original storyboard target on request replay and explicit retry after reordering', async () => {
+  const { store, who, session } = await fixture(randomUUID());
+  const draft = authorizedText('编辑第2镜');
+  const original = {
+    ordinal: 2,
+    board_id: randomUUID(),
+    shot_id: randomUUID(),
+    shot_revision: 3,
+  };
+  const command = {
+    ...who,
+    request_id: randomUUID(),
+    content_hash: draft.input_hash,
+    expected_execution_revision: 0,
+    goal: draft.prompt,
+    manifest: {},
+    input: { ...draft, storyboard_targets: [original] },
+  };
+  await expect(
+    store.admitRun(
+      session.id,
+      {
+        ...command,
+        canvas_id: randomUUID(),
+      },
+      manifest,
+    ),
+  ).rejects.toThrow(/session_not_found/);
+  const first = await store.admitRun(session.id, command, manifest);
+  const reordered = { ...original, shot_id: randomUUID(), shot_revision: 1 };
+  const replay = await store.admitRun(
+    session.id,
+    {
+      ...command,
+      input: { ...draft, storyboard_targets: [reordered] },
+    },
+    manifest,
+  );
+  expect(replay.id).toBe(first.id);
+  expect(replay.input).toMatchObject({
+    input_hash: draft.input_hash,
+    storyboard_targets: [original],
+  });
+  await claimSessionOwner(pool, session.id, randomUUID(), 30000);
+  await pool.query(
+    "INSERT INTO agent.runtime_events(session_id,commit_seq,event_ordinal,event_type,payload) VALUES($1,1,1,'agent.state',$2)",
+    [
+      session.id,
+      { root_run_id: first.id, status: 'completed', execution_revision: 1 },
+    ],
+  );
+  const retry = await store.admitRun(
+    session.id,
+    {
+      ...command,
+      request_id: randomUUID(),
+      expected_execution_revision: 1,
+      retry_of_run_id: first.id,
+      input: draft,
+    },
+    manifest,
+  );
+  expect(retry.id).not.toBe(first.id);
+  expect(retry.input).toMatchObject({
+    input_hash: draft.input_hash,
+    storyboard_targets: [original],
+  });
 });
 it('pages all attempts and binds the cursor to its private session', async () => {
   const { store, who, session, history } = await fixture();

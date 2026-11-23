@@ -18,6 +18,7 @@ const (
 	NodeTypeTimeline        = "timeline"
 	NodeTypeDirector        = "director"
 	NodeTypeGeneration      = "generation"
+	NodeTypeStoryboard      = "storyboard"
 
 	NodeActionResource = "resource"
 	NodeActionTool     = "tool"

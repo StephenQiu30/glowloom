@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildApp } from './helpers/agent-app.js';
+import { authorizedText } from './helpers/conversation-input.js';
 
 const actor = '00000000-0000-4000-8000-000000000001';
 const project = '00000000-0000-4000-8000-000000000002';
@@ -150,4 +151,70 @@ it('rejects a new run without a frozen authorized input', async () => {
   });
   expect(response.statusCode).toBe(400);
   await app.close();
+});
+
+it('accepts bounded storyboard targets and rejects malformed nested input', async () => {
+  const admitted: unknown[] = [];
+  const app = await buildApp({
+    service: {
+      ...service(),
+      createRun: async (_session, input) => {
+        admitted.push(input.input);
+        return {
+          root_run_id: rid,
+          session_id: sid,
+          submission_id: 'fixture',
+          status: 'accepted',
+          execution_revision: 1,
+        };
+      },
+    },
+    serviceToken: 'a'.repeat(48),
+  });
+  try {
+    const draft = authorizedText('把第2镜改成乘客的手');
+    const target = {
+      ordinal: 2,
+      board_id: sid,
+      shot_id: rid,
+      shot_revision: 5,
+    };
+    const submit = (targets: unknown) =>
+      app.inject({
+        method: 'POST',
+        url: `/internal/agent/sessions/${sid}/runs`,
+        headers,
+        payload: {
+          actor_id: actor,
+          org_id: actor,
+          scope_id: actor,
+          project_id: project,
+          canvas_id: sid,
+          request_id: rid,
+          content_hash: draft.input_hash,
+          expected_execution_revision: 0,
+          goal: draft.prompt,
+          input: { ...draft, storyboard_targets: targets },
+          manifest: {},
+        },
+      });
+    expect((await submit([target])).statusCode).toBe(202);
+    expect(admitted).toEqual([
+      expect.objectContaining({ storyboard_targets: [target] }),
+    ]);
+    for (const targets of [
+      null,
+      [null],
+      Array.from({ length: 7 }, () => target),
+      [{ ...target, ordinal: 0 }],
+      [{ ...target, board_id: 'unscoped' }],
+      [{ ...target, shot_id: 'unscoped' }],
+      [{ ...target, shot_revision: 0 }],
+      [{ ...target, extra: 'not allowed' }],
+    ])
+      expect((await submit(targets)).statusCode).toBe(400);
+    expect(admitted).toHaveLength(1);
+  } finally {
+    await app.close();
+  }
 });

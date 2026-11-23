@@ -167,6 +167,10 @@ func (o Operation) Validate() error {
 	if o.Source != nil && (!o.Source.Valid() || o.Origin != "canvas" || o.TargetType != "free") {
 		return ErrInvalidOperation
 	}
+	if o.Source != nil && o.Source.ShotID != nil &&
+		(o.BatchID != nil || o.Capability != "video.generate" || o.Mode != "text2video" || o.OutputCount != 1) {
+		return ErrInvalidOperation
+	}
 	if o.Origin != "upload" && (o.Region == nil || o.ModelProfileVersionID == nil) {
 		return ErrInvalidOperation
 	}

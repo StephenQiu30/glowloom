@@ -156,7 +156,16 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 	}
 
 	gin.SetMode(gin.TestMode)
-	scope := domain.Scope{ActorID: uuid.New(), OrgID: uuid.New(), ScopeID: uuid.New(), ProjectID: uuid.New()}
+	canvasID, boardID, shotID, reorderedShotID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	scope := domain.Scope{ActorID: uuid.New(), OrgID: uuid.New(), ScopeID: uuid.New(), ProjectID: uuid.New(), CanvasID: &canvasID}
+	sameScope := func(got domain.Scope) bool {
+		if got.CanvasID == nil || *got.CanvasID != canvasID {
+			return false
+		}
+		got.CanvasID = scope.CanvasID
+		return got == scope
+	}
+	var afterReorder atomic.Bool
 	access := &fixtureAccess{scope: scope, other: uuid.New()}
 	store := pg.NewStore(db, func(*gorm.DB) app.ControlAccess { return access }, time.Now)
 	businessToken, runtimeToken := uuid.NewString()+uuid.NewString(), uuid.NewString()+uuid.NewString()
@@ -168,15 +177,15 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 	const snapshotResult = `{"admitted_runs":1,"source":"agent_business.run_authorization"}`
 	capabilities := app.Capabilities{
 		Snapshot: func(ctx context.Context, got domain.Scope) (any, error) {
-			if got != scope {
+			if !sameScope(got) {
 				return nil, domain.ErrNotFound
 			}
 			var count int64
 			err := db.WithContext(ctx).Raw(`SELECT count(*) FROM agent_business.run_authorization WHERE scope->>'actor_id'=? AND scope->>'project_id'=?`, scope.ActorID, scope.ProjectID).Scan(&count).Error
-			return map[string]any{"project_id": scope.ProjectID, "admitted_runs": count}, err
+			return map[string]any{"project_id": scope.ProjectID, "admitted_runs": count, "active_canvas": map[string]any{"id": canvasID}}, err
 		},
 		Model: func(ctx context.Context, got domain.Scope, _ uuid.UUID, raw json.RawMessage, _ int64) (domain.CallResult, error) {
-			if got != scope {
+			if !sameScope(got) {
 				return domain.CallResult{}, domain.ErrNotFound
 			}
 			var input struct {
@@ -188,6 +197,9 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 			}
 			if json.Unmarshal(raw, &input) != nil || input.ModelKey != "boundary-fixture" {
 				return domain.CallResult{}, domain.ErrInvalid
+			}
+			if !bytes.Contains(raw, []byte(shotID.String())) || bytes.Contains(raw, []byte(reorderedShotID.String())) {
+				return domain.CallResult{}, fmt.Errorf("admitted storyboard target missing or changed")
 			}
 			n := models.Add(1)
 			if n == 1 {
@@ -217,7 +229,7 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 			return completed(`{"output":"Boundary fixture completed after the committed project snapshot.","usage":{"input_tokens":7,"output_tokens":3},"stop_reason":"stop","model_key":"boundary-fixture"}`, 0), nil
 		},
 		Tools: []app.Tool{{Descriptor: app.ToolDescriptor{Name: "project_snapshot", Roles: []string{"producer"}, Description: "Read this isolated project's admitted run from PostgreSQL", Parameters: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`), Effect: "read", ContractVersion: "v1", Replay: "safe"}, Execute: func(ctx context.Context, got domain.Scope, _ uuid.UUID, raw json.RawMessage) (domain.CallResult, error) {
-			if got != scope || domain.Hash(raw) != domain.Hash([]byte(`{}`)) {
+			if !sameScope(got) || domain.Hash(raw) != domain.Hash([]byte(`{}`)) {
 				return domain.CallResult{}, domain.ErrInvalid
 			}
 			var count int64
@@ -232,6 +244,11 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 			// gateway ledger and approved Agent HTTP boundary regressions.
 			return completed(snapshotResult, 0), nil
 		}}},
+	}
+	for _, name := range []string{"canvas_storyboard_read", "canvas_storyboard_write"} {
+		capabilities.Tools = append(capabilities.Tools, app.Tool{
+			Descriptor: app.ToolDescriptor{Name: name, Roles: []string{"producer"}, Description: "Fixture capability", Parameters: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`), Effect: "read", ContractVersion: "v1", Replay: "safe"},
+		})
 	}
 	businessRouter := gin.New()
 	agenthttp.NewBusinessHandler(store, capabilities, businessToken).Register(businessRouter)
@@ -272,7 +289,23 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 		}
 		c.Set("principal", principal)
 	})
-	agenthttp.NewPublicHandler(store, access, runtime).WithConversationInputs(fixtureInputs{scope: scope}).Register(api)
+	agenthttp.NewPublicHandler(store, access, runtime).WithConversationInputs(fixtureInputs{scope: scope}).
+		WithCanvasAccess(func(_ context.Context, _ identity.Principal, project, canvas uuid.UUID) error {
+			if project != scope.ProjectID || canvas != canvasID {
+				return domain.ErrNotFound
+			}
+			return nil
+		}).
+		WithStoryboardTargets(func(_ context.Context, _ identity.Principal, project, canvas uuid.UUID, text string) ([]app.StoryboardTarget, error) {
+			if project != scope.ProjectID || canvas != canvasID || !strings.Contains(text, "第二镜") {
+				return nil, nil
+			}
+			current := shotID
+			if afterReorder.Load() {
+				current = reorderedShotID
+			}
+			return []app.StoryboardTarget{{Ordinal: 2, BoardID: boardID, ShotID: current, ShotRevision: 3}}, nil
+		}).Register(api)
 	publicServer := httptest.NewServer(publicRouter)
 	t.Cleanup(publicServer.Close)
 	client := &http.Client{Timeout: 15 * time.Second}
@@ -291,7 +324,7 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 		}
 	})
 
-	create := map[string]any{"request_id": uuid.NewString(), "title": "Cross-process boundary fixture"}
+	create := map[string]any{"request_id": uuid.NewString(), "title": "Cross-process boundary fixture", "canvas_id": canvasID}
 	var session runtimeclient.SessionView
 	decode(t, requestJSON(t, client, "POST", base, create, nil, 201), &session)
 	sid, err = uuid.Parse(session.Id)
@@ -314,7 +347,7 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 	requestJSON(t, client, "GET", strings.Replace(base, "/agent/sessions", "/agent-sessions", 1), nil, nil, 404)
 	requestJSON(t, client, "GET", base+"/"+sid.String()+"/stream", nil, nil, 404)
 
-	start := map[string]any{"request_id": uuid.NewString(), "expected_execution_revision": 0, "input": boundaryDraft("Read a formal project snapshot, then report its receipt."), "manifest": map[string]any{"model_key": "boundary-fixture", "max_tokens": 256, "max_micros": 10}, "budget_micros": 100}
+	start := map[string]any{"request_id": uuid.NewString(), "expected_execution_revision": 0, "input": boundaryDraft("读取第二镜所在项目的正式快照并汇报回执。"), "manifest": map[string]any{"model_key": "boundary-fixture", "max_tokens": 256, "max_micros": 10}, "budget_micros": 100}
 	var accepted runtimeclient.AcceptedRun
 	decode(t, requestJSON(t, client, "POST", base+"/"+sid.String()+"/runs", start, nil, 202), &accepted)
 	rid, err := uuid.Parse(accepted.RootRunId)
@@ -328,6 +361,7 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 		body := requestJSON(t, client, "GET", runURL, nil, nil, 200)
 		t.Fatalf("production Harness never reached Go model capability; snapshot=%s", body)
 	}
+	afterReorder.Store(true)
 	var repeated runtimeclient.AcceptedRun
 	decode(t, requestJSON(t, client, "POST", base+"/"+sid.String()+"/runs", start, nil, 202), &repeated)
 	if repeated != accepted {

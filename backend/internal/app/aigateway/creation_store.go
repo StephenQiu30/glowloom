@@ -125,6 +125,21 @@ func (c Creation) Quote(ctx context.Context, a identity.Principal, p uuid.UUID, 
 			}
 			epoch = slot.Epoch + 1
 		}
+		source := creationSource(in)
+		if in.Source != nil && in.Source.ShotID != nil {
+			if !in.Source.Valid() {
+				return domain.ErrInvalid
+			}
+			if err := checkStoryboardQuoteInput(tx, p, in); err != nil {
+				return err
+			}
+			prompt, memoryVersion, err := storyboardMemoryPrompt(tx, p, in.Source.ShotID, in.Prompt)
+			if err != nil {
+				return err
+			}
+			in.Prompt = prompt
+			source = canonical(storyboardQuoteSource{CanvasSource: *in.Source, MemoryVersion: memoryVersion})
+		}
 		model, raw, draft, err := c.quoteInput(ctx, tx, a, p, in)
 		if err != nil {
 			return err
@@ -163,7 +178,7 @@ func (c Creation) Quote(ctx context.Context, a identity.Principal, p uuid.UUID, 
 			out.SubmissionID = &quote.ID
 			out.SubmissionEpoch = epoch
 		}
-		if err := tx.Exec(`INSERT INTO ai.creation(id,scope_id,actor_id,project_id,owner_key,epoch,source,draft,presentation,input_hash,actor,confirm_key) VALUES(?,?,?,?,?,?,?::jsonb,?::jsonb,?::jsonb,?,?::jsonb,?)`, quote.ID, a.ScopeID, a.ID, p, owner, epoch, string(creationSource(in)), string(canonical(draft)), string(canonical(out)), fingerprint, string(canonical(a)), confirm).Error; err != nil {
+		if err := tx.Exec(`INSERT INTO ai.creation(id,scope_id,actor_id,project_id,owner_key,epoch,source,draft,presentation,input_hash,actor,confirm_key) VALUES(?,?,?,?,?,?,?::jsonb,?::jsonb,?::jsonb,?,?::jsonb,?)`, quote.ID, a.ScopeID, a.ID, p, owner, epoch, string(source), string(canonical(draft)), string(canonical(out)), fingerprint, string(canonical(a)), confirm).Error; err != nil {
 			return err
 		}
 		if owner != nil {
@@ -197,6 +212,21 @@ func (c Creation) Confirm(ctx context.Context, a identity.Principal, p, id uuid.
 		if row.ActorID != a.ID {
 			return domain.ErrForbidden
 		}
+		var source storyboardQuoteSource
+		decodeErr := json.Unmarshal(row.Source, &source)
+		storyboard := source.ShotID != nil || source.ShotRevision != nil
+		if storyboard {
+			if decodeErr != nil || !source.Valid() || row.OwnerKey != nil {
+				return domain.ErrInvalid
+			}
+			if key != row.ConfirmKey.String() {
+				return domain.ErrConflict
+			}
+			if row.State == "accepted" {
+				out, err = c.store(tx, a).Read(ctx, a.ScopeID, id)
+				return err
+			}
+		}
 		if row.State == "closed" {
 			var n int64
 			if err := tx.Raw("SELECT count(*) FROM ai.request WHERE id=?", id).Scan(&n).Error; err != nil {
@@ -227,7 +257,15 @@ func (c Creation) Confirm(ctx context.Context, a identity.Principal, p, id uuid.
 		}
 		call, err := c.store(tx, a).LoadQuote(ctx, a.ScopeID, id)
 		if err != nil {
+			if storyboard && errors.Is(err, domain.ErrInvalid) {
+				return operation.ErrQuoteStale
+			}
 			return err
+		}
+		if storyboard {
+			if err := checkStoryboardConfirmation(tx, call, source); err != nil {
+				return err
+			}
 		}
 		if row.State != "accepted" {
 			if err := c.Runtime.PinMediaOutput(ctx, tx, call); err != nil {
@@ -238,6 +276,15 @@ func (c Creation) Confirm(ctx context.Context, a identity.Principal, p, id uuid.
 		out, err = c.store(tx, a).Queue(ctx, call)
 		if err != nil {
 			return err
+		}
+		if storyboard {
+			var expired bool
+			if err := tx.Raw("SELECT expires_at<=clock_timestamp() FROM ai.quote WHERE id=?", id).Row().Scan(&expired); err != nil {
+				return err
+			}
+			if expired {
+				return operation.ErrQuoteStale
+			}
 		}
 		return tx.Exec("UPDATE ai.creation SET state='accepted' WHERE id=?", id).Error
 	})

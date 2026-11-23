@@ -130,7 +130,12 @@ export class SessionRuntime {
         imageRoot: resolve(process.cwd(), 'trusted'),
         entries: run.manifest.trusted_extensions,
       });
-      const { models } = createBusinessModels(business, run.manifest, gate);
+      const { models } = createBusinessModels(
+        business,
+        run.manifest,
+        gate,
+        run.input?.storyboard_targets,
+      );
       const registry = buildRegistry(business, gate, runtime.trusted.tools);
       runtime.harnessValue = await Harness.open(
         storage,

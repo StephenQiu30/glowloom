@@ -27,10 +27,19 @@ type ConversationQuote struct {
 	ContentHash string `json:"content_hash"`
 }
 
+// StoryboardTarget records the position and stable shot revision at admission.
+type StoryboardTarget struct {
+	Ordinal      int       `json:"ordinal"`
+	BoardID      uuid.UUID `json:"board_id"`
+	ShotID       uuid.UUID `json:"shot_id"`
+	ShotRevision int64     `json:"shot_revision"`
+}
+
 // AuthorizedConversationInput combines frozen creative intent with an optional authorized quote.
 type AuthorizedConversationInput struct {
 	prompt.ConversationInput
-	Quote *ConversationQuote `json:"quote,omitempty"`
+	Quote             *ConversationQuote `json:"quote,omitempty"`
+	StoryboardTargets []StoryboardTarget `json:"storyboard_targets,omitempty"`
 }
 
 // ConversationModel pins the selected catalog release, version and context window.

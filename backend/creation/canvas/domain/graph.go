@@ -28,7 +28,7 @@ func ValidateGraph(doc Document) error {
 			return fmt.Errorf("%w: unknown node configuration", ErrUnsupportedCommand)
 		}
 		switch node.NodeType {
-		case "cinema_studio", "subject", "config", "text", "group", "image", "video", "audio", "model", "image_generation", "video_generation", "batch_table", "timeline", "director", "generation":
+		case "cinema_studio", "subject", "config", "text", "group", "image", "video", "audio", "model", "image_generation", "video_generation", "batch_table", "timeline", "director", "generation", NodeTypeStoryboard:
 		default:
 			return fmt.Errorf("%w: unknown node type", ErrUnsupportedCommand)
 		}

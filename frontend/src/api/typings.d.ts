@@ -39,6 +39,11 @@ declare namespace API {
     id: string;
   };
 
+  type adoptCanvasStoryboardShotParams = {
+    /** 画布 UUID */
+    id: string;
+  };
+
   type AdoptReceipt = {
     changed?: boolean;
     duplicate?: boolean;
@@ -334,6 +339,7 @@ declare namespace API {
     quote?: QuotedMessage;
     references_unavailable?: boolean;
     schema_version: AuthorizedInputSchemaVersion;
+    storyboard_targets?: StoryboardTargetDto[];
   };
 
   type AuthorizedInputSchemaVersion = 1;
@@ -594,6 +600,8 @@ declare namespace API {
     node_id?: string;
     revision?: number;
     row_id?: string | null;
+    shot_id?: string | null;
+    shot_revision?: number | null;
   };
 
   type CanvasUsage = {
@@ -2141,6 +2149,11 @@ declare namespace API {
     id: string;
   };
 
+  type getCanvasStoryboardParams = {
+    /** 画布 UUID */
+    id: string;
+  };
+
   type getCreationAnalyticsParams = {
     /** personal (default) or platform; current platform permission required */
     scope?: string;
@@ -3103,6 +3116,15 @@ declare namespace API {
     pid: string;
   };
 
+  type listCanvasStoryboardCandidatesParams = {
+    /** 画布 UUID */
+    id: string;
+    /** 故事板 UUID */
+    board_id: string;
+    /** 镜头 UUID */
+    shot_id: string;
+  };
+
   type listDiagnosticLogsParams = {
     /** Inclusive UTC RFC3339 time, default last 24h */
     from?: string;
@@ -3360,11 +3382,15 @@ declare namespace API {
     key: string;
     /** 修订号上界 */
     before?: number;
+    /** 镜头 UUID */
+    shot_id?: string;
   };
 
   type listProjectMemoryParams = {
     /** 项目 UUID */
     pid: string;
+    /** 镜头 UUID */
+    shot_id?: string;
   };
 
   type listProjectModelsParams = {
@@ -3843,6 +3869,7 @@ declare namespace API {
     format_version?: number;
     generation?: GenerationConfig;
     rich_text?: Record<string, any>;
+    storyboard?: Storyboard;
     subject?: SubjectConfig;
     text?: string;
     timeline?: TimelineConfig;
@@ -4617,12 +4644,14 @@ declare namespace API {
     key?: string;
     project_id?: string;
     revision?: number;
+    shot_id?: string;
     statement?: string;
     withdrawn?: boolean;
   };
 
   type ProjectMemoryChange = {
     expected_revision: number;
+    shot_id?: string;
     statement?: string;
     withdraw?: boolean;
   };
@@ -4840,6 +4869,11 @@ declare namespace API {
     | "partial_failed"
     | "failed"
     | "cancelled";
+
+  type quoteCanvasStoryboardShotParams = {
+    /** 画布 UUID */
+    id: string;
+  };
 
   type QuotedMessage = {
     content_hash: string;
@@ -5854,6 +5888,114 @@ declare namespace API {
     object_count?: number;
     scope?: LibraryScope;
     used_bytes?: number;
+  };
+
+  type Storyboard = {
+    shots?: StoryboardShot[];
+  };
+
+  type StoryboardAdoption = {
+    board_id?: string;
+    expected_revision?: number;
+    operation_id?: string;
+    output_id?: string;
+    shot_id?: string;
+    shot_revision?: number;
+  };
+
+  type StoryboardBoard = {
+    id?: string;
+    shots?: StoryboardShot[];
+  };
+
+  type StoryboardCommand = {
+    board_id?: string;
+    edit?: StoryboardEdit;
+    expected_revision?: number;
+    move?: StoryboardMove;
+    shots?: StoryboardDraft[];
+  };
+
+  type StoryboardDraft = {
+    action?: string;
+    camera?: string;
+    dialogue?: string;
+    duration_ms?: number;
+    sound?: string;
+    title?: string;
+  };
+
+  type StoryboardEdit = {
+    expected_revision?: number;
+    field?: string;
+    shot_id?: string;
+    value?: Record<string, any>;
+  };
+
+  type StoryboardMove = {
+    before_id?: string;
+    shot_id?: string;
+  };
+
+  type StoryboardQuoteRequest = {
+    board_id?: string;
+    expected_revision?: number;
+    model_key?: string;
+    shot_id?: string;
+    shot_revision?: number;
+  };
+
+  type StoryboardQuoteResponse = {
+    available_micros?: number;
+    compiler_version?: string;
+    confirm_key?: string;
+    confirmable?: boolean;
+    editor_draft?: PromptDraft;
+    expires_at?: string;
+    final_prompt?: string;
+    operation_id?: string;
+    prompt_preparation?: PromptPreparation;
+    quote_detail?: Record<string, any>;
+    quote_micros?: number;
+    reference_mapping?: ReferenceMapping[];
+    reused_from_id?: string | null;
+    submission_epoch?: number;
+    submission_id?: string;
+  };
+
+  type StoryboardShot = {
+    action?: string;
+    adopted?: StoryboardTake;
+    camera?: string;
+    dialogue?: string;
+    duration_ms?: number;
+    id?: string;
+    revision?: number;
+    sound?: string;
+    title?: string;
+  };
+
+  type StoryboardTake = {
+    asset_id?: string;
+    asset_version?: number;
+    operation_id?: string;
+    output_id?: string;
+    shot_revision?: number;
+  };
+
+  type StoryboardTargetDto = {
+    board_id: string;
+    ordinal: number;
+    shot_id: string;
+    shot_revision: number;
+  };
+
+  type StoryboardView = {
+    board?: StoryboardBoard;
+    canvas_id?: string;
+    commit_seq?: string;
+    project_id?: string;
+    revision?: number;
   };
 
   type StructureConfirmRequest = {
@@ -7043,5 +7185,10 @@ declare namespace API {
     current_actor_id?: string;
     current_org_id?: string;
     state?: ProjectState;
+  };
+
+  type writeCanvasStoryboardParams = {
+    /** 画布 UUID */
+    id: string;
   };
 }

@@ -130,6 +130,11 @@ func (c Creation) RegisterCreation(g *gin.RouterGroup) {
 	operationhttp.NewSubmissionHandler(c).Register(g)
 }
 
+// WriteCreationProblem writes the public error response for a creation command.
+func WriteCreationProblem(c *gin.Context, err error) {
+	creationProblem(c, err)
+}
+
 func creationProblem(c *gin.Context, err error) {
 	status, code := 503, "dependency_unavailable"
 	switch {
@@ -147,8 +152,10 @@ func creationProblem(c *gin.Context, err error) {
 		status, code = 409, "model_unavailable"
 	case errors.Is(err, domain.ErrUnknown):
 		status, code = 409, "consumption_pending"
-	case errors.Is(err, promptdomain.ErrInputStale):
+	case errors.Is(err, promptdomain.ErrInputStale), errors.Is(err, operation.ErrQuoteSourceStale):
 		status, code = 409, "canvas_revision_conflict"
+	case errors.Is(err, operation.ErrQuoteStale):
+		status, code = 409, "quote_stale"
 	case errors.Is(err, operation.ErrSubmissionUnresolved):
 		status, code = 409, "submission_unresolved"
 	case errors.Is(err, operation.ErrSubmissionEpoch):

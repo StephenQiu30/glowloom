@@ -2,6 +2,8 @@ import { isProjectID } from "@/components/projects/project";
 import { RequestError } from "@/lib/request";
 export type ProjectPickerAsset = API.AssetSummary & {
   libraryItemID?: string;
+  title?: string;
+  sourceLabel?: string;
 };
 export type ProjectPickerFilter = {
   from: string;
@@ -115,6 +117,8 @@ export function requireProjectPickerPage(
           ...item.media!,
           project_id: projectID,
           libraryItemID: item.id,
+          title: item.title,
+          sourceLabel: item.source_label,
         }) as ProjectPickerAsset,
     ),
     total: page.total!,
