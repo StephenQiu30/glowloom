@@ -58,7 +58,7 @@ Plan11 是 AI 接入的实施验证与上线手册，维护可复用的验证、
 
 - [27-画布时间线实施计划](27-画布时间线实施计划.md)：唯一来源[PRD18](../prd/18-画布时间线.md)。
 
-- [28-完整创作Agent与Skill多Agent实施计划](28-完整创作Agent与Skill多Agent实施计划.md)：唯一来源PRD19；SDK、业务桥、Skill、多Agent、解析/分镜/交付、UI、迁移与故障接受的14个实施任务。
+- [28-完整创作Agent与Skill多Agent实施计划](28-完整创作Agent与Skill多Agent实施计划.md)。唯一来源为 PRD19；原 Harness 迁移、Skill、多 Agent 与交付之外，新增[上下文、检索、记忆与评测任务](28-完整创作Agent与Skill多Agent实施计划.md#harness-module-plan)。
 
 
 - [29-模型与供应商接入扩展实施计划](29-模型与供应商接入扩展实施计划.md)：唯一来源[PRD20](../prd/20-模型与供应商接入扩展.md)，拆解T-AI-21-01～04，复用原协议/预设与安全边界。

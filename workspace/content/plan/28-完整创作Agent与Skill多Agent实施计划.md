@@ -1,5 +1,7 @@
 # 完整创作 Agent、Skill 与多 Agent 实施计划
 
+本轮四模块的执行步骤见[§11 任务与证据](#harness-module-plan)。
+
 2026-11-12范围说明：按PRD19新增主子协作、Skill自动调用、外部MCP、持久唤醒与稳定性实施切片（本文末节）。当前用户要求先完善文档，本轮不执行下面任何代码、连接配置、迁移、部署或模型消费步骤；此前迁移授权不覆盖本轮限制。新增切片来源仍只有PRD19，不从调研或本Plan另造业务范围。
 
 > 执行方式：使用 writing-plans、executing-plans；独立责任切片按 subagent-driven-development 执行，核心行为 Red → Green → Refactor。原 Pi Durable 主线的实施授权见需求19。2026-11-06 的 NestJS 请求先交付文档。
@@ -432,3 +434,30 @@ SRC-AGH-23已授权R1/R2/R3与Plan33 D1实现和本地验证；原文档调研�
 5. 文档直接维护在 `workspace/content/{requirement,design,prd,plan,research}`，不建立 docs 嵌套；结构整理沿 PRD31/Plan40 验证加载、导航、搜索和编辑入口。
 
 执行结果及发布限制仅记 BACKLOG。Prisma 官方依据：[v7 事务](https://www.prisma.io/docs/orm/v7/prisma-client/queries/transactions)、[7.5 嵌套事务与保存点](https://www.prisma.io/changelog/2026-03-11)、[v7 客户端](https://www.prisma.io/docs/orm/v7/reference/prisma-client-reference)；类型化构建器见 [Kysely](https://kysely.dev/)。包和锁固定匹配的 Prisma/Client/pg adapter 版本，不启用迁移器。验收另需验证普通 Prisma 写入与构建器在嵌套保存点内互相可见、拒绝批次回滚、只读 repeatable-read，以及 COMMIT/ROLLBACK 失败连接销毁。
+
+<a id="harness-module-plan"></a>
+
+## 11. 上下文、检索、项目记忆和评测的交付切片
+
+唯一来源为 [PRD19 的四项能力验收](../prd/19-完整创作Agent与Skill多Agent.md#harness-module-acceptance)。每个切片先固定失败场景，再穿过正常入口验证结果，最后整理合同和回归。表内说明依赖关系；调度及开工状态见 [Backlog](../../../BACKLOG.md#harness-module-backlog)。
+
+| 任务与职责 | 输入及依赖 | 执行与产物 | 独立退出条件 |
+| --- | --- | --- | --- |
+| T-AH-EV-01 夹具与证据。QA、Agent、Go | PRD 的故事、场景和验收项；不依赖新能力 | 建立双项目、双角色、同名素材、两版镜头和未决订单；冻结时钟和授权事件，记录可计数网关、出站捕获及业务终态读取方法；先注入一例已知错单和一处漏证据 | 正反样例能区分通过、失败、未验证；夹具可重置并重跑。ST-AH-82 |
+| T-AH-CTX-01 上下文组装。Agent，Go 准入协作 | T-AH-EV-01；允许用固定镜头身份和固定决定 | 在发送、模型出站与转录边界绑定目标与修订；按模型窗口核算最终输入，隔离系统规则和资料文本，暴露最小来源清单。先测镜头重排、空画布和硬约束超限 | 目标不漂移；超限请求未发出；无材料仍可讨论。ST-AH-73、74、75 的组装部分 |
+| T-AH-RAG-01 来源定位与词法读取。Go 创作域、各来源域 | T-AH-EV-01；权威 reader、可见性及段落／时间定位样例 | 经受授权的只读入口实现显式 ID、规范名、别名及描述查询的词法基线；强制回源并区分歧义、空集、故障。给上下文和画布交付同一来源描述 | 两项目同名不串读，可打开正确源修订与时间窗，故障时显式打开可用。ST-AH-76、77 |
+| T-AH-MEM-01 约定发布与读取。Go 项目域、Agent | T-AH-EV-01；项目权限、私有会话、已有正式字段 | 打通私有提议、展示共享内容、用户确认发布、按项目／镜头读取。对已有风格、画幅等从原对象取值；对共享约定保存独立发布回执。用一名只读成员尝试确认 | 新会话可读共享内容，私聊保持原权限；发布重试无额外记录。ST-AH-79 |
+| T-AH-CTX-02 压缩、委派和撤权。Agent、Go 网关 | T-AH-CTX-01、T-AH-RAG-01、T-AH-MEM-01 | 在摘要、原快照、工具返回、图片和子任务链保留依赖；恢复前查原动作，出站准入按当前授权重验。复现“压缩后撤权、断线后恢复、已有未决订单” | 新请求及派生读数无失效来源，有效约束仍在；原动作只查询。ST-AH-75、82 |
+| T-AH-RAG-02 索引更新与撤权。Go 来源域、worker | T-AH-RAG-01 | 复用 outbox、租约 worker 和源修订；构造更新、删除、晚到、重复与局部失败事件。按当前数据重建派生索引，测试更新与出站并发 | 新资料可定位，旧任务不能覆盖新修订；清理滞后期间无越权结果。ST-AH-77、78 |
+| T-AH-MEM-02 更正、局部例外和撤回。Go 项目域、Agent | T-AH-MEM-01 | 对同一主题在项目与单镜写入不同有效值，覆盖预期修订、动作幂等、同键异参及并发确认。回源读新值并验证依赖旧值的上下文失效 | 成功确认唯一；冲突给出差异；撤回后新会话遵循有效决定。ST-AH-80、81 |
+| T-AH-EV-02 词法与项目记忆基线。QA、产品、创作评审 | T-AH-CTX-02、T-AH-RAG-02、T-AH-MEM-02 | 以固定案例跑现有入口。校验出站及回执，再对有无项目记忆、不同压缩预算作对照。按项目划分开发与封存集，登记指标、成本计量和人工评分规则 | 可归因到具体模块，能给出每个切片分母与失败实例；漏追踪列为未验。ST-AH-73～83 的模块基线 |
+| T-AH-RAG-03 语义检索与重排对照。检索、QA | T-AH-RAG-02、T-AH-EV-02；相同的授权语料、预算及基线 | 小可见集先测精确 dense，再分别比较词法＋dense 融合及可选重排，按权限选择率核对实返数、召回、延迟和成本。记录模型与索引版本、离线重建及切回演练 | 提供保持词法或采用某个候选的对照证据和限制。该实验独立于故事板首轮联调。ST-AH-76、77、83 |
+| T-AH-EV-03 故事板联合接受。QA、画布、创作域、Agent | T-AH-EV-02；隔离产品流程对接 Plan31 的 T-CONV-23 | 共用同一流程记录“创意、方向、可编辑故事板、选镜与费用、预览和采用”。注入重排、手改冲突与断线，使用原回执核对目标、零或一笔订单、采用指针。真实试用关联 T-CONV-24 的实际作品和费用记录 | ST-AH-74、78、84 可从入口追到终态。隔离通过、真实供应商结果与导演明确采用分别留证；真实条件未具备时只关闭已验证范围 |
+
+**责任文件与验证入口。**
+
+- Agent 复用 `agent/src/pi-durable/context.ts`、`model-provider.ts`、`telemetry.ts`、`agent/src/business/transcript.ts` 与 `agent/src/sessions/runtime.ts`。基于现有 `compaction-context.test.ts`、`transcript.test.ts`、`delegation.test.ts`、`delivery-contract.test.ts` 扩充目标场景。验证命令包括 `pnpm --dir agent test`，涉及跨服务 DTO 时再跑 `pnpm --dir agent api:check`。
+- Go 建议由 `backend/creation/workspace` 持有共享项目约定。剧本、角色、画布、媒体领域提供各自的权威读口；`backend/internal/app/agent` 装配只读与正式写入合同，`backend/internal/platform/outbox` 驱动索引派生。原项目归档、作用域读取、原资金回执直接复用。领域测试与 `go -C backend test -race ./tests/workspace ./tests/agentbusiness ./tests/operation` 配合隔离 PG；如有数据库结构变动，维护唯一的 `backend/db/schema.sql` 并运行 `go -C backend test ./tests/db`。
+- Evals 从同一应用入口读取测试材料，以 Go／Vitest 做确定性断言，Promptfoo 为建议的案例驱动器。每次保留案例与策略版本、运行条件、授权变化时间、实际来源清单、目标修订、原订单及采用指针。按需保存可重放的脱敏夹具。缺少隔离数据库、模型、真实作品或人工接受时，分别标识缺失环节。
+
+**上线与停用语义。** 启用前在隔离数据核验建索引、修订和旧项目读取，缺少共享约定的存量项目返回空集合。若新检索路径异常，停用相应排序或索引版本，保留显式回源与原合同。若共享约定写入异常，暂缓新的确认并保留用户草稿，已确认回执和历史修订可查。若撤权或出站验证失败，停止受影响调用，核对原动作后恢复。业务回执、手工改稿与已采用样片应在这些演练中保持可查。

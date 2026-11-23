@@ -52,7 +52,7 @@ PRD 面向范围评审，说明用户价值、功能边界和验收条件。每�
 
 - [18-画布时间线](18-画布时间线.md)：唯一来源[设计31](../design/31-时间线即梦一致性设计.md)，由[Plan27](../plan/27-画布时间线实施计划.md)承接。
 
-- [19-完整创作Agent与Skill多Agent](19-完整创作Agent与Skill多Agent.md)：唯一来源设计32；12个用户故事、19项接受条件及24个场景，执行见Plan28。
+- [19-完整创作Agent与Skill多Agent](19-完整创作Agent与Skill多Agent.md)。唯一来源为设计32；创作对话的四个故事、验收与场景见[四模块 PRD](19-完整创作Agent与Skill多Agent.md#harness-module-stories)，执行见 Plan28。
 
 
 - [20-模型与供应商接入扩展](20-模型与供应商接入扩展.md)：唯一来源[设计33](../design/33-多设计模式驱动的模型与供应商接入扩展体系设计.md)，由[Plan29](../plan/29-模型与供应商接入扩展实施计划.md)承接；FR-AI-40、US-AIX-01～04、CASE-AIX-01～06。

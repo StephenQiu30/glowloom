@@ -725,9 +725,30 @@ MVP保留Go及独立Agent/Canvas，不新增LiteLLM网关或钱包。目录中`i
 
 工程测试、隔离基础设施、实际供应商与完整创作接受分别记录；未提交代码、镜像构建或健康页不能代替真实产物与计费验收。
 
+<a id="harness-module-backlog"></a>
+
+## 2026-11-23 Agent 上下文、项目检索、项目记忆与评测
+
+[需求19 的八项细分需求](workspace/content/requirement/19-完整创作Agent与Skill多Agent需求.md#src-agh-27) → [设计32 的模块合同](workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md#harness-module-contracts) → [PRD19 用户故事及验收](workspace/content/prd/19-完整创作Agent与Skill多Agent.md#harness-module-stories) → [Plan28 的十个任务](workspace/content/plan/28-完整创作Agent与Skill多Agent实施计划.md#harness-module-plan)。
+
+**当前状态。** 模块拆解与任务编排供评审，业务实施继续暂停。下表为建议依赖顺序。各行的牵头方为职责，工期、具名负责人和投产日期待团队安排。现有[技术选型实测](workspace/content/research/69-2026-11-23-创作Agent上下文与检索技术选型和评测.md)只支持隔离实验中的结论。
+
+| 批次 | 任务 | 牵头职责 | 依赖与本批出口 |
+| --- | --- | --- | --- |
+| A | T-AH-EV-01 | QA、Agent、Go | 先约定数据集及证据，提供可重置夹具、正反例和原回执读法 |
+| B，可并行 | T-AH-CTX-01、T-AH-RAG-01、T-AH-MEM-01 | Agent、Go 来源域、Go 项目域分别牵头 | 各依赖 A，交付一次调用清单、授权来源读口、项目约定发布和读取 |
+| C，可并行 | T-AH-CTX-02、T-AH-RAG-02、T-AH-MEM-02 | Agent 与 Go、索引 worker、项目域分别牵头 | 上下文消费 B 三项；索引只依赖 RAG-01，约定更正只依赖 MEM-01。交付撤权恢复、索引新鲜度及修订证据 |
+| D | T-AH-EV-02 | QA、产品、创作评审 | 消费 C 三项，形成可复现的模块基线；单列遗漏追踪与未验真实环境 |
+| E，条件实验 | T-AH-RAG-03 | 检索、QA | 词法基线完成后按授权语料和算力比较语义融合与重排，收益不足可保持词法 |
+| E，产品联调 | T-AH-EV-03 | QA、画布、创作域、Agent | 消费 EV-02 与 T-CONV-23 的隔离证据；真实试用另对照 T-CONV-24。联调可独立于 RAG-03 进行 |
+
+**本次评审要定的事项。** 产品与项目权限所有者确定哪些资料可自动检索、哪些角色可发布项目约定；数据所有者明确真实评测语料的使用范围；产品和运维确定质量提升与成本预算的判定口径。普通故事板写入归属由下方 T-CONV-15 独立评审，早期模块合同可先用固定镜头身份验证。
+
 <a id="canvas-storyboard-backlog"></a>
 
 ## 2026-11-23 普通画布 AI 对话与故事板
+
+> 2026-11-23 按用户最新更正暂停本队列实施。先评审 Agent Harness 的上下文组装、项目记忆、RAG 和验收范围。表内为原依赖顺序，T-CONV-15 在能力边界评审后恢复。[用户要求](workspace/content/requirement/19-完整创作Agent与Skill多Agent需求.md#src-agh-25) · [能力调研](workspace/content/research/68-2026-11-23-AgentHarness上下文记忆与RAG能力调研.md)。上下文、RAG、项目记忆、Evals 的评审稿已补入[设计32 §7.18](workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md#creative-context-design)，选型依据与两组隔离试验见[调研69](workspace/content/research/69-2026-11-23-创作Agent上下文与检索技术选型和评测.md)；本队列继续暂停实施。
 
 **目标**　用户从一句创意出发，在普通画布里得到可编辑故事板，并亲自确认一镜报价、预览和采用样片。调研与首版设计已推送 main（`077de034d`）。本队列编排新增工作，早期画布助手、通用对话和短剧的通过记录只覆盖各自既有范围。
 
@@ -735,7 +756,7 @@ MVP保留Go及独立Agent/Canvas，不新增LiteLLM网关或钱包。目录中`i
 
 | 批次 | 任务 | 优先级 | 牵头职责 | 依赖 | 状态／下一步 |
 | --- | --- | --- | --- | --- | --- |
-| A | T-CONV-15 普通故事板归属与身份 | P0 | Go 创作域，画布、Agent 会签 | 无 | 可开始。核对普通画布与分集镜头现有写入方，给出读写、冲突、权限及回执合同 |
+| A | T-CONV-15 普通故事板归属与身份 | P0 | Go 创作域，画布、Agent 会签 | 无 | 暂停实施，待 Agent Harness 能力边界评审。恢复后核对普通画布与分集镜头现有写入方，给出读写、冲突、权限及回执合同 |
 | B | T-CONV-16 画布进入本人 pi 会话 | P0 | 画布前端、Agent | T-CONV-15 | 待合同确定。打通首次发送、旧助手回看及原任务恢复 |
 | B | T-CONV-17 定方向与直接分镜 | P0 | Agent、Prompt | T-CONV-15 | 待合同确定。用模糊、明确、纯讨论与冲突输入准备可渲染草案 |
 | B | T-CONV-18 持久故事板 | P0 | Go 创作域、画布 | T-CONV-15 | 待合同确定。用固定草案验证一次写入、重排、修订冲突与重开 |
