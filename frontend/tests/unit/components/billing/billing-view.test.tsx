@@ -65,3 +65,42 @@ it("shows authorized exact balances and keeps restricted credits separate", () =
   expect(screen.getByText("1.2")).toBeTruthy();
   expect(screen.getByText(/限模型积分 2.1/)).toBeTruthy();
 });
+
+it("网关流水区分冻结、实扣、解冻与入账，并保留发生时间", () => {
+  const events = [
+    { kind: "grant", credits: "100" },
+    { kind: "freeze", credits: "-20" },
+    { kind: "settle", credits: "-8" },
+    { kind: "release", credits: "12" },
+    { kind: "redeem", credits: "0.00" },
+  ];
+  render(
+    <BillingView
+      section="transactions"
+      wallet={{
+        enabled: true,
+        history_available: true,
+        entries: events.map((entry) => ({
+          ...entry,
+          id: entry.kind,
+          created_at: "2026-11-23T02:42:00Z",
+          source: "workbench",
+          model_key: "candidate-00000000-0000-4000-8000-000000000001",
+        })),
+      }}
+    />,
+  );
+  for (const amount of [
+    "+100 积分",
+    "冻结 20 积分",
+    "−8 积分",
+    "返还 12 积分",
+    "0 积分",
+  ]) {
+    expect(screen.getByText(amount)).toBeTruthy();
+  }
+  expect(screen.queryByText(/candidate-/)).toBeNull();
+  expect(document.querySelector("time")?.textContent).toMatch(
+    /11[-/]23.*\d{2}:42/,
+  );
+});

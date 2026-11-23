@@ -22,7 +22,6 @@ import {
 import { AuthDialog, type AuthMode } from "@/components/auth/auth-dialog";
 import { authenticationReturn } from "@/components/auth/auth-return";
 import { pendingInvitation } from "@/components/auth/invitation-continuity";
-import { toast } from "@/components/feedback/notification";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -176,11 +175,6 @@ function Shell({
         onOpenNavigation={() => setOpenMobile(true)}
         onLogin={() => setAuth(true)}
         onLogout={() => setLogout(true)}
-        onFeature={(feature) =>
-          toast.info(`${feature}暂未开放`, {
-            id: "product-feature-unavailable",
-          })
-        }
       >
         <main
           id="main-content"

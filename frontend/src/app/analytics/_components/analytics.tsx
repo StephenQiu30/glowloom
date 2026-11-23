@@ -5,6 +5,7 @@ import {
   getBusinessAnalyticsCapability,
 } from "@/api/analytics";
 import { SessionGate, useSession } from "@/components/auth/session";
+import { HeaderNavigation } from "@/components/layout/header-navigation";
 import { PageLayout } from "@/components/layout/page-layout";
 import { ContentState } from "@/components/layout/content-state";
 import { Button } from "@/components/ui/button";
@@ -325,7 +326,7 @@ function AnalyticsContent() {
     { key: "project_id", label: "项目 UUID" },
   ];
   return (
-    <PageLayout screen="analytics" hideSearch>
+    <PageLayout screen="analytics">
       <section className="insights">
         <InsightsHeading
           active="analytics"
@@ -340,10 +341,14 @@ function AnalyticsContent() {
           refresh={() => setRevision((n) => n + 1)}
         />
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList>
-            <TabsTrigger value="creation">创作</TabsTrigger>
-            {admin ? <TabsTrigger value="business">经营</TabsTrigger> : null}
-          </TabsList>
+          <HeaderNavigation label="分析导航" active={tab}>
+            <TabsList variant="workspace" aria-label="分析类型">
+              <TabsTrigger value="creation">
+                {admin ? "创作" : "数据分析"}
+              </TabsTrigger>
+              {admin ? <TabsTrigger value="business">经营</TabsTrigger> : null}
+            </TabsList>
+          </HeaderNavigation>
           <TabsContent value="creation">
             <div className="flex flex-col gap-5">
               <Filters

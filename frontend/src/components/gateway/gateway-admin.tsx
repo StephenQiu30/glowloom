@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Layers, Plus, RefreshCw } from "lucide-react";
 import { useOptionalSession } from "@/components/auth/session";
 import { ContentState } from "@/components/layout/content-state";
-import { useAdminHeadingInNavigation } from "@/components/governance/admin-layout";
 import { useSpace } from "@/components/spaces/space-context";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -213,7 +213,6 @@ function GatewayConfigurationPage({
 
   const isProviders = entry === "providers";
   const title = isProviders ? "AI 服务接入" : "模型管理";
-  const titleInNavigation = useAdminHeadingInNavigation(title);
   const showListing =
     !inDetail && !stage && (tab !== "onboarding" || !candidate);
   const currentStep =
@@ -229,6 +228,18 @@ function GatewayConfigurationPage({
     selectedModel &&
     !configuration?.models.some(({ model }) => model.id === selectedModel);
 
+  const mobile = useIsMobile();
+  const createAction = showListing && configuration && (
+    <Button
+      type="button"
+      disabled={busy}
+      className="max-md:min-h-11"
+      onClick={startModel}
+    >
+      <Plus data-icon="inline-start" aria-hidden="true" />
+      {isProviders ? "新建接入" : "新建模型预设"}
+    </Button>
+  );
   return (
     <div
       className="mx-auto flex w-full max-w-6xl min-w-0 flex-col gap-5"
@@ -241,47 +252,27 @@ function GatewayConfigurationPage({
           <h1
             ref={heading}
             tabIndex={-1}
-            className={
-              titleInNavigation
-                ? "sr-only"
-                : "text-2xl font-semibold tracking-tight"
-            }
+            className="text-2xl font-semibold tracking-tight"
           >
             {title}
           </h1>
-          {!titleInNavigation ? (
-            <p className="mt-1 text-sm text-muted-foreground">
-              {isProviders
-                ? "管理供应商路由、采购费用和上线验证。"
-                : "管理模型预设、支持能力与销售定价。"}
-            </p>
-          ) : null}
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
             type="button"
             variant="outline"
             disabled={busy || loading}
-            className="max-md:min-h-11"
+            size="toolbar-icon"
+            aria-label="刷新配置"
+            title="刷新配置"
             onClick={() => {
               setLoading(true);
               refresh();
             }}
           >
             <RefreshCw data-icon="inline-start" aria-hidden="true" />
-            刷新配置
           </Button>
-          {showListing && configuration && (
-            <Button
-              type="button"
-              disabled={busy}
-              className="max-md:min-h-11"
-              onClick={startModel}
-            >
-              <Plus data-icon="inline-start" aria-hidden="true" />
-              {isProviders ? "新建接入" : "新建模型预设"}
-            </Button>
-          )}
+          {!mobile && createAction}
         </div>
       </div>
       {readError && (
@@ -325,6 +316,7 @@ function GatewayConfigurationPage({
               </TabsTrigger>
             ))}
           </TabsList>
+          {mobile && createAction && <div>{createAction}</div>}
           {currentStep !== undefined && (
             <OnboardingSteps current={currentStep} />
           )}

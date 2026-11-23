@@ -1,14 +1,8 @@
 "use client";
-import Link from "next/link";
 import type { AdminSection } from "@/components/layout/routes";
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useRef,
-  type ReactNode,
-} from "react";
-import { PageToolbar } from "@/components/layout/page-toolbar";
+import { createContext, useContext, type ReactNode } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { HeaderLinks } from "@/components/layout/header-navigation";
 import { PageHeader } from "@/components/canvas/runtime/components/layout/workspace/page-header";
 import { Toolbar, ToolbarGroup } from "@/components/ui/toolbar";
 import { Button } from "@/components/ui/button";
@@ -16,7 +10,12 @@ import { Button } from "@/components/ui/button";
 const adminLinks = [
   { id: "users", href: "/users", label: "用户管理" },
   { id: "teams", href: "/platform/teams", label: "团队管理" },
-  { id: "providers", href: "/providers", label: "AI 服务接入" },
+  {
+    id: "providers",
+    href: "/providers",
+    label: "AI 服务",
+    title: "AI 服务接入",
+  },
   { id: "models", href: "/models", label: "模型管理" },
   { id: "settings", href: "/platform/settings", label: "平台设置" },
   { id: "notifications", href: "/platform/notifications", label: "通知管理" },
@@ -25,61 +24,12 @@ const adminLinks = [
 ];
 const AdminNavigationTitle = createContext<string | undefined>(undefined);
 
-export function useAdminHeadingInNavigation(title: string) {
+function useAdminHeadingInNavigation(title: string) {
   return title === useContext(AdminNavigationTitle);
 }
 
-function revealNavigationLink(navigation: HTMLElement, link: Element) {
-  const viewport = navigation.getBoundingClientRect();
-  const item = link.getBoundingClientRect();
-  const offset =
-    Math.min(item.left - viewport.left, 0) ||
-    Math.max(item.right - viewport.right, 0);
-  if (offset) navigation.scrollLeft += offset;
-}
-
 export function AdminNavigation({ active }: { active: AdminSection }) {
-  const navigationRef = useRef<HTMLElement>(null);
-  useEffect(() => {
-    const navigation = navigationRef.current;
-    const current = navigation?.querySelector('[aria-current="page"]');
-    if (!navigation || !current) return;
-
-    const revealCurrent = () => revealNavigationLink(navigation, current);
-    revealCurrent();
-    if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(revealCurrent);
-    observer.observe(navigation);
-    return () => observer.disconnect();
-  }, [active]);
-
-  return (
-    <nav
-      ref={navigationRef}
-      aria-label="管理页面"
-      className="admin-navigation"
-      onFocusCapture={(event) =>
-        revealNavigationLink(event.currentTarget, event.target)
-      }
-    >
-      {adminLinks.map((link) => (
-        <Button
-          key={link.id}
-          variant={active === link.id ? "secondary" : "ghost"}
-          asChild
-          size="toolbar"
-          className="admin-navigation-link focus-visible:ring-inset"
-        >
-          <Link
-            href={link.href}
-            aria-current={active === link.id ? "page" : undefined}
-          >
-            {link.label}
-          </Link>
-        </Button>
-      ))}
-    </nav>
-  );
+  return <HeaderLinks active={active} label="管理页面" links={adminLinks} />;
 }
 /** Owned by the persistent application shell, outside route loading boundaries. */
 export function AdminWorkspace({
@@ -92,10 +42,10 @@ export function AdminWorkspace({
   const link = adminLinks.find((item) => item.id === active);
   return (
     <div className="admin-workspace">
-      <PageToolbar inHeader>
-        <AdminNavigation active={active} />
-      </PageToolbar>
-      <AdminNavigationTitle.Provider value={link?.heading ?? link?.label}>
+      {link && <AdminNavigation active={active} />}
+      <AdminNavigationTitle.Provider
+        value={link?.heading ?? link?.title ?? link?.label}
+      >
         {children}
       </AdminNavigationTitle.Provider>
     </div>
@@ -113,11 +63,12 @@ export function AdminHeading({
   detail?: boolean;
 }) {
   const inNavigation = useAdminHeadingInNavigation(title);
+  const mobile = useIsMobile();
   return (
     <PageHeader
       title={title}
       description={description}
-      hideTitle={inNavigation && !detail}
+      hideTitle={inNavigation && !detail && !mobile}
     >
       {children ? (
         <ToolbarGroup

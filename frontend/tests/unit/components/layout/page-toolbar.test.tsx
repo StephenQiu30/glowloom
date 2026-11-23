@@ -25,7 +25,6 @@ function ResponsiveHeader({ mobile }: { mobile: boolean }) {
         onOpenNavigation={vi.fn()}
         onLogin={vi.fn()}
         onLogout={vi.fn()}
-        onFeature={vi.fn()}
       />
       <PageToolbarContext.Provider value={host}>
         <PageToolbar inHeader>

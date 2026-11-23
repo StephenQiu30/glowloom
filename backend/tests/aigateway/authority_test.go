@@ -84,6 +84,11 @@ func TestTeamLedgerHistoryRequiresCurrentTeamAdministration(t *testing.T) {
 	entrypointSession(t, db, a)
 	entrypointProject(t, db, member)
 	entrypointSession(t, db, member)
+	runtime := &aigateway.Runtime{DB: db}
+	personal, err := runtime.Wallet(t.Context(), a, nil)
+	require.NoError(t, err)
+	require.Equal(t, "personal", personal.Payer)
+	require.Equal(t, "0", personal.RedeemedToday)
 	team, sid := uuid.New(), uuid.New()
 	require.NoError(t, db.Exec("INSERT INTO workspace.team(id,name,created_by) VALUES(?,'Ledger team',?)", team, a.ID).Error)
 	require.NoError(t, db.Exec("INSERT INTO workspace.creation_scope(id,kind,team_id,physical_scope_id) VALUES(?,'team',?,?)", sid, team, a.OrgID).Error)
@@ -118,16 +123,27 @@ func TestTeamLedgerHistoryRequiresCurrentTeamAdministration(t *testing.T) {
 	bills, err = adminStore.Bills(t.Context(), sid)
 	require.NoError(t, err)
 	require.Len(t, bills, 2)
-	runtime := &aigateway.Runtime{DB: db}
+	// Historical settlements stay in the ledger and fall outside today's spend.
+	require.NoError(t, db.Exec(`INSERT INTO ai.money_event
+		(id,scope_id,actor_id,request_id,event_key,kind,available_delta,held_delta,spent_delta,source_hash,created_at)
+		SELECT ?,scope_id,actor_id,request_id,'previous-day-settlement','settle',0,-7,7,source_hash,
+			date_trunc('day',transaction_timestamp(),'Asia/Shanghai') - interval '1 microsecond'
+		FROM ai.money_event WHERE scope_id=? AND kind='settle' LIMIT 1`, uuid.New(), sid).Error)
 	wallet, err := runtime.Wallet(t.Context(), member, nil)
 	require.NoError(t, err)
 	require.False(t, wallet.HistoryAvailable)
 	require.Empty(t, wallet.Entries)
 	require.Equal(t, "98", wallet.GeneralCredits)
+	require.Equal(t, "team", wallet.Payer)
+	require.Equal(t, "2", wallet.RedeemedToday)
 	adminWallet, err := runtime.Wallet(t.Context(), a, nil)
 	require.NoError(t, err)
 	require.True(t, adminWallet.HistoryAvailable)
 	require.NotEmpty(t, adminWallet.Entries)
+	previousPage, err := runtime.Wallet(t.Context(), a, &adminWallet.Entries[len(adminWallet.Entries)-1].ID)
+	require.NoError(t, err)
+	require.Empty(t, previousPage.Entries)
+	require.Equal(t, "2", previousPage.RedeemedToday)
 	require.NoError(t, db.Exec("UPDATE workspace.team_member SET role='member' WHERE team_id=? AND user_id=?", team, a.ID).Error)
 	wallet, err = runtime.Wallet(t.Context(), a, nil)
 	require.NoError(t, err)

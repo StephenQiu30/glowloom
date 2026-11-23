@@ -15,11 +15,7 @@ export function ProductNavigation({
   ...header
 }: Omit<
   ComponentProps<typeof ProductHeader>,
-  | "adminLayout"
-  | "assetLayout"
-  | "inlineNavigation"
-  | "showSearch"
-  | "showUtilities"
+  "inlineNavigation" | "showSearch" | "showUtilities"
 > & {
   screen: Screen;
   hideSearch?: boolean;
@@ -43,15 +39,23 @@ export function ProductNavigation({
           <ProductHeader
             {...header}
             floating={screen === "home" && !header.isMobile}
-            adminLayout={Boolean(adminSection)}
-            assetLayout={screen === "assets"}
-            inlineNavigation={screen === "billing"}
+            inlineNavigation={
+              Boolean(adminSection) ||
+              [
+                "billing",
+                "assets",
+                "explore",
+                "ai-tools",
+                "subjects",
+                "analytics",
+              ].includes(screen)
+            }
             showSearch={
               !hideSearch &&
               screen !== "home" &&
-              (!adminSection || Boolean(header.search))
+              (!adminSection || !header.isMobile || Boolean(header.search))
             }
-            showUtilities={!adminSection}
+            showUtilities={!adminSection || screen === "analytics"}
           />
           {children}
         </div>

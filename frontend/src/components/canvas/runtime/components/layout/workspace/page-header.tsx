@@ -4,11 +4,13 @@ import { cn } from "cn";
 /** Shared page geometry; actions retain their business permissions and state. */
 export function PageHeader({
   title,
+  className,
   hideTitle = false,
   description,
   children,
 }: {
   title: ReactNode;
+  className?: string;
   hideTitle?: boolean;
   description?: ReactNode;
   children?: ReactNode;
@@ -16,7 +18,7 @@ export function PageHeader({
   if (hideTitle && !description && !children)
     return <h1 className="sr-only">{title}</h1>;
   return (
-    <header className="workspace-page-header">
+    <header className={cn("workspace-page-header", className)}>
       {hideTitle ? <h1 className="sr-only">{title}</h1> : null}
       {!hideTitle || description ? (
         <div className="workspace-page-heading">

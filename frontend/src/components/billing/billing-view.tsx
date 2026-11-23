@@ -14,22 +14,28 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 import { billingSections, type BillingSection } from "./billing-sections";
 
-const entryLabels: Record<string, string> = {
-  issue: "入账",
-  hold: "冻结",
-  redeem: "实扣",
-  release: "解冻",
-  expire: "到期",
-  restore: "到期返还",
-  compensate: "消费返还",
-};
+import { payerLabel, presentMovement } from "./wallet-presentation";
 
-const sourceLabels: Record<string, string> = {
-  promotional: "赠送积分",
-  paid: "购买积分",
-  subscription: "会员积分",
-  expiry_return: "返还积分",
-};
+function TransactionRow({ entry }: { entry: API.WalletEntry }) {
+  const { label, purpose, amount, time } = presentMovement(entry);
+  return (
+    <li className="grid grid-cols-[minmax(0,1fr)_minmax(0,max-content)] items-start gap-x-3 gap-y-1 px-4 py-3 text-sm">
+      <span>{label}</span>
+      <span className="text-right wrap-anywhere tabular-nums">{amount}</span>
+      <span className="truncate text-muted-foreground" title={purpose}>
+        {purpose}
+      </span>
+      {time && (
+        <time
+          dateTime={entry.created_at}
+          className="text-right whitespace-nowrap text-muted-foreground tabular-nums"
+        >
+          {time}
+        </time>
+      )}
+    </li>
+  );
+}
 
 export function BillingView({
   section = "overview",
@@ -74,11 +80,7 @@ export function BillingView({
             <CardHeader>
               <CardTitle>可用积分</CardTitle>
               <CardDescription role="status">
-                {activeWallet
-                  ? activeWallet.payer === "team"
-                    ? "团队付款账户"
-                    : "个人付款账户"
-                  : balanceState}
+                {activeWallet ? payerLabel(activeWallet.payer) : balanceState}
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
@@ -127,33 +129,14 @@ export function BillingView({
           activeWallet?.history_available ? (
             <div className="flex max-w-2xl flex-col gap-4">
               {activeWallet.entries?.length ? (
-                <Card className="py-0">
+                <Card
+                  variant="flat"
+                  className="rounded-lg border bg-background py-0"
+                >
                   <CardContent className="px-0">
-                    <ul className="divide-y">
+                    <ul className="divide-y" aria-label="积分流水">
                       {activeWallet.entries.map((entry) => (
-                        <li
-                          key={entry.id}
-                          className="flex flex-wrap justify-between gap-2 p-4"
-                        >
-                          <div className="min-w-0">
-                            <p>{entryLabels[entry.kind ?? ""] ?? entry.kind}</p>
-                            <p className="break-words text-muted-foreground">
-                              {sourceLabels[entry.source ?? ""] ?? entry.source}
-                              {entry.model_key ? ` · ${entry.model_key}` : ""}
-                            </p>
-                          </div>
-                          <div className="min-w-0 text-right tabular-nums">
-                            <p className="break-words">{entry.credits} 积分</p>
-                            {entry.created_at && (
-                              <time
-                                dateTime={entry.created_at}
-                                className="text-muted-foreground"
-                              >
-                                {entry.created_at.slice(0, 10)}
-                              </time>
-                            )}
-                          </div>
-                        </li>
+                        <TransactionRow key={entry.id} entry={entry} />
                       ))}
                     </ul>
                   </CardContent>

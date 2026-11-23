@@ -712,14 +712,12 @@ it("asset header options stay stable under the shared login context", async () =
   expect(
     within(header).getByRole("tablist", { name: "资产来源" }),
   ).toBeTruthy();
-  expect(within(header).getByRole("button", { name: "批量操作" })).toBeTruthy();
-  expect(within(header).getByRole("button", { name: "账号菜单" })).toBeTruthy();
-  expect(within(header).queryByRole("button", { name: "企业服务" })).toBeNull();
-  const tools = within(header).getByRole("group", { name: "资产工具" });
   expect(
-    within(tools).getByRole("button", { name: "搜索本人生成历史" }),
+    within(header).getByRole("button", { name: "搜索本人生成历史" }),
   ).toBeTruthy();
-  expect(within(tools).getByRole("button", { name: "批量操作" })).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: "批量操作" }).closest("main"),
+  ).toBeTruthy();
   expect(within(header).getByRole("tab", { name: "生成历史" })).toBeTruthy();
   expect(within(header).getByRole("tab", { name: "画布" })).toBeTruthy();
   expect(within(header).getByRole("tab", { name: "短剧工作室" })).toBeTruthy();

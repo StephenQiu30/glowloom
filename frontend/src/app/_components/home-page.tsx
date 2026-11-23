@@ -1,8 +1,8 @@
-import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
 import { PageLayout } from "@/components/layout/page-layout";
 import { InspirationGallery } from "@/components/inspiration/gallery";
+import { ReferenceCover } from "@/components/inspiration/reference-cover";
 import type { CreationType } from "@/components/generation/creation-types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,13 +44,7 @@ export function HomePage({
           <div className="home-destination-grid">
             <Card variant="feature" className="home-feature">
               <CardContent>
-                <Image
-                  src="/design/reference/amber-perfume.png"
-                  alt=""
-                  fill
-                  loading="eager"
-                  sizes="(max-width: 767px) 100vw, 360px"
-                />
+                <ReferenceCover image="amber-perfume" />
               </CardContent>
               <CardHeader>
                 <CardTitle>探索创作灵感</CardTitle>
@@ -73,12 +67,7 @@ export function HomePage({
                   >
                     <Link href={href}>
                       <span className="home-destination-cover">
-                        <Image
-                          src={`/design/reference/${image}.png`}
-                          alt=""
-                          fill
-                          sizes="104px"
-                        />
+                        <ReferenceCover image={image} />
                       </span>
                       <span className="min-w-0 truncate">{title}</span>
                       <ArrowUpRight aria-hidden="true" data-icon="inline-end" />

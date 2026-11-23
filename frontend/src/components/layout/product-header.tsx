@@ -12,8 +12,6 @@ import {
 /** Figma ProductHeader 620:24416; shared by ordinary product pages. */
 export function ProductHeader({
   floating = false,
-  adminLayout = false,
-  assetLayout = false,
   inlineNavigation = false,
   toolbarRef,
   pageActionsRef,
@@ -28,11 +26,8 @@ export function ProductHeader({
   onOpenNavigation,
   onLogin,
   onLogout,
-  onFeature,
 }: {
   floating?: boolean;
-  adminLayout?: boolean;
-  assetLayout?: boolean;
   inlineNavigation?: boolean;
   toolbarRef?: Ref<HTMLDivElement>;
   pageActionsRef?: Ref<HTMLDivElement>;
@@ -55,21 +50,16 @@ export function ProductHeader({
   const common = (
     <ProductHeaderActions
       key="common"
-      assetLayout={assetLayout}
-      pageActions={assetLayout ? pageActions : undefined}
       search={search}
       showSearch={showSearch && !replaceBase}
       showUtilities={showUtilities}
       actor={actor}
       onLogin={onLogin}
       onLogout={onLogout}
-      onFeature={onFeature}
     />
   );
   return (
     <div
-      data-asset-layout={assetLayout || undefined}
-      data-admin-layout={adminLayout || undefined}
       data-inline-navigation={inlineNavigation || undefined}
       data-replace-base={replaceBase || undefined}
       className={floating ? "product-global-actions" : "product-header"}
@@ -94,9 +84,9 @@ export function ProductHeader({
           </>
         ) : null}
       </div>
-      {isMobile && !adminLayout && !inlineNavigation
-        ? [common, navigation, assetLayout ? null : pageActions]
-        : [navigation, assetLayout ? null : pageActions, common]}
+      {isMobile && !inlineNavigation
+        ? [common, navigation, pageActions]
+        : [navigation, pageActions, common]}
     </div>
   );
 }

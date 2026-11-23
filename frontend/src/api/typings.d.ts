@@ -7000,6 +7000,7 @@ declare namespace API {
   };
 
   type WalletEntry = {
+    capability?: string;
     created_at?: string;
     credits?: string;
     expires_at?: string;

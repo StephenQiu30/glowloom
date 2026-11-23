@@ -1,5 +1,6 @@
 "use client";
 import Image from "next/image";
+import { ReferenceCover } from "./reference-cover";
 import { useState, type ReactNode } from "react";
 import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -27,49 +28,49 @@ const homeCategories = [
 ];
 const works = [
   {
-    src: "cobalt-headphones.png",
+    image: "cobalt-headphones",
     title: "声色之间 · 产品概念",
     categories: ["广告营销", "平面设计"],
     scene: "品牌广告",
   },
   {
-    src: "moonlight-whale.png",
+    image: "moonlight-whale",
     title: "云海鲸歌 · 动画概念",
     categories: ["广告营销", "影视作品", "动画动漫"],
     scene: "品牌广告",
   },
   {
-    src: "amber-perfume.png",
+    image: "amber-perfume",
     title: "琥珀香氛 · 暖金时刻",
     categories: ["广告营销", "电商"],
     scene: "品牌广告",
   },
   {
-    src: "alpine-road.png",
+    image: "alpine-road",
     title: "山野公路 · 晨光旅程",
     categories: ["广告营销", "影视作品"],
     scene: "品牌广告",
   },
   {
-    src: "cobalt-headphones.png",
+    image: "cobalt-headphones",
     title: "声色之间 · 耳机广告",
     categories: ["广告营销", "平面设计"],
     scene: "社媒营销",
   },
   {
-    src: "moonlight-whale.png",
+    image: "moonlight-whale",
     title: "云海鲸歌 · 色彩参考",
     categories: ["广告营销", "影视作品", "动画动漫"],
     scene: "社媒营销",
   },
   {
-    src: "amber-perfume.png",
+    image: "amber-perfume",
     title: "琥珀香氛 · 日落篇",
     categories: ["广告营销", "电商"],
     scene: "社媒营销",
   },
   {
-    src: "citrus-still-life.png",
+    image: "citrus-still-life",
     title: "夏日柑橘 · 静物广告",
     categories: ["广告营销", "影视作品"],
     scene: "社媒营销",
@@ -82,7 +83,7 @@ const homeWorks = [
   { ...works[3], title: "山野公路 · 晨光旅程" },
 ];
 
-type Preview = { src: string; title: string };
+type Preview = { image: string; title: string };
 function InspirationPreview({
   item,
   children,
@@ -98,10 +99,10 @@ function InspirationPreview({
 
         <div className="relative aspect-video">
           <Image
-            src={`/design/reference/${item.src}`}
+            src={`/design/reference/${item.image}.png`}
             alt={item.title}
             fill
-            sizes="80vw"
+            unoptimized
             className="object-contain"
           />
         </div>
@@ -117,7 +118,8 @@ export function InspirationGallery({ searchQuery }: { searchQuery?: string }) {
     (w) =>
       (category === "精选" ||
         works.some(
-          (item) => item.src === w.src && item.categories.includes(category),
+          (item) =>
+            item.image === w.image && item.categories.includes(category),
         )) &&
       w.title.includes(query.trim()),
   );
@@ -178,13 +180,7 @@ function ReferenceGrid({ items }: { items: Preview[] }) {
             <Card variant="media" className="w-full">
               <CardContent>
                 <div className="work-cover">
-                  <Image
-                    src={`/design/reference/${w.src}`}
-                    alt=""
-                    fill
-                    loading="eager"
-                    sizes="(max-width: 767px) 45vw, (max-width: 1199px) 30vw, 22vw"
-                  />
+                  <ReferenceCover image={w.image} />
                 </div>
               </CardContent>
               <CardHeader>

@@ -8,11 +8,9 @@ import styles from "./explore.module.css";
 export function OverflowNavigation({
   label,
   children,
-  primary = false,
 }: {
   label: string;
   children: ReactNode;
-  primary?: boolean;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const viewport = useRef<HTMLDivElement>(null);
@@ -73,11 +71,7 @@ export function OverflowNavigation({
   };
 
   return (
-    <div
-      className={styles.navigation}
-      data-explore-navigation={primary || undefined}
-      ref={container}
-    >
+    <div className={styles.navigation} ref={container}>
       {edges.overflow && (
         <Button
           variant="ghost"

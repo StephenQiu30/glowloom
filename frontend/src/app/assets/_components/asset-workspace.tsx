@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useEffectEvent,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import Image from "next/image";
@@ -15,8 +8,9 @@ import { ChevronDown } from "lucide-react";
 import { useOptionalSession } from "@/components/auth/session";
 import { useSpace } from "@/components/spaces/space-context";
 import { useLoginDialog } from "@/components/layout/basic-layout";
+import { PageHeader } from "@/components/canvas/runtime/components/layout/workspace/page-header";
 import { PageLayout } from "@/components/layout/page-layout";
-import { PageToolbar } from "@/components/layout/page-toolbar";
+import { HeaderNavigation } from "@/components/layout/header-navigation";
 import { ContentState } from "@/components/layout/content-state";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
@@ -124,31 +118,12 @@ function WorkspaceScope({
 }) {
   const session = useOptionalSession();
   const space = useSpace();
-  const navigationRef = useRef<HTMLDivElement>(null);
-  const mountNavigation = useCallback((element: HTMLDivElement | null) => {
-    navigationRef.current = element;
-    const revealSelected = () =>
-      element
-        ?.querySelector<HTMLElement>('[aria-selected="true"]')
-        ?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
-    revealSelected();
-    if (element && typeof ResizeObserver !== "undefined") {
-      const observer = new ResizeObserver(revealSelected);
-      observer.observe(element);
-      return () => observer.disconnect();
-    }
-  }, []);
   const [view, setView] = useState(initialLocation?.view ?? initialView);
   const [kind, setKind] = useState<AssetKind>(initialLocation?.kind ?? "image");
   const [search, setSearch] = useState(initialLocation?.filters.search ?? "");
   const [filters, setFilters] = useState(
     initialLocation?.filters ?? defaultFilters,
   );
-  useEffect(() => {
-    navigationRef.current
-      ?.querySelector<HTMLElement>('[aria-selected="true"]')
-      ?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
-  }, [view]);
   const [referenceFilter, setReferenceFilter] = useState(
     initialLocation?.reference,
   );
@@ -254,53 +229,37 @@ function WorkspaceScope({
   };
   return (
     <PageLayout screen="assets" search={pageSearch} hideSearch={!authenticated}>
-      <header className="workspace-page-header mb-5">
-        <div className="workspace-page-heading">
-          <h1>资产和主体</h1>
-        </div>
-      </header>
+      <PageHeader title="资产和主体" className="mb-5">
+        {authenticated &&
+          view !== "subjects" &&
+          view !== "motion" &&
+          view !== "marketing" && (
+            <div ref={setToolbarTarget} className="min-w-0" />
+          )}
+      </PageHeader>
       <Tabs
         value={view}
         onValueChange={(value) => changeView(value as AssetSource)}
         className="asset-workspace-tabs gap-6"
       >
-        <PageToolbar inHeader>
-          <div
-            data-asset-toolbar
-            ref={mountNavigation}
-            className="asset-category-navigation w-full min-w-0 overflow-x-auto"
+        <HeaderNavigation label="资产分类" active={view}>
+          <TabsList
+            variant="workspace"
+            aria-label="资产来源"
+            className="min-w-max"
           >
-            <TabsList
-              variant="workspace"
-              aria-label="资产来源"
-              className="min-w-max"
-            >
-              {sources.map((source) => (
-                <TabsTrigger
-                  key={source.id}
-                  value={source.id}
-                  className="transition-[color,background-color,box-shadow] motion-reduce:transition-none"
-                  disabled={locked}
-                >
-                  {source.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </div>
-        </PageToolbar>
-        {authenticated &&
-          view !== "subjects" &&
-          view !== "motion" &&
-          view !== "marketing" && (
-            <PageToolbar inHeader slot="actions">
-              <div
-                className="flex min-w-0 flex-wrap items-center gap-1"
-                data-asset-page-actions
+            {sources.map((source) => (
+              <TabsTrigger
+                key={source.id}
+                value={source.id}
+                className="transition-[color,background-color,box-shadow] motion-reduce:transition-none"
+                disabled={locked}
               >
-                <div ref={setToolbarTarget} className="min-w-0" />
-              </div>
-            </PageToolbar>
-          )}
+                {source.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </HeaderNavigation>
         {authenticated && view !== "subjects" && (
           <div aria-label="资产筛选" className="asset-filter-bar">
             {(view === "history" ||
@@ -460,7 +419,6 @@ function WorkspaceScope({
                 actorID={session.actor.id}
                 scopeID={space.selected.id}
                 query={filters.search}
-                toolbarInHeader
                 embedded
                 onLockChange={setLocked}
                 onBatchMode={setBatch}

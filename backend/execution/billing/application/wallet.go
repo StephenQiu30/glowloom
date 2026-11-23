@@ -36,6 +36,7 @@ type WalletEntry struct {
 	Kind        string     `json:"kind"`
 	Credits     string     `json:"credits"`
 	Source      string     `json:"source"`
+	Capability  string     `json:"capability,omitempty"`
 	ModelKey    *string    `json:"model_key,omitempty"`
 	OperationID *uuid.UUID `json:"operation_id,omitempty"`
 	ExpiresAt   *time.Time `json:"expires_at,omitempty"`

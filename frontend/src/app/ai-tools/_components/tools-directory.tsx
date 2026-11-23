@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import { useOptionalSession } from "@/components/auth/session";
 import { useLoginDialog } from "@/components/layout/basic-layout";
+import { HeaderNavigation } from "@/components/layout/header-navigation";
+import { PageHeader } from "@/components/canvas/runtime/components/layout/workspace/page-header";
 import { PageLayout } from "@/components/layout/page-layout";
 import { AssetCreateProject } from "@/components/projects/asset-create-project";
 import { useSpace } from "@/components/spaces/space-context";
@@ -90,30 +92,24 @@ export function ToolsDirectory() {
   }
 
   return (
-    <PageLayout screen="ai-tools" hideSearch fullBleed>
+    <PageLayout screen="ai-tools" fullBleed>
       <div className="tool-directory">
-        <header className="workspace-page-header">
-          <div className="workspace-page-heading">
-            <h1>AI 工具</h1>
-          </div>
-        </header>
+        <PageHeader title="AI 工具" />
         {error && (
           <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
         <Tabs value={active} onValueChange={setActive} className="gap-8">
-          <TabsList
-            aria-label="分类"
-            variant="surface"
-            className="max-w-full flex-wrap justify-start"
-          >
-            {tabs.map((name) => (
-              <TabsTrigger key={name} value={name} className="px-3 md:px-4">
-                {name}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+          <HeaderNavigation label="工具分类" active={active}>
+            <TabsList aria-label="分类" variant="workspace">
+              {tabs.map((name) => (
+                <TabsTrigger key={name} value={name}>
+                  {name}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </HeaderNavigation>
           {tabs.map((tab) => (
             <TabsContent key={tab} value={tab} className="flex flex-col gap-7">
               {(tab === "全部"

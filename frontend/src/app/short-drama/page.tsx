@@ -5,7 +5,7 @@ export const metadata = { title: "短剧工作室 · 织光" };
 
 export default function Page() {
   return (
-    <PageLayout screen="short-drama" hideSearch>
+    <PageLayout screen="short-drama">
       <ShortDramaStudio />
     </PageLayout>
   );

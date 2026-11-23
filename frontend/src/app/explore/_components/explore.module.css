@@ -24,46 +24,9 @@
 .arrow {
   flex: none;
 }
-.categories {
-  gap: clamp(6px, 1cqi, 12px);
-  justify-content: flex-start;
-}
-.categories [data-state="active"] {
-  background: var(--primary);
-  color: var(--primary-foreground);
-}
 .sceneList {
   gap: clamp(6px, 1cqi, 12px);
 }
 .scenes {
   margin-bottom: clamp(16px, 2cqi, 24px);
-}
-@media (max-width: 767px) {
-  :global(.product-header):has(.navigation[data-explore-navigation]):has(
-      [data-explore-search]
-    )
-    :global(.product-header-actions) {
-    display: contents;
-  }
-  :global(.product-header):has(.navigation[data-explore-navigation]):has(
-      [data-explore-search]
-    )
-    :global([data-account-actions]) {
-    grid-column: 2;
-    grid-row: 1;
-    justify-self: end;
-  }
-  :global(.product-header):has(.navigation[data-explore-navigation])
-    :global([data-explore-search]) {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    width: 100%;
-  }
-  :global(.product-header):has(.navigation[data-explore-navigation]):has(
-      [data-explore-search]
-    )
-    :global(.product-header-toolbar) {
-    grid-column: 1 / -1;
-    grid-row: 3;
-  }
 }

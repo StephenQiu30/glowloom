@@ -2,9 +2,10 @@
 
 import { useId, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import Image from "next/image";
+import { ReferenceCover } from "@/components/inspiration/reference-cover";
 import Link from "next/link";
 import { Plus, X } from "lucide-react";
+import { PageHeader } from "@/components/canvas/runtime/components/layout/workspace/page-header";
 import { PageLayout } from "@/components/layout/page-layout";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -57,18 +58,6 @@ const marketingTools = [
   "妆造焕新",
   "图片复刻",
 ];
-function Cover({ image }: { image: string }) {
-  return (
-    <Image
-      src={`/design/reference/${image}.png`}
-      alt=""
-      fill
-      loading="eager"
-      sizes="(max-width: 767px) 46vw, 370px"
-      className="object-cover"
-    />
-  );
-}
 function Parameter({
   label,
   value,
@@ -150,15 +139,12 @@ function StudioWorkspace({
     if (scopeID) setSource(target);
   }
   return (
-    <PageLayout
-      screen={marketing ? "marketing-studio" : "motion-studio"}
-      hideSearch
-    >
+    <PageLayout screen={marketing ? "marketing-studio" : "motion-studio"}>
       <div className="studio-workspace">
-        <header className="workspace-page-header studio-heading">
-          <div className="workspace-page-heading">
-            <h1>{marketing ? "营销工作室" : "动效工作室"}</h1>
-          </div>
+        <PageHeader
+          title={marketing ? "营销工作室" : "动效工作室"}
+          className="studio-heading"
+        >
           <Button variant="secondary" asChild>
             <Link
               href={
@@ -168,7 +154,7 @@ function StudioWorkspace({
               查看资产
             </Link>
           </Button>
-        </header>
+        </PageHeader>
         <form
           className="studio-composer"
           onSubmit={(event) => event.preventDefault()}
@@ -324,7 +310,7 @@ function StudioWorkspace({
                   aria-pressed={style === item.title}
                 >
                   <span className="studio-template-cover">
-                    <Cover image={item.image} />
+                    <ReferenceCover image={item.image} />
                   </span>
                   <span className="resource-card-title">{item.title}</span>
                 </Button>
@@ -379,7 +365,7 @@ function StudioWorkspace({
                 }}
               >
                 <span className="studio-template-cover">
-                  <Cover image={item.image} />
+                  <ReferenceCover image={item.image} />
                 </span>
                 <span>{item.title}</span>
               </Button>

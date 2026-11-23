@@ -2,8 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { Fragment, useRef, useState } from "react";
+import { PageHeader } from "@/components/canvas/runtime/components/layout/workspace/page-header";
 import { PageLayout } from "@/components/layout/page-layout";
-import { PageToolbar } from "@/components/layout/page-toolbar";
+import { HeaderNavigation } from "@/components/layout/header-navigation";
 import { ContentState } from "@/components/layout/content-state";
 import { Button } from "@/components/ui/button";
 import { ExploreReferenceExamples } from "@/components/inspiration/gallery";
@@ -42,11 +43,7 @@ export function ExplorePage({ initialQuery = "" }: { initialQuery?: string }) {
         placeholder: "搜索",
       }}
     >
-      <div className="workspace-page-header mb-2">
-        <div className="workspace-page-heading">
-          <h1>探索</h1>
-        </div>
-      </div>
+      <PageHeader title="探索" className="mb-2" />
       <Tabs
         value={category.id}
         onValueChange={(id) => {
@@ -58,32 +55,26 @@ export function ExplorePage({ initialQuery = "" }: { initialQuery?: string }) {
             });
         }}
       >
-        <PageToolbar inHeader>
-          <OverflowNavigation label="探索分类" primary>
-            <TabsList
-              variant="workspace"
-              className={styles.categories}
-              aria-label="探索分类"
-            >
-              {exploreCategories.map((item) => (
-                <Fragment key={item.id}>
-                  {item.id === "skill" && (
-                    <Separator
-                      orientation="vertical"
-                      className="mx-1 h-3.5 shrink-0"
-                    />
-                  )}
-                  <TabsTrigger
-                    value={item.id}
-                    ref={item.id === "featured" ? featuredTab : undefined}
-                  >
-                    {item.label}
-                  </TabsTrigger>
-                </Fragment>
-              ))}
-            </TabsList>
-          </OverflowNavigation>
-        </PageToolbar>
+        <HeaderNavigation label="探索导航" active={category.id}>
+          <TabsList variant="workspace" aria-label="探索分类">
+            {exploreCategories.map((item) => (
+              <Fragment key={item.id}>
+                {item.id === "skill" && (
+                  <Separator
+                    orientation="vertical"
+                    className="mx-1 h-3.5 shrink-0"
+                  />
+                )}
+                <TabsTrigger
+                  value={item.id}
+                  ref={item.id === "featured" ? featuredTab : undefined}
+                >
+                  {item.label}
+                </TabsTrigger>
+              </Fragment>
+            ))}
+          </TabsList>
+        </HeaderNavigation>
         <TabsContent value={category.id}>
           {category.scenes.length > 0 && (
             <div className={styles.scenes}>

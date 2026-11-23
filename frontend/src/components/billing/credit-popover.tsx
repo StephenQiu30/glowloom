@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Coins, Sparkle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { payerLabel } from "./wallet-presentation";
 import { useCreditWallet } from "./use-credit-wallet";
 import {
   Popover,
@@ -56,8 +57,7 @@ export function CreditPopover({
           <>
             <p className="font-medium">可用积分 {wallet.general_credits}</p>
             <p className="text-sm text-muted-foreground">
-              冻结 {wallet.held_credits} 积分 ·{" "}
-              {wallet.payer === "team" ? "团队付款账户" : "个人付款账户"}
+              冻结 {wallet.held_credits} 积分 · {payerLabel(wallet.payer)}
             </p>
           </>
         ) : (

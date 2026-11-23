@@ -12,7 +12,6 @@ export type ProductAccountActionsProps = {
   actor?: API.EmailSessionView["actor"];
   onLogin: () => void;
   onLogout: () => void;
-  onFeature: (feature: string) => void;
 };
 
 /** Figma ProductAccountActions 3165:58374; one account area across product routes. */
@@ -29,7 +28,11 @@ export function ProductAccountActions({
     </Button>
   );
   return (
-    <ToolbarGroup data-account-actions aria-label="通知与账号">
+    <ToolbarGroup
+      data-account-actions
+      data-guest-account={!actor || undefined}
+      aria-label="通知与账号"
+    >
       {!actor ? <ThemeToggle toolbar /> : null}
       <NotificationBell onLogin={onLogin} />
       {actor ? (
