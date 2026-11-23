@@ -1,12 +1,29 @@
 import type { TranscriptContext } from '@earendil-works/pi-ai';
+
+type ContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } };
+
+interface BusinessMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string | ContentPart[];
+  tool_call_id?: string;
+  tool_calls?: {
+    id: string;
+    type: 'function';
+    function: { name: string; arguments: string };
+  }[];
+}
+
 export function businessTranscript(
   context: Pick<TranscriptContext, 'messages'>,
+  dataSection?: string,
 ) {
   const tools = new Map<
     string,
     { name: string; description: string; parameters: unknown }
   >();
-  const messages: Record<string, unknown>[] = [];
+  const messages: BusinessMessage[] = [];
   const system: string[] = [];
   const sections = new Map<string, string>();
   for (const msg of context.messages) {
@@ -37,7 +54,7 @@ export function businessTranscript(
         .filter((c) => c.type === 'toolCall')
         .map((c) => ({
           id: c.id,
-          type: 'function',
+          type: 'function' as const,
           function: { name: c.name, arguments: JSON.stringify(c.arguments) },
         }));
       messages.push({
@@ -57,7 +74,7 @@ export function businessTranscript(
       const images = msg.content
         .filter((c) => c.type === 'image')
         .map((c) => ({
-          type: 'image_url',
+          type: 'image_url' as const,
           image_url: { url: `data:${c.mimeType};base64,${c.data}` },
         }));
       if (images.length)
@@ -75,7 +92,7 @@ export function businessTranscript(
       const content =
         typeof msg.content === 'string'
           ? msg.content
-          : msg.content.map((c) =>
+          : msg.content.map<ContentPart>((c) =>
               c.type === 'text'
                 ? { type: 'text', text: c.text }
                 : {
@@ -86,6 +103,14 @@ export function businessTranscript(
       messages.push({ role: 'user', content });
     }
   }
+  const data =
+    dataSection === undefined ? undefined : sections.get(dataSection);
+  if (dataSection !== undefined) sections.delete(dataSection);
+  if (data)
+    messages.unshift({
+      role: 'user',
+      content: 'Current creative session state:\n' + data,
+    });
   const prompt = [...system, ...sections.values()];
   if (prompt.length)
     messages.unshift({ role: 'system', content: prompt.join('\n\n') });

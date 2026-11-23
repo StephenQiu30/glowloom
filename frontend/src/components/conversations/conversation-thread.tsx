@@ -36,12 +36,14 @@ export function ConversationThread({
   projectID,
   writable = false,
   onUseReply,
+  onDraftProjectMemory,
   useReplyLabel = "作为剧本草稿",
 }: {
   conversation: ConversationController;
   projectID: string;
   writable?: boolean;
   onUseReply?: (text: string) => void;
+  onDraftProjectMemory?: (text: string) => void;
   useReplyLabel?: string;
 }) {
   const box = useRef<HTMLDivElement>(null),
@@ -268,6 +270,17 @@ export function ConversationThread({
                         </p>
                       ) : null}
                       <div className="mt-2 flex flex-wrap gap-1">
+                        {onDraftProjectMemory &&
+                          state.status === "completed" &&
+                          message.text.trim() && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => onDraftProjectMemory(message.text)}
+                            >
+                              草拟项目约定
+                            </Button>
+                          )}
                         {onUseReply &&
                           state.status === "completed" &&
                           message.text.trim() && (
@@ -413,7 +426,9 @@ export function ConversationThread({
                       暂停以核对原任务
                     </Button>
                   ) : null}
-                  {terminalStatuses.has(state.status) && s.input ? (
+                  {terminalStatuses.has(state.status) &&
+                  s.input &&
+                  state.failure?.code !== "project_memory_changed" ? (
                     <Button
                       variant="outline"
                       disabled={
@@ -437,6 +452,11 @@ export function ConversationThread({
                   "conversation_reference_unavailable" ? (
                     <p className="text-sm text-muted-foreground">
                       历史参考当前不可访问，创作已停止。请核对权限，或新建对话继续。
+                    </p>
+                  ) : null}
+                  {state.failure?.code === "project_memory_changed" ? (
+                    <p className="text-sm text-muted-foreground">
+                      项目约定已变更。请新建会话，按当前约定继续创作。
                     </p>
                   ) : null}
                   {!s.execution_available ? (

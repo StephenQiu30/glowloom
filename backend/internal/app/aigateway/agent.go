@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	workspacepg "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
 	pg "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/application"
 	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
@@ -17,6 +18,8 @@ import (
 	agent "github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 )
+
+var errProjectMemoryChanged = errors.New("project memory changed")
 
 // AgentModel uses the approved Agent grant as a caller authority, not as a wallet.
 func (r *Runtime) AgentModel(ctx context.Context, scope agent.Scope, id uuid.UUID, raw json.RawMessage, maxMicros int64) (agent.CallResult, error) {
@@ -38,6 +41,15 @@ func (r *Runtime) AgentModel(ctx context.Context, scope agent.Scope, id uuid.UUI
 		}
 		if err := projectScope(tx, sid, pid); err != nil {
 			return err
+		}
+		if input.ProjectMemoryVersion != "" {
+			memories, err := workspacepg.ReadActiveProjectMemories(tx, pid)
+			if err != nil {
+				return err
+			}
+			if workspacepg.ProjectMemoryVersion(memories) != input.ProjectMemoryVersion {
+				return errProjectMemoryChanged
+			}
 		}
 		var approved struct {
 			RootRunID    uuid.UUID
@@ -106,6 +118,9 @@ func (r *Runtime) AgentModel(ctx context.Context, scope agent.Scope, id uuid.UUI
 		if errors.Is(err, domain.ErrUnknown) || readErr != nil || durable == 1 {
 			return agent.CallResult{Status: agent.CallStatusUnknown, Result: json.RawMessage(`{"code":"ai_result_unknown"}`)}, nil
 		}
+		if errors.Is(err, errProjectMemoryChanged) {
+			return agentFailure("project_memory_changed"), nil
+		}
 		return agentFailure("model_admission_failed"), nil
 	}
 	return agentResult(record, input.ModelKey, model.Protocol)
@@ -140,11 +155,12 @@ func agentFailure(code string) agent.CallResult {
 }
 
 type agentInput struct {
-	ModelKey  string            `json:"model_key"`
-	ReleaseID string            `json:"release_id"`
-	MaxTokens int               `json:"max_tokens"`
-	Messages  []json.RawMessage `json:"messages"`
-	Tools     []struct {
+	ProjectMemoryVersion string            `json:"project_memory_version,omitempty"`
+	ModelKey             string            `json:"model_key"`
+	ReleaseID            string            `json:"release_id"`
+	MaxTokens            int               `json:"max_tokens"`
+	Messages             []json.RawMessage `json:"messages"`
+	Tools                []struct {
 		Name        string          `json:"name"`
 		Description string          `json:"description"`
 		Parameters  json.RawMessage `json:"parameters"`

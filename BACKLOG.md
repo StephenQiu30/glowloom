@@ -731,7 +731,11 @@ MVP保留Go及独立Agent/Canvas，不新增LiteLLM网关或钱包。目录中`i
 
 [需求19 的八项细分需求](workspace/content/requirement/19-完整创作Agent与Skill多Agent需求.md#src-agh-27) → [设计32 的模块合同](workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md#harness-module-contracts) → [PRD19 用户故事及验收](workspace/content/prd/19-完整创作Agent与Skill多Agent.md#harness-module-stories) → [Plan28 的十个任务](workspace/content/plan/28-完整创作Agent与Skill多Agent实施计划.md#harness-module-plan)。
 
-**当前状态。** 模块拆解与任务编排供评审，业务实施继续暂停。下表为建议依赖顺序。各行的牵头方为职责，工期、具名负责人和投产日期待团队安排。现有[技术选型实测](workspace/content/research/69-2026-11-23-创作Agent上下文与检索技术选型和评测.md)只支持隔离实验中的结论。
+**当前状态。** 用户授权开始 Agent 实施，调研及四模块合同基线 `d290ce7da` 已推送并核对远端 main。先交付上下文模型出站及首批评测证据。工期、具名负责人和投产日期待团队安排。[用户授权](workspace/content/requirement/19-完整创作Agent与Skill多Agent需求.md#src-agh-28)
+
+**首批范围。** T-AH-CTX-01 已接入出站角色隔离和上下文窗口预检。T-AH-CTX-02 已接上显式引用的送出前复核。T-AH-EV-01 在真实 Pi 和隔离 PostgreSQL 记录超限、撤权、资料角色和模型调用计数。镜头身份与修订定位、完整评测集、检索及项目约定仍沿下表推进。
+
+**验证。** Agent 构建、类型检查、Lint、格式检查通过。在从规范性 schema 和公共数据新建的两套隔离 PostgreSQL 数据库中，Vitest 全量串行运行通过 34 个文件、199 项，包含真实 SIGKILL 和原回执恢复。早先运行出现恢复测试超时，单独重跑和最后一轮全量通过。模型与媒体调用使用隔离夹具。
 
 | 批次 | 任务 | 牵头职责 | 依赖与本批出口 |
 | --- | --- | --- | --- |
@@ -742,13 +746,17 @@ MVP保留Go及独立Agent/Canvas，不新增LiteLLM网关或钱包。目录中`i
 | E，条件实验 | T-AH-RAG-03 | 检索、QA | 词法基线完成后按授权语料和算力比较语义融合与重排，收益不足可保持词法 |
 | E，产品联调 | T-AH-EV-03 | QA、画布、创作域、Agent | 消费 EV-02 与 T-CONV-23 的隔离证据；真实试用另对照 T-CONV-24。联调可独立于 RAG-03 进行 |
 
+**项目约定实施。** 项目级发布、更正、撤回、原动作幂等、修订历史、同项目继承和模型受理版本检查已接入常规入口。项目上下文包含权威项目设置、指定画布身份、脚本状态和有效约定。会话引用的项目约定失效时，引导新开会话。场次／单镜局部例外及普通画布镜头身份继续由故事板合同承接，RAG 索引和完整评测集沿原队列。新表在部署前由管理员按规范性 schema 核对并受控变更。[实现合同](workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md#project-memory-runtime)
+
+**项目约定验证。** 使用规范性 schema 初始化隔离 PostgreSQL。Go 项目记忆和真实模型网关准入专项通过 Race 验证，覆盖成员共享、归档只读、撤权、版本竞争、回执重放和过期请求零供应商调用。Agent 在全新测试库串行通过 34 个测试文件、200 项，前端对话与记忆面板 15 项通过。更广的 Workspace 测试出现对象存储夹具缺失及项目预算期望不一致，未列为通过。未验证已部署浏览器环境和真实供应商。
+
 **本次评审要定的事项。** 产品与项目权限所有者确定哪些资料可自动检索、哪些角色可发布项目约定；数据所有者明确真实评测语料的使用范围；产品和运维确定质量提升与成本预算的判定口径。普通故事板写入归属由下方 T-CONV-15 独立评审，早期模块合同可先用固定镜头身份验证。
 
 <a id="canvas-storyboard-backlog"></a>
 
 ## 2026-11-23 普通画布 AI 对话与故事板
 
-> 2026-11-23 按用户最新更正暂停本队列实施。先评审 Agent Harness 的上下文组装、项目记忆、RAG 和验收范围。表内为原依赖顺序，T-CONV-15 在能力边界评审后恢复。[用户要求](workspace/content/requirement/19-完整创作Agent与Skill多Agent需求.md#src-agh-25) · [能力调研](workspace/content/research/68-2026-11-23-AgentHarness上下文记忆与RAG能力调研.md)。上下文、RAG、项目记忆、Evals 的评审稿已补入[设计32 §7.18](workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md#creative-context-design)，选型依据与两组隔离试验见[调研69](workspace/content/research/69-2026-11-23-创作Agent上下文与检索技术选型和评测.md)；本队列继续暂停实施。
+> 2026-11-23 已开始 Agent 首个实施切片。画布队列继续按自身归属及接口依赖安排，T-CONV-15 负责确认普通故事板写入方及镜头身份。[Agent 首批任务](#harness-module-backlog)
 
 **目标**　用户从一句创意出发，在普通画布里得到可编辑故事板，并亲自确认一镜报价、预览和采用样片。调研与首版设计已推送 main（`077de034d`）。本队列编排新增工作，早期画布助手、通用对话和短剧的通过记录只覆盖各自既有范围。
 

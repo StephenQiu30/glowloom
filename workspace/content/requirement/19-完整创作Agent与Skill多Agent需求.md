@@ -262,3 +262,25 @@ SRC-AGH-22 用户原文：
 | AGH-054 | 产品和工程共同判断语义检索、重排或记忆策略是否值得采用 | 在同一封存集对照质量、延迟、成本及作品接受，报告样本量和未验证边界 |
 
 **待决定的产品规则。** 产品与项目权限所有者确认默认可索引资料以及共享约定的发布角色；数据所有者确认真实语料保留、脱敏与出站范围；产品与运维按实测确定质量增益和成本预算。评审入口见[服务合同](../design/32-完整创作AgentHarness与Skill多Agent架构设计.md#harness-module-contracts)，后续分别由 PRD19 与 Plan28 承接。
+
+
+<a id="src-agh-28"></a>
+
+## SRC-AGH-28 提交基线并开始 Agent 设计实施
+
+2026-11-23 用户原文
+
+> 先将代码代码提交到main并推送，然后开始落实我们的agent服务的设计
+
+用户授权先提交并推送本轮 Agent 相关基线，再启动 Agent 服务设计实施。按 [Plan28 四模块任务](../plan/28-完整创作Agent与Skill多Agent实施计划.md#harness-module-plan)推进，产品规则仍按 [SRC-AGH-27](#src-agh-27) 标记确认与待定。
+
+
+<a id="src-agh-29"></a>
+
+## SRC-AGH-29 落实 Agent 项目上下文与项目记忆
+
+2026-11-23 用户原文
+
+> 先阅读一下我们的workspace下的相关服务的设计，先对我们的agent服务进行完整，保证我们的项目的上下文以及项目记忆可以完整的落地
+
+沿 [设计32 §7.18](../design/32-完整创作AgentHarness与Skill多Agent架构设计.md#creative-context-design) 和 [Plan28 §11](../plan/28-完整创作Agent与Skill多Agent实施计划.md#harness-module-plan) 实施。复用现行项目成员权限、画布和脚本来源、Pi 会话和 Go 模型受理回执。普通画布的镜头级作用范围依赖稳定镜头身份和写入归属合同。

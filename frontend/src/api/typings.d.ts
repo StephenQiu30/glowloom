@@ -3353,6 +3353,20 @@ declare namespace API {
     cursor?: string;
   };
 
+  type listProjectMemoryHistoryParams = {
+    /** 项目 UUID */
+    pid: string;
+    /** 约定名称 */
+    key: string;
+    /** 修订号上界 */
+    before?: number;
+  };
+
+  type listProjectMemoryParams = {
+    /** 项目 UUID */
+    pid: string;
+  };
+
   type listProjectModelsParams = {
     /** 项目UUID */
     project_id: string;
@@ -4596,6 +4610,28 @@ declare namespace API {
     name?: string;
   };
 
+  type ProjectMemory = {
+    confirmed_at?: string;
+    confirmed_by?: string;
+    id?: string;
+    key?: string;
+    project_id?: string;
+    revision?: number;
+    statement?: string;
+    withdrawn?: boolean;
+  };
+
+  type ProjectMemoryChange = {
+    expected_revision: number;
+    statement?: string;
+    withdraw?: boolean;
+  };
+
+  type ProjectMemoryView = {
+    can_edit?: boolean;
+    items?: ProjectMemory[];
+  };
+
   type ProjectRequest = {
     project_id?: string;
   };
@@ -4731,6 +4767,13 @@ declare namespace API {
   type publishPlatformNotificationParams = {
     /** Announcement UUID */
     id: string;
+  };
+
+  type publishProjectMemoryParams = {
+    /** 项目 UUID */
+    pid: string;
+    /** 约定名称 */
+    key: string;
   };
 
   type PurgeControlRequest = {

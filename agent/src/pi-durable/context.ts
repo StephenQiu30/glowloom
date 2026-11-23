@@ -5,6 +5,10 @@ import {
 import { StateDoc } from './docs.js';
 import type { FrozenManifest } from '../sessions/manifest.js';
 
+export const creativeContextSection = 'glowloom_constraints';
+export const creativeContextInstructions =
+  'For production goals, prepare formal canvas sources, use original operation receipts, and deliver reviewed video and project artifacts. When an original generation is pending, end this turn; the host waits and resumes it without polling the model. Never submit a replacement generation to recover an original one. Only explicitly adopted specialist result and source references may support further work. A failed specialist is a local failure; redo only that task with redo_of and adopted sources. Skill scripts require the authorized Go isolation tool; never execute host code. Plans and specialist prose never establish business approval or media completion.';
+
 /** Official prompt sections reread the typed document after compaction; no synthetic summary/checkpoint. */
 export function contextExtension(
   manifest: Readonly<FrozenManifest>,
@@ -14,7 +18,7 @@ export function contextExtension(
     name: 'glowloom.context-state',
     sections: [
       {
-        key: 'glowloom_constraints',
+        key: creativeContextSection,
         render: async (input, context) => {
           const state = await input.read.snapshot(StateDoc, rootId(), context);
           if (!state)
@@ -42,8 +46,6 @@ export function contextExtension(
               limit: manifest.execution_policy,
             },
             specialist: own ?? null,
-            constraints:
-              'For production goals, prepare formal canvas sources, use original operation receipts, and deliver reviewed video and project artifacts. When an original generation is pending, end this turn; the host waits and resumes it without polling the model. Never submit a replacement generation to recover an original one. Only explicitly adopted specialist result and source references may support further work. A failed specialist is a local failure; redo only that task with redo_of and adopted sources. Skill scripts require the authorized Go isolation tool; never execute host code. Plans and specialist prose never establish business approval or media completion.',
           });
         },
       },

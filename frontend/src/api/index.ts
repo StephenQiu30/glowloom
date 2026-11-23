@@ -21,6 +21,7 @@ import * as diagnostics from "./diagnostics";
 import * as projectCopies from "./projectCopies";
 import * as agent from "./agent";
 import * as bible from "./bible";
+import * as projectMemory from "./projectMemory";
 import * as settings from "./settings";
 import * as promptEditor from "./promptEditor";
 import * as voiceLibrary from "./voiceLibrary";
@@ -48,6 +49,7 @@ export default {
   projectCopies,
   agent,
   bible,
+  projectMemory,
   settings,
   promptEditor,
   voiceLibrary,

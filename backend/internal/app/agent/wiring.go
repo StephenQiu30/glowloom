@@ -7,6 +7,7 @@ import (
 
 	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
 	script "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
+	workspacepg "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
 	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
 
 	"github.com/gin-gonic/gin"
@@ -19,6 +20,7 @@ import (
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/aigateway"
+	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
 )
 
@@ -65,15 +67,43 @@ func NewBoundary(database *gorm.DB, model app.ModelCapability) *Boundary {
 	b.Capabilities.Snapshot = func(ctx context.Context, s domain.Scope) (any, error) {
 		var out map[string]any
 		err := database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-			canvases, err := canvasService(tx).List(ctx, app.Principal(s), s.ProjectID)
+			actor := app.Principal(s)
+			project, err := scopewire.ProvideWorkerProjectContentAccess(tx).Authorize(ctx, actor, s.ProjectID, false)
 			if err != nil {
 				return err
 			}
-			script, err := scriptService(tx).Workspace(ctx, scriptwire.Actor(app.Principal(s)), s.ProjectID)
+			if project.OwnerScopeID != s.ScopeID {
+				return domain.ErrGrant
+			}
+			canvases, err := canvasService(tx).List(ctx, actor, s.ProjectID)
 			if err != nil {
 				return err
 			}
-			out = map[string]any{"canvases": canvases, "script": script}
+			script, err := scriptService(tx).Workspace(ctx, scriptwire.Actor(actor), s.ProjectID)
+			if err != nil {
+				return err
+			}
+			memory, err := workspacepg.ReadActiveProjectMemories(tx, s.ProjectID)
+			if err != nil {
+				return err
+			}
+			var facts map[string]any
+			if err := tx.Raw(`SELECT id,revision,name,description,aspect_ratio,resolution,style_type,style_subtype,style_preset_id FROM workspace.project WHERE id=?`, s.ProjectID).Scan(&facts).Error; err != nil {
+				return err
+			}
+			out = map[string]any{
+				"canvases": canvases, "script": script, "project": facts,
+				"project_memory": memory, "project_memory_version": workspacepg.ProjectMemoryVersion(memory),
+			}
+			if s.CanvasID != nil {
+				for _, doc := range canvases {
+					if doc.ID == *s.CanvasID {
+						out["active_canvas"] = doc
+						return nil
+					}
+				}
+				return domain.ErrNotFound
+			}
 			return nil
 		})
 		return out, err

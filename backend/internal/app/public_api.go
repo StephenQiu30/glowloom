@@ -159,6 +159,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	workspacehttp.RegisterIndependentCreation(protected, workspaceStore.EnsureIndependentCreation)
 	workspacehttp.NewProjectBudgetHandler(workspaceapp.NewProjectBudgetQuery(aigateway.Defaults{Runtime: gatewayRuntime})).Register(protected)
 	workspacehttp.NewProjectLifecycleHandler(workspaceapp.NewProjectLifecycle(workspaceStore, time.Now)).Register(protected)
+	workspacehttp.RegisterProjectMemory(protected, workspaceapp.NewProjectMemories(workspaceStore, time.Now))
 	workspacehttp.NewProjectCreationRecoveryHandler(workspaceapp.NewProjectCreationRecoveryQuery(workspaceStore)).Register(protected)
 	copies := copywire.ProvideProjectCopyStoreWithObjects(database, mediawire.NewMediaScopeAccess)
 	transfers := mediawire.ProvideRoutedMediaTransferStore(database)

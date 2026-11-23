@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ConversationComposer,
   type ConversationComposerHandle,
@@ -11,6 +11,8 @@ import { ConversationThread } from "./conversation-thread";
 import { useConversation, type ConversationOptions } from "./use-conversation";
 import { FeedbackNotice } from "@/components/feedback/feedback-notice";
 import { ConversationMessageSkeleton } from "@/components/layout/loading-state";
+import { Button } from "@/components/ui/button";
+import { ProjectMemoryDialog } from "./project-memory-dialog";
 export function ConversationWorkspace({
   onChooseProject,
   headerActions,
@@ -42,6 +44,18 @@ export function ConversationWorkspace({
   const hasMessages = c.summaries.length > 0;
   const welcome = !embedded && !options.sessionID && !hasMessages;
   const authorized = options.enabled && !c.denied;
+  const [memory, setMemory] = useState<{
+    project: string;
+    statement: string;
+  } | null>(null);
+  const openMemory = (statement: string) =>
+    setMemory({ project: options.projectID, statement });
+  const memoryAction =
+    authorized && options.projectID ? (
+      <Button variant="ghost" size="sm" onClick={() => openMemory("")}>
+        项目记忆
+      </Button>
+    ) : null;
   const composer = useRef<ConversationComposerHandle>(null);
   return (
     <div
@@ -62,6 +76,7 @@ export function ConversationWorkspace({
           writable={authorized}
           projectID={options.projectID}
           onUseReply={onUseReply}
+          onDraftProjectMemory={memoryAction ? openMemory : undefined}
           useReplyLabel={useReplyLabel}
         />
       ) : welcome ? (
@@ -177,13 +192,26 @@ export function ConversationWorkspace({
             projectID={options.projectID}
             authorized={authorized}
             onChooseProject={onChooseProject}
-            headerActions={headerActions}
+            headerActions={
+              <>
+                {headerActions}
+                {memoryAction}
+              </>
+            }
             projectControl={projectControl}
             projectSetting={projectSetting}
             welcome={welcome}
           />
         )}
+        {alternateComposer && memoryAction}
       </div>
+      {authorized && memory && memory.project === options.projectID && (
+        <ProjectMemoryDialog
+          projectID={memory.project}
+          initialStatement={memory.statement}
+          onClose={() => setMemory(null)}
+        />
+      )}
     </div>
   );
 }

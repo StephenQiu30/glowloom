@@ -9719,3 +9719,24 @@ CREATE TABLE ai.work (
 );
 CREATE TRIGGER ai_work_immutable BEFORE UPDATE OR DELETE ON ai.work FOR EACH ROW EXECUTE FUNCTION ai.immutable_fact();
 GRANT SELECT,INSERT ON ai.work TO glowloom_app,glowloom_execution;
+
+-- Shared project decisions are append-only. The owning project lock serializes
+-- revision assignment and the active decision limit for each project.
+CREATE TABLE workspace.project_memory_revision (
+    id uuid PRIMARY KEY,
+    project_id uuid NOT NULL REFERENCES workspace.project(id) ON DELETE CASCADE,
+    key text NOT NULL CHECK (char_length(key) BETWEEN 1 AND 48),
+    revision bigint NOT NULL CHECK (revision > 0),
+    statement text NOT NULL CHECK (char_length(statement) <= 512),
+    withdrawn boolean NOT NULL,
+    confirmed_by uuid NOT NULL,
+    confirmed_at timestamptz NOT NULL,
+    request_id uuid NOT NULL,
+    CHECK (withdrawn = (statement = '')),
+    UNIQUE (project_id, confirmed_by, request_id)
+);
+
+CREATE UNIQUE INDEX project_memory_slot_revision
+    ON workspace.project_memory_revision (project_id, key, revision DESC);
+
+GRANT SELECT,INSERT ON TABLE workspace.project_memory_revision TO glowloom_app;

@@ -103,7 +103,26 @@ it('runs the official Harness against real PostgreSQL, durably deduplicates inpu
   const run = await service.createRun(session.id, input);
   await service.waitForRun(run.root_run_id);
   expect(business.calls).toBe(1);
-  expect(JSON.stringify(business.lastInput)).toContain('business_snapshot');
+  expect(business.lastInput).toMatchObject({
+    messages: expect.arrayContaining([
+      expect.objectContaining({
+        role: 'user',
+        content: expect.stringContaining('"business_snapshot"'),
+      }),
+      expect.objectContaining({
+        role: 'user',
+        content: expect.stringContaining('Current creative session state:'),
+      }),
+    ]),
+  });
+  expect(business.lastInput).not.toMatchObject({
+    messages: expect.arrayContaining([
+      expect.objectContaining({
+        role: 'system',
+        content: expect.stringContaining('"business_snapshot"'),
+      }),
+    ]),
+  });
   const again = await service.createRun(session.id, input);
   expect(again.root_run_id).toBe(run.root_run_id);
   expect(business.calls).toBe(1);
@@ -118,6 +137,44 @@ it('runs the official Harness against real PostgreSQL, durably deduplicates inpu
   ).toBeUndefined();
   const events = await service.events(run.root_run_id, scope, '0:0');
   expect(events.some((e) => e.type === 'text')).toBe(true);
+});
+
+it('rejects a model request whose assembled context exceeds the selected window without executing a paid call', async () => {
+  class LargeProjectBusiness extends BusinessFixture {
+    override async snapshot() {
+      return { revision: 2, script: '雾中渡轮靠岸'.repeat(6200) };
+    }
+  }
+  const gateway = new LargeProjectBusiness();
+  const isolated = new SessionService(pool, gateway, { leaseMs: 30000 });
+  try {
+    const session = await isolated.createSession({
+      ...scope,
+      request_id: randomUUID(),
+      content_hash: 'c'.repeat(64),
+      title: '上下文测试',
+    });
+    const run = await isolated.createRun(session.id, {
+      ...scope,
+      input: authorizedText('提炼故事方向'),
+      request_id: randomUUID(),
+      content_hash: 'd'.repeat(64),
+      expected_execution_revision: 0,
+      goal: '提炼故事方向',
+      manifest: {
+        model_key: 'test-model',
+        context_window: 32000,
+        max_tokens: 8192,
+      },
+    });
+    await isolated.waitForRun(run.root_run_id);
+    expect(gateway.calls).toBe(0);
+    expect((await isolated.readRun(run.root_run_id, scope))?.state.status).toBe(
+      'failed',
+    );
+  } finally {
+    await isolated.close();
+  }
 });
 
 it('reconfigures the root between consecutive runs with different models in one session', async () => {
@@ -312,4 +369,68 @@ it('returns a byte-bounded recent event window with the current snapshot cursor'
   expect(snapshot?.events.length).toBeGreaterThan(0);
   expect(snapshot?.snapshot_cursor).toMatch(/:1100$/);
   expect(snapshot?.state.status).toBe('completed');
+});
+
+it('loads current shared project decisions in a fresh conversation and fences a superseded source in the old conversation', async () => {
+  class MemoryBusiness extends BusinessFixture {
+    version = 'a'.repeat(64);
+    memory = { id: randomUUID(), statement: '全片无旁白' };
+    override async snapshot() {
+      return {
+        revision: 1,
+        project_memory_version: this.version,
+        project_memory: [this.memory],
+      };
+    }
+  }
+  const gateway = new MemoryBusiness();
+  const isolated = new SessionService(pool, gateway, { leaseMs: 30000 });
+  const createSession = () =>
+    isolated.createSession({
+      ...scope,
+      request_id: randomUUID(),
+      content_hash: '1'.repeat(64),
+      title: '项目记忆',
+    });
+  async function submit(session: string, expectedRevision: number) {
+    const run = await isolated.createRun(session, {
+      ...scope,
+      input: authorizedText('继续创作'),
+      request_id: randomUUID(),
+      content_hash: '2'.repeat(64),
+      expected_execution_revision: expectedRevision,
+      goal: '继续创作',
+      manifest: { model_key: 'test-model' },
+    });
+    await isolated.waitForRun(run.root_run_id);
+    return isolated.readRun(run.root_run_id, scope);
+  }
+
+  try {
+    const first = await createSession();
+    expect((await submit(first.id, 0))?.state.status).toBe('completed');
+    expect(JSON.stringify(gateway.lastInput)).toContain('全片无旁白');
+    expect(gateway.lastInput).toMatchObject({
+      project_memory_version: gateway.version,
+    });
+
+    gateway.version = 'b'.repeat(64);
+    gateway.memory = { id: randomUUID(), statement: '开头一镜可用独白' };
+    const before = await isolated.readSession(first.id, scope);
+    if (!before) throw Error('Missing original session');
+    const stale = await submit(first.id, before.execution_revision);
+    expect(stale?.state).toMatchObject({
+      status: 'failed',
+      failure: { code: 'project_memory_changed' },
+    });
+    expect(gateway.calls).toBe(1);
+
+    const fresh = await createSession();
+    expect((await submit(fresh.id, 0))?.state.status).toBe('completed');
+    expect(JSON.stringify(gateway.lastInput)).toContain('开头一镜可用独白');
+    expect(JSON.stringify(gateway.lastInput)).not.toContain('全片无旁白');
+    expect(gateway.calls).toBe(2);
+  } finally {
+    await isolated.close();
+  }
 });

@@ -19,6 +19,7 @@ const png =
 class ImageBusiness extends BusinessClient {
   sourceChecks = 0;
   revoked = false;
+  revokeAfterMediaRead = false;
   async validateInputSources() {
     this.sourceChecks++;
     if (this.revoked) throw new Error('conversation_reference_unavailable');
@@ -57,6 +58,7 @@ class ImageBusiness extends BusinessClient {
     return { revision: 1 };
   }
   override async findCall() {
+    if (this.revokeAfterMediaRead && this.reads > 0) this.revoked = true;
     return undefined;
   }
   override async execute(
@@ -189,50 +191,60 @@ it('passes sampled video frames and complete document text through the official 
     await service.close();
   }
 });
-it('passes real image content through the official Harness transcript and retains only reference identities in the accepted input', async () => {
-  const business = new ImageBusiness();
-  const service = new SessionService(pool, business, { leaseMs: 30000 });
-  try {
-    const session = await service.createSession({
-      ...scope,
-      request_id: randomUUID(),
-      content_hash: 'a'.repeat(64),
-      title: '图片',
-    });
-    const run = await service.createRun(session.id, {
-      ...scope,
-      request_id: randomUUID(),
-      content_hash: 'b'.repeat(64),
-      expected_execution_revision: 0,
-      goal: 'reference input',
-      manifest: { model_key: 'fixture' },
-      input: {
-        schema_version: 1,
-        draft: {},
-        input_hash: 'c'.repeat(64),
-        plain_text: '',
-        prompt: '',
-        media_pins: [
-          { sourceId: asset, sourceVersion: '2', mediaKind: 'image' },
-        ],
-      },
-    });
-    await service.waitForRun(run.root_run_id);
-    const snapshot = await service.readRun(run.root_run_id, scope);
-    expect(snapshot?.state.status).toBe('completed');
-    expect(business.reads).toBe(1);
-    expect(JSON.stringify(business.modelInput)).toContain(
-      `data:image/png;base64,${png}`,
-    );
-    expect(snapshot?.input?.plain_text).toBe('');
-    expect(JSON.stringify(snapshot?.input)).not.toContain(png);
-    expect(
-      snapshot?.messages_page.items.map((part) => part.content).join(''),
-    ).toContain('已读取参考图片');
-  } finally {
-    await service.close();
-  }
-});
+it.each([false, true])(
+  'checks source authority again after looking up the model receipt (revoked: %s)',
+  async (revoke) => {
+    const business = new ImageBusiness();
+    business.revokeAfterMediaRead = revoke;
+    const service = new SessionService(pool, business, { leaseMs: 30000 });
+    try {
+      const session = await service.createSession({
+        ...scope,
+        request_id: randomUUID(),
+        content_hash: 'a'.repeat(64),
+        title: '图片',
+      });
+      const run = await service.createRun(session.id, {
+        ...scope,
+        request_id: randomUUID(),
+        content_hash: 'b'.repeat(64),
+        expected_execution_revision: 0,
+        goal: 'reference input',
+        manifest: { model_key: 'fixture' },
+        input: {
+          schema_version: 1,
+          draft: {},
+          input_hash: 'c'.repeat(64),
+          plain_text: '',
+          prompt: '',
+          media_pins: [
+            { sourceId: asset, sourceVersion: '2', mediaKind: 'image' },
+          ],
+        },
+      });
+      await service.waitForRun(run.root_run_id);
+      const snapshot = await service.readRun(run.root_run_id, scope);
+      expect(business.reads).toBe(1);
+      if (revoke) {
+        expect(business.revoked).toBe(true);
+        expect(business.modelInput).toBeUndefined();
+        expect(snapshot?.state.status).toBe('failed');
+        return;
+      }
+      expect(snapshot?.state.status).toBe('completed');
+      expect(JSON.stringify(business.modelInput)).toContain(
+        `data:image/png;base64,${png}`,
+      );
+      expect(snapshot?.input?.plain_text).toBe('');
+      expect(JSON.stringify(snapshot?.input)).not.toContain(png);
+      expect(
+        snapshot?.messages_page.items.map((part) => part.content).join(''),
+      ).toContain('已读取参考图片');
+    } finally {
+      await service.close();
+    }
+  },
+);
 it('revalidates old image sources before a later message can reuse the transcript', async () => {
   const business = new ImageBusiness(),
     service = new SessionService(pool, business, { leaseMs: 30000 });
