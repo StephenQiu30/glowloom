@@ -143,7 +143,7 @@ export function AdminTableFilters<Key extends string>({
                 onApply({});
               }}
             >
-              重置
+              重置筛选
             </Button>
           </div>
         </form>

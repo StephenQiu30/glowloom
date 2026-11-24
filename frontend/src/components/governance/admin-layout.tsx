@@ -1,11 +1,13 @@
 "use client";
+import { createPortal } from "react-dom";
+import { IconAction } from "@/components/ui/icon-action";
+import { X } from "lucide-react";
 import type { AdminSection } from "@/components/layout/routes";
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { HeaderLinks } from "@/components/layout/header-navigation";
 import { PageHeader } from "@/components/canvas/runtime/components/layout/workspace/page-header";
 import { Toolbar, ToolbarGroup } from "@/components/ui/toolbar";
-import { Button } from "@/components/ui/button";
 
 const adminLinks = [
   { id: "users", href: "/users", label: "用户管理" },
@@ -24,6 +26,24 @@ const adminLinks = [
 ];
 const AdminNavigationTitle = createContext<string | undefined>(undefined);
 
+export const SelectionToolbarSlot = createContext<HTMLDivElement | null>(null);
+const RegisterSelectionToolbar = createContext<
+  ((node: HTMLDivElement | null) => void) | undefined
+>(undefined);
+
+/** Selected actions occupy the same space as the default page actions. */
+export function SelectionToolbar({ children }: { children: ReactNode }) {
+  const register = useContext(RegisterSelectionToolbar);
+  return (
+    <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
+      <div ref={register} className="peer empty:hidden" />
+      <div className="flex flex-wrap items-center gap-2 peer-[:not(:empty)]:hidden">
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function useAdminHeadingInNavigation(title: string) {
   return title === useContext(AdminNavigationTitle);
 }
@@ -39,6 +59,7 @@ export function AdminWorkspace({
   active: AdminSection;
   children: ReactNode;
 }) {
+  const [slot, register] = useState<HTMLDivElement | null>(null);
   const link = adminLinks.find((item) => item.id === active);
   return (
     <div className="admin-workspace">
@@ -46,7 +67,11 @@ export function AdminWorkspace({
       <AdminNavigationTitle.Provider
         value={link?.heading ?? link?.title ?? link?.label}
       >
-        {children}
+        <RegisterSelectionToolbar.Provider value={register}>
+          <SelectionToolbarSlot.Provider value={slot}>
+            {children}
+          </SelectionToolbarSlot.Provider>
+        </RegisterSelectionToolbar.Provider>
       </AdminNavigationTitle.Provider>
     </div>
   );
@@ -95,8 +120,9 @@ export function SelectionBar({
   onClear: () => void;
   children: ReactNode;
 }) {
+  const slot = useContext(SelectionToolbarSlot);
   if (!count) return null;
-  return (
+  const actions = (
     <ToolbarGroup
       appearance="plain"
       className="flex-wrap"
@@ -106,15 +132,15 @@ export function SelectionBar({
         已选 {count}
         {total === undefined ? "" : ` / ${total}`} 项
       </span>
-      <Button
-        size="toolbar"
+      <IconAction
         variant="ghost"
         disabled={disabled}
         onClick={onClear}
-      >
-        清除选择
-      </Button>
+        icon={X}
+        label="清除选择"
+      />
       <Toolbar className="flex-wrap sm:ml-auto">{children}</Toolbar>
     </ToolbarGroup>
   );
+  return slot ? createPortal(actions, slot) : actions;
 }

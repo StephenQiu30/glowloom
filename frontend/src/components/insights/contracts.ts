@@ -55,7 +55,7 @@ export const statusName: Record<string, string> = {
 };
 export function filterQuery(
   draft: Record<string, string>,
-  maxDays: number,
+  maxDays?: number,
 ): Record<string, string> {
   const query = Object.fromEntries(
     Object.entries(draft)
@@ -71,7 +71,7 @@ export function filterQuery(
       !Number.isFinite(from) ||
       !Number.isFinite(to) ||
       to <= from ||
-      to - from > maxDays * 86400000
+      (maxDays !== undefined && to - from > maxDays * 86400000)
     )
       throw new Error(`请选择不超过${maxDays}天的有效时间范围`);
     query.from = new Date(from).toISOString();

@@ -71,13 +71,6 @@
   overflow-wrap: anywhere;
   white-space: normal;
 }
-.insights-pagination {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  flex-wrap: wrap;
-}
 .insights-detail {
   width: min(100%, 560px) !important;
   max-width: 560px !important;
@@ -141,7 +134,7 @@
     font-size: 24px;
     line-height: 32px;
   }
-  .insights button,
+  .insights button:not([role="checkbox"]),
   .insights [data-slot="native-select"],
   .insights [data-slot="input"],
   .insights-detail button,
@@ -149,9 +142,15 @@
   .insights-detail [data-slot="input"] {
     min-height: 44px;
   }
-  .insights button,
+  .insights button:not([role="checkbox"]),
   .insights-detail button {
     min-width: 44px;
+  }
+  .insights-table [role="checkbox"]::after {
+    inset: 50% auto auto 50%;
+    width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
   }
   .insights-fields {
     grid-template-columns: minmax(0, 1fr);

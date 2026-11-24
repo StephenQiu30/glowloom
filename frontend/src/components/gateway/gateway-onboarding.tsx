@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, RefreshCw } from "lucide-react";
+import {
+  ArrowLeft,
+  RefreshCw,
+  Undo2,
+  Route,
+  Check,
+  X,
+  ShieldCheck,
+} from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -14,8 +22,16 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { GatewayAction } from "./gateway-action";
 import {
   Card,
   CardContent,
@@ -114,25 +130,13 @@ export function OnboardingPanel({
   return (
     <div className="flex min-w-0 flex-col gap-4">
       <div className="flex flex-wrap justify-between gap-2">
-        <Button
-          type="button"
-          variant="ghost"
-          className="max-md:min-h-11"
-          onClick={back}
-        >
-          <ArrowLeft data-icon="inline-start" aria-hidden="true" />
-          返回验证列表
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          className="max-md:min-h-11"
+        <GatewayAction onClick={back} label="返回验证列表" icon={ArrowLeft} />
+        <GatewayAction
           disabled={busy}
           onClick={() => setRevision((value) => value + 1)}
-        >
-          <RefreshCw data-icon="inline-start" aria-hidden="true" />
-          读取最新回执
-        </Button>
+          label="读取最新回执"
+          icon={RefreshCw}
+        />
       </div>
       {readError && (
         <Alert variant="destructive">
@@ -180,15 +184,24 @@ export function OnboardingPanel({
                 )}
               </div>
               <Separator />
-              <ul className="flex flex-col gap-3" aria-label="验证用例">
-                {review.plan.probes.map((probe, index) => (
-                  <ProbeSummary
-                    key={probe.name}
-                    probe={probe}
-                    progress={review.progress[index]}
-                  />
-                ))}
-              </ul>
+              <Table aria-label="验证用例">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>验证用例</TableHead>
+                    <TableHead>测试内容</TableHead>
+                    <TableHead>状态与回执</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {review.plan.probes.map((probe, index) => (
+                    <ProbeSummary
+                      key={probe.name}
+                      probe={probe}
+                      progress={review.progress[index]}
+                    />
+                  ))}
+                </TableBody>
+              </Table>
               <FormDetails label="验证对象与版本">
                 <dl className="grid gap-3 sm:grid-cols-2">
                   <Summary
@@ -247,9 +260,12 @@ export function OnboardingPanel({
                       onCheckedChange={(value) => setConfirmed(value === true)}
                     />
                     <div>
-                      <SubmitButton busy={busy} disabled={!confirmed}>
-                        确认预算并验证
-                      </SubmitButton>
+                      <SubmitButton
+                        busy={busy}
+                        disabled={!confirmed}
+                        label="确认预算并验证"
+                        icon={ShieldCheck}
+                      />
                     </div>
                   </FieldGroup>
                 </form>
@@ -270,14 +286,11 @@ export function OnboardingPanel({
               <AlertDescription>
                 当前线上版本继续服务。
                 {!unknown && (
-                  <Button
-                    type="button"
-                    variant="link"
-                    className="h-auto px-0 max-md:min-h-11"
+                  <GatewayAction
                     onClick={() => retryRoute(review.model_id)}
-                  >
-                    重新准备采购路由
-                  </Button>
+                    label="重新准备采购路由"
+                    icon={Route}
+                  />
                 )}
               </AlertDescription>
             </Alert>
@@ -285,13 +298,7 @@ export function OnboardingPanel({
           {review.state === "active" && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-fit max-md:min-h-11"
-                >
-                  回退该候选
-                </Button>
+                <GatewayAction label="回退该候选" icon={Undo2} />
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
@@ -301,8 +308,13 @@ export function OnboardingPanel({
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel>取消</AlertDialogCancel>
+                  <AlertDialogCancel size="icon" aria-label="取消" title="取消">
+                    <X aria-hidden="true" />
+                  </AlertDialogCancel>
                   <AlertDialogAction
+                    size="icon"
+                    aria-label="确认回退"
+                    title="确认回退"
                     disabled={busy}
                     onClick={() => {
                       void run(async () => {
@@ -311,7 +323,7 @@ export function OnboardingPanel({
                       }, "已回退该版本。");
                     }}
                   >
-                    确认回退
+                    <Check aria-hidden="true" />
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -377,44 +389,44 @@ function ProbeSummary({
   );
   const refs = Array.isArray(input.references) ? input.references.length : 0;
   return (
-    <li className="flex min-w-0 flex-col gap-1">
-      <p className="font-medium">
+    <TableRow>
+      <TableCell className="whitespace-normal">
         {modeLabel(probe.name)}
-        {progress && (
-          <span className="ml-2 text-sm font-normal text-muted-foreground">
-            {progressLabels[progress.state] ?? "状态待更新"}
-          </span>
+      </TableCell>
+      <TableCell className="whitespace-normal">
+        {prompt && (
+          <p className="text-sm wrap-anywhere whitespace-pre-wrap text-muted-foreground">
+            {prompt}
+          </p>
         )}
-      </p>
-      {prompt && (
-        <p className="text-sm wrap-anywhere whitespace-pre-wrap text-muted-foreground">
-          {prompt}
-        </p>
-      )}
-      {typeof maxOutput === "number" && (
-        <p className="text-sm text-muted-foreground">
-          最多输出 {maxOutput} token
-        </p>
-      )}
-      {refs > 0 && (
-        <p className="text-sm text-muted-foreground">测试素材 {refs} 个</p>
-      )}
-      {!!params.length && (
-        <dl className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-          {params.map(([name, value]) => (
-            <div className="flex min-w-0 gap-1 break-all" key={name}>
-              <dt>{name}</dt>
-              <dd>{String(value)}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
-      {progress && (
-        <p className="font-mono text-xs break-all text-muted-foreground">
-          原请求 {progress.request_id}
-        </p>
-      )}
-    </li>
+        {typeof maxOutput === "number" && (
+          <p className="text-sm text-muted-foreground">
+            最多输出 {maxOutput} token
+          </p>
+        )}
+        {refs > 0 && (
+          <p className="text-sm text-muted-foreground">测试素材 {refs} 个</p>
+        )}
+        {!!params.length && (
+          <dl className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+            {params.map(([name, value]) => (
+              <div className="flex min-w-0 gap-1 break-all" key={name}>
+                <dt>{name}</dt>
+                <dd>{String(value)}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+      </TableCell>
+      <TableCell className="whitespace-normal">
+        {progress ? (progressLabels[progress.state] ?? "状态待更新") : "待验证"}
+        {progress && (
+          <p className="font-mono text-xs break-all text-muted-foreground">
+            原请求 {progress.request_id}
+          </p>
+        )}
+      </TableCell>
+    </TableRow>
   );
 }
 

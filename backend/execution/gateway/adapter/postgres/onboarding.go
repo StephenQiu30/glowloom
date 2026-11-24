@@ -167,11 +167,11 @@ func (s *Store) PrepareOnboarding(ctx context.Context, in application.Onboarding
 			}
 		}
 		doc := string(mustJSON(onboardingContract{Onboarding: in, Plan: plan}))
-		if err := tx.Exec("INSERT INTO ai.onboarding(id,model_id,previous_model_id,replaces_route_id,document) VALUES(?,?,?,?,?::jsonb) ON CONFLICT DO NOTHING", in.Route.ID, model.ID, nullable(live.ID), nullable(in.Replacement), doc).Error; err != nil {
+		if err := tx.Exec("INSERT INTO ai.onboarding(id,model_id,previous_model_id,replaces_route_id,document) SELECT ?,?,?,?,?::jsonb WHERE NOT EXISTS (SELECT 1 FROM ai.route WHERE id=?) ON CONFLICT DO NOTHING", in.Route.ID, model.ID, nullable(live.ID), nullable(in.Replacement), doc, in.Route.ID).Error; err != nil {
 			return err
 		}
 		var same bool
-		if err := tx.Raw("SELECT document=?::jsonb FROM ai.onboarding WHERE id=?", doc, in.Route.ID).Row().Scan(&same); err != nil {
+		if err := tx.Raw("SELECT EXISTS (SELECT 1 FROM ai.onboarding WHERE document=?::jsonb AND deleted_at IS NULL AND id=?)", doc, in.Route.ID).Row().Scan(&same); err != nil {
 			return err
 		}
 		if !same {
@@ -199,7 +199,7 @@ func preservesModes(old, next domain.Model) bool {
 func loadOnboarding(tx *gorm.DB, id uuid.UUID, lock bool) (onboardingRow, OnboardingWork, error) {
 	var row onboardingRow
 	var work OnboardingWork
-	query := "SELECT o.id,o.model_id,o.previous_model_id,o.state,o.document,o.actor,m.document AS model FROM ai.onboarding o JOIN ai.model m ON m.id=o.model_id WHERE o.id=?"
+	query := "SELECT o.id,o.model_id,o.previous_model_id,o.state,o.document,o.actor,m.document AS model FROM ai.onboarding o JOIN ai.model m ON m.id=o.model_id WHERE o.id=? AND o.deleted_at IS NULL"
 	if lock {
 		query += " FOR UPDATE OF o"
 	}

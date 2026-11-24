@@ -187,7 +187,7 @@ func insertRoute(tx *gorm.DB, route domain.Route, ciphertext []byte, keyID strin
 			return err
 		}
 	}
-	r = tx.Exec("INSERT INTO ai.route(id,model_id,credential_id,quota_group,priority,document,enabled) VALUES(?,?,?,?,?,?::jsonb,?) ON CONFLICT DO NOTHING", route.ID, route.ModelID, route.Credential, route.Group, route.Priority, string(mustJSON(route)), enabled)
+	r = tx.Exec("INSERT INTO ai.route(id,model_id,credential_id,quota_group,priority,document,enabled) SELECT ?,?,?,?,?,?::jsonb,? WHERE NOT EXISTS (SELECT 1 FROM ai.onboarding WHERE id=? AND deleted_at IS NOT NULL) ON CONFLICT DO NOTHING", route.ID, route.ModelID, route.Credential, route.Group, route.Priority, string(mustJSON(route)), enabled, route.ID)
 	if r.Error != nil {
 		return r.Error
 	}

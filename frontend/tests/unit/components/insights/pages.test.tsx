@@ -146,7 +146,7 @@ it("does not apply draft filters until submit, then all requests use the applied
     scope: "platform",
     origin: "canvas",
   });
-  fireEvent.click(screen.getByRole("button", { name: "重置" }));
+  fireEvent.click(screen.getByRole("button", { name: "重置筛选" }));
   await waitFor(() => expect(mocks.creation).toHaveBeenCalledTimes(3));
   expect(mocks.creation.mock.calls[2][0]).toEqual({ scope: "personal" });
 });
@@ -191,6 +191,8 @@ it("audit detail uses safe authorized strings, pagination and closes/restores in
     .mockResolvedValue({ as_of: now, items: [], next_cursor: "" });
   render(<AuditEvents />);
   const trigger = await screen.findByRole("button", { name: "查看审计 evt-1" });
+  fireEvent.click(screen.getByRole("checkbox", { name: "全选本页安全事件" }));
+  expect(screen.getByRole("button", { name: "复制所选条目" })).toBeTruthy();
   fireEvent.click(trigger);
   const dialog = await screen.findByRole("dialog");
   expect(within(dialog).getByText("active → disabled")).toBeTruthy();
@@ -201,6 +203,8 @@ it("audit detail uses safe authorized strings, pagination and closes/restores in
   fireEvent.click(screen.getByRole("button", { name: "下一页" }));
   await waitFor(() => expect(mocks.audit).toHaveBeenCalledTimes(2));
   expect(mocks.audit.mock.calls[1][0].cursor).toBe("next");
+  fireEvent.click(screen.getByRole("button", { name: "清除选择" }));
+  expect(screen.queryByRole("button", { name: "复制所选条目" })).toBeNull();
   expect(screen.getByRole("button", { name: "上一页" })).toBeTruthy();
 });
 it("identity switch immediately drops private analytics and ignores late old response", async () => {
@@ -355,7 +359,7 @@ it("keeps applied platform filters and datetime drafts consistent after business
   fireEvent.click(screen.getByRole("button", { name: "筛选" }));
   expect(mocks.creation.mock.calls.at(-1)![0]).toEqual(applied);
   expect(screen.getByText("已应用 4 项条件")).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "重置" }));
+  fireEvent.click(screen.getByRole("button", { name: "重置筛选" }));
   await waitFor(() =>
     expect(mocks.creation.mock.calls.at(-1)![0]).toEqual({ scope: "personal" }),
   );

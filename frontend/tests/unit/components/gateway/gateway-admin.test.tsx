@@ -112,6 +112,73 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+it("shows one resource table per provider tab and opens the selected billing attempt", async () => {
+  send.mockResolvedValueOnce({
+    models: [{ model, enabled: true }],
+    routes: [{ route: { ...mediaRoute, id: verificationID }, enabled: true }],
+    onboarding: [
+      { ...review, state: "prepared", upstream_model: "pending-model" },
+    ],
+    quotas: [{ name: "image-account", concurrency: 2, rpm: 60 }],
+    credentials: [],
+    unknown: [
+      {
+        request_id: modelID,
+        attempt_id: verificationID,
+        scope_id: supplier,
+        state: "unknown",
+      },
+    ],
+  });
+  render(<GatewayAdmin entry="providers" />);
+  expect(await screen.findByRole("table", { name: "供应商路由" })).toBeTruthy();
+  expect(screen.getAllByRole("table")).toHaveLength(1);
+  expect(
+    screen.queryByRole("heading", { level: 1, name: "AI 服务接入" }),
+  ).toBeNull();
+  expect(screen.getByRole("button", { name: "准备采购路由" }).textContent).toBe(
+    "",
+  );
+  expect(
+    screen.getByRole("link", { name: "查看路由" }).getAttribute("href"),
+  ).toBe(`/providers/${verificationID}`);
+  fireEvent.click(screen.getByRole("button", { name: "筛选条件" }));
+  fireEvent.change(await screen.findByLabelText("关键词"), {
+    target: { value: "not-a-route" },
+  });
+  fireEvent.change(screen.getByRole("combobox", { name: "状态" }), {
+    target: { value: "已启用" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "筛选" }));
+  expect(await screen.findByText("没有符合条件的记录")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "重置筛选" }));
+  expect(await screen.findByRole("link", { name: "查看路由" })).toBeTruthy();
+  expect(screen.queryByText("pending-model")).toBeNull();
+  for (const [tab, table] of [
+    ["待接入", "待接入渠道"],
+    ["配额", "共享配额"],
+    ["凭据", "供应商凭据"],
+    ["对账", "待对账请求"],
+  ]) {
+    fireEvent.mouseDown(screen.getByRole("tab", { name: tab }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    expect(screen.getAllByRole("table")).toHaveLength(1);
+    expect(screen.getByRole("table", { name: table })).toBeTruthy();
+    if (tab === "待接入")
+      expect(screen.getByText("pending-model")).toBeTruthy();
+  }
+  fireEvent.click(screen.getByRole("button", { name: "核对账单" }));
+  expect(screen.getByLabelText<HTMLInputElement>("原请求 ID").value).toBe(
+    modelID,
+  );
+  expect(screen.getByLabelText<HTMLInputElement>("原尝试 ID").value).toBe(
+    verificationID,
+  );
+  expect(send).toHaveBeenCalledTimes(1);
+});
+
 it("does not request gateway configuration for a non-admin account", () => {
   actor.role = "member";
   render(<GatewayAdmin />);
@@ -143,7 +210,7 @@ it("starts the provider entry on procurement and asks before discarding an edite
     </SpaceContext.Provider>,
   );
   const procurement = await screen.findByRole("tab", {
-    name: "供应商与采购价",
+    name: "渠道",
   });
   expect(procurement.getAttribute("aria-selected")).toBe("true");
   fireEvent.click(screen.getByRole("button", { name: "准备采购路由" }));
@@ -153,7 +220,7 @@ it("starts the provider entry on procurement and asks before discarding an edite
   fireEvent.change(screen.getByLabelText("供应商模型号"), {
     target: { value: "edited-model" },
   });
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "模型与销售价" }), {
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "配额" }), {
     button: 0,
     ctrlKey: false,
   });
@@ -265,11 +332,11 @@ it("keeps supplier procurement independent from sale and refuses invalid amounts
 });
 
 it("saves the keyless procurement plan before showing API Key and budget confirmation", async () => {
-  render(<GatewayAdmin />);
-  await screen.findByText("text/default");
+  render(<GatewayAdmin entry="providers" />);
+  await screen.findByRole("table", { name: "供应商路由" });
   expect(send.mock.calls[0][0]).toBe("/api/ai/admin/configuration");
   expect(screen.queryByText("must-not-render")).toBeNull();
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "供应商与采购价" }), {
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "渠道" }), {
     button: 0,
     ctrlKey: false,
   });
@@ -342,12 +409,13 @@ it("normalizes empty configuration and discards any credential read-back fields"
 });
 
 it("requires concrete credit preview before manual funding and keeps business reference", async () => {
-  render(<GatewayAdmin />);
-  await screen.findByText("text/default");
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "积分与对账" }), {
+  render(<GatewayAdmin entry="providers" />);
+  await screen.findByRole("table", { name: "供应商路由" });
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "对账" }), {
     button: 0,
     ctrlKey: false,
   });
+  fireEvent.click(screen.getByRole("button", { name: "增加积分" }));
   fireEvent.change(screen.getByLabelText("积分空间 ID"), {
     target: { value: supplier },
   });
@@ -435,9 +503,9 @@ it("prepares a supported media driver with an explicit probe and no key", async 
       },
     ],
   });
-  render(<GatewayAdmin />);
-  await screen.findByText("image/default");
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "供应商与采购价" }), {
+  render(<GatewayAdmin entry="providers" />);
+  await screen.findByRole("table", { name: "供应商路由" });
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "渠道" }), {
     button: 0,
     ctrlKey: false,
   });

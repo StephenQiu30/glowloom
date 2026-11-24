@@ -35,7 +35,7 @@ func (s *Store) Configuration(ctx context.Context) (map[string]any, error) {
 		}
 		out["models"] = products
 		candidates := []OnboardingSummary{}
-		if err := tx.Raw(`SELECT id,model_id,state,document->'route'->>'upstream_model' AS upstream FROM ai.onboarding ORDER BY created_at DESC,id LIMIT 100`).Scan(&candidates).Error; err != nil {
+		if err := tx.Raw(`SELECT id,model_id,state,document->'route'->>'upstream_model' AS upstream FROM ai.onboarding WHERE deleted_at IS NULL ORDER BY created_at DESC,id LIMIT 100`).Scan(&candidates).Error; err != nil {
 			return err
 		}
 		out["onboarding"] = candidates
@@ -43,7 +43,7 @@ func (s *Store) Configuration(ctx context.Context) (map[string]any, error) {
 			Document []byte
 			Enabled  bool
 		}
-		if err := tx.Raw("SELECT document,enabled FROM ai.route ORDER BY model_id,priority,id LIMIT 1000").Scan(&routes).Error; err != nil {
+		if err := tx.Raw("SELECT document,enabled FROM ai.route WHERE deleted_at IS NULL ORDER BY model_id,priority,id LIMIT 1000").Scan(&routes).Error; err != nil {
 			return err
 		}
 		supplies := []map[string]any{}

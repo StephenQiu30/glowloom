@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Coins, ReceiptText } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   FieldDescription,
@@ -330,10 +330,11 @@ export function ModelForm({
           description="限制一次模型调用的最高采购费用。"
         />
         <div>
-          <SubmitButton busy={busy}>
-            保存并继续采购配置
-            <ArrowRight data-icon="inline-end" aria-hidden="true" />
-          </SubmitButton>
+          <SubmitButton
+            busy={busy}
+            label="保存并继续采购配置"
+            icon={ArrowRight}
+          />
         </div>
       </FieldGroup>
     </form>
@@ -682,10 +683,9 @@ function PreparedRouteForm({
           <SubmitButton
             busy={busy}
             disabled={noVerificationSlot || (media && !driver)}
-          >
-            保存并查看验证预算
-            <ArrowRight data-icon="inline-end" aria-hidden="true" />
-          </SubmitButton>
+            label="保存并查看验证预算"
+            icon={ArrowRight}
+          />
         </div>
       </FieldGroup>
     </form>
@@ -784,9 +784,11 @@ export function CreditsForm({
             {preview.reference}。
           </p>
         ) : null}
-        <SubmitButton busy={busy}>
-          {preview ? "确认增加积分" : "核对入账信息"}
-        </SubmitButton>
+        <SubmitButton
+          busy={busy}
+          icon={Coins}
+          label={preview ? "确认增加积分" : "核对入账信息"}
+        />
       </FieldGroup>
     </form>
   );
@@ -796,13 +798,15 @@ export function ReconciliationForm({
   run,
   busy,
   unknown,
+  initialAttempt = "",
 }: {
   run: RunMutation;
   busy: boolean;
   unknown: GatewayConfiguration["unknown"];
+  initialAttempt?: string;
 }) {
   const [billingResult, setBillingResult] = useState("");
-  const [selected, setSelected] = useState("");
+  const [selected, setSelected] = useState(initialAttempt);
   const pending = unknown.find((record) => record.attempt_id === selected);
   return (
     <form
@@ -914,7 +918,7 @@ export function ReconciliationForm({
             ))}
           </FieldGroup>
         ) : null}
-        <SubmitButton busy={busy}>凭证据结算原请求</SubmitButton>
+        <SubmitButton busy={busy} label="凭证据结算原请求" icon={ReceiptText} />
       </FieldGroup>
     </form>
   );

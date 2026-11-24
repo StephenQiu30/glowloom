@@ -1,4 +1,10 @@
 "use client";
+import { SelectionToolbar } from "@/components/governance/admin-layout";
+import { usePageSelection } from "@/components/governance/use-page-selection";
+import { IconAction } from "@/components/ui/icon-action";
+import { Eye, RefreshCw } from "lucide-react";
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/lib/pagination";
+import { ListPagination } from "@/components/canvas/runtime/components/layout/workspace/list-pagination";
 import { useState, useRef } from "react";
 import {
   getDiagnosticLog,
@@ -35,14 +41,12 @@ import { useInsightRead } from "@/components/insights/use-insight-read";
 import {
   Filters,
   dateFields,
-  InsightsHeading,
   Loading,
   Metric,
   Notice,
   Panel,
   ReadState,
   Snapshot,
-  Pager,
   CopyValue,
   useInsightIdentity,
   type FilterField,
@@ -258,6 +262,7 @@ function Logs({
   const identity = useInsightIdentity();
   const [history, setHistory] = useState({ revision, cursors: [""] });
   const cursors = history.revision === revision ? history.cursors : [""];
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [restarted, setRestarted] = useState(false);
   const cursor = cursors.at(-1);
   const [selection, setSelection] = useState<{
@@ -269,15 +274,21 @@ function Logs({
     setSelection(id ? { id, revision } : null);
   const focus = useRef<HTMLButtonElement | null>(null);
   const read = useInsightRead(
-    `${identity}:${JSON.stringify(query)}:${cursor}`,
+    `${identity}:${JSON.stringify(query)}:${pageSize}:${cursor}`,
     (signal) =>
       listDiagnosticLogs(
-        { ...query, limit: 25, cursor: cursor || undefined },
+        { ...query, limit: pageSize, cursor: cursor || undefined },
         { signal },
       ),
     revision,
   );
   const d = read.data;
+  const checks = usePageSelection(
+    d?.items ?? [],
+    JSON.stringify([identity, query, revision, read.error]),
+    "日志",
+    (row) => row.request_id,
+  );
   return (
     <>
       {read.error ? (
@@ -307,12 +318,13 @@ function Logs({
               </p>
             )}
           <Coverage value={d.coverage} />
-          <Panel title="诊断日志">
+          <div className="min-w-0 shrink-0 overflow-hidden rounded-md border">
             {d.items.length ? (
               <div className="insights-table">
-                <Table>
+                <Table aria-label="诊断日志">
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-10">{checks.selectAll}</TableHead>
                       <TableHead>时间 / 级别</TableHead>
                       <TableHead>请求 / 状态</TableHead>
                       <TableHead className="insights-secondary-col">
@@ -321,12 +333,13 @@ function Logs({
                       <TableHead className="insights-secondary-col">
                         请求 ID
                       </TableHead>
-                      <TableHead>详情</TableHead>
+                      <TableHead className="text-right">操作</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {d.items.map((item) => (
                       <TableRow key={item.id}>
+                        <TableCell>{checks.selectRow(item)}</TableCell>
                         <TableCell>
                           <div>{timestamp(item.timestamp)}</div>
                           <Badge variant="outline">
@@ -347,17 +360,15 @@ function Logs({
                         <TableCell className="insights-secondary-col insights-code">
                           {item.request_id}
                         </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            aria-label={`查看日志 ${item.request_id}`}
+                        <TableCell className="text-right">
+                          <IconAction
+                            icon={Eye}
+                            label={`查看日志 ${item.request_id}`}
                             onClick={(e) => {
                               focus.current = e.currentTarget;
                               setSelected(item.id);
                             }}
-                          >
-                            查看
-                          </Button>
+                          />
                         </TableCell>
                       </TableRow>
                     ))}
@@ -371,21 +382,31 @@ function Logs({
                 }
               />
             )}
-          </Panel>
-          <Pager
-            back={cursors.length > 1 && !read.pending}
-            next={Boolean(d.next_cursor) && !read.pending}
-            onBack={() => {
+          </div>
+          {checks.actions}
+          <ListPagination
+            label="诊断日志分页"
+            mode="cursor"
+            current={cursors.length}
+            pageSize={pageSize}
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            pending={read.pending}
+            itemCount={d.items.length}
+            hasNextPage={Boolean(d.next_cursor)}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
               setSelected(null);
-              setHistory({ revision, cursors: cursors.slice(0, -1) });
+              setHistory({ revision, cursors: [""] });
             }}
-            onNext={() => {
+            onPageChange={(page) => {
               setSelected(null);
-              if (d.next_cursor)
-                setHistory({
-                  revision,
-                  cursors: [d.first_cursor, ...cursors.slice(1), d.next_cursor],
-                });
+              const next =
+                page < cursors.length
+                  ? cursors.slice(0, -1)
+                  : d.next_cursor
+                    ? [d.first_cursor, ...cursors.slice(1), d.next_cursor]
+                    : cursors;
+              setHistory({ revision, cursors: next });
             }}
           />
           <Snapshot at={d.as_of} pending={read.pending} />
@@ -410,18 +431,24 @@ function DiagnosticsContent() {
   return (
     <PageLayout screen="health" hideSearch>
       <section className="insights">
-        <InsightsHeading
-          active="health"
-          title="运行诊断"
-          refresh={() => setRevision((n) => n + 1)}
-        />
+        <h1 className="sr-only">运行诊断</h1>
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList>
-            <TabsTrigger value="overview">概览</TabsTrigger>
-            <TabsTrigger value="logs">日志</TabsTrigger>
-          </TabsList>
-          <div className="my-5">
-            <Filters fields={fields} maxDays={7} onApply={setQuery} />
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <TabsList variant="line" aria-label="运行日志视图">
+              <TabsTrigger value="overview">概览</TabsTrigger>
+              <TabsTrigger value="logs">日志</TabsTrigger>
+            </TabsList>
+            <SelectionToolbar>
+              {" "}
+              <div className="flex items-center gap-2">
+                <Filters fields={fields} maxDays={7} onApply={setQuery} />
+                <IconAction
+                  label="刷新"
+                  icon={RefreshCw}
+                  onClick={() => setRevision((n) => n + 1)}
+                />
+              </div>
+            </SelectionToolbar>
           </div>
           <TabsContent value="overview">
             <div className="flex flex-col gap-5">

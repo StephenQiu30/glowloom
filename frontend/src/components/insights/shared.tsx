@@ -1,4 +1,6 @@
 "use client";
+import { IconAction } from "@/components/ui/icon-action";
+import { FunnelX } from "lucide-react";
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { RefreshCw, SlidersHorizontal, Copy, Info } from "lucide-react";
 import { useSession } from "@/components/auth/session";
@@ -52,10 +54,12 @@ export function InsightsHeading({
   return (
     <AdminHeading title={title} description={description}>
       {children}
-      <Button variant="ghost" onClick={refresh} disabled={pending}>
-        <RefreshCw data-icon="inline-start" />
-        刷新
-      </Button>
+      <IconAction
+        label="刷新"
+        icon={RefreshCw}
+        onClick={refresh}
+        disabled={pending}
+      />
     </AdminHeading>
   );
 }
@@ -191,7 +195,7 @@ export function Filters({
   applied: controlledApplied,
 }: {
   fields: FilterField[];
-  maxDays: number;
+  maxDays?: number;
   onApply: (query: Record<string, string>) => void;
   defaults?: Record<string, string>;
 } & FilterControl) {
@@ -268,7 +272,7 @@ export function Filters({
           筛选
         </Button>
         <Button type="button" variant="ghost" onClick={reset}>
-          重置
+          重置筛选
         </Button>
       </div>
     </>
@@ -277,15 +281,21 @@ export function Filters({
     <div className="insights-filters">
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger asChild>
-          <Button variant="secondary">
-            <SlidersHorizontal data-icon="inline-start" />
-            筛选条件
-          </Button>
+          <IconAction
+            label="筛选条件"
+            icon={SlidersHorizontal}
+            variant={appliedCount ? "secondary" : "ghost"}
+          />
         </SheetTrigger>
-        <SheetContent className="insights-detail">
+        <SheetContent
+          className="insights-detail"
+          {...(maxDays ? {} : { "aria-describedby": undefined })}
+        >
           <SheetHeader>
             <SheetTitle>筛选条件</SheetTitle>
-            <SheetDescription>最多{maxDays}天，上海时间</SheetDescription>
+            {maxDays && (
+              <SheetDescription>最多{maxDays}天，上海时间</SheetDescription>
+            )}
           </SheetHeader>
           <form
             className="insights-detail-content"
@@ -299,37 +309,13 @@ export function Filters({
         </SheetContent>
       </Sheet>
       {appliedCount ? (
-        <span className="insights-note">已应用 {appliedCount} 项条件</span>
+        <span className="insights-note max-md:sr-only">
+          已应用 {appliedCount} 项条件
+        </span>
       ) : null}
       {appliedCount ? (
-        <Button variant="ghost" onClick={reset}>
-          重置
-        </Button>
+        <IconAction label="重置筛选" icon={FunnelX} onClick={reset} />
       ) : null}
-    </div>
-  );
-}
-export function Pager({
-  back,
-  next,
-  onBack,
-  onNext,
-}: {
-  back: boolean;
-  next: boolean;
-  onBack: () => void;
-  onNext: () => void;
-}) {
-  return (
-    <div className="insights-pagination">
-      <div className="flex gap-2">
-        <Button variant="ghost" disabled={!back} onClick={onBack}>
-          上一页
-        </Button>
-        <Button variant="secondary" disabled={!next} onClick={onNext}>
-          下一页
-        </Button>
-      </div>
     </div>
   );
 }

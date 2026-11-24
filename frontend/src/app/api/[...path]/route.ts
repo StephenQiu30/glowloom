@@ -1057,7 +1057,7 @@ async function proxy(
       query: [],
     },
     {
-      pattern: "ai/admin/(models|routes|credits|reconciliations)",
+      pattern: "ai/admin/(models|routes|routes/delete|credits|reconciliations)",
       methods: ["POST"],
       query: [],
     },

@@ -9471,7 +9471,9 @@ CREATE TABLE ai.route (
  id uuid PRIMARY KEY,model_id uuid NOT NULL REFERENCES ai.model(id),
  credential_id uuid NOT NULL REFERENCES ai.credential(id),
  quota_group text NOT NULL REFERENCES ai.quota(name),priority integer NOT NULL CHECK(priority>=0),
- document jsonb NOT NULL CHECK(jsonb_typeof(document)='object'),enabled boolean NOT NULL DEFAULT false
+ document jsonb NOT NULL CHECK(jsonb_typeof(document)='object'),enabled boolean NOT NULL DEFAULT false,
+ deleted_at timestamptz,deleted_by uuid,
+ CHECK ((deleted_at IS NULL)=(deleted_by IS NULL)),CHECK (deleted_at IS NULL OR NOT enabled)
 );
 CREATE INDEX ai_route_model ON ai.route(model_id,priority);
 
@@ -9551,6 +9553,8 @@ CREATE TABLE ai.onboarding (
  actor jsonb CHECK(jsonb_typeof(actor)='object'),
  confirmed_at timestamptz,
  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ deleted_at timestamptz,deleted_by uuid,
+ CHECK ((deleted_at IS NULL)=(deleted_by IS NULL)),CHECK (deleted_at IS NULL OR state<>'verifying'),
  CHECK((actor IS NULL)=(confirmed_at IS NULL))
 );
 CREATE INDEX ai_onboarding_model ON ai.onboarding(model_id,created_at);

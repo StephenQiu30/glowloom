@@ -1189,6 +1189,10 @@ declare namespace API {
     revision?: string;
   };
 
+  type DeleteRoutesInput = {
+    ids: string[];
+  };
+
   type deleteScriptSourceParams = {
     /** 项目UUID */
     pid: string;

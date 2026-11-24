@@ -417,6 +417,7 @@ PUT /ai/admin/budgets
 POST /ai/admin/reconciliations
 POST /ai/admin/models
 POST /ai/admin/routes
+POST /ai/admin/routes/delete
 GET /ai/admin/onboarding/:id
 POST /ai/admin/onboarding/:id/verify
 POST /ai/admin/onboarding/:id/rollback

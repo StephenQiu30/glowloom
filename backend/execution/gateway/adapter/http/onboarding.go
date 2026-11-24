@@ -156,3 +156,34 @@ func writeOnboardingReview(c *gin.Context, store *pg.Store, id uuid.UUID, status
 	}
 	c.JSON(status, review)
 }
+
+// DeleteRoutesInput identifies the exact channels to retire in one transaction.
+type DeleteRoutesInput struct {
+	IDs []uuid.UUID `json:"ids" binding:"required"`
+}
+
+// @Summary 删除选定的供应商渠道
+// @ID deleteAiRoutes
+// @Tags ai-gateway
+// @Accept json
+// @Param input body DeleteRoutesInput true "渠道或待验证候选 ID"
+// @Success 204
+// @Router /api/ai/admin/routes/delete [post]
+func (h *Handler) deleteRoutes(c *gin.Context) {
+	var in DeleteRoutesInput
+	if err := bindOnboarding(c, 64<<10, &in); err != nil {
+		problem(c, err)
+		return
+	}
+	err := h.store(identityhttp.Principal(c)).DeleteRoutes(c.Request.Context(), in.IDs)
+	switch err {
+	case nil:
+		c.Status(http.StatusNoContent)
+	case pg.ErrRouteVerifying:
+		c.JSON(http.StatusConflict, gin.H{"code": "route_verification_in_progress"})
+	case pg.ErrRouteNotFound:
+		c.JSON(http.StatusNotFound, gin.H{"code": "route_not_found"})
+	default:
+		problem(c, err)
+	}
+}

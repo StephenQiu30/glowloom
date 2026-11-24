@@ -57,6 +57,7 @@ func (h *Handler) Register(api, session *gin.RouterGroup) {
 	session.PUT("/ai/admin/budgets", h.budget)
 	session.POST("/ai/admin/models", h.model)
 	session.POST("/ai/admin/routes", h.route)
+	session.POST("/ai/admin/routes/delete", h.deleteRoutes)
 	session.GET("/ai/admin/onboarding/:id", h.onboarding)
 	session.POST("/ai/admin/onboarding/:id/verify", h.verifyOnboarding)
 	session.POST("/ai/admin/onboarding/:id/rollback", h.rollbackOnboarding)

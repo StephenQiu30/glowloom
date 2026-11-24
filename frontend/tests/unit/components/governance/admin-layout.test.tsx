@@ -56,7 +56,7 @@ it("折叠筛选保留未提交内容，回车提交条件并支持恢复默认"
   expect(apply).toHaveBeenLastCalledWith({ search: "模型一" });
   expect(trigger.getAttribute("aria-expanded")).toBe("false");
   fireEvent.click(trigger);
-  fireEvent.click(screen.getByRole("button", { name: "重置" }));
+  fireEvent.click(screen.getByRole("button", { name: "重置筛选" }));
   expect(apply).toHaveBeenLastCalledWith({});
   expect(screen.getByLabelText("名称")).toHaveProperty("value", "");
 });

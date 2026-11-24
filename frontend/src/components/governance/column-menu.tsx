@@ -1,6 +1,6 @@
 "use client";
+import { IconAction } from "@/components/ui/icon-action";
 import { Columns3 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -20,10 +20,12 @@ export function ColumnMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button type="button" size="toolbar" variant="ghost">
-          <Columns3 data-icon="inline-start" />
-          显示列
-        </Button>
+        <IconAction
+          type="button"
+          variant="ghost"
+          icon={Columns3}
+          label="显示列"
+        />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuGroup>

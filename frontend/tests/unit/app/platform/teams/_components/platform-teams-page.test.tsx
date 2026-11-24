@@ -43,7 +43,19 @@ it("A头像上传迟到时已选B，不再弹出旧团队确认或修改A", asyn
     return { items: [] };
   });
   render(<PlatformTeamsPage />);
-  fireEvent.click(await screen.findByRole("button", { name: "查看 Alpha" }));
+  const openTeam = await screen.findByRole("button", { name: "查看 Alpha" });
+  const filters = screen.getByRole("form", { name: "团队筛选" });
+  const create = screen.getByRole("link", { name: "创建团队" });
+  expect(filters.contains(create)).toBe(true);
+  expect(create.getAttribute("href")).toBe("/teams#team-create");
+  for (const control of [
+    create,
+    openTeam,
+    screen.getByRole("button", { name: "查询" }),
+  ]) {
+    expect(control.textContent).toBe("");
+  }
+  fireEvent.click(openTeam);
   await screen.findByRole("heading", { name: "Alpha" });
   fireEvent.click(screen.getByRole("button", { name: "编辑团队资料" }));
   fireEvent.change(screen.getByLabelText(/选择头像/), {
@@ -183,7 +195,7 @@ it("收起团队高级筛选后仍应用条件，重置后清除条件", async (
     ),
   );
   await screen.findByText("没有符合条件的团队");
-  fireEvent.click(screen.getByRole("button", { name: "重置" }));
+  fireEvent.click(screen.getByRole("button", { name: "重置筛选" }));
   await waitFor(() => {
     const [, options] = vi.mocked(request).mock.lastCall!;
     expect(options?.params).not.toHaveProperty("id");

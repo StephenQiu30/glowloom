@@ -1,4 +1,20 @@
 "use client";
+import { SelectionToolbar } from "@/components/governance/admin-layout";
+import { IconAction } from "@/components/ui/icon-action";
+import {
+  Search,
+  FunnelX,
+  SlidersHorizontal,
+  RefreshCw,
+  Eye,
+  ChartColumn,
+  UserPlus,
+  CircleCheck,
+  LogOut,
+  Ban,
+  Trash2,
+} from "lucide-react";
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/lib/pagination";
 import { ContentState } from "@/components/layout/content-state";
 import { DirectoryTools } from "@/components/directory/directory-tools";
 import { UserActions } from "./user-actions";
@@ -13,16 +29,13 @@ import {
   type DataTableColumn,
 } from "@/components/canvas/runtime/components/account/list/data-table";
 import { ListPagination } from "@/components/canvas/runtime/components/layout/workspace/list-pagination";
-import {
-  AdminHeading,
-  SelectionBar,
-} from "@/components/governance/admin-layout";
+import { SelectionBar } from "@/components/governance/admin-layout";
 import { useBatchOperation } from "@/components/governance/use-batch-operation";
 import { BatchDialog } from "@/components/governance/batch-dialog";
 import { userBatchAction } from "@/components/governance/batch-actions";
 import { Badge } from "@/components/ui/badge";
 import { ColumnMenu } from "@/components/governance/column-menu";
-import { ChevronDown, Ellipsis, Plus } from "lucide-react";
+import { Ellipsis } from "lucide-react";
 import {
   Collapsible,
   CollapsibleContent,
@@ -103,7 +116,7 @@ function UserAdministration() {
     [],
   );
   const [cursors, setCursors] = useState<string[]>([""]);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [advanced, setAdvanced] = useState(false);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const filterId = useId();
@@ -269,14 +282,13 @@ function UserAdministration() {
       id: "actions",
       header: "操作",
       cell: ({ row }) => (
-        <Button
+        <IconAction
           variant="ghost"
           disabled={locked}
           onClick={() => void inspect(row.original.id)}
-          aria-label={`查看 ${row.original.display_name}`}
-        >
-          查看
-        </Button>
+          icon={Eye}
+          label={`查看 ${row.original.display_name}`}
+        />
       ),
     },
   ];
@@ -290,23 +302,28 @@ function UserAdministration() {
     );
   return (
     <div className="user-directory flex w-full min-w-0 flex-col gap-5">
-      <AdminHeading title="用户管理">
-        {mobile && (
-          <>
-            <Button
-              ref={(element) => {
-                mobileFilterTrigger.current = element;
-                registerFallbackTrigger(element);
-              }}
-              variant={mobileFiltersOpen ? "default" : "secondary"}
-              size="toolbar"
-              className="min-h-11"
-              aria-expanded={mobileFiltersOpen}
-              aria-controls={`${filterId}-form`}
-              onClick={() => setMobileFiltersOpen((open) => !open)}
-            >
-              {mobileFiltersOpen ? "收起筛选" : "筛选"}
-            </Button>
+      <h1 className="sr-only">用户管理</h1>
+      {mobile && (
+        <div
+          role="group"
+          aria-label="用户目录操作"
+          className="flex items-center justify-end gap-2"
+        >
+          <IconAction
+            icon={SlidersHorizontal}
+            ref={(element) => {
+              mobileFilterTrigger.current = element;
+              registerFallbackTrigger(element);
+            }}
+            variant={mobileFiltersOpen ? "default" : "secondary"}
+            className="min-h-11"
+            aria-expanded={mobileFiltersOpen}
+            aria-controls={`${filterId}-form`}
+            onClick={() => setMobileFiltersOpen((open) => !open)}
+            label={mobileFiltersOpen ? "收起筛选" : "筛选"}
+          />
+          <SelectionToolbar>
+            {" "}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -340,9 +357,10 @@ function UserAdministration() {
                 </DropdownMenuGroup>
               </DropdownMenuContent>
             </DropdownMenu>
-          </>
-        )}
-      </AdminHeading>
+          </SelectionToolbar>
+        </div>
+      )}
+
       <Collapsible asChild open={advanced} onOpenChange={setAdvanced}>
         <form
           id={`${filterId}-form`}
@@ -444,7 +462,7 @@ function UserAdministration() {
               role="group"
               aria-label="筛选操作"
             >
-              <Button
+              <IconAction
                 type="button"
                 variant="outline"
                 disabled={locked}
@@ -458,44 +476,35 @@ function UserAdministration() {
                   setOrder(defaultFilters.order);
                   applyFilters({ ...defaultFilters });
                 }}
-              >
-                重置
-              </Button>
+                icon={FunnelX}
+                label="重置筛选"
+              />
               <CollapsibleTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="group/filter-toggle"
-                >
-                  {advanced
-                    ? mobile
-                      ? "收起更多筛选"
-                      : "收起筛选"
-                    : "更多筛选"}
-                  {!advanced && appliedAdvancedCount > 0
-                    ? `（${appliedAdvancedCount}）`
-                    : null}
-                  <ChevronDown
-                    data-icon="inline-end"
-                    className="group-aria-expanded/filter-toggle:rotate-180"
-                    aria-hidden="true"
-                  />
-                </Button>
+                <IconAction
+                  icon={SlidersHorizontal}
+                  label={`${advanced ? (mobile ? "收起更多筛选" : "收起筛选") : "更多筛选"}${!advanced && appliedAdvancedCount ? `（${appliedAdvancedCount}）` : ""}`}
+                  variant={
+                    advanced || appliedAdvancedCount ? "secondary" : "ghost"
+                  }
+                />
               </CollapsibleTrigger>
-              <Button type="submit" disabled={locked}>
-                查询
-              </Button>
+              <IconAction
+                type="submit"
+                disabled={locked}
+                icon={Search}
+                label="查询"
+              />
             </div>
             {!mobile ? (
               <>
-                <Button
+                <IconAction
                   type="button"
                   variant="outline"
                   disabled={refreshDisabled}
                   onClick={refresh}
-                >
-                  刷新
-                </Button>
+                  icon={RefreshCw}
+                  label="刷新"
+                />
                 <ColumnMenu
                   columns={[
                     { id: "role", label: "平台角色" },
@@ -504,30 +513,32 @@ function UserAdministration() {
                   visibility={visibility}
                   onChange={setVisibility}
                 />
-                <div
-                  className="ml-auto flex flex-wrap gap-2"
-                  role="group"
-                  aria-label="账号目录操作"
-                >
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={forbidden}
-                    aria-expanded={toolsOpen}
-                    onClick={() => setToolsOpen((v) => !v)}
+                <SelectionToolbar>
+                  {" "}
+                  <div
+                    className="ml-auto flex flex-wrap gap-2"
+                    role="group"
+                    aria-label="账号目录操作"
                   >
-                    统计与导出
-                  </Button>
-                  <Button
-                    type="button"
-                    disabled={forbidden}
-                    aria-expanded={governanceOpen}
-                    onClick={() => setGovernanceOpen((v) => !v)}
-                  >
-                    <Plus data-icon="inline-start" />
-                    账号邀请
-                  </Button>
-                </div>
+                    <IconAction
+                      type="button"
+                      variant="outline"
+                      disabled={forbidden}
+                      aria-expanded={toolsOpen}
+                      onClick={() => setToolsOpen((v) => !v)}
+                      icon={ChartColumn}
+                      label="统计与导出"
+                    />
+                    <IconAction
+                      type="button"
+                      disabled={forbidden}
+                      aria-expanded={governanceOpen}
+                      onClick={() => setGovernanceOpen((v) => !v)}
+                      icon={UserPlus}
+                      label="账号邀请"
+                    />
+                  </div>
+                </SelectionToolbar>
               </>
             ) : null}
           </div>
@@ -645,8 +656,15 @@ function UserAdministration() {
               {(
                 ["enable", "revoke_sessions", "disable", "delete"] as const
               ).map((kind) => (
-                <Button
-                  size="toolbar"
+                <IconAction
+                  icon={
+                    {
+                      enable: CircleCheck,
+                      revoke_sessions: LogOut,
+                      disable: Ban,
+                      delete: Trash2,
+                    }[kind]
+                  }
                   key={kind}
                   variant={kind === "delete" ? "destructive" : "outline"}
                   disabled={locked || batch.unresolved}
@@ -656,8 +674,7 @@ function UserAdministration() {
                       userBatchAction(kind, session.actor.id),
                     )
                   }
-                >
-                  {
+                  label={
                     {
                       enable: "启用账号",
                       revoke_sessions: "撤销会话",
@@ -665,7 +682,7 @@ function UserAdministration() {
                       delete: "删除账号",
                     }[kind]
                   }
-                </Button>
+                />
               ))}
             </SelectionBar>
           ) : !pending &&
@@ -676,7 +693,6 @@ function UserAdministration() {
             </p>
           ) : null}
           <DataTable
-            density="comfortable"
             columns={columns}
             data={page.items}
             label="用户目录"
@@ -699,7 +715,8 @@ function UserAdministration() {
             label="用户分页"
             current={cursors.length}
             pageSize={pageSize}
-            pageSizeOptions={[20, 50]}
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+
             itemCount={page.items.length}
             hasNextPage={!!page.next_cursor}
             disabled={locked || batch.unresolved}

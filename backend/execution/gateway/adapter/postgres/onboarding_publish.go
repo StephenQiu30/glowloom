@@ -108,7 +108,7 @@ func (s *Store) PublishVerified(ctx context.Context, id uuid.UUID) error {
 		// Check and hold the precise credential and route through alias activation.
 		route := work.Input.Route
 		var eligible struct{ ID uuid.UUID }
-		q := tx.Raw("SELECT r.id FROM ai.route r JOIN ai.credential c ON c.id=r.credential_id WHERE r.id=? AND r.model_id=? AND NOT r.enabled AND c.state='active' FOR UPDATE OF r FOR SHARE OF c", route.ID, work.Model.ID).Scan(&eligible)
+		q := tx.Raw("SELECT r.id FROM ai.route r JOIN ai.credential c ON c.id=r.credential_id WHERE r.id=? AND r.deleted_at IS NULL AND r.model_id=? AND NOT r.enabled AND c.state='active' FOR UPDATE OF r FOR SHARE OF c", route.ID, work.Model.ID).Scan(&eligible)
 		if q.Error != nil {
 			return q.Error
 		}
@@ -214,7 +214,7 @@ func (s *Store) RollbackOnboarding(ctx context.Context, id uuid.UUID) error {
 
 func enableEligibleRoute(tx *gorm.DB, model domain.Model, id uuid.UUID) (bool, error) {
 	var row struct{ Document []byte }
-	q := tx.Raw("SELECT r.document FROM ai.route r JOIN ai.credential c ON c.id=r.credential_id WHERE r.id=? AND r.model_id=? AND c.state='active' FOR UPDATE OF r FOR SHARE OF c", id, model.ID).Scan(&row)
+	q := tx.Raw("SELECT r.document FROM ai.route r JOIN ai.credential c ON c.id=r.credential_id WHERE r.id=? AND r.deleted_at IS NULL AND r.model_id=? AND c.state='active' FOR UPDATE OF r FOR SHARE OF c", id, model.ID).Scan(&row)
 	if q.Error != nil || q.RowsAffected != 1 {
 		return false, q.Error
 	}

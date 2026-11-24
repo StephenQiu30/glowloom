@@ -1,15 +1,23 @@
 "use client";
+import { SelectionToolbar } from "@/components/governance/admin-layout";
+import { IconAction } from "@/components/ui/icon-action";
+import {
+  Eye,
+  Search,
+  FunnelX,
+  SlidersHorizontal,
+  RefreshCw,
+  Plus,
+  CircleCheck,
+  Ban,
+} from "lucide-react";
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/lib/pagination";
 import { ContentState } from "@/components/layout/content-state";
 import { readErrorMessage } from "@/lib/read-error";
 import { PlatformTeamInvitations } from "./platform-team-invitations";
 import { Field, FieldLabel } from "@/components/ui/field";
-import Link from "next/link";
-import { ChevronDown } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import {
-  AdminHeading,
-  SelectionBar,
-} from "@/components/governance/admin-layout";
+import { SelectionBar } from "@/components/governance/admin-layout";
 import {
   DataTable,
   type DataTableColumn,
@@ -75,7 +83,7 @@ function TeamAdministration() {
   const mobile = useIsMobile();
   const [selected, setSelected] = useState<API.PlatformTeam[]>([]);
   const [cursors, setCursors] = useState<string[]>([""]);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [loading, setLoading] = useState(true);
   const [advanced, setAdvanced] = useState(false);
   const [filterStatus, setFilterStatus] = useState("all");
@@ -247,14 +255,13 @@ function TeamAdministration() {
       id: "actions",
       header: "操作",
       cell: ({ row }) => (
-        <Button
+        <IconAction
           variant="ghost"
           disabled={locked}
-          aria-label={`查看 ${row.original.name}`}
           onClick={() => void inspect(row.original)}
-        >
-          查看
-        </Button>
+          icon={Eye}
+          label={`查看 ${row.original.name}`}
+        />
       ),
     },
   ];
@@ -268,11 +275,7 @@ function TeamAdministration() {
     );
   return (
     <div className="flex w-full flex-col gap-5">
-      <AdminHeading title="团队管理">
-        <Button variant="outline" asChild>
-          <Link href="/teams#team-create">创建团队</Link>
-        </Button>
-      </AdminHeading>
+      <h1 className="sr-only">团队管理</h1>
       <Collapsible asChild open={advanced} onOpenChange={setAdvanced}>
         <form
           aria-label="团队筛选"
@@ -310,7 +313,7 @@ function TeamAdministration() {
               name="search"
               aria-label="搜索团队名称"
               placeholder="团队名称"
-              className="sm:w-56 xl:w-60"
+              className="max-sm:min-w-[calc(100%-3.25rem)] max-sm:flex-1 sm:w-56 xl:w-60"
               disabled={locked}
             />
             <Select
@@ -319,7 +322,10 @@ function TeamAdministration() {
               value={filterStatus}
               onValueChange={setFilterStatus}
             >
-              <SelectTrigger aria-label="团队状态" className="max-w-full">
+              <SelectTrigger
+                aria-label="团队状态"
+                className="max-w-full max-sm:order-1"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -335,33 +341,38 @@ function TeamAdministration() {
             </Select>
 
             <div
-              className="flex flex-wrap items-center gap-2"
+              className="flex flex-wrap items-center gap-2 max-sm:order-1"
               role="group"
               aria-label="筛选操作"
             >
-              <Button disabled={locked}>查询</Button>
-              <Button type="reset" variant="outline" disabled={locked}>
-                重置
-              </Button>
+              <IconAction
+                disabled={locked}
+                icon={Search}
+                label="查询"
+                type="submit"
+              />
+              <IconAction
+                type="reset"
+                variant="outline"
+                disabled={locked}
+                icon={FunnelX}
+                label="重置筛选"
+              />
               <CollapsibleTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="group/filter-toggle"
-                >
-                  {advanced ? "收起筛选" : "更多筛选"}
-                  {!advanced && appliedAdvancedCount > 0
-                    ? `（${appliedAdvancedCount}）`
-                    : null}
-                  <ChevronDown
-                    data-icon="inline-end"
-                    className="group-aria-expanded/filter-toggle:rotate-180"
-                    aria-hidden="true"
-                  />
-                </Button>
+                <IconAction
+                  icon={SlidersHorizontal}
+                  label={
+                    advanced
+                      ? "收起筛选"
+                      : `更多筛选${appliedAdvancedCount ? `（${appliedAdvancedCount}）` : ""}`
+                  }
+                  variant={
+                    advanced || appliedAdvancedCount ? "secondary" : "ghost"
+                  }
+                />
               </CollapsibleTrigger>
             </div>
-            <Button
+            <IconAction
               type="button"
               variant="outline"
               disabled={locked}
@@ -369,9 +380,20 @@ function TeamAdministration() {
                 setLoading(true);
                 setReload((n) => n + 1);
               }}
-            >
-              刷新
-            </Button>
+              className="max-sm:order-1"
+              icon={RefreshCw}
+              label="刷新"
+            />
+            <SelectionToolbar>
+              {" "}
+              <IconAction
+                label="创建团队"
+                icon={Plus}
+                href="/teams#team-create"
+                variant="default"
+                className="ml-auto"
+              />
+            </SelectionToolbar>
           </div>
           <CollapsibleContent
             forceMount
@@ -456,22 +478,20 @@ function TeamAdministration() {
             onClear={() => setSelected([])}
           >
             {(["restore", "suspend"] as const).map((kind) => (
-              <Button
-                size="toolbar"
+              <IconAction
+                icon={kind === "restore" ? CircleCheck : Ban}
                 key={kind}
                 variant="outline"
                 disabled={locked}
                 onClick={() =>
                   void batch.prepare(selected, teamBatchAction(kind))
                 }
-              >
-                {kind === "restore" ? "恢复团队" : "停用团队"}
-              </Button>
+                label={kind === "restore" ? "恢复团队" : "停用团队"}
+              />
             ))}
           </SelectionBar>
           <DataTable
             label="团队目录"
-            density="comfortable"
             columns={columns}
             data={page.items ?? []}
             emptyTitle="没有符合条件的团队"
@@ -493,7 +513,8 @@ function TeamAdministration() {
             label="团队分页"
             current={cursors.length}
             pageSize={pageSize}
-            pageSizeOptions={[20, 50]}
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+
             itemCount={page.items?.length ?? 0}
             hasNextPage={!!page.next_cursor}
             disabled={locked}

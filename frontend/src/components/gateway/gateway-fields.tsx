@@ -1,8 +1,15 @@
 "use client";
 
 import { useId, useState, type ComponentProps, type ReactNode } from "react";
-import { ChevronDown, LoaderCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import {
+  ChevronDown,
+  ChevronUp,
+  LoaderCircle,
+  Save,
+  type LucideIcon,
+} from "lucide-react";
+import { GatewayAction } from "./gateway-action";
+
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Collapsible,
@@ -136,20 +143,12 @@ export function FormDetails({
         requestAnimationFrame(() => target.focus());
       }}
     >
-      <CollapsibleTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          className="group px-0 max-md:min-h-11"
-        >
-          {label}
-          <ChevronDown
-            aria-hidden="true"
-            data-icon="inline-end"
-            className="group-data-[state=open]:rotate-180"
-          />
-        </Button>
-      </CollapsibleTrigger>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-medium">{label}</span>
+        <CollapsibleTrigger asChild>
+          <GatewayAction icon={open ? ChevronUp : ChevronDown} label={label} />
+        </CollapsibleTrigger>
+      </div>
       <CollapsibleContent
         forceMount={keepMounted ? true : undefined}
         className="pt-3 data-[state=closed]:hidden"
@@ -162,26 +161,24 @@ export function FormDetails({
 
 export function SubmitButton({
   busy,
-  children,
+  label,
+  icon = Save,
   disabled,
-  ...props
-}: ComponentProps<typeof Button> & { busy: boolean }) {
+}: {
+  busy: boolean;
+  label: string;
+  icon?: LucideIcon;
+  disabled?: boolean;
+}) {
   return (
-    <Button
+    <GatewayAction
       type="submit"
-      className="w-full max-md:min-h-11 sm:w-fit"
+      variant="default"
+      label={label}
+      icon={busy ? LoaderCircle : icon}
       disabled={busy || disabled}
-      {...props}
-    >
-      {busy && (
-        <LoaderCircle
-          aria-hidden="true"
-          data-icon="inline-start"
-          className="motion-safe:animate-spin"
-        />
-      )}
-      {children}
-    </Button>
+      aria-busy={busy}
+    />
   );
 }
 

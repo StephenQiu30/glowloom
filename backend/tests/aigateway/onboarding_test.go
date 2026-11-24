@@ -471,3 +471,38 @@ func TestOnboardingArkEmbeddingRequiresSettledVector(t *testing.T) {
 	require.Equal(t, m.ID, current.ID)
 	require.True(t, projectSeesModel())
 }
+
+func TestRouteDeletionIsAtomicAndPreservesAdmittedAttempts(t *testing.T) {
+	db, store, model, actor := fixture(t)
+	ctx := t.Context()
+	c := call(t, model, actor)
+	dispatch, err := store.Admit(ctx, c)
+	require.NoError(t, err)
+	active := dispatch.Route.ID
+	in := application.Onboarding{Route: domain.Route{ID: uuid.New(), ModelID: model.ID, Supplier: uuid.New(), Group: uuid.NewString(), Protocol: "chat", BaseURL: "https://8.8.8.8/v1", UpstreamModel: "pending-delete", Purchase: model.Price}, Scope: actor.ScopeID, Concurrency: 2, RPM: 10000}
+	require.NoError(t, store.PrepareOnboarding(ctx, in))
+	targets := []uuid.UUID{active, in.Route.ID}
+	require.ErrorIs(t, store.DeleteRoutes(ctx, append(targets, uuid.New())), pg.ErrRouteNotFound)
+	require.NoError(t, db.Exec("UPDATE ai.onboarding SET state='verifying' WHERE id=?", in.Route.ID).Error)
+	require.ErrorIs(t, store.DeleteRoutes(ctx, targets), pg.ErrRouteVerifying)
+	var enabled bool
+	require.NoError(t, db.Raw("SELECT enabled FROM ai.route WHERE id=?", active).Row().Scan(&enabled))
+	require.True(t, enabled)
+	require.NoError(t, db.Exec("UPDATE ai.onboarding SET state='prepared' WHERE id=?", in.Route.ID).Error)
+	require.ErrorIs(t, pg.New(db, actor, nil).DeleteRoutes(ctx, targets), domain.ErrForbidden)
+	require.NoError(t, store.DeleteRoutes(ctx, targets))
+	require.NoError(t, store.DeleteRoutes(ctx, targets))
+	require.ErrorIs(t, store.PrepareOnboarding(ctx, in), domain.ErrConflict)
+	retired := in
+	retired.Route.ID = active
+	require.ErrorIs(t, store.PrepareOnboarding(ctx, retired), domain.ErrConflict)
+	var retained bool
+	require.NoError(t, db.Raw("SELECT EXISTS(SELECT 1 FROM ai.attempt a JOIN ai.route r ON r.id=a.route_id WHERE a.id=? AND NOT r.enabled AND r.deleted_by=?)", dispatch.Attempt, actor.ID).Row().Scan(&retained))
+	require.True(t, retained)
+	_, err = store.ReviewOnboarding(ctx, in.Route.ID)
+	require.ErrorIs(t, err, domain.ErrUnavailable)
+	next, err := store.Admit(ctx, call(t, model, actor))
+	require.NoError(t, err)
+	require.NotEqual(t, active, next.Route.ID)
+	require.NoError(t, store.DeleteRoutes(ctx, []uuid.UUID{next.Route.ID}))
+}

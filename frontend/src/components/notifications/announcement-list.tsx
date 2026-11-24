@@ -1,12 +1,17 @@
 "use client";
+import { SelectionToolbar } from "@/components/governance/admin-layout";
+import { usePageSelection } from "@/components/governance/use-page-selection";
+import { IconAction } from "@/components/ui/icon-action";
+import { Search, SlidersHorizontal, Plus, Eye, FunnelX } from "lucide-react";
 
-import Link from "next/link";
-import { useMemo, useState } from "react";
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/lib/pagination";
+import { ListPagination } from "@/components/canvas/runtime/components/layout/workspace/list-pagination";
+import { Input } from "@/components/ui/input";
+import { useState } from "react";
 import useSWR from "swr";
 import { listPlatformNotifications } from "@/api/notifications";
 import { useSession } from "@/components/auth/session";
 import { PageLayout } from "@/components/layout/page-layout";
-import { AdminHeading } from "@/components/governance/admin-layout";
 import { ContentState } from "@/components/layout/content-state";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,13 +24,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemTitle,
-  ItemDescription,
-} from "@/components/ui/item";
-import {
   Sheet,
   SheetContent,
   SheetHeader,
@@ -33,7 +31,6 @@ import {
   SheetFooter,
 } from "@/components/ui/sheet";
 import { FieldGroup } from "@/components/ui/field";
-import { Separator } from "@/components/ui/separator";
 import {
   NotificationSelect,
   NotificationDateField,
@@ -72,11 +69,12 @@ export function AnnouncementList() {
   const [filters, setFilters] = useState(initialFilters);
   const [draft, setDraft] = useState(initialFilters);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const cursor = cursors.at(-1);
   const page = useSWR(
     actor.platform_role === "platform_admin"
-      ? ["announcement-list", actor.id, keyword, filters, cursor]
+      ? ["announcement-list", actor.id, keyword, filters, cursor, pageSize]
       : null,
     () =>
       listPlatformNotifications({
@@ -87,43 +85,38 @@ export function AnnouncementList() {
         from: dateBoundary(filters.from),
         to: dateBoundary(filters.to, true),
         cursor,
-        limit: 20,
+        limit: pageSize,
       }),
     { shouldRetryOnError: false },
   );
-  const search = useMemo(
-    () => ({
-      value: query,
-      onValueChange: setQuery,
-      onSearch: (value: string) => {
-        setKeyword(value.trim());
-        setCursors([undefined]);
-      },
-      label: "搜索通知",
-      placeholder: "搜索通知标题",
-    }),
-    [query],
-  );
   const items = (page.data?.items ?? []).map(requireAnnouncement);
+  const checks = usePageSelection(
+    items,
+    JSON.stringify([actor.id, keyword, filters, Boolean(page.error)]),
+    "通知",
+    (row) => row.draft.title || row.id,
+  );
   return (
-    <PageLayout screen="platform/notifications" search={search}>
+    <PageLayout screen="platform/notifications" hideSearch>
       <div className="notification-surface flex min-w-0 flex-col gap-6">
-        <AdminHeading title="通知管理">
-          <Button
-            variant="outline"
-            onClick={() => {
-              setDraft(filters);
-              setFilterOpen(true);
-            }}
-          >
-            筛选
-          </Button>
-          <Button asChild>
-            <Link href="/platform/notifications/new">新建通知</Link>
-          </Button>
-        </AdminHeading>
-        <div className="flex flex-wrap items-center gap-3">
-          <FieldGroup className="w-44">
+        <h1 className="sr-only">通知管理</h1>
+        <form
+          aria-label="通知筛选"
+          className="flex flex-wrap items-center gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setKeyword(query.trim());
+            setCursors([undefined]);
+          }}
+        >
+          <Input
+            className="sm:w-60"
+            aria-label="搜索通知"
+            placeholder="搜索通知标题"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          <FieldGroup className="max-w-40 [&_[data-slot=field-label]]:sr-only">
             <NotificationSelect
               label="状态"
               value={filters.status}
@@ -134,25 +127,42 @@ export function AnnouncementList() {
               }}
             />
           </FieldGroup>
+          <IconAction type="submit" label="搜索通知标题" icon={Search} />
+          <IconAction
+            label="筛选"
+            icon={SlidersHorizontal}
+            onClick={() => {
+              setDraft(filters);
+              setFilterOpen(true);
+            }}
+          />
           {keyword ||
           Object.entries(filters).some(
             ([key, value]) =>
               value !== initialFilters[key as keyof typeof initialFilters],
           ) ? (
-            <Button
-              variant="ghost"
-              size="sm"
+            <IconAction
+              label="重置筛选"
+              icon={FunnelX}
               onClick={() => {
                 setFilters(initialFilters);
                 setKeyword("");
                 setQuery("");
                 setCursors([undefined]);
               }}
-            >
-              重置
-            </Button>
+            />
           ) : null}
-        </div>
+          <SelectionToolbar>
+            {" "}
+            <IconAction
+              label="新建通知"
+              icon={Plus}
+              variant="default"
+              href="/platform/notifications/new"
+              className="ml-auto"
+            />
+          </SelectionToolbar>
+        </form>
         {page.error ? (
           <ContentState
             state="error"
@@ -173,28 +183,36 @@ export function AnnouncementList() {
           <ContentState title="没有符合条件的通知" />
         ) : (
           <>
-            <div className="hidden md:block">
-              <Table>
+            <div className="min-w-0 overflow-hidden rounded-md border">
+              <Table aria-label="通知列表">
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">{checks.selectAll}</TableHead>
                     <TableHead>标题</TableHead>
-                    <TableHead>展示位置</TableHead>
-                    <TableHead>接收范围</TableHead>
+                    <TableHead className="hidden md:table-cell">
+                      展示位置
+                    </TableHead>
+                    <TableHead className="hidden md:table-cell">
+                      接收范围
+                    </TableHead>
                     <TableHead>状态</TableHead>
-                    <TableHead>生效时间</TableHead>
+                    <TableHead className="hidden md:table-cell">
+                      生效时间
+                    </TableHead>
                     <TableHead className="text-right">操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {items.map((item) => (
                     <TableRow key={item.id}>
-                      <TableCell className="max-w-80 truncate">
+                      <TableCell>{checks.selectRow(item)}</TableCell>
+                      <TableCell className="max-w-48 truncate md:max-w-80">
                         {item.draft.title}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden md:table-cell">
                         {optionLabel(positionOptions, item.draft.placement)}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden md:table-cell">
                         {optionLabel(audienceOptions, item.draft.audience)}
                       </TableCell>
                       <TableCell>
@@ -202,72 +220,45 @@ export function AnnouncementList() {
                           {announcementStatus(item.status)}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden md:table-cell">
                         {item.draft.starts_at
                           ? notificationDate(item.draft.starts_at)
                           : "—"}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" asChild>
-                          <Link href={`/platform/notifications/${item.id}`}>
-                            查看
-                          </Link>
-                        </Button>
+                        <IconAction
+                          label={`查看 ${item.draft.title}`}
+                          href={`/platform/notifications/${item.id}`}
+                          icon={Eye}
+                        />
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
-            <div className="flex flex-col gap-2 md:hidden">
-              {items.map((item) => (
-                <div key={item.id}>
-                  <Item>
-                    <ItemContent>
-                      <ItemTitle>{item.draft.title}</ItemTitle>
-                      <ItemDescription>
-                        {optionLabel(positionOptions, item.draft.placement)} ·{" "}
-                        {announcementStatus(item.status)}
-                      </ItemDescription>
-                      <p className="text-xs text-muted-foreground">
-                        {optionLabel(audienceOptions, item.draft.audience)}
-                      </p>
-                    </ItemContent>
-                    <ItemActions>
-                      <Button variant="ghost" asChild>
-                        <Link href={`/platform/notifications/${item.id}`}>
-                          查看
-                        </Link>
-                      </Button>
-                    </ItemActions>
-                  </Item>
-                  <Separator />
-                </div>
-              ))}
-            </div>
           </>
         )}
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-muted-foreground">每页 20 条</p>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              disabled={cursors.length === 1 || page.isLoading}
-              onClick={() => setCursors((value) => value.slice(0, -1))}
-            >
-              上一页
-            </Button>
-            <Button
-              variant="outline"
-              disabled={!page.data?.next_cursor || page.isLoading}
-              onClick={() =>
-                setCursors((value) => [...value, page.data!.next_cursor!])
-              }
-            >
-              下一页
-            </Button>
-          </div>
-        </div>
+        {checks.actions}
+        <ListPagination
+          mode="cursor"
+          label="公告分页"
+          current={cursors.length}
+          itemCount={page.data?.items?.length}
+          pageSize={pageSize}
+          pageSizeOptions={PAGE_SIZE_OPTIONS}
+          pending={page.isLoading}
+          hasNextPage={Boolean(page.data?.next_cursor)}
+          onPageChange={(next) => {
+            if (next < cursors.length) setCursors(cursors.slice(0, -1));
+            else if (page.data?.next_cursor)
+              setCursors([...cursors, page.data.next_cursor]);
+          }}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setCursors([undefined]);
+          }}
+        />
         <Sheet open={filterOpen} onOpenChange={setFilterOpen}>
           <SheetContent
             className="notification-surface w-full overflow-y-auto data-[side=right]:w-full [&_[data-slot=sheet-close]]:size-11"
@@ -321,7 +312,7 @@ export function AnnouncementList() {
                 variant="outline"
                 onClick={() => setDraft(initialFilters)}
               >
-                重置
+                重置筛选
               </Button>
               <Button
                 onClick={() => {

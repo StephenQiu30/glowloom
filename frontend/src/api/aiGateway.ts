@@ -152,6 +152,21 @@ export async function prepareAiRoute(
   });
 }
 
+/** 删除选定的供应商渠道 POST /api/ai/admin/routes/delete */
+export async function deleteAiRoutes(
+  body: API.DeleteRoutesInput,
+  options?: RequestOptions,
+) {
+  return request<any>("/api/ai/admin/routes/delete", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    data: body,
+    ...(options || {}),
+  });
+}
+
 /** 读取统一模型账单 GET /api/ai/bills */
 export async function listAiBills(options?: RequestOptions) {
   return request<Record<string, any>>("/api/ai/bills", {

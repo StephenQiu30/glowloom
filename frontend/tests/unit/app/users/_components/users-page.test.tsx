@@ -44,7 +44,7 @@ it("server filters and pagination use platform contract without temporary-passwo
   fireEvent.change(screen.getByLabelText("搜索用户邮箱或显示名"), {
     target: { value: "creator" },
   });
-  fireEvent.click(screen.getByText("查询"));
+  fireEvent.click(screen.getByRole("button", { name: "查询" }));
   await waitFor(() =>
     expect(request).toHaveBeenCalledWith(
       "/api/platform/users",
@@ -88,10 +88,10 @@ it("permission loss clears private directory while retaining retry", async () =>
     .mockRejectedValue(new RequestError("forbidden", 403));
   render(<UserDirectory />);
   await screen.findByText("private@example.com");
-  fireEvent.click(screen.getByText("刷新"));
+  fireEvent.click(screen.getByRole("button", { name: "刷新" }));
   await screen.findByRole("heading", { name: "暂无访问权限" });
   expect(screen.queryByText("private@example.com")).toBeNull();
-  expect(screen.getByText("刷新")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "刷新" })).toBeTruthy();
 });
 it("empty platform directory reports no invented users", async () => {
   vi.mocked(request).mockResolvedValue({ items: [], next_cursor: null });
@@ -175,12 +175,12 @@ it("高级筛选收起后仍可查询，重置清除条件并返回第一页", a
     ),
   );
   await waitFor(() =>
-    expect(screen.getByRole("button", { name: "重置" })).toHaveProperty(
+    expect(screen.getByRole("button", { name: "重置筛选" })).toHaveProperty(
       "disabled",
       false,
     ),
   );
-  fireEvent.click(screen.getByRole("button", { name: "重置" }));
+  fireEvent.click(screen.getByRole("button", { name: "重置筛选" }));
   await waitFor(() => {
     const [, options] = vi.mocked(request).mock.lastCall!;
     expect(options?.params).toMatchObject({ cursor: undefined, search: "" });

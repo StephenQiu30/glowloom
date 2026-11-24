@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { listProjects } from "@/api/projects";
-import { Button } from "@/components/ui/button";
+import { GatewayAction } from "./gateway-action";
 import {
   FieldDescription,
   FieldGroup,
@@ -261,16 +261,12 @@ function AddButton({
   onClick: () => void;
 }) {
   return (
-    <Button
-      type="button"
-      variant="outline"
-      className="w-fit max-md:min-h-11"
+    <GatewayAction
+      label={label}
+      icon={Plus}
       disabled={disabled}
       onClick={onClick}
-    >
-      <Plus data-icon="inline-start" aria-hidden="true" />
-      {label}
-    </Button>
+    />
   );
 }
 
@@ -281,18 +277,7 @@ function RemoveButton({
   label: string;
   onClick: () => void;
 }) {
-  return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon"
-      aria-label={label}
-      onClick={onClick}
-      className="shrink-0 self-end max-md:size-11"
-    >
-      <Trash2 aria-hidden="true" />
-    </Button>
-  );
+  return <GatewayAction label={label} icon={Trash2} onClick={onClick} />;
 }
 
 function ModeRow({

@@ -2,6 +2,7 @@
 import { request } from "@/lib/request";
 
 export type GatewayPrice = {
+  explicit_free?: boolean;
   input: number;
   cache_read: number;
   cache_write: number;
