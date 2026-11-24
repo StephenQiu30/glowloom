@@ -22,10 +22,10 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/media/mediatool/domain"
 )
 
-// DepthMediaFactory binds exact pending result cleanup to its media owner.
 // SavedMediaSourceFactory binds the canvas reader to the admission transaction.
 type SavedMediaSourceFactory func(*gorm.DB) application.SavedMediaSourceReader
 
+// DepthMediaFactory binds exact pending result cleanup to its media owner.
 type DepthMediaFactory func(*gorm.DB) application.DepthDerivedMedia
 
 // DepthStore owns native depth facts and consumes the existing canvas/media ports.

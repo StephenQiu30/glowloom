@@ -4,12 +4,16 @@ import (
 	"context"
 	"errors"
 
-	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
 )
 
+// ErrRouteVerifying indicates that a requested channel is being verified.
 var ErrRouteVerifying = errors.New("route verification in progress")
+
+// ErrRouteNotFound indicates that a requested channel does not exist.
 var ErrRouteNotFound = errors.New("route not found")
 
 // DeleteRoutes retires channels and their onboarding entries without rewriting historical contracts.

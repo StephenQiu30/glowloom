@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -176,12 +177,12 @@ func (h *Handler) deleteRoutes(c *gin.Context) {
 		return
 	}
 	err := h.store(identityhttp.Principal(c)).DeleteRoutes(c.Request.Context(), in.IDs)
-	switch err {
-	case nil:
+	switch {
+	case err == nil:
 		c.Status(http.StatusNoContent)
-	case pg.ErrRouteVerifying:
+	case errors.Is(err, pg.ErrRouteVerifying):
 		c.JSON(http.StatusConflict, gin.H{"code": "route_verification_in_progress"})
-	case pg.ErrRouteNotFound:
+	case errors.Is(err, pg.ErrRouteNotFound):
 		c.JSON(http.StatusNotFound, gin.H{"code": "route_not_found"})
 	default:
 		problem(c, err)

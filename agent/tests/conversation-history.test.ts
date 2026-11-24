@@ -223,8 +223,10 @@ it('reopens and pages more than 100 committed messages without losing older outp
     type: 'conversation',
     value: { id: ROOT_CONVERSATION_ID },
   };
+  const messageCount = 123;
+  const pageSize = 20;
   try {
-    for (let i = 0; i < 123; i++) {
+    for (let i = 0; i < messageCount; i++) {
       const result = await storage.commit(
         [i === 0 ? [write] : []],
         () => {},
@@ -233,23 +235,24 @@ it('reopens and pages more than 100 committed messages without losing older outp
       expect(result.stored).toBe(1);
     }
     const snapshot = await store.snapshot(run);
-    expect(snapshot.messages_page.items).toHaveLength(50);
-    const page2 = await history.messages(run.id, {
-      ...who,
-      through: snapshot.snapshot_cursor,
-      before: snapshot.messages_page.next_cursor!,
-    });
-    const page3 = await history.messages(run.id, {
-      ...who,
-      through: snapshot.snapshot_cursor,
-      before: page2.next_cursor!,
-    });
-    expect(
-      [...page3.items, ...page2.items, ...snapshot.messages_page.items].map(
-        (part) => part.content,
-      ),
-    ).toEqual(Array.from({ length: 123 }, (_, i) => `part${i + 1}`));
-    expect(page3.next_cursor).toBeUndefined();
+    let page = snapshot.messages_page;
+    expect(page.items).toHaveLength(pageSize);
+    const contents = page.items.map((part) => part.content);
+    while (page.next_cursor && contents.length < messageCount) {
+      page = await history.messages(run.id, {
+        ...who,
+        through: snapshot.snapshot_cursor,
+        before: page.next_cursor,
+      });
+      expect(page.items).toHaveLength(
+        Math.min(pageSize, messageCount - contents.length),
+      );
+      contents.unshift(...page.items.map((part) => part.content));
+    }
+    expect(contents).toEqual(
+      Array.from({ length: messageCount }, (_, i) => `part${i + 1}`),
+    );
+    expect(page.next_cursor).toBeUndefined();
     const last = (
       await pool.query<{ payload: { message_parts: unknown[] } }>(
         'SELECT payload FROM agent.runtime_events WHERE session_id=$1 ORDER BY commit_seq DESC,event_ordinal DESC LIMIT 1',
