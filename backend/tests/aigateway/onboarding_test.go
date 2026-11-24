@@ -542,7 +542,8 @@ func TestOnboardingConfigurationShowsActualProviderMetadata(t *testing.T) {
 func TestOnboardingConfigurationExcludesHistoricalLocalSpeech(t *testing.T) {
 	db, store, model, actor := fixture(t)
 	legacy := model
-	legacy.ID, legacy.Name, legacy.Protocol = uuid.New(), "local/whisper", "local"
+	legacy.ID, legacy.Protocol = uuid.New(), "local"
+	legacy.Name = "local/whisper-" + legacy.ID.String()
 	data, err := json.Marshal(legacy)
 	require.NoError(t, err)
 	require.NoError(t, db.Exec("INSERT INTO ai.model (id,name,document,enabled) VALUES (?,?,?::jsonb,true)", legacy.ID, legacy.Name, string(data)).Error)
