@@ -33,7 +33,7 @@ const tabsListVariants = cva(
         navigation: "gap-2 bg-transparent p-0",
         pill: "gap-2 bg-transparent p-0",
         workspace:
-          "min-w-0 max-w-full justify-start gap-1 overflow-x-auto bg-transparent p-0 [scrollbar-width:none] group-data-horizontal/tabs:h-auto",
+          "min-w-0 max-w-full justify-start gap-1 overflow-x-auto rounded-none bg-transparent p-0 [scrollbar-width:none] group-data-horizontal/tabs:h-auto",
         surface:
           "min-h-13 w-full justify-start gap-3 rounded-xl bg-card p-2 group-data-horizontal/tabs:h-auto",
         notification: "w-full bg-muted group-data-horizontal/tabs:h-11",
@@ -89,7 +89,7 @@ function TabsTrigger({
         "group-data-[variant=navigation]/tabs-list:px-4 group-data-[variant=navigation]/tabs-list:font-normal group-data-[variant=navigation]/tabs-list:data-active:border-transparent group-data-[variant=navigation]/tabs-list:data-active:bg-secondary",
         "group-data-[variant=pill]/tabs-list:rounded-full group-data-[variant=pill]/tabs-list:px-4 group-data-[variant=pill]/tabs-list:font-normal group-data-[variant=pill]/tabs-list:data-active:border-transparent group-data-[variant=pill]/tabs-list:data-active:bg-secondary",
         variant === "workspace" &&
-          "h-9 flex-none rounded-full border-0 px-3 text-[length:var(--text-workspace)] leading-[var(--text-workspace--line-height)] font-medium text-workspace-muted-foreground hover:text-workspace-foreground focus-visible:ring-inset max-md:min-h-11 pointer-coarse:min-h-11 data-active:bg-secondary data-active:text-workspace-foreground",
+          "h-9 flex-none rounded-none border-0 px-3 text-[length:var(--text-workspace)] leading-[var(--text-workspace--line-height)] font-medium text-workspace-muted-foreground hover:text-workspace-foreground focus-visible:ring-inset max-md:min-h-11 pointer-coarse:min-h-11 data-active:bg-secondary data-active:text-workspace-foreground",
         variant === "surface" &&
           "min-h-8 flex-none border-0 px-3 text-muted-foreground max-md:min-h-11 pointer-coarse:min-h-11 data-active:bg-primary data-active:text-primary-foreground",
         variant === "notification" &&

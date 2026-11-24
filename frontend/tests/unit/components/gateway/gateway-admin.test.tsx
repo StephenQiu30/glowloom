@@ -137,7 +137,13 @@ it("shows one resource table per provider tab and opens the selected billing att
   expect(
     screen.queryByRole("heading", { level: 1, name: "AI 服务接入" }),
   ).toBeNull();
-  expect(screen.getByRole("button", { name: "新增接入" }).textContent).toBe("");
+  const toolbar = screen.getByRole("group", { name: "供应商路由工具栏" });
+  expect(
+    within(toolbar).getByRole("button", { name: "新增接入" }).textContent,
+  ).toBe("");
+  expect(
+    within(toolbar).getByRole("button", { name: "刷新配置" }),
+  ).toBeTruthy();
   expect(
     screen.getByRole("link", { name: "查看路由" }).getAttribute("href"),
   ).toBe(`/providers/${verificationID}`);
@@ -154,7 +160,9 @@ it("shows one resource table per provider tab and opens the selected billing att
   expect(await screen.findByRole("link", { name: "查看路由" })).toBeTruthy();
   expect(screen.queryByText("pending-model")).toBeNull();
   for (const [tab, table] of [
+    ["模型", "销售模型"],
     ["待接入", "待接入渠道"],
+    ["验证", "接入验证"],
     ["配额", "共享配额"],
     ["凭据", "供应商凭据"],
     ["对账", "待对账请求"],

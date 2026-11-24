@@ -94,7 +94,7 @@ export function ToolsDirectory() {
   return (
     <PageLayout screen="ai-tools" fullBleed>
       <div className="tool-directory">
-        <PageHeader title="AI 工具" />
+        <PageHeader title="AI 工具" hideTitle />
         {error && (
           <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>

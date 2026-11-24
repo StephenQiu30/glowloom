@@ -40,8 +40,7 @@ const accountLinks = [
   { label: "修改密码", href: "/reset-password" },
 ];
 const platformLinks = [
-  { label: "AI 服务接入", href: "/providers" },
-  { label: "模型管理", href: "/models" },
+  { label: "AI 服务", href: "/models" },
   { label: "用户管理", href: "/users" },
   { label: "平台团队", href: "/platform/teams" },
   { label: "平台设置", href: "/platform/settings" },

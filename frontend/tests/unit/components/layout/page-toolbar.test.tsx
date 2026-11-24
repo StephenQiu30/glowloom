@@ -75,8 +75,8 @@ it("全部管理页导航进入共享顶栏，正文只保留页面内容", asyn
   try {
     const view = render(
       <PageToolbarContext.Provider value={host}>
-        <AdminWorkspace active="providers">
-          <AdminHeading title="AI 服务接入" />
+        <AdminWorkspace active="models">
+          <AdminHeading title="AI 服务" />
           <AdminHeading title="接入详情">
             <button>刷新详情</button>
           </AdminHeading>
@@ -89,11 +89,11 @@ it("全部管理页导航进入共享顶栏，正文只保留页面内容", asyn
     expect(view.container.querySelector(".admin-workspace nav")).toBeNull();
     expect(
       screen
-        .getByRole("link", { name: "AI 服务接入" })
+        .getByRole("link", { name: "AI 服务" })
         .getAttribute("aria-current"),
     ).toBe("page");
     const redundantTitle = screen.getByRole("heading", {
-      name: "AI 服务接入",
+      name: "AI 服务",
       level: 1,
     });
     expect(redundantTitle.classList.contains("sr-only")).toBe(true);

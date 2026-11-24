@@ -49,7 +49,7 @@ export const screens = [
   { id: "billing", name: "积分与会员", node: "4166:141347", group: "账号" },
   { id: "users", name: "用户管理", node: "4108:126578", group: "管理" },
   { id: "providers", name: "AI 服务接入", node: "4146:137773", group: "管理" },
-  { id: "models", name: "模型管理", node: "4146:137978", group: "管理" },
+  { id: "models", name: "AI 服务", node: "4146:137978", group: "管理" },
   { id: "audit", name: "审计日志", node: "4108:129597", group: "管理" },
   { id: "health", name: "运行诊断", node: "4108:129086", group: "管理" },
   { id: "bible", name: "主体", node: "3713:110935", group: "创作" },
@@ -73,11 +73,12 @@ export function resolveScreen(pathname: string) {
   );
 }
 
-/** These sibling management routes share navigation, never their business state. */
+/** Resolve the active workspace navigation item for each management route. */
 export function resolveAdminSection(screen: Screen, platformAdmin = false) {
   switch (screen) {
-    case "users":
     case "providers":
+      return "models";
+    case "users":
     case "models":
     case "health":
     case "audit":

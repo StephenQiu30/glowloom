@@ -67,8 +67,7 @@ it("展示当前账号摘要和真实入口，普通创作者不见管理入口"
   expect(screen.queryByRole("menuitem", { name: "我的画布" })).toBeNull();
   expect(screen.queryByRole("menuitem", { name: "平台管理" })).toBeNull();
   expect(screen.queryByRole("menuitem", { name: "用户管理" })).toBeNull();
-  expect(screen.queryByRole("menuitem", { name: "AI 服务接入" })).toBeNull();
-  expect(screen.queryByRole("menuitem", { name: "模型管理" })).toBeNull();
+  expect(screen.queryByRole("menuitem", { name: "AI 服务" })).toBeNull();
   expect(screen.queryByRole("menuitem", { name: "平台团队" })).toBeNull();
   expect(screen.queryByRole("menuitem", { name: "平台设置" })).toBeNull();
   expect(onLogout).not.toHaveBeenCalled();
@@ -95,7 +94,7 @@ it("仅向平台管理员提供管理入口", async () => {
     );
   }
 });
-it("平台管理员可以从账号菜单进入AI接入和模型管理", async () => {
+it("平台管理员从账号菜单进入统一 AI 服务", async () => {
   await openMenu({ ...actor, platform_role: "platform_admin" });
   expect(screen.queryByRole("menuitem", { name: "用户管理" })).toBeNull();
   fireEvent.keyDown(screen.getByRole("menuitem", { name: "平台管理" }), {
@@ -103,10 +102,7 @@ it("平台管理员可以从账号菜单进入AI接入和模型管理", async ()
   });
   await screen.findByRole("menuitem", { name: "用户管理" });
   expect(
-    screen.getByRole("menuitem", { name: "AI 服务接入" }).getAttribute("href"),
-  ).toBe("/providers");
-  expect(
-    screen.getByRole("menuitem", { name: "模型管理" }).getAttribute("href"),
+    screen.getByRole("menuitem", { name: "AI 服务" }).getAttribute("href"),
   ).toBe("/models");
 });
 it("历史 admin role 不授予平台管理入口", async () => {

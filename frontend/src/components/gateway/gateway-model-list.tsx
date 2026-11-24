@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Toolbar } from "@/components/ui/toolbar";
+import type { ReactNode } from "react";
 import { modelPreset, type GatewayConfiguration } from "@/lib/ai-gateway-admin";
 import { GatewayAction } from "./gateway-action";
 import { priceSummary } from "./gateway-fields";
@@ -48,9 +48,11 @@ type RouteRow = GatewayConfiguration["routes"][number];
 export function GatewayModelList({
   configuration,
   startRoute,
+  toolbarActions,
 }: {
   configuration: GatewayConfiguration;
   startRoute: (id: string) => void;
+  toolbarActions: ReactNode;
 }) {
   const [category, setCategory] = useState("all");
   const [draft, setDraft] = useState("");
@@ -166,71 +168,76 @@ export function GatewayModelList({
           ))}
         </TabsList>
         <TabsContent value={category} className="flex min-w-0 flex-col gap-2">
-          <Toolbar className="flex-wrap">
-            <form
-              role="search"
-              aria-label="搜索模型目录"
-              className="w-full sm:w-72"
-              onSubmit={(event) => {
-                event.preventDefault();
-                setQuery(draft.trim().toLowerCase());
-              }}
-            >
-              <InputGroup className="max-md:min-h-11">
-                <InputGroupInput
-                  type="text"
-                  aria-label="搜索模型、上游型号或渠道"
-                  placeholder="搜索模型、上游型号或渠道"
-                  value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
-                />
-                <InputGroupAddon
-                  align="inline-end"
-                  className="py-0 has-[>button]:mr-0"
-                >
-                  {draft && (
-                    <GatewayAction
-                      icon={X}
-                      label="清空模型搜索"
-                      className="size-7 max-md:size-11"
-                      onClick={() => {
-                        setDraft("");
-                        setQuery("");
-                      }}
-                    />
-                  )}
-                  <GatewayAction
-                    icon={Search}
-                    className="size-7 max-md:size-11"
-                    label="搜索模型"
-                    type="submit"
-                  />
-                </InputGroupAddon>
-              </InputGroup>
-            </form>
-            <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger
-                aria-label="模型可用状态"
-                className="max-md:min-h-11"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value="all">全部状态</SelectItem>
-                  <SelectItem value="available">可用</SelectItem>
-                  <SelectItem value="unavailable">不可用</SelectItem>
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </Toolbar>
-          <p
-            role="status"
-            className="text-sm text-muted-foreground tabular-nums"
-          >
-            {matching.length} 个模型 · {channelCount} 条渠道
-          </p>
           <GatewayTable
+            toolbarActions={toolbarActions}
+            filters={
+              <>
+                <form
+                  role="search"
+                  aria-label="搜索模型目录"
+                  className="w-full sm:w-72"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    setQuery(draft.trim().toLowerCase());
+                  }}
+                >
+                  <InputGroup className="max-md:min-h-11">
+                    <InputGroupInput
+                      type="text"
+                      aria-label="搜索模型、上游型号或渠道"
+                      placeholder="搜索模型、上游型号或渠道"
+                      value={draft}
+                      onChange={(event) => setDraft(event.target.value)}
+                    />
+                    <InputGroupAddon
+                      align="inline-end"
+                      className="py-0 has-[>button]:mr-0"
+                    >
+                      {draft && (
+                        <GatewayAction
+                          icon={X}
+                          label="清空模型搜索"
+                          className="size-7 max-md:size-11"
+                          onClick={() => {
+                            setDraft("");
+                            setQuery("");
+                          }}
+                        />
+                      )}
+                      <GatewayAction
+                        icon={Search}
+                        className="size-7 max-md:size-11"
+                        label="搜索模型"
+                        type="submit"
+                      />
+                    </InputGroupAddon>
+                  </InputGroup>
+                </form>
+                <Select value={status} onValueChange={setStatus}>
+                  <SelectTrigger
+                    aria-label="模型可用状态"
+                    className="max-md:min-h-11"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectItem value="all">全部状态</SelectItem>
+                      <SelectItem value="available">可用</SelectItem>
+                      <SelectItem value="unavailable">不可用</SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </>
+            }
+            summary={
+              <p
+                role="status"
+                className="text-sm text-muted-foreground tabular-nums"
+              >
+                {matching.length} 个模型 · {channelCount} 条渠道
+              </p>
+            }
             label="销售模型"
             columns={["模型", "上游型号", "能力", "销售价", "状态", "操作"]}
             empty={filtered ? "没有符合条件的模型" : "暂无模型"}

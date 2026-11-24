@@ -6,10 +6,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import {
-  GatewayTable,
-  GatewaySelectionSlot,
-} from "@/components/gateway/gateway-table";
+import { GatewayTable } from "@/components/gateway/gateway-table";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 afterEach(cleanup);
@@ -104,52 +101,44 @@ it("places bulk actions in the top toolbar and sends the confirmed IDs in a sing
     .fn()
     .mockRejectedValueOnce(new Error("conflict"))
     .mockResolvedValue(undefined);
-  const slot = document.createElement("div");
-  document.body.prepend(slot);
-  try {
-    render(
-      <TooltipProvider>
-        <GatewaySelectionSlot.Provider value={slot}>
-          <GatewayTable
-            label="渠道"
-            columns={["模型", "操作"]}
-            empty="暂无渠道"
-            rows={rows
-              .slice(0, 2)
-              .map((row) => ({
-                ...row,
-                deleteID: "route-" + row.id,
-                cells: [row.label, null],
-              }))}
-            onDelete={onDelete}
-          />
-        </GatewaySelectionSlot.Provider>
-      </TooltipProvider>,
-    );
-    fireEvent.click(screen.getByRole("button", { name: "删除渠道 模型 1" }));
-    expect(
-      screen.getByRole("alertdialog", { name: "删除渠道「模型 1」？" }),
-    ).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "取消" }));
-    expect(onDelete).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("checkbox", { name: "全选本页渠道" }));
-    const bulk = screen.getByRole("button", { name: "删除所选渠道" });
-    expect(slot.contains(bulk)).toBe(true);
-    fireEvent.click(bulk);
-    expect(
-      screen.getByRole("alertdialog", { name: "删除选中的 2 个渠道？" }),
-    ).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "确认删除" }));
-    expect(await screen.findByRole("alert")).toBeTruthy();
-    expect(onDelete).toHaveBeenCalledTimes(1);
-    expect(onDelete).toHaveBeenCalledWith(["route-0", "route-1"]);
-    fireEvent.click(screen.getByRole("button", { name: "确认删除" }));
-    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
-    expect(slot.childElementCount).toBe(0);
-    fireEvent.click(screen.getByRole("button", { name: "删除渠道 模型 2" }));
-    fireEvent.click(screen.getByRole("button", { name: "确认删除" }));
-    await waitFor(() => expect(onDelete).toHaveBeenLastCalledWith(["route-1"]));
-  } finally {
-    slot.remove();
-  }
+  render(
+    <TooltipProvider>
+      <GatewayTable
+        label="渠道"
+        columns={["模型", "操作"]}
+        empty="暂无渠道"
+        rows={rows.slice(0, 2).map((row) => ({
+          ...row,
+          deleteID: "route-" + row.id,
+          cells: [row.label, null],
+        }))}
+        onDelete={onDelete}
+      />
+    </TooltipProvider>,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "删除渠道 模型 1" }));
+  expect(
+    screen.getByRole("alertdialog", { name: "删除渠道「模型 1」？" }),
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "取消" }));
+  expect(onDelete).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("checkbox", { name: "全选本页渠道" }));
+  const bulk = screen.getByRole("button", { name: "删除所选渠道" });
+  expect(screen.getByRole("group", { name: "渠道工具栏" }).contains(bulk)).toBe(
+    true,
+  );
+  fireEvent.click(bulk);
+  expect(
+    screen.getByRole("alertdialog", { name: "删除选中的 2 个渠道？" }),
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "确认删除" }));
+  expect(await screen.findByRole("alert")).toBeTruthy();
+  expect(onDelete).toHaveBeenCalledTimes(1);
+  expect(onDelete).toHaveBeenCalledWith(["route-0", "route-1"]);
+  fireEvent.click(screen.getByRole("button", { name: "确认删除" }));
+  await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+  expect(screen.queryByRole("group", { name: "批量操作" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "删除渠道 模型 2" }));
+  fireEvent.click(screen.getByRole("button", { name: "确认删除" }));
+  await waitFor(() => expect(onDelete).toHaveBeenLastCalledWith(["route-1"]));
 });

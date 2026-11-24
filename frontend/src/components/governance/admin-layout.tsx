@@ -4,7 +4,6 @@ import { IconAction } from "@/components/ui/icon-action";
 import { X } from "lucide-react";
 import type { AdminSection } from "@/components/layout/routes";
 import { createContext, useContext, useState, type ReactNode } from "react";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { HeaderLinks } from "@/components/layout/header-navigation";
 import { PageHeader } from "@/components/canvas/runtime/components/layout/workspace/page-header";
 import { Toolbar, ToolbarGroup } from "@/components/ui/toolbar";
@@ -12,13 +11,7 @@ import { Toolbar, ToolbarGroup } from "@/components/ui/toolbar";
 const adminLinks = [
   { id: "users", href: "/users", label: "用户管理" },
   { id: "teams", href: "/platform/teams", label: "团队管理" },
-  {
-    id: "providers",
-    href: "/providers",
-    label: "AI 服务",
-    title: "AI 服务接入",
-  },
-  { id: "models", href: "/models", label: "模型管理" },
+  { id: "models", href: "/models", label: "AI 服务" },
   { id: "settings", href: "/platform/settings", label: "平台设置" },
   { id: "notifications", href: "/platform/notifications", label: "通知管理" },
   { id: "health", href: "/health", label: "运行日志", heading: "运行诊断" },
@@ -64,9 +57,7 @@ export function AdminWorkspace({
   return (
     <div className="admin-workspace">
       {link && <AdminNavigation active={active} />}
-      <AdminNavigationTitle.Provider
-        value={link?.heading ?? link?.title ?? link?.label}
-      >
+      <AdminNavigationTitle.Provider value={link?.heading ?? link?.label}>
         <RegisterSelectionToolbar.Provider value={register}>
           <SelectionToolbarSlot.Provider value={slot}>
             {children}
@@ -88,12 +79,11 @@ export function AdminHeading({
   detail?: boolean;
 }) {
   const inNavigation = useAdminHeadingInNavigation(title);
-  const mobile = useIsMobile();
   return (
     <PageHeader
       title={title}
       description={description}
-      hideTitle={inNavigation && !detail && !mobile}
+      hideTitle={inNavigation && !detail}
     >
       {children ? (
         <ToolbarGroup

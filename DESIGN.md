@@ -1,6 +1,6 @@
 # 织光视觉与交互规范
 
-编码按产品路由查找现行画板。普通页面的一级页签与账号操作同排，标题紧随顶栏。手机固定导航和账号，页签在中间区域横向滚动。生成参数、表单选项和编辑器工具保留在操作位置。[Figma 全站页面主稿](https://www.figma.com/design/uLqmeRWuQuzfrp9xOYg6FT?node-id=4165-140125) · [48 个页面入口](workspace/content/design/09-统一顶栏与阶段入口设计.md#page-design-index)
+编码按产品路由查找现行画板。普通页面的一级页签与账号操作同排，页签与正文左对齐。导航已标识页面时，正文从内容开始，并保留供辅助技术读取的页面标题。详情、表单、反馈和创作入口保留有辨识作用的标题。页签使用直角选中背景，列表筛选、刷新、新增与批量操作紧贴表格上方。手机固定导航和账号，页签在中间区域横向滚动。生成参数、表单选项和编辑器工具保留在操作位置。[Figma 全站页面主稿](https://www.figma.com/design/uLqmeRWuQuzfrp9xOYg6FT?node-id=4165-140125) · [48 个页面入口](workspace/content/design/09-统一顶栏与阶段入口设计.md#page-design-index)
 
 2026-11-16 本轮统一改版来源为[通知需求31 / SRC-NOT-03](workspace/content/requirement/31-通知中心与公告管理需求.md)与[Figma36区](https://www.figma.com/design/uLqmeRWuQuzfrp9xOYg6FT?node-id=4108-126476)：所有相关表面参照即梦设计和实际交互，覆盖全部管理页、消息高面板及账号认证；字体和基础组件仍沿Geist/Neutral/shadcn Radix Nova，不放促销。消息中心桌面为约360px右侧高面板、无整页遮暗，手机全屏；互动/官方消息两分类与直链共用内容，覆盖旧最近5条小浮层和五分类整页。时间和频次合同见[设计46 §7.9](workspace/content/design/46-通知中心与公告管理设计.md)。
 

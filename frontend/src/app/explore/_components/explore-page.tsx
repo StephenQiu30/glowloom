@@ -43,7 +43,7 @@ export function ExplorePage({ initialQuery = "" }: { initialQuery?: string }) {
         placeholder: "搜索",
       }}
     >
-      <PageHeader title="探索" className="mb-2" />
+      <PageHeader title="探索" hideTitle />
       <Tabs
         value={category.id}
         onValueChange={(id) => {

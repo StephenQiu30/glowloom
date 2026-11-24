@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  createContext,
-  useContext,
-  useRef,
-  useState,
-  type ReactNode,
-  type SetStateAction,
-} from "react";
-import { createPortal } from "react-dom";
+import { useRef, useState, type ReactNode, type SetStateAction } from "react";
 import { Filters, type FilterField } from "@/components/insights/shared";
 import { SelectionBar } from "@/components/governance/admin-layout";
 import { RequestError } from "@/lib/request";
@@ -28,9 +20,7 @@ import { DataTable } from "@/components/canvas/runtime/components/account/list/d
 import { ListPagination } from "@/components/canvas/runtime/components/layout/workspace/list-pagination";
 import { DEFAULT_PAGE_SIZE, paginationRange } from "@/lib/pagination";
 import { GatewayAction } from "./gateway-action";
-
-export const GatewayFilterSlot = createContext<HTMLDivElement | null>(null);
-export { SelectionToolbarSlot as GatewaySelectionSlot } from "@/components/governance/admin-layout";
+import { Toolbar } from "@/components/ui/toolbar";
 
 export type GatewayTableRow = {
   id: string;
@@ -48,6 +38,9 @@ export function GatewayTable({
   empty,
   onDelete,
   externalFilterKey,
+  toolbarActions,
+  filters,
+  summary,
 }: {
   label: string;
   columns: string[];
@@ -55,8 +48,10 @@ export function GatewayTable({
   empty: string;
   onDelete?: (ids: string[]) => Promise<void>;
   externalFilterKey?: string;
+  toolbarActions?: ReactNode;
+  filters?: ReactNode;
+  summary?: ReactNode;
 }) {
-  const filterSlot = useContext(GatewayFilterSlot);
   const [filter, setFilter] = useState<Record<string, string>>({});
   const statuses = [
     ...new Set(rows.flatMap((row) => (row.status ? [row.status] : []))),
@@ -191,9 +186,8 @@ export function GatewayTable({
 
   return (
     <div className="flex min-w-0 flex-col gap-3">
-      {filterSlot &&
-        externalFilterKey === undefined &&
-        createPortal(
+      <Toolbar role="group" aria-label={`${label}工具栏`} className="flex-wrap">
+        {externalFilterKey === undefined ? (
           <Filters
             fields={fields}
             onApply={(next) => {
@@ -201,10 +195,17 @@ export function GatewayTable({
               setCurrent(1);
               setSelectedIds(new Set());
             }}
-          />,
-          filterSlot,
+          />
+        ) : (
+          filters
         )}
-      {actions}
+        {(actions || toolbarActions) && (
+          <div className="ml-auto flex flex-wrap items-center gap-1">
+            {actions || toolbarActions}
+          </div>
+        )}
+      </Toolbar>
+      {summary}
       <DataTable<GatewayTableRow>
         label={label}
         data={visible}

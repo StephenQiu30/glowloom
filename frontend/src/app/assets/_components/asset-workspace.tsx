@@ -229,14 +229,7 @@ function WorkspaceScope({
   };
   return (
     <PageLayout screen="assets" search={pageSearch} hideSearch={!authenticated}>
-      <PageHeader title="资产和主体" className="mb-5">
-        {authenticated &&
-          view !== "subjects" &&
-          view !== "motion" &&
-          view !== "marketing" && (
-            <div ref={setToolbarTarget} className="min-w-0" />
-          )}
-      </PageHeader>
+      <PageHeader title="资产和主体" hideTitle />
       <Tabs
         value={view}
         onValueChange={(value) => changeView(value as AssetSource)}
@@ -403,6 +396,9 @@ function WorkspaceScope({
                 </Button>
               )}
             </div>
+            {view !== "motion" && view !== "marketing" && (
+              <div ref={setToolbarTarget} className="ml-auto min-w-0" />
+            )}
           </div>
         )}
         <TabsContent value={view} className="min-w-0">

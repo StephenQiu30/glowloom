@@ -432,21 +432,22 @@ function DiagnosticsContent() {
       <section className="insights">
         <h1 className="sr-only">运行诊断</h1>
         <Tabs value={tab} onValueChange={setTab}>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <TabsList variant="workspace" aria-label="运行日志视图">
-              <TabsTrigger value="overview">概览</TabsTrigger>
-              <TabsTrigger value="logs">日志</TabsTrigger>
-            </TabsList>
+          <TabsList variant="workspace" aria-label="运行日志视图">
+            <TabsTrigger value="overview">概览</TabsTrigger>
+            <TabsTrigger value="logs">日志</TabsTrigger>
+          </TabsList>
+          <div
+            role="group"
+            aria-label="运行诊断工具栏"
+            className="flex items-center gap-2"
+          >
+            <Filters fields={fields} maxDays={7} onApply={setQuery} />
             <SelectionToolbar>
-              {" "}
-              <div className="flex items-center gap-2">
-                <Filters fields={fields} maxDays={7} onApply={setQuery} />
-                <IconAction
-                  label="刷新"
-                  icon={RefreshCw}
-                  onClick={() => setRevision((n) => n + 1)}
-                />
-              </div>
+              <IconAction
+                label="刷新"
+                icon={RefreshCw}
+                onClick={() => setRevision((n) => n + 1)}
+              />
             </SelectionToolbar>
           </div>
           <TabsContent value="overview">

@@ -3,14 +3,16 @@
 import { GatewayAction } from "./gateway-action";
 import { GatewayModelList } from "./gateway-model-list";
 import { deleteAiRoutes } from "@/api/aiGateway";
-import {
-  GatewayTable,
-  GatewayFilterSlot,
-  GatewaySelectionSlot,
-} from "./gateway-table";
+import { GatewayTable } from "./gateway-table";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   ArrowLeft,
   Layers,
@@ -89,28 +91,27 @@ import {
 import { OnboardingPanel, onboardingState } from "./gateway-onboarding";
 import { modeLabel } from "./gateway-media-fields";
 
-const entryTabs = {
-  models: [
-    ["models", "模型"],
-    ["onboarding", "验证"],
-  ],
-  providers: [
-    ["routes", "渠道"],
-    ["pending", "待接入"],
-    ["quotas", "配额"],
-    ["credentials", "凭据"],
-    ["credits", "对账"],
-  ],
-} as const;
-type Entry = keyof typeof entryTabs;
-type GatewayTab = (typeof entryTabs)[Entry][number][0];
+const tabs = [
+  ["models", "模型"],
+  ["routes", "渠道"],
+  ["pending", "待接入"],
+  ["onboarding", "验证"],
+  ["quotas", "配额"],
+  ["credentials", "凭据"],
+  ["credits", "对账"],
+] as const;
+
+type Entry = "models" | "providers";
+type GatewayTab = (typeof tabs)[number][0];
 
 export function GatewayAdmin({
   entry = "models",
   entityID,
+  initialTab,
 }: {
   entry?: Entry;
   entityID?: string;
+  initialTab?: string;
 }) {
   const session = useOptionalSession();
   if (session?.actor.platform_role !== "platform_admin")
@@ -123,9 +124,10 @@ export function GatewayAdmin({
     );
   return (
     <GatewayConfigurationPage
-      key={`${session.actor.id}:${entry}:${entityID ?? ""}`}
+      key={`${session.actor.id}:${entry}:${entityID ?? ""}:${initialTab ?? ""}`}
       entry={entry}
       entityID={entityID}
+      initialTab={initialTab}
     />
   );
 }
@@ -133,9 +135,11 @@ export function GatewayAdmin({
 function GatewayConfigurationPage({
   entry,
   entityID,
+  initialTab,
 }: {
   entry: Entry;
   entityID?: string;
+  initialTab?: string;
 }) {
   const { selected: space } = useSpace();
   const defaultScope = space?.writable ? space.id : undefined;
@@ -143,7 +147,8 @@ function GatewayConfigurationPage({
     useState<GatewayConfiguration | null>(null);
   const [revision, setRevision] = useState(0);
   const [tab, setTab] = useState<GatewayTab>(
-    entry === "providers" ? "routes" : "models",
+    tabs.find(([key]) => key === initialTab)?.[0] ??
+      (entry === "providers" ? "routes" : "models"),
   );
   const [stage, setStage] = useState<
     "model" | "route" | "fund" | "reconcile"
@@ -160,10 +165,6 @@ function GatewayConfigurationPage({
   const [loading, setLoading] = useState(true);
   const submitting = useRef(false);
   const dirty = useRef(false);
-  const [filterSlot, setFilterSlot] = useState<HTMLDivElement | null>(null);
-  const [selectionSlot, setSelectionSlot] = useState<HTMLDivElement | null>(
-    null,
-  );
   const heading = useRef<HTMLDivElement>(null);
   const refresh = useCallback(() => setRevision((value) => value + 1), []);
 
@@ -220,12 +221,17 @@ function GatewayConfigurationPage({
     refresh();
   }
 
-  const tabs = entryTabs[entry];
   const [selectedAttempt, setSelectedAttempt] = useState("");
 
   function go(next: GatewayTab) {
     dirty.current = false;
-    setTab(tabs.some(([key]) => key === next) ? next : tabs[0][0]);
+    setTab(next);
+    if (!entityID && next !== tab && window.location.pathname === "/models") {
+      const url = new URL(window.location.href);
+      if (next === "models") url.searchParams.delete("tab");
+      else url.searchParams.set("tab", next);
+      window.history.replaceState(null, "", url);
+    }
     setCandidate(undefined);
     setStage(undefined);
     setInDetail(false);
@@ -242,18 +248,18 @@ function GatewayConfigurationPage({
   }
 
   function startModel() {
-    go("models");
+    go(tab);
     setStage("model");
   }
 
   function startRoute(id?: string) {
-    go("routes");
+    go(tab);
     setSelectedModel(id);
     setStage("route");
   }
 
   function openCandidate(id: string) {
-    go(entry === "providers" ? "pending" : "onboarding");
+    go(tab === "pending" ? "pending" : "onboarding");
     setCandidate(id);
     requestAnimationFrame(() => heading.current?.focus());
   }
@@ -264,8 +270,7 @@ function GatewayConfigurationPage({
     setStage(action);
     requestAnimationFrame(() => heading.current?.focus());
   }
-  const isProviders = entry === "providers";
-  const title = isProviders ? "AI 服务接入" : "模型管理";
+  const title = "AI 服务";
   const setupOpen = stage === "model" || stage === "route";
   const showListing = !inDetail && (!stage || setupOpen) && !candidate;
   const currentStep =
@@ -281,7 +286,49 @@ function GatewayConfigurationPage({
       <AlertDescription>{error}</AlertDescription>
     </Alert>
   );
-  const showCreate = showListing && configuration;
+  function reload() {
+    setLoading(true);
+    refresh();
+  }
+
+  const toolbarActions = showListing && (
+    <>
+      {!readError && (
+        <GatewayAction
+          label="刷新配置"
+          icon={RefreshCw}
+          disabled={busy || loading}
+          onClick={reload}
+        />
+      )}
+      {(tab === "models" || tab === "routes") && (
+        <GatewayAction
+          icon={Plus}
+          variant="default"
+          label="新增接入"
+          disabled={busy}
+          onClick={startModel}
+        />
+      )}
+      {tab === "credits" && (
+        <>
+          <GatewayAction
+            icon={Coins}
+            label="增加积分"
+            disabled={busy}
+            onClick={() => openBilling("fund")}
+          />
+          <GatewayAction
+            icon={ClipboardCheck}
+            label="手动对账"
+            disabled={busy}
+            onClick={() => openBilling("reconcile")}
+          />
+        </>
+      )}
+    </>
+  );
+
   return (
     <TooltipProvider>
       <div
@@ -318,61 +365,20 @@ function GatewayConfigurationPage({
                 </TabsTrigger>
               ))}
             </TabsList>
-            <div
-              ref={setSelectionSlot}
-              className="peer shrink-0 empty:hidden"
-            />
-            <div className="flex items-center gap-1 peer-[:not(:empty)]:hidden">
-              <div ref={setFilterSlot} className="empty:hidden" />
-              <GatewayAction
-                label="刷新配置"
-                icon={RefreshCw}
-                disabled={busy || loading}
-                onClick={() => {
-                  setLoading(true);
-                  refresh();
-                }}
-              />
-              {showCreate && tab === "models" && (
-                <GatewayAction
-                  icon={Plus}
-                  variant="default"
-                  label="新增接入"
-                  disabled={busy}
-                  onClick={startModel}
-                />
-              )}
-              {showCreate && tab === "routes" && (
-                <GatewayAction
-                  icon={Plus}
-                  variant="default"
-                  label="新增接入"
-                  disabled={busy}
-                  onClick={startModel}
-                />
-              )}
-              {showCreate && tab === "credits" && (
-                <>
-                  <GatewayAction
-                    icon={Coins}
-                    label="增加积分"
-                    disabled={busy}
-                    onClick={() => openBilling("fund")}
-                  />
-                  <GatewayAction
-                    icon={ClipboardCheck}
-                    label="手动对账"
-                    disabled={busy}
-                    onClick={() => openBilling("reconcile")}
-                  />
-                </>
-              )}
-            </div>
           </div>
           {readError && (
             <Alert variant="destructive">
               <AlertTitle>网关配置暂时无法读取</AlertTitle>
-              <AlertDescription>请刷新配置后继续。</AlertDescription>
+              <AlertDescription>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={loading}
+                  onClick={reload}
+                >
+                  刷新配置
+                </Button>
+              </AlertDescription>
             </Alert>
           )}
           {!setupOpen && operationError}
@@ -389,169 +395,166 @@ function GatewayConfigurationPage({
               {!setupOpen && currentStep !== undefined && (
                 <OnboardingSteps current={currentStep} />
               )}
-              <GatewayFilterSlot.Provider value={filterSlot}>
-                <GatewaySelectionSlot.Provider value={selectionSlot}>
-                  <TabsContent key={tab} value={tab} className="min-w-0">
-                    {inDetail && entityID ? (
-                      <EntityDetail
-                        entry={entry}
-                        id={entityID}
-                        configuration={configuration}
-                        startRoute={startRoute}
-                        openCandidate={openCandidate}
-                      />
-                    ) : candidate ? (
-                      <OnboardingPanel
-                        key={candidate}
-                        id={candidate}
-                        initial={
-                          prepared?.id === candidate ? prepared : undefined
-                        }
-                        run={run}
-                        busy={busy}
-                        refreshConfiguration={refresh}
-                        back={() => go(tab)}
-                        retryRoute={startRoute}
-                      />
-                    ) : tab === "onboarding" || tab === "pending" ? (
-                      <GatewayTable
-                        label={tab === "pending" ? "待接入渠道" : "接入验证"}
-                        onDelete={
-                          tab === "pending" ? deleteChannels : undefined
-                        }
-                        columns={["模型 / 上游型号", "状态", "操作"]}
-                        empty={
-                          tab === "pending" ? "暂无待接入渠道" : "暂无验证记录"
-                        }
-                        rows={configuration.onboarding
-                          .filter(
-                            (item) =>
-                              tab !== "pending" ||
-                              item.state === "prepared" ||
-                              item.state === "verifying",
-                          )
-                          .map((item) => {
-                            const name =
-                              configuration.models.find(
-                                ({ model }) => model.id === item.model_id,
-                              )?.model.name ?? item.upstream_model;
-                            return {
-                              id: item.id,
-                              deleteID: item.id,
-                              label:
-                                tab === "pending" ? item.upstream_model : name,
-                              terms: [name, item.upstream_model],
-                              status: onboardingState[item.state],
-                              cells: [
-                                <RouteModel
-                                  key="model"
-                                  name={name}
-                                  upstream={item.upstream_model}
-                                />,
-                                <Badge key="status" variant="secondary">
-                                  {onboardingState[item.state]}
-                                </Badge>,
-                                <GatewayAction
-                                  key="review"
-                                  onClick={() => openCandidate(item.id)}
-                                  label={
-                                    item.state === "prepared"
-                                      ? "继续验证"
-                                      : "查看回执"
-                                  }
-                                  icon={ClipboardCheck}
-                                />,
-                              ],
-                            };
-                          })}
-                      />
-                    ) : tab === "models" ? (
-                      <GatewayModelList
-                        configuration={configuration}
-                        startRoute={startRoute}
-                      />
-                    ) : tab === "routes" ? (
-                      <RoutesList
-                        configuration={configuration}
-                        onDelete={deleteChannels}
-                      />
-                    ) : tab === "quotas" ? (
-                      <GatewayTable
-                        label="共享配额"
-                        columns={["配额组", "并发", "请求／分钟"]}
-                        empty="暂无共享配额组"
-                        rows={configuration.quotas.map((q) => ({
-                          id: q.name,
-                          label: q.name,
-                          cells: [q.name, q.concurrency, q.rpm],
-                        }))}
-                      />
-                    ) : tab === "credentials" ? (
-                      <CredentialList
-                        configuration={configuration}
-                        busy={busy}
-                        run={run}
-                      />
-                    ) : stage === "fund" || stage === "reconcile" ? (
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>
-                            {stage === "fund" ? "增加积分" : "供应商账单对账"}
-                          </CardTitle>
-                          <CardAction>
-                            <GatewayAction
-                              label="返回列表"
-                              icon={ArrowLeft}
-                              disabled={busy}
-                              onClick={() => requestNavigation("credits")}
-                            />
-                          </CardAction>
-                        </CardHeader>
-                        <CardContent>
-                          {stage === "fund" ? (
-                            <CreditsForm
-                              run={run}
-                              busy={busy}
-                              defaultScope={defaultScope}
-                            />
-                          ) : (
-                            <ReconciliationForm
-                              run={run}
-                              busy={busy}
-                              unknown={configuration.unknown}
-                              initialAttempt={selectedAttempt}
-                            />
-                          )}
-                        </CardContent>
-                      </Card>
-                    ) : (
-                      <GatewayTable
-                        label="待对账请求"
-                        columns={["原请求", "原尝试", "状态", "操作"]}
-                        empty="暂无待对账请求"
-                        rows={configuration.unknown.map((row) => ({
-                          id: row.attempt_id,
-                          label: row.request_id,
-                          terms: [row.attempt_id],
+              <TabsContent key={tab} value={tab} className="min-w-0">
+                {inDetail && entityID ? (
+                  <EntityDetail
+                    entry={entry}
+                    id={entityID}
+                    configuration={configuration}
+                    startRoute={startRoute}
+                    openCandidate={openCandidate}
+                  />
+                ) : candidate ? (
+                  <OnboardingPanel
+                    key={candidate}
+                    id={candidate}
+                    initial={prepared?.id === candidate ? prepared : undefined}
+                    run={run}
+                    busy={busy}
+                    refreshConfiguration={refresh}
+                    back={() => go(tab)}
+                    retryRoute={startRoute}
+                  />
+                ) : tab === "onboarding" || tab === "pending" ? (
+                  <GatewayTable
+                    toolbarActions={toolbarActions}
+                    label={tab === "pending" ? "待接入渠道" : "接入验证"}
+                    onDelete={tab === "pending" ? deleteChannels : undefined}
+                    columns={["模型 / 上游型号", "状态", "操作"]}
+                    empty={
+                      tab === "pending" ? "暂无待接入渠道" : "暂无验证记录"
+                    }
+                    rows={configuration.onboarding
+                      .filter(
+                        (item) =>
+                          tab !== "pending" ||
+                          item.state === "prepared" ||
+                          item.state === "verifying",
+                      )
+                      .map((item) => {
+                        const name =
+                          configuration.models.find(
+                            ({ model }) => model.id === item.model_id,
+                          )?.model.name ?? item.upstream_model;
+                        return {
+                          id: item.id,
+                          deleteID: item.id,
+                          label: tab === "pending" ? item.upstream_model : name,
+                          terms: [name, item.upstream_model],
+                          status: onboardingState[item.state],
                           cells: [
-                            row.request_id,
-                            row.attempt_id,
-                            "待核对",
+                            <RouteModel
+                              key="model"
+                              name={name}
+                              upstream={item.upstream_model}
+                            />,
+                            <Badge key="status" variant="secondary">
+                              {onboardingState[item.state]}
+                            </Badge>,
                             <GatewayAction
-                              key="reconcile"
-                              label="核对账单"
-                              icon={ClipboardCheck}
-                              onClick={() =>
-                                openBilling("reconcile", row.attempt_id)
+                              key="review"
+                              onClick={() => openCandidate(item.id)}
+                              label={
+                                item.state === "prepared"
+                                  ? "继续验证"
+                                  : "查看回执"
                               }
+                              icon={ClipboardCheck}
                             />,
                           ],
-                        }))}
-                      />
-                    )}
-                  </TabsContent>
-                </GatewaySelectionSlot.Provider>
-              </GatewayFilterSlot.Provider>
+                        };
+                      })}
+                  />
+                ) : tab === "models" ? (
+                  <GatewayModelList
+                    toolbarActions={toolbarActions}
+                    configuration={configuration}
+                    startRoute={startRoute}
+                  />
+                ) : tab === "routes" ? (
+                  <RoutesList
+                    toolbarActions={toolbarActions}
+                    configuration={configuration}
+                    onDelete={deleteChannels}
+                  />
+                ) : tab === "quotas" ? (
+                  <GatewayTable
+                    toolbarActions={toolbarActions}
+                    label="共享配额"
+                    columns={["配额组", "并发", "请求／分钟"]}
+                    empty="暂无共享配额组"
+                    rows={configuration.quotas.map((q) => ({
+                      id: q.name,
+                      label: q.name,
+                      cells: [q.name, q.concurrency, q.rpm],
+                    }))}
+                  />
+                ) : tab === "credentials" ? (
+                  <CredentialList
+                    toolbarActions={toolbarActions}
+                    configuration={configuration}
+                    busy={busy}
+                    run={run}
+                  />
+                ) : stage === "fund" || stage === "reconcile" ? (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>
+                        {stage === "fund" ? "增加积分" : "供应商账单对账"}
+                      </CardTitle>
+                      <CardAction>
+                        <GatewayAction
+                          label="返回列表"
+                          icon={ArrowLeft}
+                          disabled={busy}
+                          onClick={() => requestNavigation("credits")}
+                        />
+                      </CardAction>
+                    </CardHeader>
+                    <CardContent>
+                      {stage === "fund" ? (
+                        <CreditsForm
+                          run={run}
+                          busy={busy}
+                          defaultScope={defaultScope}
+                        />
+                      ) : (
+                        <ReconciliationForm
+                          run={run}
+                          busy={busy}
+                          unknown={configuration.unknown}
+                          initialAttempt={selectedAttempt}
+                        />
+                      )}
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <GatewayTable
+                    toolbarActions={toolbarActions}
+                    label="待对账请求"
+                    columns={["原请求", "原尝试", "状态", "操作"]}
+                    empty="暂无待对账请求"
+                    rows={configuration.unknown.map((row) => ({
+                      id: row.attempt_id,
+                      label: row.request_id,
+                      terms: [row.attempt_id],
+                      cells: [
+                        row.request_id,
+                        row.attempt_id,
+                        "待核对",
+                        <GatewayAction
+                          key="reconcile"
+                          label="核对账单"
+                          icon={ClipboardCheck}
+                          onClick={() =>
+                            openBilling("reconcile", row.attempt_id)
+                          }
+                        />,
+                      ],
+                    }))}
+                  />
+                )}
+              </TabsContent>
             </>
           )}
         </Tabs>
@@ -580,7 +583,7 @@ function GatewayConfigurationPage({
               {operationError}
               {stage === "model" ? (
                 <>
-                  {isProviders &&
+                  {tab === "routes" &&
                     configuration.models.some(
                       (row) => row.enabled || row.draft,
                     ) && (
@@ -706,13 +709,16 @@ function RouteModel({ name, upstream }: { name?: string; upstream: string }) {
 
 function RoutesList({
   configuration,
+  toolbarActions,
   onDelete,
 }: {
   configuration: GatewayConfiguration;
+  toolbarActions: ReactNode;
   onDelete: (ids: string[]) => Promise<void>;
 }) {
   return (
     <GatewayTable
+      toolbarActions={toolbarActions}
       label="供应商路由"
       onDelete={onDelete}
       columns={["渠道 / 上游型号", "配额组", "采购价", "状态", "操作"]}
@@ -794,7 +800,7 @@ function EntityDetail({
       <GatewayAction
         label="返回列表"
         icon={ArrowLeft}
-        href={entry === "models" ? "/models" : "/providers"}
+        href={entry === "models" ? "/models" : "/models?tab=routes"}
       />
       {model || route ? (
         <Card>
@@ -919,10 +925,12 @@ const credentialOptions = [
 
 function CredentialList({
   configuration,
+  toolbarActions,
   run,
   busy,
 }: {
   configuration: GatewayConfiguration;
+  toolbarActions: ReactNode;
   run: RunMutation;
   busy: boolean;
 }) {
@@ -947,6 +955,7 @@ function CredentialList({
   return (
     <>
       <GatewayTable
+        toolbarActions={toolbarActions}
         label="供应商凭据"
         columns={["凭据", "状态", "操作"]}
         empty="暂无供应商凭据"

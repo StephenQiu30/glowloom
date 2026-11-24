@@ -143,6 +143,7 @@ function StudioWorkspace({
       <div className="studio-workspace">
         <PageHeader
           title={marketing ? "营销工作室" : "动效工作室"}
+          hideTitle
           className="studio-heading"
         >
           <Button variant="secondary" asChild>

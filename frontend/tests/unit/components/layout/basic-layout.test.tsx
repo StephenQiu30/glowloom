@@ -676,7 +676,7 @@ it("管理页切换与路由加载保留同一导航节点和焦点，正文按�
   expect(screen.getByRole("navigation", { name: "管理页面" })).toBe(nav);
   expect(
     within(nav)
-      .getByRole("link", { name: "模型管理" })
+      .getByRole("link", { name: "AI 服务" })
       .getAttribute("aria-current"),
   ).toBe("page");
   mocks.pathname = "/";
@@ -716,7 +716,9 @@ it("asset header options stay stable under the shared login context", async () =
     within(header).getByRole("button", { name: "搜索本人生成历史" }),
   ).toBeTruthy();
   expect(
-    screen.getByRole("button", { name: "批量操作" }).closest("main"),
+    screen
+      .getByRole("button", { name: "批量操作" })
+      .closest('[aria-label="资产筛选"]'),
   ).toBeTruthy();
   expect(within(header).getByRole("tab", { name: "生成历史" })).toBeTruthy();
   expect(within(header).getByRole("tab", { name: "画布" })).toBeTruthy();
@@ -734,7 +736,7 @@ it("asset header options stay stable under the shared login context", async () =
   expect(screen.getByLabelText("资产筛选").closest("main")).toBeTruthy();
   const heading = screen.getByRole("heading", { name: /^资产和主体$/ });
   expect(heading.closest("main")).toBeTruthy();
-  expect(heading.classList.contains("sr-only")).toBe(false);
+  expect(heading.classList.contains("sr-only")).toBe(true);
   expect(
     errors.mock.calls.some((args) =>
       args.some((value) => String(value).includes("Maximum update depth")),

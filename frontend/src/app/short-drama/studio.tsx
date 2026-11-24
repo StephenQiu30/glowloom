@@ -65,10 +65,7 @@ function StudioWorkspace() {
         aria-labelledby="short-drama-title"
         className="flex w-full flex-col gap-4"
       >
-        <h1
-          id="short-drama-title"
-          className="text-2xl font-semibold md:text-3xl"
-        >
+        <h1 id="short-drama-title" className="sr-only">
           短剧工作室
         </h1>
         <Tabs value={mode} onValueChange={setMode} className="min-w-0 gap-0">

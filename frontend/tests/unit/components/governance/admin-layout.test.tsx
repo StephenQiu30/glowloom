@@ -7,7 +7,7 @@ afterEach(cleanup);
 
 it("管理导航在日志与审计之间保留全部管理入口及当前项语义", () => {
   const { rerender } = render(<AdminNavigation active="health" />);
-  expect(screen.getAllByRole("link")).toHaveLength(8);
+  expect(screen.getAllByRole("link")).toHaveLength(7);
   expect(
     screen.getByRole("link", { name: "运行日志" }).getAttribute("aria-current"),
   ).toBe("page");
@@ -17,6 +17,9 @@ it("管理导航在日志与审计之间保留全部管理入口及当前项语�
   expect(
     screen.getByRole("link", { name: "通知管理" }).getAttribute("href"),
   ).toBe("/platform/notifications");
+  expect(
+    screen.getByRole("link", { name: "AI 服务" }).getAttribute("href"),
+  ).toBe("/models");
   rerender(<AdminNavigation active="audit" />);
   expect(
     screen.getByRole("link", { name: "审计日志" }).getAttribute("aria-current"),

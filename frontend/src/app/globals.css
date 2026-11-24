@@ -730,7 +730,7 @@ button:not(:disabled),
 }
 .header-navigation :is(a, [role="tab"]) {
   min-width: 44px;
-  border-radius: var(--radius-control);
+  border-radius: 0;
   padding-inline: 10px;
 }
 .header-navigation :is(a, [role="tab"]):focus-visible {
@@ -3874,14 +3874,6 @@ button:not(:disabled),
   ) {
   --layout-content-x: 16px;
 }
-.admin-workspace > :is([data-page="models"], [data-page="providers"])
-  [data-slot="tabs-list"][data-variant="workspace"] {
-  border-radius: 0;
-
-  & > [data-slot="tabs-trigger"] {
-    border-radius: 0;
-  }
-}
 .admin-workspace:has(> :is([data-page="models"], [data-page="providers"])) {
   gap: 8px;
 }
@@ -3962,10 +3954,8 @@ button:not(:disabled),
 .tool-directory {
   display: flex;
   width: 100%;
-  max-width: 1360px;
   flex-direction: column;
   gap: 8px;
-  margin-inline: auto;
   padding: 8px var(--layout-content-x) var(--layout-content-y);
 }
 .tool-directory-grid {
