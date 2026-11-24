@@ -38,6 +38,7 @@ import {
   TooltipTrigger,
 } from "@glowloom/canvas-host/components/ui/tooltip";
 import {
+  DropdownMenuGroup,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -51,6 +52,7 @@ import {
   Command,
   CommandDialog,
   CommandEmpty,
+  CommandGroup,
   CommandInput,
   CommandItem,
   CommandList,
@@ -165,31 +167,33 @@ export function CanvasHeader({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-60" collisionPadding={12}>
-            <DropdownMenuLabel className="break-words whitespace-normal">
-              {name}
-            </DropdownMenuLabel>
-            <DropdownMenuItem asChild>
-              <Link href="/projects">
-                <Folder />
-                我的画布
-              </Link>
-            </DropdownMenuItem>
-            {onImport && (
-              <DropdownMenuItem onSelect={onImport}>
-                <Upload />
-                导入画布文件
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="break-words whitespace-normal">
+                {name}
+              </DropdownMenuLabel>
+              <DropdownMenuItem asChild>
+                <Link href="/projects">
+                  <Folder />
+                  我的画布
+                </Link>
               </DropdownMenuItem>
-            )}
-            {onExport && (
-              <DropdownMenuItem onSelect={onExport}>
-                <Download />
-                导出画布文件
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuSeparator />
-            <p className="px-2 py-1.5 text-xs leading-5 text-muted-foreground">
-              {status}
-            </p>
+              {onImport && (
+                <DropdownMenuItem onSelect={onImport}>
+                  <Upload />
+                  导入画布文件
+                </DropdownMenuItem>
+              )}
+              {onExport && (
+                <DropdownMenuItem onSelect={onExport}>
+                  <Download />
+                  导出画布文件
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuSeparator />
+              <p className="px-2 py-1.5 text-xs leading-5 text-muted-foreground">
+                {status}
+              </p>
+            </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
         <span
@@ -247,37 +251,39 @@ export function CanvasHeader({
             className="w-52"
             collisionPadding={12}
           >
-            {onExport && (
-              <DropdownMenuItem onSelect={onExport}>
-                <Download />
-                导出画布文件
+            <DropdownMenuGroup>
+              {onExport && (
+                <DropdownMenuItem onSelect={onExport}>
+                  <Download />
+                  导出画布文件
+                </DropdownMenuItem>
+              )}
+              {onRefresh && (
+                <DropdownMenuItem onSelect={onRefresh}>
+                  <RotateCw />
+                  重新读取画布
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem asChild>
+                <Link href="/projects">
+                  <Folder />
+                  返回画布列表
+                </Link>
               </DropdownMenuItem>
-            )}
-            {onRefresh && (
-              <DropdownMenuItem onSelect={onRefresh}>
-                <RotateCw />
-                重新读取画布
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <a
+                  href="/licenses/infinite-canvas.txt"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  画布开源许可
+                </a>
               </DropdownMenuItem>
-            )}
-            <DropdownMenuItem asChild>
-              <Link href="/projects">
-                <Folder />
-                返回画布列表
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <a
-                href="/licenses/infinite-canvas.txt"
-                target="_blank"
-                rel="noreferrer"
-              >
-                画布开源许可
-              </a>
-            </DropdownMenuItem>
-            <p className="px-2 py-1.5 text-xs leading-5 text-muted-foreground">
-              {status}
-            </p>
+              <p className="px-2 py-1.5 text-xs leading-5 text-muted-foreground">
+                {status}
+              </p>
+            </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
         <Button asChild variant="ghost" size="icon" className="shrink-0">
@@ -296,19 +302,21 @@ export function CanvasHeader({
           <CommandInput placeholder="搜索节点…" />
           <CommandList>
             <CommandEmpty>没有找到节点</CommandEmpty>
-            {nodes.map((node) => (
-              <CommandItem
-                key={node.id}
-                value={`${node.title} ${node.id}`}
-                onSelect={() => {
-                  setSearch(false);
-                  onLocate(node.id);
-                }}
-              >
-                <Search />
-                <span className="truncate">{node.title}</span>
-              </CommandItem>
-            ))}
+            <CommandGroup>
+              {nodes.map((node) => (
+                <CommandItem
+                  key={node.id}
+                  value={`${node.title} ${node.id}`}
+                  onSelect={() => {
+                    setSearch(false);
+                    onLocate(node.id);
+                  }}
+                >
+                  <Search />
+                  <span className="truncate">{node.title}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
           </CommandList>
         </Command>
       </CommandDialog>
@@ -522,37 +530,43 @@ export function CanvasViewControls({
           collisionPadding={12}
           className="w-52 p-2 [&_[role^=menuitem]]:min-h-9"
         >
-          <DropdownMenuItem onSelect={() => onZoom(zoom * 1.2)}>
-            <Plus />
-            放大视图
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onZoom(zoom / 1.2)}>
-            <Minus />
-            缩小视图
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={onFit}>
-            <Maximize />
-            适合屏幕
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            disabled={!onFitSelection}
-            onSelect={onFitSelection}
-          >
-            缩放至选中项
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          {[0.5, 1, 2].map((value) => (
-            <DropdownMenuItem key={value} onSelect={() => onZoom(value)}>
-              缩放至 {value * 100}%
+          <DropdownMenuGroup>
+            <DropdownMenuItem onSelect={() => onZoom(zoom * 1.2)}>
+              <Plus />
+              放大视图
             </DropdownMenuItem>
-          ))}
+            <DropdownMenuItem onSelect={() => onZoom(zoom / 1.2)}>
+              <Minus />
+              缩小视图
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={onFit}>
+              <Maximize />
+              适合屏幕
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={!onFitSelection}
+              onSelect={onFitSelection}
+            >
+              缩放至选中项
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup>
+            {[0.5, 1, 2].map((value) => (
+              <DropdownMenuItem key={value} onSelect={() => onZoom(value)}>
+                缩放至 {value * 100}%
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuLabel>画布背景</DropdownMenuLabel>
-          {onSnap && (
-            <DropdownMenuItem onSelect={onSnap}>
-              {snap ? "关闭吸附对齐" : "开启吸附对齐"}
-            </DropdownMenuItem>
-          )}
+          <DropdownMenuGroup>
+            {onSnap && (
+              <DropdownMenuItem onSelect={onSnap}>
+                {snap ? "关闭吸附对齐" : "开启吸附对齐"}
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuGroup>
           <DropdownMenuRadioGroup
             value={background}
             onValueChange={(v) => onBackground(v as CanvasBackgroundMode)}

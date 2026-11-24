@@ -35,6 +35,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
+  DropdownMenuGroup,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -157,18 +158,20 @@ export function StudioReferences({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
             <DropdownMenuContent align="start">
-              <DropdownMenuItem onSelect={() => choose("upload")}>
-                <Upload />
-                从设备上传
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => choose("library")}>
-                <FolderOpen />
-                资产库
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => choose("link")}>
-                <Link2 />
-                视频链接上传
-              </DropdownMenuItem>
+              <DropdownMenuGroup>
+                <DropdownMenuItem onSelect={() => choose("upload")}>
+                  <Upload />
+                  从设备上传
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => choose("library")}>
+                  <FolderOpen />
+                  资产库
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => choose("link")}>
+                  <Link2 />
+                  视频链接上传
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
         )}

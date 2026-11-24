@@ -11,6 +11,7 @@ import { Input } from "@glowloom/canvas-host/components/ui/input";
 import { Label } from "@glowloom/canvas-host/components/ui/label";
 import { Checkbox } from "@glowloom/canvas-host/components/ui/checkbox";
 import {
+  SelectGroup,
   Select,
   SelectContent,
   SelectItem,
@@ -370,15 +371,17 @@ export function DirectorTimeline({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {[
-                  ["linear", "线性"],
-                  ["smooth", "平滑"],
-                  ["step", "保持"],
-                ].map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
+                <SelectGroup>
+                  {[
+                    ["linear", "线性"],
+                    ["smooth", "平滑"],
+                    ["step", "保持"],
+                  ].map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
           </Label>

@@ -44,6 +44,7 @@ import {
 import { Label } from "@glowloom/canvas-host/components/ui/label";
 import { Input } from "@glowloom/canvas-host/components/ui/input";
 import {
+  SelectGroup,
   Select,
   SelectContent,
   SelectItem,
@@ -51,6 +52,7 @@ import {
   SelectValue,
 } from "@glowloom/canvas-host/components/ui/select";
 import {
+  DropdownMenuGroup,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -580,32 +582,36 @@ function TimelineExportSession({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuItem onSelect={() => void start("xmeml")}>
-                    导出为 XML
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => void start("media_bundle")}>
-                    批量导出时间线素材
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onSelect={() => {
-                      setOpen(false);
-                      setEditing(false);
-                      if (skipJianyingReminder()) void start("jianying");
-                      else setNativeConfirm(true);
-                    }}
-                  >
-                    导出到剪映
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => void start("xmeml")}>
-                    导出到 DaVinci Resolve
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => void start("xmeml")}>
-                    导出到 Premiere
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => void start("fcpxml")}>
-                    导出到 Final Cut Pro
-                  </DropdownMenuItem>
+                  <DropdownMenuGroup>
+                    <DropdownMenuItem onSelect={() => void start("xmeml")}>
+                      导出为 XML
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() => void start("media_bundle")}
+                    >
+                      批量导出时间线素材
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        setOpen(false);
+                        setEditing(false);
+                        if (skipJianyingReminder()) void start("jianying");
+                        else setNativeConfirm(true);
+                      }}
+                    >
+                      导出到剪映
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => void start("xmeml")}>
+                      导出到 DaVinci Resolve
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => void start("xmeml")}>
+                      导出到 Premiere
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => void start("fcpxml")}>
+                      导出到 Final Cut Pro
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
@@ -666,8 +672,10 @@ function TimelineExportSession({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="canvas">添加到画布</SelectItem>
-                <SelectItem value="local">下载到本地</SelectItem>
+                <SelectGroup>
+                  <SelectItem value="canvas">添加到画布</SelectItem>
+                  <SelectItem value="local">下载到本地</SelectItem>
+                </SelectGroup>
               </SelectContent>
             </Select>
           </div>
@@ -689,17 +697,19 @@ function TimelineExportSession({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {[
-                  [480, "480P"],
-                  [720, "720P"],
-                  [1080, "1080P"],
-                  [1440, "2K"],
-                  [2160, "4K"],
-                ].map(([value, label]) => (
-                  <SelectItem key={value} value={String(value)}>
-                    {label}
-                  </SelectItem>
-                ))}
+                <SelectGroup>
+                  {[
+                    [480, "480P"],
+                    [720, "720P"],
+                    [1080, "1080P"],
+                    [1440, "2K"],
+                    [2160, "4K"],
+                  ].map(([value, label]) => (
+                    <SelectItem key={value} value={String(value)}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
           </div>

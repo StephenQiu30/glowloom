@@ -153,7 +153,7 @@ export function CanvasNodeSearch({
                 className="[scrollbar-width:none] overflow-x-auto overflow-y-hidden pr-6"
               >
                 <TabsList
-                  variant="line"
+                  variant="workspace"
                   aria-label="节点类型筛选"
                   className="h-8! justify-start gap-4 p-0"
                 >

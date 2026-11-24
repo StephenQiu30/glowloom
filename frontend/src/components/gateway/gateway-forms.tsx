@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { ArrowRight, Coins, ReceiptText } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -14,11 +14,13 @@ import { Separator } from "@/components/ui/separator";
 import {
   arkEmbedding,
   fundCredits,
+  modelPreset,
   prepareModel,
   prepareRoute,
   reconcileGateway,
   type GatewayConfiguration,
   type GatewayModel,
+  type GatewayPreset,
   type GatewayPrice,
   type MediaDriverOption,
   type OnboardingReview,
@@ -37,6 +39,7 @@ import {
 } from "./gateway-fields";
 import {
   MediaModelFields,
+  modeLabel,
   MediaProbeFields,
   VideoMeterFields,
   readMediaModel,
@@ -60,16 +63,20 @@ const currencyOptions = [
 
 function PriceFields({
   kind,
+  preset,
   embedding = false,
   media,
   videoTokens,
+  advanced,
 }: {
   kind: "销售" | "采购";
+  preset?: GatewayPreset;
   media: boolean;
   embedding?: boolean;
   videoTokens?: boolean;
+  advanced?: ReactNode;
 }) {
-  const [currency, setCurrency] = useState("CNY");
+  const [currency, setCurrency] = useState(preset?.currency ?? "CNY");
   const unit = currency === "USD" ? "美元" : "元";
   const common = {
     type: "text",
@@ -81,16 +88,23 @@ function PriceFields({
   return (
     <FieldSet>
       <FieldLegend>{kind}定价</FieldLegend>
-      <FieldDescription>
-        {videoTokens
-          ? `按 ${unit} / 百万视频 Token 计价。`
-          : media
-            ? `每次请求按 ${unit} 计价。`
-            : embedding
-              ? `输入按 ${unit} / 百万 token 计价。`
-              : `输入和输出按 ${unit} / 百万 token 计价。`}
-      </FieldDescription>
-      <FieldGroup>
+      {preset?.rates.length ? (
+        <FieldDescription>
+          供应商参考价 · {preset.rates.join("；")}
+        </FieldDescription>
+      ) : null}
+      {(!media || videoTokens || !preset?.rates.length) && (
+        <FieldDescription>
+          {videoTokens
+            ? `按 ${unit} / 百万视频 Token 计价。`
+            : media
+              ? `每次请求按 ${unit} 计价。`
+              : embedding
+                ? `输入按 ${unit} / 百万 token 计价。`
+                : `输入和输出按 ${unit} / 百万 token 计价。`}
+        </FieldDescription>
+      )}
+      <FieldGroup className="grid gap-3 min-[360px]:grid-cols-2">
         <SelectField
           name="currency"
           label={`${kind}币种`}
@@ -107,64 +121,84 @@ function PriceFields({
         ) : embedding ? (
           <InputField label={`${kind}输入价`} name="input" {...common} />
         ) : media ? (
-          <InputField label={`${kind}按次价`} name="request" {...common} />
+          <InputField
+            key={currency}
+            label={`${kind}按次价`}
+            name="request"
+            placeholder={`填写${kind}价`}
+            {...common}
+            value={
+              kind === "采购" &&
+              currency === preset?.currency &&
+              preset.request_micros != null
+                ? preset.request_micros / 1_000_000
+                : undefined
+            }
+          />
         ) : (
           <FieldGroup className="grid sm:grid-cols-2">
             <InputField label={`${kind}输入价`} name="input" {...common} />
             <InputField label={`${kind}输出价`} name="output" {...common} />
           </FieldGroup>
         )}
-        <FormDetails
-          label={media || embedding ? "汇率与折扣" : "缓存与其他费率"}
-        >
-          <FieldGroup>
-            {!media && !embedding && (
-              <FieldGroup className="grid sm:grid-cols-3">
-                <InputField
-                  name="cache_read"
-                  label={`${kind}缓存读取价`}
-                  {...common}
-                  description={`${unit} / 百万 token`}
-                />
-                <InputField
-                  name="cache_write"
-                  label={`${kind}缓存写入价`}
-                  {...common}
-                  description={`${unit} / 百万 token`}
-                />
-                <InputField
-                  name="request"
-                  label={`${kind}按次附加费`}
-                  {...common}
-                  description={`${unit} / 次`}
-                />
-              </FieldGroup>
-            )}
+      </FieldGroup>
+      <FormDetails
+        label={
+          advanced
+            ? "高级配置"
+            : media || embedding
+              ? "汇率与折扣"
+              : "缓存与其他费率"
+        }
+      >
+        <FieldGroup>
+          {advanced}
+          {!media && !embedding && (
             <FieldGroup className="grid sm:grid-cols-3">
               <InputField
-                name="fx"
-                label={`${kind}汇率`}
-                inputMode="decimal"
-                value="1"
-                description="兑换人民币的汇率。"
+                name="cache_read"
+                label={`${kind}缓存读取价`}
+                {...common}
+                description={`${unit} / 百万 token`}
               />
               <InputField
-                name="multiplier"
-                label={`${kind}倍率`}
-                inputMode="decimal"
-                value="1"
+                name="cache_write"
+                label={`${kind}缓存写入价`}
+                {...common}
+                description={`${unit} / 百万 token`}
               />
               <InputField
-                name="discount"
-                label={`${kind}折扣`}
-                inputMode="decimal"
-                value="1"
-                description="大于 0，最多为 1。"
+                name="request"
+                label={`${kind}按次附加费`}
+                {...common}
+                description={`${unit} / 次`}
               />
             </FieldGroup>
+          )}
+          <FieldGroup className="grid sm:grid-cols-3">
+            <InputField
+              name="fx"
+              label={`${kind}汇率`}
+              inputMode="decimal"
+              value="1"
+              description="兑换人民币的汇率。"
+            />
+            <InputField
+              name="multiplier"
+              label={`${kind}倍率`}
+              inputMode="decimal"
+              value="1"
+            />
+            <InputField
+              name="discount"
+              label={`${kind}折扣`}
+              inputMode="decimal"
+              value="1"
+              description="大于 0，最多为 1。"
+            />
           </FieldGroup>
-        </FormDetails>
-      </FieldGroup>
+        </FieldGroup>
+      </FormDetails>
     </FieldSet>
   );
 }
@@ -183,23 +217,214 @@ function readPrice(form: FormData): GatewayPrice {
   };
 }
 
-export function ModelForm({
-  run,
-  busy,
-  onPrepared,
-}: {
+type ModelFormProps = {
   run: RunMutation;
   busy: boolean;
   onPrepared: (id: string) => void;
-}) {
-  const [protocol, setProtocol] = useState("chat");
-  const [capability, setCapability] = useState("image.generate");
-  const [billingUnit, setBillingUnit] = useState("video_tokens");
+};
+export function ModelForm({
+  configuration,
+  ...props
+}: ModelFormProps & { configuration: GatewayConfiguration }) {
+  const presets = configuration.model_presets ?? [];
+  const [provider, setProvider] = useState(presets.length ? "" : "custom");
+  const [modelKey, setModelKey] = useState("");
+  const choices = presets.filter((item) => item.adapter === provider);
+  const preset = choices.find((item) => item.key === modelKey);
+  const providers = new Map(
+    presets.map((item) => [item.adapter, item.provider]),
+  );
+  return (
+    <FieldGroup>
+      <FieldGroup className="grid gap-3 min-[360px]:grid-cols-2">
+        <SelectField
+          label="供应商"
+          value={provider}
+          onChange={(event) => {
+            setProvider(event.currentTarget.value);
+            setModelKey("");
+          }}
+          options={[["", "选择供应商"], ...providers, ["custom", "自定义接入"]]}
+        />
+        {choices.length > 0 && (
+          <SelectField
+            label="模型预设"
+            value={modelKey}
+            onChange={(event) => setModelKey(event.currentTarget.value)}
+            options={[
+              ["", "选择型号"],
+              ...choices.map((item) => [item.key, item.name] as const),
+            ]}
+          />
+        )}
+      </FieldGroup>
+      {(preset || provider === "custom") && (
+        <ModelSettings
+          key={preset?.key ?? "custom"}
+          preset={preset}
+          driver={configuration.media_drivers.find(
+            (d) => d.key === preset?.adapter,
+          )}
+          {...props}
+        />
+      )}
+    </FieldGroup>
+  );
+}
+
+function ModelSettings({
+  run,
+  busy,
+  onPrepared,
+  preset,
+  driver,
+}: ModelFormProps & { preset?: GatewayPreset; driver?: MediaDriverOption }) {
+  const [protocol, setProtocol] = useState(
+    preset && preset.capability !== "text.generate" ? "media" : "chat",
+  );
+  const [capability, setCapability] = useState(
+    preset?.capability ?? "image.generate",
+  );
+  const [billingUnit, setBillingUnit] = useState(
+    !preset || preset.adapter === "volcengine_ark" ? "video_tokens" : "request",
+  );
   const attempt = useRef<{ payload: string; id: string } | null>(null);
   const media = protocol === "media";
   const embedding = protocol === arkEmbedding.protocol;
   const video = media && capability === "video.generate";
   const videoTokens = video && billingUnit === "video_tokens";
+  const fields =
+    preset?.fields.filter(
+      (field) =>
+        driver?.parameters[capability]?.includes(field.field) &&
+        !(
+          videoTokens &&
+          [
+            "resolution",
+            "duration",
+            "duration_ms",
+            "ratio",
+            "aspect_ratio",
+          ].includes(field.field)
+        ),
+    ) ?? [];
+  const purchaseCap = (
+    <InputField
+      key={videoTokens ? "video-procurement-cap" : "default-procurement-cap"}
+      label="单次采购上限（元）"
+      name="purchase_cap"
+      value={videoTokens ? undefined : "10"}
+      inputMode="decimal"
+      maxLength={18}
+      pattern="[0-9]+([.][0-9]{1,6})?"
+      description="限制一次模型调用的最高采购费用。"
+    />
+  );
+  const modelFields = (
+    <>
+      <FieldGroup className="grid sm:grid-cols-2">
+        <InputField
+          label="销售模型名称"
+          name="name"
+          value={preset?.name}
+          placeholder="例如 doubao/seed"
+          maxLength={160}
+          description="同名同协议的新版本通过验证后才会切换。"
+        />
+        <SelectField
+          label="模型协议"
+          name="protocol"
+          options={
+            preset
+              ? protocolOptions.filter(([id]) =>
+                  preset.capability === "text.generate"
+                    ? ["chat", "responses", "messages"].includes(id)
+                    : id === "media",
+                )
+              : protocolOptions
+          }
+          value={protocol}
+          onChange={(event) => setProtocol(event.currentTarget.value)}
+        />
+      </FieldGroup>
+      {media && preset ? (
+        <FieldSet>
+          <FieldLegend variant="label">支持的生成模式</FieldLegend>
+          <div className="flex flex-wrap gap-3">
+            {preset.modes
+              .filter(
+                (mode) =>
+                  !videoTokens ||
+                  mode === "text2video" ||
+                  (mode === "image2video" &&
+                    !preset.upstream.startsWith("doubao-seedance-2-5-")),
+              )
+              .map((mode) => (
+                <CheckField
+                  key={mode}
+                  name="preset_mode"
+                  value={mode}
+                  label={modeLabel(mode)}
+                  defaultChecked
+                />
+              ))}
+          </div>
+          {fields.length > 0 && (
+            <FormDetails label="生成参数与默认值">
+              {fields.map((field) => (
+                <p key={field.field} className="text-sm">
+                  {field.label} · {String(field.default ?? field.type)}
+                </p>
+              ))}
+            </FormDetails>
+          )}
+        </FieldSet>
+      ) : media ? (
+        <MediaModelFields
+          capability={capability}
+          onCapabilityChange={setCapability}
+        />
+      ) : (
+        !embedding && (
+          <FieldSet>
+            <FieldLegend variant="label">文本能力</FieldLegend>
+            <FieldGroup className="grid sm:grid-cols-2">
+              <CheckField label="支持工具调用" name="tools" />
+              <CheckField label="支持流式输出" name="stream" />
+            </FieldGroup>
+          </FieldSet>
+        )
+      )}
+    </>
+  );
+  const limits = (
+    <FieldGroup className="grid sm:grid-cols-2">
+      {!videoTokens && purchaseCap}
+      {!media && (
+        <>
+          <InputField
+            label="最大输入 token"
+            name="max_input"
+            type="number"
+            min={1}
+            max={1048576}
+            value={32768}
+          />
+          {!embedding && (
+            <InputField
+              label="最大输出 token"
+              name="max_output"
+              type="number"
+              min={1}
+              max={1048576}
+              value={4096}
+            />
+          )}
+        </>
+      )}
+      {media && <CheckField label="已审核供应商成功输出策略" name="reviewed" />}
+    </FieldGroup>
+  );
   return (
     <form
       aria-label="准备模型与销售价"
@@ -207,9 +432,36 @@ export function ModelForm({
         event.preventDefault();
         const form = new FormData(event.currentTarget);
         void run(async () => {
-          const draft = media ? readMediaModel(form) : undefined;
+          const draft = !media
+            ? undefined
+            : preset
+              ? {
+                  capability,
+                  modes: form.getAll("preset_mode").map(String),
+                  parameters: Object.fromEntries(
+                    fields.map(
+                      ({
+                        field,
+                        type,
+                        min,
+                        max,
+                        enum: options,
+                        default: value,
+                      }) => [
+                        field,
+                        { type, min, max, enum: options, default: value },
+                      ],
+                    ),
+                  ),
+                  output_policy:
+                    form.get("reviewed") === "on"
+                      ? "provider_success_v1"
+                      : undefined,
+                }
+              : readMediaModel(form);
           const model = {
             ...(draft && videoTokens ? readVideoMetering(form, draft) : draft),
+            preset_key: preset?.key,
             name: text(form, "name"),
             protocol,
             price: readPrice(form),
@@ -234,38 +486,7 @@ export function ModelForm({
       }}
     >
       <FieldGroup>
-        <FieldGroup className="grid sm:grid-cols-2">
-          <InputField
-            label="销售模型名称"
-            name="name"
-            placeholder="例如 doubao/seed"
-            maxLength={160}
-            description="同名同协议的新版本通过验证后才会切换。"
-          />
-          <SelectField
-            label="模型协议"
-            name="protocol"
-            options={protocolOptions}
-            value={protocol}
-            onChange={(event) => setProtocol(event.currentTarget.value)}
-          />
-        </FieldGroup>
-        {media ? (
-          <MediaModelFields
-            capability={capability}
-            onCapabilityChange={setCapability}
-          />
-        ) : (
-          !embedding && (
-            <FieldSet>
-              <FieldLegend variant="label">文本能力</FieldLegend>
-              <FieldGroup className="grid sm:grid-cols-2">
-                <CheckField label="支持工具调用" name="tools" />
-                <CheckField label="支持流式输出" name="stream" />
-              </FieldGroup>
-            </FieldSet>
-          )
-        )}
+        {!preset && modelFields}
         {video && (
           <SelectField
             label="视频计费方式"
@@ -278,55 +499,24 @@ export function ModelForm({
           />
         )}
         {videoTokens && <VideoMeterFields />}
-        <FormDetails label="能力与使用限制">
-          <FieldGroup className="grid sm:grid-cols-2">
-            {!media && (
-              <>
-                <InputField
-                  label="最大输入 token"
-                  name="max_input"
-                  type="number"
-                  min={1}
-                  max={1048576}
-                  value={32768}
-                />
-                {!embedding && (
-                  <InputField
-                    label="最大输出 token"
-                    name="max_output"
-                    type="number"
-                    min={1}
-                    max={1048576}
-                    value={4096}
-                  />
-                )}
-              </>
-            )}
-            {media && (
-              <CheckField label="已审核供应商成功输出策略" name="reviewed" />
-            )}
-          </FieldGroup>
-        </FormDetails>
-        <Separator />
+        {!preset && <FormDetails label="能力与使用限制">{limits}</FormDetails>}
         <PriceFields
           kind="销售"
+          advanced={
+            preset && (
+              <>
+                {modelFields}
+                {limits}
+              </>
+            )
+          }
+          preset={preset}
           embedding={embedding}
           media={media}
           videoTokens={videoTokens}
         />
-        <InputField
-          key={
-            videoTokens ? "video-procurement-cap" : "default-procurement-cap"
-          }
-          label="单次采购上限（元）"
-          name="purchase_cap"
-          value={videoTokens ? undefined : "10"}
-          inputMode="decimal"
-          maxLength={18}
-          pattern="[0-9]+([.][0-9]{1,6})?"
-          description="限制一次模型调用的最高采购费用。"
-        />
-        <div>
+        {videoTokens && purchaseCap}
+        <div className="flex justify-end">
           <SubmitButton
             busy={busy}
             label="保存并继续采购配置"
@@ -367,9 +557,37 @@ export function RouteForm({
         请先保存模型预设与销售价。
       </p>
     );
+  const knownRoutes = configuration.routes.filter(
+    ({ route }) => route.model_id === model.id,
+  );
+  const sources = knownRoutes.length
+    ? knownRoutes.map(({ provider_key, route }) => ({
+        provider_key,
+        upstream_model: route.upstream_model,
+      }))
+    : configuration.onboarding.filter(
+        (entry) =>
+          entry.model_id === model.id &&
+          ["prepared", "verifying", "failed"].includes(entry.state),
+      );
+  const source = sources[0];
+  const consistent =
+    source &&
+    sources.every(
+      (entry) =>
+        entry.provider_key === source.provider_key &&
+        entry.upstream_model === source.upstream_model,
+    );
+  const preset = modelPreset(
+    configuration.model_presets,
+    model,
+    consistent ? source.provider_key : undefined,
+    consistent ? source.upstream_model : undefined,
+  );
   return (
     <PreparedRouteForm
       key={model.id}
+      preset={preset}
       model={model}
       models={models}
       chooseModel={setSelected}
@@ -383,6 +601,7 @@ export function RouteForm({
 }
 
 function PreparedRouteForm({
+  preset,
   model,
   models,
   chooseModel,
@@ -393,6 +612,7 @@ function PreparedRouteForm({
   defaultScope,
 }: {
   model: GatewayModel;
+  preset?: GatewayPreset;
   models: GatewayConfiguration["models"];
   chooseModel: (id: string) => void;
   configuration: GatewayConfiguration;
@@ -412,7 +632,7 @@ function PreparedRouteForm({
       (!model.modes?.includes("text2audio") ||
         option.key === "volcengine_speech"),
   );
-  const [driverKey, setDriverKey] = useState("");
+  const [driverKey, setDriverKey] = useState(preset?.adapter ?? "");
   const [supplier, setSupplier] = useState("");
   const [groupOverride, setGroupOverride] = useState<string>();
   const draftRoute = configuration.routes.find(
@@ -439,7 +659,98 @@ function PreparedRouteForm({
     ({ route, enabled }) => enabled && route.model_id === model.id,
   );
   const supplierRoutes = new Map(
-    configuration.routes.map(({ route }) => [route.supplier, route]),
+    configuration.routes
+      .filter((row) => !preset || row.provider_key === preset.adapter)
+      .map(({ route }) => [route.supplier, route]),
+  );
+  const hasConnectionDefaults = Boolean(
+    preset && (media ? driver?.base_url : preset.base_url),
+  );
+  const connectionFields = (
+    <>
+      {media && (
+        <>
+          <SelectField
+            label="媒体驱动"
+            value={driverKey}
+            onChange={(event) => setDriverKey(event.currentTarget.value)}
+            options={[
+              ["", "选择已安装的驱动"],
+              ...drivers.map((option) => [option.key, option.name] as const),
+            ]}
+            required
+          />
+          {!drivers.length && (
+            <FieldDescription>
+              当前未读取到支持该生成类型的媒体驱动。
+            </FieldDescription>
+          )}
+        </>
+      )}
+      {(!media || driver) && (
+        <FieldGroup className="grid sm:grid-cols-2">
+          <InputField
+            key={`${driverKey}:${supplier}`}
+            label="供应商地址"
+            name="base_url"
+            type="url"
+            placeholder="https://api.example.com/v1"
+            readOnly={embedding || Boolean(driver && !driver.custom_url)}
+            value={
+              embedding
+                ? arkEmbedding.baseURL
+                : (driver?.base_url ?? draftRoute?.base_url ?? preset?.base_url)
+            }
+          />
+          {driver && (
+            <div className="flex flex-col gap-2 text-sm">
+              <span className="font-medium">服务地区</span>
+              <Badge variant="secondary" className="w-fit">
+                {driver.region === "domestic" ? "国内" : "海外"}
+              </Badge>
+            </div>
+          )}
+        </FieldGroup>
+      )}
+    </>
+  );
+  const quotaFields = (
+    <FieldGroup key={quota?.name ?? supplier} className="grid sm:grid-cols-2">
+      <InputField
+        label="共享并发"
+        name="concurrency"
+        type="number"
+        min={1}
+        max={1000}
+        value={quota?.concurrency ?? preset?.concurrency ?? 1}
+      />
+      <InputField
+        label="每分钟请求上限"
+        name="rpm"
+        type="number"
+        min={1}
+        max={media ? 100000 : Number.MAX_SAFE_INTEGER}
+        value={quota?.rpm ?? preset?.rpm ?? 60}
+      />
+      <InputField
+        label="路由优先级"
+        name="priority"
+        type="number"
+        min={0}
+        value={0}
+        description="数值越小，越优先尝试。"
+      />
+      {media && (
+        <InputField
+          label="请求超时（秒）"
+          name="timeout"
+          type="number"
+          min={5}
+          max={300}
+          value={60}
+        />
+      )}
+    </FieldGroup>
   );
   return (
     <form
@@ -528,56 +839,13 @@ function PreparedRouteForm({
           <InputField
             label="供应商模型号"
             name="upstream_model"
-            value={embedding ? arkEmbedding.model : undefined}
+            value={embedding ? arkEmbedding.model : preset?.upstream}
             readOnly={embedding}
             placeholder="供应商返回的精确型号"
             maxLength={160}
           />
         </FieldGroup>
-        {media && (
-          <>
-            <SelectField
-              label="媒体驱动"
-              value={driverKey}
-              onChange={(event) => setDriverKey(event.currentTarget.value)}
-              options={[
-                ["", "选择已安装的驱动"],
-                ...drivers.map((option) => [option.key, option.name] as const),
-              ]}
-              required
-            />
-            {!drivers.length && (
-              <FieldDescription>
-                当前未读取到支持该生成类型的媒体驱动。
-              </FieldDescription>
-            )}
-          </>
-        )}
-        {(!media || driver) && (
-          <FieldGroup className="grid sm:grid-cols-2">
-            <InputField
-              key={`${driverKey}:${supplier}`}
-              label="供应商地址"
-              name="base_url"
-              type="url"
-              placeholder="https://api.example.com/v1"
-              readOnly={embedding || Boolean(driver && !driver.custom_url)}
-              value={
-                embedding
-                  ? arkEmbedding.baseURL
-                  : (driver?.base_url ?? draftRoute?.base_url)
-              }
-            />
-            {driver && (
-              <div className="flex flex-col gap-2 text-sm">
-                <span className="font-medium">服务地区</span>
-                <Badge variant="secondary" className="w-fit">
-                  {driver.region === "domestic" ? "国内" : "海外"}
-                </Badge>
-              </div>
-            )}
-          </FieldGroup>
-        )}
+        {!hasConnectionDefaults && connectionFields}
         {replacements.length > 0 && (
           <SelectField
             label="替换现有路由"
@@ -621,50 +889,20 @@ function PreparedRouteForm({
             </AlertDescription>
           </Alert>
         )}
-        <FormDetails label="共享配额与超时">
-          <FieldGroup
-            key={quota?.name ?? supplier}
-            className="grid sm:grid-cols-2"
-          >
-            <InputField
-              label="共享并发"
-              name="concurrency"
-              type="number"
-              min={1}
-              max={1000}
-              value={quota?.concurrency ?? 1}
-            />
-            <InputField
-              label="每分钟请求上限"
-              name="rpm"
-              type="number"
-              min={1}
-              max={media ? 100000 : Number.MAX_SAFE_INTEGER}
-              value={quota?.rpm ?? 60}
-            />
-            <InputField
-              label="路由优先级"
-              name="priority"
-              type="number"
-              min={0}
-              value={0}
-              description="数值越小，越优先尝试。"
-            />
-            {media && (
-              <InputField
-                label="请求超时（秒）"
-                name="timeout"
-                type="number"
-                min={5}
-                max={300}
-                value={60}
-              />
-            )}
-          </FieldGroup>
-        </FormDetails>
-        <Separator />
+        {!preset && (
+          <FormDetails label="共享配额与超时">{quotaFields}</FormDetails>
+        )}
         <PriceFields
           kind="采购"
+          advanced={
+            preset && (
+              <>
+                {hasConnectionDefaults && connectionFields}
+                {quotaFields}
+              </>
+            )
+          }
+          preset={preset}
           embedding={embedding}
           media={media}
           videoTokens={Boolean(model.video_metering)}
@@ -675,7 +913,7 @@ function PreparedRouteForm({
             <MediaProbeFields model={model} />
           </>
         )}
-        <div>
+        <div className="flex justify-end">
           <SubmitButton
             busy={busy}
             disabled={noVerificationSlot || (media && !driver)}

@@ -12,6 +12,7 @@ import {
   DialogDescription,
 } from "@glowloom/canvas-host/components/ui/dialog";
 import {
+  SelectGroup,
   Select,
   SelectContent,
   SelectItem,
@@ -169,12 +170,16 @@ export function DirectorPathEditor({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="preset">预设运镜</SelectItem>
-                <SelectItem value="fixed-target">
-                  自定义 · 固定注视点
-                </SelectItem>
-                <SelectItem value="fixed-camera">自定义 · 固定机位</SelectItem>
-                <SelectItem value="free">自定义 · 自由运镜</SelectItem>
+                <SelectGroup>
+                  <SelectItem value="preset">预设运镜</SelectItem>
+                  <SelectItem value="fixed-target">
+                    自定义 · 固定注视点
+                  </SelectItem>
+                  <SelectItem value="fixed-camera">
+                    自定义 · 固定机位
+                  </SelectItem>
+                  <SelectItem value="free">自定义 · 自由运镜</SelectItem>
+                </SelectGroup>
               </SelectContent>
             </Select>
             {cameraMode === "free" && (
@@ -205,11 +210,13 @@ export function DirectorPathEditor({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {CAMERA_MOTIONS.map(([value, label]) => (
-                <SelectItem key={value} value={value}>
-                  {label}
-                </SelectItem>
-              ))}
+              <SelectGroup>
+                {CAMERA_MOTIONS.map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
             </SelectContent>
           </Select>
         ) : (

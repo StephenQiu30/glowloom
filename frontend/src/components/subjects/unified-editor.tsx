@@ -20,6 +20,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
+  DropdownMenuGroup,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -370,25 +371,27 @@ export function UnifiedSubjectEditor({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="unified-subject-menu">
-          <DropdownMenuItem
-            onSelect={() => localInputs.current[target]?.click()}
-          >
-            <Upload />
-            {target === "voice" ? "上传音色" : "从本地添加"}
-          </DropdownMenuItem>
-          {target !== "voice" ? (
+          <DropdownMenuGroup>
             <DropdownMenuItem
-              onSelect={() => setSource({ target, mode: "library" })}
+              onSelect={() => localInputs.current[target]?.click()}
             >
-              <FolderPlus />
-              从资产添加
+              <Upload />
+              {target === "voice" ? "上传音色" : "从本地添加"}
             </DropdownMenuItem>
-          ) : null}
-          {target === "voice" ? (
-            <DropdownMenuItem onSelect={() => void voiceJob.begin()}>
-              智能配音
-            </DropdownMenuItem>
-          ) : null}
+            {target !== "voice" ? (
+              <DropdownMenuItem
+                onSelect={() => setSource({ target, mode: "library" })}
+              >
+                <FolderPlus />
+                从资产添加
+              </DropdownMenuItem>
+            ) : null}
+            {target === "voice" ? (
+              <DropdownMenuItem onSelect={() => void voiceJob.begin()}>
+                智能配音
+              </DropdownMenuItem>
+            ) : null}
+          </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>
     );

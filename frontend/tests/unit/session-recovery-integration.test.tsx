@@ -58,6 +58,7 @@ vi.mock("axios", async (original) => {
 });
 vi.mock("next/navigation", () => ({
   usePathname: () => "/",
+  useSearchParams: () => new URLSearchParams(),
   useRouter: () => ({ replace() {} }),
 }));
 vi.mock("next-themes", () => ({ useTheme: () => ({ setTheme() {} }) }));

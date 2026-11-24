@@ -11,6 +11,7 @@ import { Input } from "@glowloom/canvas-host/components/ui/input";
 import { Label } from "@glowloom/canvas-host/components/ui/label";
 import { Checkbox } from "@glowloom/canvas-host/components/ui/checkbox";
 import {
+  SelectGroup,
   Select,
   SelectContent,
   SelectItem,
@@ -97,11 +98,13 @@ function Choice({
           data-canvas-no-zoom
           onMouseDown={(event) => event.stopPropagation()}
         >
-          {items.map(([key, text]) => (
-            <SelectItem key={key} value={key}>
-              {text}
-            </SelectItem>
-          ))}
+          <SelectGroup>
+            {items.map(([key, text]) => (
+              <SelectItem key={key} value={key}>
+                {text}
+              </SelectItem>
+            ))}
+          </SelectGroup>
         </SelectContent>
       </Select>
     </Label>

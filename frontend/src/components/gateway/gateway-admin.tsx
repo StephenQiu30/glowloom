@@ -38,6 +38,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 
 import {
@@ -236,14 +244,12 @@ function GatewayConfigurationPage({
   function startModel() {
     go("models");
     setStage("model");
-    requestAnimationFrame(() => heading.current?.focus());
   }
 
   function startRoute(id?: string) {
     go("routes");
     setSelectedModel(id);
     setStage("route");
-    requestAnimationFrame(() => heading.current?.focus());
   }
 
   function openCandidate(id: string) {
@@ -260,7 +266,8 @@ function GatewayConfigurationPage({
   }
   const isProviders = entry === "providers";
   const title = isProviders ? "AI 服务接入" : "模型管理";
-  const showListing = !inDetail && !stage && !candidate;
+  const setupOpen = stage === "model" || stage === "route";
+  const showListing = !inDetail && (!stage || setupOpen) && !candidate;
   const currentStep =
     stage === "model" ? 0 : stage === "route" ? 1 : candidate ? 2 : undefined;
   const waitingForNewDraft =
@@ -268,14 +275,17 @@ function GatewayConfigurationPage({
     selectedModel &&
     !configuration?.models.some(({ model }) => model.id === selectedModel);
 
-  const showCreate = showListing && configuration;
-  const hasRoutableModel = configuration?.models.some(
-    ({ enabled, draft }) => enabled || draft,
+  const operationError = error && (
+    <Alert id="gateway-operation-error" tabIndex={-1} variant="destructive">
+      <AlertTitle>操作未完成</AlertTitle>
+      <AlertDescription>{error}</AlertDescription>
+    </Alert>
   );
+  const showCreate = showListing && configuration;
   return (
     <TooltipProvider>
       <div
-        className="flex w-full min-w-0 flex-col gap-5"
+        className="flex w-full min-w-0 flex-col gap-2"
         onChangeCapture={() => {
           if (stage) dirty.current = true;
         }}
@@ -283,7 +293,7 @@ function GatewayConfigurationPage({
         <Tabs
           value={tab}
           onValueChange={(value) => requestNavigation(value as GatewayTab)}
-          className="min-w-0 gap-5"
+          className="min-w-0 gap-2"
         >
           <div
             ref={heading}
@@ -294,15 +304,15 @@ function GatewayConfigurationPage({
           >
             <TabsList
               aria-label="网关管理"
-              variant="line"
-              className="h-auto! min-w-0 flex-1 [scrollbar-width:none] justify-start overflow-x-auto overscroll-x-contain p-0"
+              variant="workspace"
+              className="flex-1 overscroll-x-contain"
             >
               {tabs.map(([value, label]) => (
                 <TabsTrigger
                   key={value}
                   value={value}
                   disabled={!configuration}
-                  className="h-11 flex-none border-0 px-2.5 group-data-horizontal/tabs:after:bottom-0 focus-visible:ring-inset max-md:px-1.5"
+                  className="px-2.5"
                 >
                   {label}
                 </TabsTrigger>
@@ -327,7 +337,7 @@ function GatewayConfigurationPage({
                 <GatewayAction
                   icon={Plus}
                   variant="default"
-                  label="新建模型预设"
+                  label="新增接入"
                   disabled={busy}
                   onClick={startModel}
                 />
@@ -336,9 +346,9 @@ function GatewayConfigurationPage({
                 <GatewayAction
                   icon={Plus}
                   variant="default"
-                  label={hasRoutableModel ? "准备采购路由" : "新建模型预设"}
+                  label="新增接入"
                   disabled={busy}
-                  onClick={hasRoutableModel ? () => startRoute() : startModel}
+                  onClick={startModel}
                 />
               )}
               {showCreate && tab === "credits" && (
@@ -365,16 +375,7 @@ function GatewayConfigurationPage({
               <AlertDescription>请刷新配置后继续。</AlertDescription>
             </Alert>
           )}
-          {error && (
-            <Alert
-              id="gateway-operation-error"
-              tabIndex={-1}
-              variant="destructive"
-            >
-              <AlertTitle>操作未完成</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
+          {!setupOpen && operationError}
           {notice && (
             <Alert role="status">
               <AlertDescription>{notice}</AlertDescription>
@@ -385,7 +386,7 @@ function GatewayConfigurationPage({
           )}
           {configuration && (
             <>
-              {currentStep !== undefined && (
+              {!setupOpen && currentStep !== undefined && (
                 <OnboardingSteps current={currentStep} />
               )}
               <GatewayFilterSlot.Provider value={filterSlot}>
@@ -399,70 +400,6 @@ function GatewayConfigurationPage({
                         startRoute={startRoute}
                         openCandidate={openCandidate}
                       />
-                    ) : stage === "model" ? (
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>模型预设与销售价</CardTitle>
-                          <CardDescription>
-                            定义创作者可选的模型能力及计价方式。
-                          </CardDescription>
-                          <CardAction>
-                            <GatewayAction
-                              disabled={busy}
-                              onClick={() => requestNavigation("models")}
-                              label="返回列表"
-                              icon={ArrowLeft}
-                            />
-                          </CardAction>
-                        </CardHeader>
-                        <CardContent>
-                          <ModelForm
-                            busy={busy}
-                            run={run}
-                            onPrepared={startRoute}
-                          />
-                        </CardContent>
-                      </Card>
-                    ) : stage === "route" ? (
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>供应商与采购价</CardTitle>
-                          <CardDescription>
-                            选择接入的精确型号、验证范围及实际采购定价。
-                          </CardDescription>
-                          <CardAction>
-                            <GatewayAction
-                              disabled={busy}
-                              onClick={() => requestNavigation("routes")}
-                              label="返回列表"
-                              icon={ArrowLeft}
-                            />
-                          </CardAction>
-                        </CardHeader>
-                        <CardContent>
-                          {waitingForNewDraft ? (
-                            <p
-                              role="status"
-                              className="text-sm text-muted-foreground"
-                            >
-                              正在读取刚保存的模型预设…
-                            </p>
-                          ) : (
-                            <RouteForm
-                              key={selectedModel ?? "choose"}
-                              configuration={configuration}
-                              busy={busy}
-                              run={run}
-                              initialModelID={selectedModel}
-                              defaultScope={defaultScope}
-                              onPrepared={(review) => {
-                                setPrepared(review);
-                                openCandidate(review.id);
-                              }}
-                            />
-                          )}
-                        </CardContent>
-                      </Card>
                     ) : candidate ? (
                       <OnboardingPanel
                         key={candidate}
@@ -618,6 +555,72 @@ function GatewayConfigurationPage({
             </>
           )}
         </Tabs>
+        {configuration && setupOpen && (
+          <Dialog
+            open
+            onOpenChange={(open) => {
+              if (!open) requestNavigation(tab);
+            }}
+          >
+            <DialogContent
+              className="gap-3 p-4 sm:max-w-[504px] sm:p-5"
+              onCloseAutoFocus={(event) => {
+                event.preventDefault();
+                heading.current?.focus();
+              }}
+            >
+              <DialogHeader>
+                <DialogTitle>
+                  {stage === "model" ? "新增接入" : "采购配置"}
+                </DialogTitle>
+                <DialogDescription>
+                  {stage === "model" ? "1 / 3 · 模型预设" : "2 / 3 · 采购路由"}
+                </DialogDescription>
+              </DialogHeader>
+              {operationError}
+              {stage === "model" ? (
+                <>
+                  {isProviders &&
+                    configuration.models.some(
+                      (row) => row.enabled || row.draft,
+                    ) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mb-3"
+                        onClick={() => startRoute()}
+                      >
+                        使用已有模型
+                      </Button>
+                    )}
+                  <ModelForm
+                    configuration={configuration}
+                    busy={busy}
+                    run={run}
+                    onPrepared={startRoute}
+                  />
+                </>
+              ) : waitingForNewDraft ? (
+                <p role="status" className="text-sm text-muted-foreground">
+                  正在读取刚保存的模型预设…
+                </p>
+              ) : (
+                <RouteForm
+                  key={selectedModel ?? "choose"}
+                  configuration={configuration}
+                  busy={busy}
+                  run={run}
+                  initialModelID={selectedModel}
+                  defaultScope={defaultScope}
+                  onPrepared={(review) => {
+                    setPrepared(review);
+                    openCandidate(review.id);
+                  }}
+                />
+              )}
+            </DialogContent>
+          </Dialog>
+        )}
         <AlertDialog
           open={discard !== undefined}
           onOpenChange={(open) => {
@@ -632,22 +635,13 @@ function GatewayConfigurationPage({
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel
-                aria-label="继续填写"
-                title="继续填写"
-                size="icon"
-              >
-                <X aria-hidden="true" />
-              </AlertDialogCancel>
+              <AlertDialogCancel>继续填写</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => {
                   if (discard) go(discard);
                 }}
-                aria-label="离开表单"
-                title="离开表单"
-                size="icon"
               >
-                <Check aria-hidden="true" />
+                离开表单
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

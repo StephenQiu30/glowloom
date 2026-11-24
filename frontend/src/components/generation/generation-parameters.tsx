@@ -114,16 +114,18 @@ export function GenerationParameters({
                     <SelectValue placeholder="尚未配置音色" />
                   </SelectTrigger>
                   <SelectContent>
-                    {typeof field.default === "string" && field.default && (
-                      <SelectItem value={field.default}>默认音色</SelectItem>
-                    )}
-                    {typeof params.speaker === "string" &&
-                      params.speaker &&
-                      params.speaker !== field.default && (
-                        <SelectItem value={params.speaker}>
-                          已保存音色
-                        </SelectItem>
+                    <SelectGroup>
+                      {typeof field.default === "string" && field.default && (
+                        <SelectItem value={field.default}>默认音色</SelectItem>
                       )}
+                      {typeof params.speaker === "string" &&
+                        params.speaker &&
+                        params.speaker !== field.default && (
+                          <SelectItem value={params.speaker}>
+                            已保存音色
+                          </SelectItem>
+                        )}
+                    </SelectGroup>
                   </SelectContent>
                 </Select>
               ) : field.enum && (ratio || field.field === "resolution") ? (

@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from "@glowloom/canvas-host/components/ui/dialog";
 import {
+  DropdownMenuGroup,
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
@@ -247,12 +248,14 @@ export function CanvasContainerToolbar({
               data-canvas-no-zoom
               onMouseDown={(e) => e.stopPropagation()}
             >
-              <DropdownMenuItem onSelect={() => onLayout("grid")}>
-                宫格布局
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => onLayout("smart")}>
-                智能布局
-              </DropdownMenuItem>
+              <DropdownMenuGroup>
+                <DropdownMenuItem onSelect={() => onLayout("grid")}>
+                  宫格布局
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => onLayout("smart")}>
+                  智能布局
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
           <DropdownMenu>
@@ -266,27 +269,30 @@ export function CanvasContainerToolbar({
               data-canvas-no-zoom
               onMouseDown={(e) => e.stopPropagation()}
             >
-              {canvasTextBackgrounds.map((color) => {
-                const value = color.value === "default" ? "none" : color.value;
-                return (
-                  <DropdownMenuItem
-                    key={value}
-                    onSelect={() => onBackground(value)}
-                  >
-                    <span
-                      className="size-4 rounded-full border"
-                      style={{
-                        background:
-                          color.value === "default"
-                            ? "transparent"
-                            : color.color,
-                      }}
-                    />
-                    {color.label}
-                    {background === value ? " ✓" : ""}
-                  </DropdownMenuItem>
-                );
-              })}
+              <DropdownMenuGroup>
+                {canvasTextBackgrounds.map((color) => {
+                  const value =
+                    color.value === "default" ? "none" : color.value;
+                  return (
+                    <DropdownMenuItem
+                      key={value}
+                      onSelect={() => onBackground(value)}
+                    >
+                      <span
+                        className="size-4 rounded-full border"
+                        style={{
+                          background:
+                            color.value === "default"
+                              ? "transparent"
+                              : color.color,
+                        }}
+                      />
+                      {color.label}
+                      {background === value ? " ✓" : ""}
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
         </>

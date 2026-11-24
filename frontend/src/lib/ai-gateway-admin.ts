@@ -38,6 +38,7 @@ export type GatewayVideoMetering = {
   geometries: Record<string, { width: number; height: number }>;
 };
 export type GatewayModel = {
+  preset_key?: string;
   id: string;
   name: string;
   protocol: string;
@@ -67,7 +68,24 @@ export type GatewayRoute = {
   driver_config?: Record<string, unknown>;
 };
 export type CredentialState = "active" | "draining" | "revoked";
+export type GatewayPreset = {
+  key: string;
+  provider: string;
+  adapter: string;
+  name: string;
+  upstream: string;
+  base_url: string;
+  capability: string;
+  modes: string[];
+  fields: (GatewayParameter & { field: string; label: string })[];
+  rates: string[];
+  currency: string | null;
+  request_micros: number | null;
+  concurrency: number;
+  rpm: number;
+};
 export type GatewayConfiguration = {
+  model_presets?: GatewayPreset[];
   models: { model: GatewayModel; enabled: boolean; draft?: boolean }[];
   onboarding: OnboardingSummary[];
   routes: { route: GatewayRoute; enabled: boolean; provider_key?: string }[];
@@ -90,6 +108,21 @@ export type OnboardingSummary = {
   upstream_model: string;
   provider_key?: string;
 };
+
+export function modelPreset(
+  presets: GatewayPreset[] | undefined,
+  model: GatewayModel,
+  adapter?: string,
+  upstream?: string,
+) {
+  return presets?.find((preset) =>
+    model.preset_key
+      ? preset.key === model.preset_key
+      : preset.adapter === adapter &&
+        preset.upstream === upstream &&
+        preset.capability === (model.capability ?? "text.generate"),
+  );
+}
 
 export type OnboardingReview = OnboardingSummary & {
   scope_id: string;
@@ -214,6 +247,7 @@ export function validateModel(
     );
   }
   const result: Omit<GatewayModel, "id"> = {
+    ...(value.preset_key && { preset_key: value.preset_key }),
     name: value.name.trim(),
     protocol: value.protocol,
     price,
@@ -315,6 +349,7 @@ export async function loadGatewayConfiguration(
     "credentials",
     "quotas",
     "media_drivers",
+    "model_presets",
     "unknown",
   ] as const) {
     requireValue(
@@ -408,6 +443,15 @@ export async function loadGatewayConfiguration(
     "待对账记录无效",
   );
   return {
+    model_presets: (result.model_presets ?? []).filter(
+      (preset) =>
+        preset.capability === "text.generate" ||
+        result.media_drivers?.some(
+          (driver) =>
+            driver.key === preset.adapter &&
+            driver.parameters[preset.capability],
+        ),
+    ),
     models: result.models ?? [],
     routes: result.routes ?? [],
     quotas: result.quotas ?? [],

@@ -214,7 +214,7 @@ export function UnifiedSubjectSourcePicker({
 
         <div className="flex shrink-0 items-center justify-between gap-2">
           <Tabs value={kind} onValueChange={changeKind}>
-            <TabsList variant="line" aria-label="资产类型">
+            <TabsList variant="workspace" aria-label="资产类型">
               {allowedKinds.map((k) => (
                 <TabsTrigger
                   key={k}
@@ -244,7 +244,7 @@ export function UnifiedSubjectSourcePicker({
             setIssue({ owner, message: "" });
           }}
         >
-          <TabsList variant="line" aria-label={`${mediaLabel}分组`}>
+          <TabsList variant="workspace" aria-label={`${mediaLabel}分组`}>
             <TabsTrigger value="all" disabled={pending}>
               所有{mediaLabel}
             </TabsTrigger>

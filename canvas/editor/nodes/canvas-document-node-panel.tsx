@@ -12,6 +12,7 @@ import {
 } from "../parameters/canvas-agent-parameters.tsx";
 import { CanvasModelSelect } from "../parameters/canvas-model-select.tsx";
 import {
+  SelectGroup,
   Select,
   SelectContent,
   SelectItem,
@@ -148,14 +149,16 @@ export function CanvasDocumentNodePanel({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="MANUAL" disabled={connectedNodes.length > 0}>
-                固定文字
-              </SelectItem>
-              <SelectItem value="PROCESS">确定性拼接</SelectItem>
-              {workflow.agentEnabled && (
-                <SelectItem value="AGENT">Agent（Mock）</SelectItem>
-              )}
-              <SelectItem value="GENERATE">模型生成</SelectItem>
+              <SelectGroup>
+                <SelectItem value="MANUAL" disabled={connectedNodes.length > 0}>
+                  固定文字
+                </SelectItem>
+                <SelectItem value="PROCESS">确定性拼接</SelectItem>
+                {workflow.agentEnabled && (
+                  <SelectItem value="AGENT">Agent（Mock）</SelectItem>
+                )}
+                <SelectItem value="GENERATE">模型生成</SelectItem>
+              </SelectGroup>
             </SelectContent>
           </Select>
         )}

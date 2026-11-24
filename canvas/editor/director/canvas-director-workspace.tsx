@@ -49,6 +49,7 @@ import {
   TabsTrigger,
 } from "@glowloom/canvas-host/components/ui/tabs";
 import {
+  SelectGroup,
   Select,
   SelectContent,
   SelectItem,
@@ -226,11 +227,13 @@ function Choice({
           data-canvas-no-zoom
           onMouseDown={(e) => e.stopPropagation()}
         >
-          {items.map(([v, title]) => (
-            <SelectItem key={v} value={v}>
-              {title}
-            </SelectItem>
-          ))}
+          <SelectGroup>
+            {items.map(([v, title]) => (
+              <SelectItem key={v} value={v}>
+                {title}
+              </SelectItem>
+            ))}
+          </SelectGroup>
         </SelectContent>
       </Select>
     </Label>

@@ -8,6 +8,7 @@ import {
   TabsTrigger,
 } from "@glowloom/canvas-host/components/ui/tabs";
 import {
+  SelectGroup,
   Select,
   SelectContent,
   SelectItem,
@@ -216,12 +217,14 @@ function AssetLibrary(props: DirectorAssetLibraryProps) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">全部分类</SelectItem>
-              {DIRECTOR_MODEL_CATEGORIES.map(([id, label]) => (
-                <SelectItem key={id} value={id}>
-                  {label}
-                </SelectItem>
-              ))}
+              <SelectGroup>
+                <SelectItem value="all">全部分类</SelectItem>
+                {DIRECTOR_MODEL_CATEGORIES.map(([id, label]) => (
+                  <SelectItem key={id} value={id}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
             </SelectContent>
           </Select>
           {!models.length && (

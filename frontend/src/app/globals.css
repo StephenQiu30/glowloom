@@ -3869,6 +3869,29 @@ button:not(:disabled),
   gap: var(--layout-gap);
   padding: 8px var(--layout-content-x) var(--layout-content-y);
 }
+.product-content:has(
+    .admin-workspace > :is([data-page="models"], [data-page="providers"])
+  ) {
+  --layout-content-x: 16px;
+}
+.admin-workspace > :is([data-page="models"], [data-page="providers"])
+  [data-slot="tabs-list"][data-variant="workspace"] {
+  border-radius: 0;
+
+  & > [data-slot="tabs-trigger"] {
+    border-radius: 0;
+  }
+}
+.admin-workspace:has(> :is([data-page="models"], [data-page="providers"])) {
+  gap: 8px;
+}
+@media (width < 768px) {
+  .product-content:has(
+      .admin-workspace > :is([data-page="models"], [data-page="providers"])
+    ) {
+    --layout-content-x: 12px;
+  }
+}
 @media (width < 768px) {
   .user-directory-filters {
     padding: 12px;

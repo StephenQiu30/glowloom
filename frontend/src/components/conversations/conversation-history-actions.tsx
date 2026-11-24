@@ -20,6 +20,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  DropdownMenuGroup,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -164,38 +165,40 @@ export function ConversationHistoryItem({
                     }
                   }}
                 >
-                  <DropdownMenuItem
-                    onSelect={() => {
-                      setMenuOpen(false);
-                      void update(item.pinned ? "unpin" : "pin");
-                    }}
-                  >
-                    {item.pinned ? <PinOff /> : <Pin />}
-                    {item.pinned ? "取消置顶" : "置顶"}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onSelect={() => {
-                      setMenuOpen(false);
-                      restoreFocus.current = true;
-                      setError("");
-                      setRename(item.title);
-                    }}
-                  >
-                    <Pencil />
-                    重命名
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    variant="destructive"
-                    onSelect={() => {
-                      setMenuOpen(false);
-                      restoreFocus.current = true;
-                      setError("");
-                      setDeleting(true);
-                    }}
-                  >
-                    <Trash2 />
-                    删除
-                  </DropdownMenuItem>
+                  <DropdownMenuGroup>
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        setMenuOpen(false);
+                        void update(item.pinned ? "unpin" : "pin");
+                      }}
+                    >
+                      {item.pinned ? <PinOff /> : <Pin />}
+                      {item.pinned ? "取消置顶" : "置顶"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        setMenuOpen(false);
+                        restoreFocus.current = true;
+                        setError("");
+                        setRename(item.title);
+                      }}
+                    >
+                      <Pencil />
+                      重命名
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onSelect={() => {
+                        setMenuOpen(false);
+                        restoreFocus.current = true;
+                        setError("");
+                        setDeleting(true);
+                      }}
+                    >
+                      <Trash2 />
+                      删除
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : undefined

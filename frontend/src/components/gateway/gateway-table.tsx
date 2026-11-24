@@ -221,7 +221,7 @@ export function GatewayTable({
               className={
                 title === "操作"
                   ? "flex justify-end gap-2"
-                  : "wrap-anywhere whitespace-normal"
+                  : "wrap-anywhere whitespace-normal max-md:w-max max-md:max-w-64"
               }
             >
               {row.original.cells[index]}

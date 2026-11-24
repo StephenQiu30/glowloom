@@ -15,6 +15,7 @@ import {
   DialogDescription,
 } from "@glowloom/canvas-host/components/ui/dialog";
 import {
+  SelectGroup,
   Select,
   SelectContent,
   SelectItem,
@@ -66,11 +67,13 @@ function Choice({
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {items.map(([id, name]) => (
-            <SelectItem key={id} value={id}>
-              {name}
-            </SelectItem>
-          ))}
+          <SelectGroup>
+            {items.map(([id, name]) => (
+              <SelectItem key={id} value={id}>
+                {name}
+              </SelectItem>
+            ))}
+          </SelectGroup>
         </SelectContent>
       </Select>
     </Label>

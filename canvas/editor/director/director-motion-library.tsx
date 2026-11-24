@@ -11,6 +11,7 @@ import {
   TabsTrigger,
 } from "@glowloom/canvas-host/components/ui/tabs";
 import {
+  SelectGroup,
   Select,
   SelectTrigger,
   SelectValue,
@@ -433,11 +434,13 @@ export function DirectorMotionLibrary(props: DirectorMotionLibraryProps) {
               <SelectValue placeholder="选择动作" />
             </SelectTrigger>
             <SelectContent>
-              {names.map((name) => (
-                <SelectItem key={name} value={name}>
-                  {name}
-                </SelectItem>
-              ))}
+              <SelectGroup>
+                {names.map((name) => (
+                  <SelectItem key={name} value={name}>
+                    {name}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
             </SelectContent>
           </Select>
         )}

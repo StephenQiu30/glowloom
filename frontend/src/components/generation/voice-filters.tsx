@@ -1,6 +1,7 @@
 "use client";
 import { Field, FieldLabel } from "@/components/ui/field";
 import {
+  SelectGroup,
   Select,
   SelectContent,
   SelectItem,
@@ -55,16 +56,18 @@ export function VoiceFilters({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {filter && (
-                <SelectItem value="all" className="max-sm:min-h-11">
-                  全部
-                </SelectItem>
-              )}
-              {voiceCategories[key].values.map((v) => (
-                <SelectItem key={v} value={v} className="max-sm:min-h-11">
-                  {v}
-                </SelectItem>
-              ))}
+              <SelectGroup>
+                {filter && (
+                  <SelectItem value="all" className="max-sm:min-h-11">
+                    全部
+                  </SelectItem>
+                )}
+                {voiceCategories[key].values.map((v) => (
+                  <SelectItem key={v} value={v} className="max-sm:min-h-11">
+                    {v}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
             </SelectContent>
           </Select>
         </Field>

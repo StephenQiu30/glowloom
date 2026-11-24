@@ -19,6 +19,7 @@ import {
 import type { MouseEvent, ReactNode } from "react";
 import { CanvasConnectionHandle } from "../nodes/canvas-connection-handle.tsx";
 import {
+  DropdownMenuGroup,
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
@@ -152,15 +153,17 @@ export function CanvasSelectionToolbar({
                 data-canvas-no-zoom
                 onMouseDown={(e) => e.stopPropagation()}
               >
-                <DropdownMenuItem onSelect={onGroup}>普通组</DropdownMenuItem>
-                <DropdownMenuItem disabled>分镜组</DropdownMenuItem>
-                <p className="max-w-60 px-2 py-1.5 text-xs text-muted-foreground">
-                  {nodes.some((n) => n.type !== "image") || nodes.length > 49
-                    ? "分镜组仅支持图片，最多支持49个图片节点"
-                    : !nodes.some((n) => n.metadata?.content)
-                      ? "所选节点均无可用图片"
-                      : "分镜组暂不可用"}
-                </p>
+                <DropdownMenuGroup>
+                  <DropdownMenuItem onSelect={onGroup}>普通组</DropdownMenuItem>
+                  <DropdownMenuItem disabled>分镜组</DropdownMenuItem>
+                  <p className="max-w-60 px-2 py-1.5 text-xs text-muted-foreground">
+                    {nodes.some((n) => n.type !== "image") || nodes.length > 49
+                      ? "分镜组仅支持图片，最多支持49个图片节点"
+                      : !nodes.some((n) => n.metadata?.content)
+                        ? "所选节点均无可用图片"
+                        : "分镜组暂不可用"}
+                  </p>
+                </DropdownMenuGroup>
               </DropdownMenuContent>
             </DropdownMenu>
           )}
@@ -176,14 +179,16 @@ export function CanvasSelectionToolbar({
                 data-canvas-no-zoom
                 onMouseDown={(e) => e.stopPropagation()}
               >
-                <DropdownMenuItem onSelect={() => onLayout("grid")}>
-                  <Grid2X2 className="size-4" />
-                  宫格布局
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => onLayout("smart")}>
-                  <LayoutDashboard className="size-4" />
-                  智能布局
-                </DropdownMenuItem>
+                <DropdownMenuGroup>
+                  <DropdownMenuItem onSelect={() => onLayout("grid")}>
+                    <Grid2X2 className="size-4" />
+                    宫格布局
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => onLayout("smart")}>
+                    <LayoutDashboard className="size-4" />
+                    智能布局
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
               </DropdownMenuContent>
             </DropdownMenu>
           )}

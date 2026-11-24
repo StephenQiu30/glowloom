@@ -119,7 +119,7 @@ function CreationView({
             </Notice>
           ) : null}
           <Tabs value={view} onValueChange={setView}>
-            <TabsList variant="line">
+            <TabsList variant="workspace">
               <TabsTrigger value="overview">创作概览</TabsTrigger>
               <TabsTrigger value="retention">转化与留存</TabsTrigger>
             </TabsList>

@@ -1,14 +1,9 @@
 "use client";
 
 import { useId, useState, type ComponentProps, type ReactNode } from "react";
-import {
-  ChevronDown,
-  ChevronUp,
-  LoaderCircle,
-  Save,
-  type LucideIcon,
-} from "lucide-react";
-import { GatewayAction } from "./gateway-action";
+import { ChevronDown, Save, type LucideIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 
 import { arkEmbedding, type GatewayPrice } from "@/lib/ai-gateway-admin";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -144,12 +139,20 @@ export function FormDetails({
         requestAnimationFrame(() => target.focus());
       }}
     >
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-medium">{label}</span>
-        <CollapsibleTrigger asChild>
-          <GatewayAction icon={open ? ChevronUp : ChevronDown} label={label} />
-        </CollapsibleTrigger>
-      </div>
+      <CollapsibleTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="w-full justify-between max-md:min-h-11"
+        >
+          {label}
+          <ChevronDown
+            data-icon="inline-end"
+            className={open ? "rotate-180" : undefined}
+          />
+        </Button>
+      </CollapsibleTrigger>
       <CollapsibleContent
         forceMount={keepMounted ? true : undefined}
         className="pt-3 data-[state=closed]:hidden"
@@ -171,15 +174,21 @@ export function SubmitButton({
   icon?: LucideIcon;
   disabled?: boolean;
 }) {
+  const Icon = icon;
   return (
-    <GatewayAction
+    <Button
       type="submit"
-      variant="default"
-      label={label}
-      icon={busy ? LoaderCircle : icon}
+      className="max-sm:min-h-11 max-sm:w-full"
       disabled={busy || disabled}
       aria-busy={busy}
-    />
+    >
+      {busy ? (
+        <Spinner aria-hidden="true" data-icon="inline-start" />
+      ) : (
+        <Icon data-icon="inline-start" />
+      )}
+      {label}
+    </Button>
   );
 }
 
@@ -227,6 +236,8 @@ export function priceSummary(price: GatewayPrice, protocol: string) {
   if (price.explicit_free === true) return "免费";
   if (protocol === arkEmbedding.protocol)
     return `输入 ${money(price.input, price.currency)} / 百万 token`;
+  if (protocol === "media" && price.output > 0 && price.request === 0)
+    return `${money(price.output, price.currency)} / 百万视频 Token`;
   return protocol === "media"
     ? `${money(price.request, price.currency)} / 次`
     : `输入 ${money(price.input, price.currency)} · 输出 ${money(price.output, price.currency)} / 百万 token`;

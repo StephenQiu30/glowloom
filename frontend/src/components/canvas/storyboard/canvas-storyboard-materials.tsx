@@ -21,6 +21,7 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group";
 import {
+  SelectGroup,
   Select,
   SelectContent,
   SelectItem,
@@ -195,12 +196,14 @@ export function CanvasStoryboardMaterials({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">全部类型</SelectItem>
-            {kinds.map(([value, label]) => (
-              <SelectItem key={value} value={value}>
-                {label}
-              </SelectItem>
-            ))}
+            <SelectGroup>
+              <SelectItem value="all">全部类型</SelectItem>
+              {kinds.map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectGroup>
           </SelectContent>
         </Select>
         <Select
@@ -217,11 +220,13 @@ export function CanvasStoryboardMaterials({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {purposes.map(([value, label]) => (
-              <SelectItem key={value} value={value}>
-                {label}
-              </SelectItem>
-            ))}
+            <SelectGroup>
+              {purposes.map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectGroup>
           </SelectContent>
         </Select>
         {writable && (

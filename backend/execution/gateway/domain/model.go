@@ -125,6 +125,7 @@ func Digest(raw []byte) string { sum := sha256.Sum256(raw); return hex.EncodeToS
 
 // Model is a published immutable product contract, independent of old catalogs.
 type Model struct {
+	PresetKey string `json:"preset_key,omitempty"`
 	// OutputPolicy declares the published provider success review contract; empty remains pending.
 	OutputPolicy  string               `json:"output_policy,omitempty"`
 	Capability    string               `json:"capability,omitempty"`
@@ -144,7 +145,7 @@ type Model struct {
 
 // Validate checks the declared native protocol and bounded product contract.
 func (m Model) Validate() error {
-	if m.ID == uuid.Nil || m.Name == "" || !Protocol(m.Protocol) || m.Price.Validate() != nil || m.MaxInput < 1 || m.MaxInput > 1<<20 || m.MaxOutput < 1 || m.MaxOutput > 1<<20 || m.PurchaseCap < 0 {
+	if len(m.PresetKey) > 200 || m.ID == uuid.Nil || m.Name == "" || !Protocol(m.Protocol) || m.Price.Validate() != nil || m.MaxInput < 1 || m.MaxInput > 1<<20 || m.MaxOutput < 1 || m.MaxOutput > 1<<20 || m.PurchaseCap < 0 {
 		return ErrInvalid
 	}
 	if m.Price.ExplicitFree {

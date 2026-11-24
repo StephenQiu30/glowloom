@@ -1,5 +1,6 @@
 import { ToolbarGroup } from "@glowloom/canvas-host/components/ui/toolbar";
 import {
+  DropdownMenuGroup,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -532,28 +533,30 @@ export function CanvasNodeHoverToolbar({
             data-canvas-no-zoom
             onPointerDown={(event) => event.stopPropagation()}
           >
-            {moreTools.map((tool) => (
-              <DropdownMenuItem
-                key={tool.id}
-                variant={tool.danger ? "destructive" : undefined}
-                onSelect={tool.onClick}
-              >
-                {tool.icon}
-                {tool.title}
-              </DropdownMenuItem>
-            ))}
-            {fixedMedia && onRemoveAsset && (
-              <DropdownMenuItem onSelect={() => onRemoveAsset(node)}>
-                <X />
-                移除素材
-              </DropdownMenuItem>
-            )}
-            {hasImage && (
-              <DropdownMenuItem onSelect={openImageToolSettings}>
-                <Settings2 />
-                配置快捷工具
-              </DropdownMenuItem>
-            )}
+            <DropdownMenuGroup>
+              {moreTools.map((tool) => (
+                <DropdownMenuItem
+                  key={tool.id}
+                  variant={tool.danger ? "destructive" : undefined}
+                  onSelect={tool.onClick}
+                >
+                  {tool.icon}
+                  {tool.title}
+                </DropdownMenuItem>
+              ))}
+              {fixedMedia && onRemoveAsset && (
+                <DropdownMenuItem onSelect={() => onRemoveAsset(node)}>
+                  <X />
+                  移除素材
+                </DropdownMenuItem>
+              )}
+              {hasImage && (
+                <DropdownMenuItem onSelect={openImageToolSettings}>
+                  <Settings2 />
+                  配置快捷工具
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       </ToolbarGroup>

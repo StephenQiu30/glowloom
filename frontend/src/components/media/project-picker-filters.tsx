@@ -11,6 +11,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
+  SelectGroup,
   Select,
   SelectContent,
   SelectItem,
@@ -172,12 +173,14 @@ function FilterSelect({
           data-canvas-no-zoom
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <SelectItem value="all">全部</SelectItem>
-          {options.map(([key, title]) => (
-            <SelectItem key={key} value={key}>
-              {title}
-            </SelectItem>
-          ))}
+          <SelectGroup>
+            <SelectItem value="all">全部</SelectItem>
+            {options.map(([key, title]) => (
+              <SelectItem key={key} value={key}>
+                {title}
+              </SelectItem>
+            ))}
+          </SelectGroup>
         </SelectContent>
       </Select>
     </div>

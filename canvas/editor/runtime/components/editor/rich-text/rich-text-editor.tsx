@@ -65,6 +65,7 @@ import { Button } from "@glowloom/canvas-host/components/ui/button";
 import { Input } from "@glowloom/canvas-host/components/ui/input";
 import { Toggle } from "@glowloom/canvas-host/components/ui/toggle";
 import {
+  DropdownMenuGroup,
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
@@ -1100,15 +1101,17 @@ function EditorToolbar({
               </DropdownMenuRadioItem>
             ))}
           </DropdownMenuRadioGroup>
-          <DropdownMenuItem
-            disabled={disabled}
-            onSelect={() => importInput.current?.click()}
-          >
-            导入结构化文档
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => void downloadDocument(editor)}>
-            导出结构化文档
-          </DropdownMenuItem>
+          <DropdownMenuGroup>
+            <DropdownMenuItem
+              disabled={disabled}
+              onSelect={() => importInput.current?.click()}
+            >
+              导入结构化文档
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => void downloadDocument(editor)}>
+              导出结构化文档
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>
       {tools

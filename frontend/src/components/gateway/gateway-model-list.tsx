@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toolbar } from "@/components/ui/toolbar";
-import type { GatewayConfiguration } from "@/lib/ai-gateway-admin";
+import { modelPreset, type GatewayConfiguration } from "@/lib/ai-gateway-admin";
 import { GatewayAction } from "./gateway-action";
 import { priceSummary } from "./gateway-fields";
 import { protocolLabels } from "./gateway-forms";
@@ -68,7 +68,10 @@ export function GatewayModelList({
       .filter(({ state }) => state === "active")
       .map(({ id }) => id),
   );
-  const candidates = new Map<string, string>();
+  const candidates = new Map<
+    string,
+    GatewayConfiguration["onboarding"][number]
+  >();
   for (const candidate of configuration.onboarding) {
     if (
       candidate.provider_key &&
@@ -77,7 +80,7 @@ export function GatewayModelList({
         candidate.state === "failed") &&
       !candidates.has(candidate.model_id)
     ) {
-      candidates.set(candidate.model_id, candidate.provider_key);
+      candidates.set(candidate.model_id, candidate);
     }
   }
   const matching = configuration.models.flatMap((row) => {
@@ -93,11 +96,21 @@ export function GatewayModelList({
       usableRoute ??
       modelRoutes.find((route) => route.enabled) ??
       modelRoutes[0];
+    const candidate = row.draft ? candidates.get(model.id) : undefined;
+    const upstream =
+      primaryRoute?.route.upstream_model ?? candidate?.upstream_model;
+    const adapter = primaryRoute?.provider_key ?? candidate?.provider_key;
+    const preset = modelPreset(
+      configuration.model_presets,
+      model,
+      adapter,
+      upstream,
+    );
     const providerKey = primaryRoute
       ? primaryRoute.provider_key
-      : row.draft
-        ? candidates.get(model.id)
-        : undefined;
+      : (candidate?.provider_key ?? preset?.adapter);
+    const displayName =
+      preset && model.name === preset.upstream ? preset.name : model.name;
     if (category !== "all" && !capability.startsWith(`${category}.`)) return [];
     if (status !== "all" && available !== (status === "available")) return [];
     if (
@@ -105,6 +118,9 @@ export function GatewayModelList({
       ![
         model.name,
         model.id,
+        displayName,
+        upstream ?? preset?.upstream ?? "",
+        preset?.provider ?? "",
         ...modelRoutes.flatMap(({ route }) => [
           route.upstream_model,
           route.group,
@@ -113,7 +129,17 @@ export function GatewayModelList({
       ].some((term) => term.toLowerCase().includes(query))
     )
       return [];
-    return [{ row, modelRoutes, capability, available, providerKey }];
+    return [
+      {
+        row,
+        modelRoutes,
+        capability,
+        available,
+        providerKey,
+        displayName,
+        upstream: upstream ?? preset?.upstream,
+      },
+    ];
   });
   const channelCount = matching.reduce(
     (count, { modelRoutes }) => count + modelRoutes.length,
@@ -122,24 +148,24 @@ export function GatewayModelList({
   const filtered = category !== "all" || status !== "all" || Boolean(query);
 
   return (
-    <section aria-label="模型目录" className="flex min-w-0 flex-col gap-4">
+    <section aria-label="模型目录" className="flex min-w-0 flex-col gap-2">
       <Tabs
         value={category}
         onValueChange={setCategory}
-        className="min-w-0 gap-4"
+        className="min-w-0 gap-2"
       >
         <TabsList
           aria-label="模型能力分类"
-          variant="line"
-          className="w-full justify-start overflow-x-auto sm:w-fit"
+          variant="workspace"
+          className="w-full sm:w-fit"
         >
           {categories.map(([key, label]) => (
-            <TabsTrigger key={key} value={key} className="min-h-11 flex-none">
+            <TabsTrigger key={key} value={key} className="px-2.5">
               {label}
             </TabsTrigger>
           ))}
         </TabsList>
-        <TabsContent value={category} className="flex min-w-0 flex-col gap-4">
+        <TabsContent value={category} className="flex min-w-0 flex-col gap-2">
           <Toolbar className="flex-wrap">
             <form
               role="search"
@@ -210,11 +236,19 @@ export function GatewayModelList({
             empty={filtered ? "没有符合条件的模型" : "暂无模型"}
             externalFilterKey={JSON.stringify([category, query, status])}
             rows={matching.map(
-              ({ row, modelRoutes, capability, available, providerKey }) => {
+              ({
+                row,
+                modelRoutes,
+                capability,
+                available,
+                providerKey,
+                displayName,
+                upstream,
+              }) => {
                 const { model, enabled, draft } = row;
                 return {
                   id: model.id,
-                  label: model.name,
+                  label: displayName,
                   cells: [
                     <span
                       key="name"
@@ -225,7 +259,7 @@ export function GatewayModelList({
                         iconOnly
                         className="size-5"
                       />
-                      <span>{model.name}</span>
+                      <span>{displayName}</span>
                     </span>,
                     modelRoutes.length ? (
                       <div key="routes" className="flex flex-col gap-1">
@@ -253,7 +287,7 @@ export function GatewayModelList({
                         ))}
                       </div>
                     ) : (
-                      "—"
+                      (upstream ?? "—")
                     ),
                     capabilityLabels[capability] ??
                       protocolLabels[model.protocol] ??

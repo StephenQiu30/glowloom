@@ -36,6 +36,11 @@ func (s *Store) Configuration(ctx context.Context) (map[string]any, error) {
 			products = append(products, map[string]any{"model": model, "enabled": row.Enabled, "draft": row.Draft})
 		}
 		out["models"] = products
+		presets, err := modelPresets(tx)
+		if err != nil {
+			return err
+		}
+		out["model_presets"] = presets
 		var candidateRows []struct {
 			OnboardingSummary
 			RouteDocument []byte

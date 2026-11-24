@@ -19,6 +19,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/",
+  useSearchParams: () => new URLSearchParams(),
   useRouter: () => router,
 }));
 beforeEach(() => {

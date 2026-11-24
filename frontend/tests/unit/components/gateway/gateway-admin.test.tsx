@@ -137,9 +137,7 @@ it("shows one resource table per provider tab and opens the selected billing att
   expect(
     screen.queryByRole("heading", { level: 1, name: "AI 服务接入" }),
   ).toBeNull();
-  expect(screen.getByRole("button", { name: "准备采购路由" }).textContent).toBe(
-    "",
-  );
+  expect(screen.getByRole("button", { name: "新增接入" }).textContent).toBe("");
   expect(
     screen.getByRole("link", { name: "查看路由" }).getAttribute("href"),
   ).toBe(`/providers/${verificationID}`);
@@ -214,17 +212,15 @@ it("starts the provider entry on procurement and asks before discarding an edite
     name: "渠道",
   });
   expect(procurement.getAttribute("aria-selected")).toBe("true");
-  fireEvent.click(screen.getByRole("button", { name: "准备采购路由" }));
+  fireEvent.click(screen.getByRole("button", { name: "新增接入" }));
+  fireEvent.click(screen.getByRole("button", { name: "使用已有模型" }));
   expect(screen.getByLabelText<HTMLInputElement>("验证付款空间 ID").value).toBe(
     space.id,
   );
   fireEvent.change(screen.getByLabelText("供应商模型号"), {
     target: { value: "edited-model" },
   });
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "配额" }), {
-    button: 0,
-    ctrlKey: false,
-  });
+  fireEvent.click(screen.getByRole("button", { name: "关闭对话框" }));
   expect(screen.getByRole("alertdialog")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "继续填写" }));
   expect(screen.getByLabelText<HTMLInputElement>("供应商模型号").value).toBe(
@@ -285,9 +281,8 @@ it.each([
       quotas: [{ name: group, ...limits }],
     });
     render(<GatewayAdmin entry="providers" />);
-    fireEvent.click(
-      await screen.findByRole("button", { name: "准备采购路由" }),
-    );
+    fireEvent.click(await screen.findByRole("button", { name: "新增接入" }));
+    fireEvent.click(screen.getByRole("button", { name: "使用已有模型" }));
     const account = screen.getByRole("combobox", { name: "供应商账号" });
     const save = screen.getByRole<HTMLButtonElement>("button", {
       name: "保存并查看验证预算",
@@ -341,7 +336,8 @@ it("saves the keyless procurement plan before showing API Key and budget confirm
     button: 0,
     ctrlKey: false,
   });
-  fireEvent.click(screen.getByRole("button", { name: "准备采购路由" }));
+  fireEvent.click(screen.getByRole("button", { name: "新增接入" }));
+  fireEvent.click(screen.getByRole("button", { name: "使用已有模型" }));
   expect(screen.queryByLabelText("API Key")).toBeNull();
   for (const [label, value] of [
     ["验证付款空间 ID", supplier],
@@ -393,6 +389,7 @@ it("normalizes empty configuration and discards any credential read-back fields"
     unknown: null,
   });
   expect(await loadGatewayConfiguration()).toEqual({
+    model_presets: [],
     models: [],
     routes: [],
     onboarding: [],
@@ -510,7 +507,8 @@ it("prepares a supported media driver with an explicit probe and no key", async 
     button: 0,
     ctrlKey: false,
   });
-  fireEvent.click(screen.getByRole("button", { name: "准备采购路由" }));
+  fireEvent.click(screen.getByRole("button", { name: "新增接入" }));
+  fireEvent.click(screen.getByRole("button", { name: "使用已有模型" }));
   fireEvent.change(screen.getByLabelText("媒体驱动"), {
     target: { value: "openai" },
   });
@@ -558,7 +556,7 @@ it("prepares a supported media driver with an explicit probe and no key", async 
 
 it("saves a media model with typed modes, parameters and exact prices after collapsing advanced fields", async () => {
   render(<GatewayAdmin />);
-  fireEvent.click(await screen.findByRole("button", { name: "新建模型预设" }));
+  fireEvent.click(await screen.findByRole("button", { name: "新增接入" }));
   fireEvent.change(screen.getByLabelText("销售模型名称"), {
     target: { value: "image/preset" },
   });
@@ -827,4 +825,84 @@ it("uses actual supplier logos for published and pending models and filters by c
   });
   fireEvent.click(await screen.findByRole("option", { name: "可用" }));
   expect(await screen.findByText("没有符合条件的模型")).toBeTruthy();
+});
+
+it("carries a selected supplier preset through draft and procurement without a key", async () => {
+  const preset = {
+    key: "version/seed-tts",
+    provider: "豆包语音",
+    adapter: "volcengine_speech",
+    name: "豆包语音合成 2.0",
+    upstream: "seed-tts-2.0",
+    base_url: "https://openspeech.bytedance.com/api/v3",
+    capability: "audio.generate",
+    modes: ["text2audio"],
+    fields: [
+      {
+        field: "speaker",
+        label: "音色",
+        type: "string",
+        default: "demo-voice",
+      },
+    ],
+    concurrency: 2,
+    rpm: 30,
+    rates: [],
+    currency: null,
+    request_micros: null,
+  };
+  const models: { model: typeof model; enabled: boolean; draft: boolean }[] =
+    [];
+  send.mockImplementation(async (path, options) => {
+    if (path.endsWith("/configuration"))
+      return {
+        models,
+        model_presets: [preset],
+        media_drivers: [
+          {
+            key: preset.adapter,
+            name: preset.provider,
+            base_url: preset.base_url,
+            region: "domestic",
+            parameters: { "audio.generate": ["speaker"] },
+            custom_url: false,
+          },
+        ],
+      };
+    if (path.endsWith("/models"))
+      models.push({ model: options.data, enabled: false, draft: true });
+  });
+  render(<GatewayAdmin />);
+  fireEvent.click(await screen.findByRole("button", { name: "新增接入" }));
+  fireEvent.change(screen.getByLabelText("供应商"), {
+    target: { value: preset.adapter },
+  });
+  fireEvent.change(screen.getByLabelText("模型预设"), {
+    target: { value: preset.key },
+  });
+  expect(screen.getByRole("dialog", { name: "新增接入" })).toBeTruthy();
+  const settings = screen.getByRole("button", { name: "高级配置" });
+  expect(settings.getAttribute("aria-expanded")).toBe("false");
+  fireEvent.click(settings);
+  expect(settings.getAttribute("aria-expanded")).toBe("true");
+  expect(screen.getByLabelText<HTMLInputElement>("销售模型名称").value).toBe(
+    preset.name,
+  );
+  fireEvent.click(settings);
+  fireEvent.change(screen.getByLabelText("销售按次价"), {
+    target: { value: "1" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "保存并继续采购配置" }));
+  expect(await screen.findByDisplayValue(preset.upstream)).toBeTruthy();
+  expect(screen.getByDisplayValue(preset.base_url)).toBeTruthy();
+  expect(models[0].model).toMatchObject({
+    preset_key: preset.key,
+    modes: ["text2audio"],
+    parameters: { speaker: { type: "string", default: "demo-voice" } },
+  });
+  expect(
+    send.mock.calls.some(
+      ([path]) => path.includes("/verify") || path.endsWith("/routes"),
+    ),
+  ).toBe(false);
 });
