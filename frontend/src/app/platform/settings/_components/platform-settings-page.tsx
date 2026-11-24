@@ -1,8 +1,10 @@
 "use client";
+import { IconAction } from "@/components/ui/icon-action";
+import { Save } from "lucide-react";
 import { ContentState } from "@/components/layout/content-state";
 import { readErrorMessage } from "@/lib/read-error";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Switch } from "@/components/ui/switch";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { useEffect, useState } from "react";
 import { platformSettings, updatePlatformSettings } from "@/api/identity";
 import {
@@ -11,7 +13,6 @@ import {
 } from "@/components/governance/confirmation";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/components/auth/session";
-import { AdminHeading } from "@/components/governance/admin-layout";
 export function PlatformSettingsPage() {
   const { actor } = useSession();
   if (actor.platform_role !== "platform_admin")
@@ -49,7 +50,7 @@ function PlatformSettingsAdministration() {
   }, [reload]);
   return (
     <div className="flex w-full flex-col gap-5">
-      <AdminHeading title="平台设置" />
+      <h1 className="sr-only">平台设置</h1>
       {error ? (
         <ContentState
           state="error"
@@ -71,7 +72,7 @@ function PlatformSettingsAdministration() {
       {settings && !error ? (
         <form
           aria-label="平台规则"
-          className="flex max-w-2xl flex-col gap-5"
+          className="flex min-w-0 items-center gap-2"
           onSubmit={(e) => {
             e.preventDefault();
             setAction({
@@ -92,29 +93,44 @@ function PlatformSettingsAdministration() {
             });
           }}
         >
-          <FieldGroup>
-            <Field orientation="horizontal">
-              <Checkbox
-                id="platform-registration"
-                checked={registration}
-                onCheckedChange={(value) => setRegistration(value === true)}
-              />
+          <div className="min-w-0 flex-1 divide-y rounded-md border">
+            <Field
+              orientation="horizontal"
+              className="justify-between px-4 py-4"
+            >
               <FieldLabel htmlFor="platform-registration">
                 允许公开注册
               </FieldLabel>
-            </Field>
-            <Field orientation="horizontal">
-              <Checkbox
-                id="platform-team-creation"
-                checked={creation}
-                onCheckedChange={(value) => setCreation(value === true)}
+              <Switch
+                id="platform-registration"
+                checked={registration}
+                onCheckedChange={setRegistration}
               />
+            </Field>
+            <Field
+              orientation="horizontal"
+              className="justify-between px-4 py-4"
+            >
               <FieldLabel htmlFor="platform-team-creation">
                 允许创建团队
               </FieldLabel>
+              <Switch
+                id="platform-team-creation"
+                checked={creation}
+                onCheckedChange={setCreation}
+              />
             </Field>
-          </FieldGroup>
-          <Button className="self-start">保存平台设置</Button>
+          </div>
+          <IconAction
+            type="submit"
+            variant="default"
+            label="保存平台设置"
+            icon={Save}
+            disabled={
+              registration === Boolean(settings.registration_enabled) &&
+              creation === Boolean(settings.team_creation_enabled)
+            }
+          />
         </form>
       ) : !error ? (
         <ContentState

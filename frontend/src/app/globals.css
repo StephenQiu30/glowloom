@@ -1114,9 +1114,18 @@ button:not(:disabled),
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 24px 16px;
 }
+.product-page:has(> .product-footer) {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 0;
+}
+.admin-workspace:has(> .product-page > .product-footer) {
+  padding-bottom: 0;
+}
 .product-page > .product-footer {
-  margin-top: 48px;
-  padding: 16px 0;
+  flex: none;
+  margin-top: auto;
+  padding: 32px 0 max(16px, env(safe-area-inset-bottom));
 }
 .product-page[data-full-bleed="true"] > .product-footer {
   margin-inline: var(--layout-content-x);
@@ -3888,7 +3897,6 @@ button:not(:disabled),
   }
   .user-directory-filter-actions > button[type="submit"] {
     margin-inline-start: auto;
-    min-width: 80px;
   }
   .user-directory [data-slot="table"] :is(th, td) {
     padding-inline: 8px;

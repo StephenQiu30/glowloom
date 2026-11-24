@@ -11,7 +11,7 @@ import {
   CircleCheck,
   Ban,
 } from "lucide-react";
-import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/lib/pagination";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { ContentState } from "@/components/layout/content-state";
 import { readErrorMessage } from "@/lib/read-error";
 import { PlatformTeamInvitations } from "./platform-team-invitations";
@@ -513,7 +513,6 @@ function TeamAdministration() {
             label="团队分页"
             current={cursors.length}
             pageSize={pageSize}
-            pageSizeOptions={PAGE_SIZE_OPTIONS}
 
             itemCount={page.items?.length ?? 0}
             hasNextPage={!!page.next_cursor}

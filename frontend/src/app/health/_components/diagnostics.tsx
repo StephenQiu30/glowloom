@@ -3,7 +3,7 @@ import { SelectionToolbar } from "@/components/governance/admin-layout";
 import { usePageSelection } from "@/components/governance/use-page-selection";
 import { IconAction } from "@/components/ui/icon-action";
 import { Eye, RefreshCw } from "lucide-react";
-import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/lib/pagination";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { ListPagination } from "@/components/canvas/runtime/components/layout/workspace/list-pagination";
 import { useState, useRef } from "react";
 import {
@@ -389,7 +389,6 @@ function Logs({
             mode="cursor"
             current={cursors.length}
             pageSize={pageSize}
-            pageSizeOptions={PAGE_SIZE_OPTIONS}
             pending={read.pending}
             itemCount={d.items.length}
             hasNextPage={Boolean(d.next_cursor)}

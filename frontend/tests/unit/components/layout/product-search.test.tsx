@@ -136,14 +136,9 @@ it("其他弹窗打开或搜索禁用时不抢占快捷键", () => {
   fireEvent.keyDown(document, { key: "k", ctrlKey: true });
   expect(screen.queryByRole("dialog")).toBeNull();
 });
-it("无页面搜索时转探索，安全编码中文关键词，并支持页面跳转", async () => {
+it("没有页面搜索时不显示全局入口或接管快捷键", () => {
   render(<ProductSearch />);
-  fireEvent.click(screen.getByRole("button", { name: "搜索灵感" }));
-  fireEvent.change(await screen.findByRole("combobox"), {
-    target: { value: "蓝蝶 & 光" },
-  });
-  fireEvent.click(screen.getByRole("option", { name: /搜索灵感/ }));
-  expect(push).toHaveBeenCalledWith(
-    `/explore?q=${encodeURIComponent("蓝蝶 & 光")}`,
-  );
+  expect(screen.queryByRole("button")).toBeNull();
+  fireEvent.keyDown(document, { key: "k", ctrlKey: true });
+  expect(screen.queryByRole("dialog")).toBeNull();
 });

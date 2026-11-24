@@ -27,12 +27,16 @@ it("设置只在明确密码确认后提交当前版本和原因，不提前改�
       : undefined,
   );
   render(<PlatformSettingsPage />);
-  const registration = await screen.findByRole("checkbox", {
+  const registration = await screen.findByRole("switch", {
     name: "允许公开注册",
   });
   expect(registration).toHaveProperty("ariaChecked", "false");
+  expect(screen.getByRole("button", { name: "保存平台设置" })).toHaveProperty(
+    "disabled",
+    true,
+  );
   fireEvent.click(registration);
-  fireEvent.click(screen.getByText("保存平台设置"));
+  fireEvent.click(screen.getByRole("button", { name: "保存平台设置" }));
   expect(request).toHaveBeenCalledTimes(1);
   fireEvent.change(screen.getByLabelText("当前密码"), {
     target: { value: "password" },

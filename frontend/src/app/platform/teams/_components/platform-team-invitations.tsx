@@ -1,4 +1,6 @@
 "use client";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { PageSizeSelect } from "@/components/ui/page-size-select";
 import { ContentState } from "@/components/layout/content-state";
 import { readErrorMessage } from "@/lib/read-error";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
@@ -28,16 +30,19 @@ export function PlatformTeamInvitations({
   reload: number;
   onAction: (action: ConfirmAction) => void;
 }) {
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [page, setPage] = useState<API.InvitationListPage | null>(null);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const [retry, setRetry] = useState(0);
-  const read = useReadBoundary(`${teamID}:${status}:${reload}:${retry}`);
+  const read = useReadBoundary(
+    `${teamID}:${status}:${reload}:${retry}:${pageSize}`,
+  );
   useEffect(() => {
     const c = new AbortController();
     listPlatformTeamInvitations(
-      { id: teamID, limit: 50, ...(status ? { status } : {}) },
+      { id: teamID, limit: pageSize, ...(status ? { status } : {}) },
       { signal: c.signal },
     )
       .then((p) => {
@@ -53,7 +58,7 @@ export function PlatformTeamInvitations({
         }
       });
     return () => c.abort();
-  }, [teamID, status, reload, retry]);
+  }, [teamID, status, reload, retry, pageSize]);
   return (
     <section className="grid gap-3" aria-label="团队历史邀请">
       <h3>团队历史邀请</h3>
@@ -160,6 +165,15 @@ export function PlatformTeamInvitations({
           ) : null}
         </article>
       ))}
+      <PageSizeSelect
+        label="团队邀请每页数量"
+        value={pageSize}
+        disabled={pending}
+        onChange={(size) => {
+          setPage(null);
+          setPageSize(size);
+        }}
+      />
       {page?.next_cursor ? (
         <Button
           variant="outline"
@@ -172,7 +186,7 @@ export function PlatformTeamInvitations({
                   listPlatformTeamInvitations(
                     {
                       id: teamID,
-                      limit: 50,
+                      limit: pageSize,
                       cursor: page.next_cursor,
                       ...(status ? { status } : {}),
                     },

@@ -1,5 +1,7 @@
 "use client";
 
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { ListPagination } from "@/components/canvas/runtime/components/layout/workspace/list-pagination";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import useSWR from "swr";
@@ -25,6 +27,7 @@ export function NotificationInbox() {
   const params = useSearchParams();
   const [category, setCategory] = useState("interaction");
   const [unread, setUnread] = useState(false);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const [selected, setSelected] = useState<string>();
   const focus = useRef<HTMLElement | null>(null);
@@ -32,14 +35,21 @@ export function NotificationInbox() {
   const cursor = cursors.at(-1);
   const page = useSWR(
     center?.signedIn
-      ? ["notification-list", center.identity, category, unread, cursor]
+      ? [
+          "notification-list",
+          center.identity,
+          category,
+          unread,
+          cursor,
+          pageSize,
+        ]
       : null,
     async () => {
       const result = await listNotifications({
         category,
         unread_only: unread,
         cursor,
-        limit: 20,
+        limit: pageSize,
       });
       if (!Array.isArray(result?.items))
         throw new RequestError("invalid_notification_response");
@@ -141,28 +151,24 @@ export function NotificationInbox() {
               />
             )}
           </ScrollArea>
-          {cursors.length > 1 || page.data?.next_cursor ? (
-            <div className="flex justify-end gap-2 pt-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={cursors.length === 1 || page.isLoading}
-                onClick={() => setCursors((value) => value.slice(0, -1))}
-              >
-                上一页
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={!page.data?.next_cursor || page.isLoading}
-                onClick={() =>
-                  setCursors((value) => [...value, page.data!.next_cursor!])
-                }
-              >
-                下一页
-              </Button>
-            </div>
-          ) : null}
+          <ListPagination
+            mode="cursor"
+            label="通知分页"
+            current={cursors.length}
+            itemCount={page.data?.items?.length}
+            pageSize={pageSize}
+            pending={page.isLoading}
+            hasNextPage={Boolean(page.data?.next_cursor)}
+            onPageChange={(next) => {
+              if (next < cursors.length) setCursors(cursors.slice(0, -1));
+              else if (page.data?.next_cursor)
+                setCursors([...cursors, page.data.next_cursor]);
+            }}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setCursors([undefined]);
+            }}
+          />
         </TabsContent>
       </Tabs>
       {detailId ? (

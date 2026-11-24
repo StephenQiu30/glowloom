@@ -14,7 +14,7 @@ import {
   Ban,
   Trash2,
 } from "lucide-react";
-import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/lib/pagination";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { ContentState } from "@/components/layout/content-state";
 import { DirectoryTools } from "@/components/directory/directory-tools";
 import { UserActions } from "./user-actions";
@@ -715,7 +715,6 @@ function UserAdministration() {
             label="用户分页"
             current={cursors.length}
             pageSize={pageSize}
-            pageSizeOptions={PAGE_SIZE_OPTIONS}
 
             itemCount={page.items.length}
             hasNextPage={!!page.next_cursor}

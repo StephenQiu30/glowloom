@@ -4,7 +4,7 @@ import { usePageSelection } from "@/components/governance/use-page-selection";
 import { IconAction } from "@/components/ui/icon-action";
 import { Search, SlidersHorizontal, Plus, Eye, FunnelX } from "lucide-react";
 
-import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/lib/pagination";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { ListPagination } from "@/components/canvas/runtime/components/layout/workspace/list-pagination";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
@@ -246,7 +246,6 @@ export function AnnouncementList() {
           current={cursors.length}
           itemCount={page.data?.items?.length}
           pageSize={pageSize}
-          pageSizeOptions={PAGE_SIZE_OPTIONS}
           pending={page.isLoading}
           hasNextPage={Boolean(page.data?.next_cursor)}
           onPageChange={(next) => {

@@ -4,7 +4,7 @@ import { usePageSelection } from "@/components/governance/use-page-selection";
 import { IconAction } from "@/components/ui/icon-action";
 import { Input } from "@/components/ui/input";
 import { Eye, RefreshCw, Search } from "lucide-react";
-import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/lib/pagination";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { ListPagination } from "@/components/canvas/runtime/components/layout/workspace/list-pagination";
 import { useState, useRef } from "react";
 import { getPlatformSecurityEvents } from "@/api/identity";
@@ -254,7 +254,6 @@ function Events() {
               mode="cursor"
               current={cursors.length}
               pageSize={pageSize}
-              pageSizeOptions={PAGE_SIZE_OPTIONS}
               pending={read.pending}
               itemCount={d.items.length}
               hasNextPage={Boolean(d.next_cursor)}

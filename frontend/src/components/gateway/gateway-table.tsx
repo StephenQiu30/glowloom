@@ -25,11 +25,7 @@ import { Copy, Trash2 } from "lucide-react";
 import { toast } from "@/components/feedback/notification";
 import { DataTable } from "@/components/canvas/runtime/components/account/list/data-table";
 import { ListPagination } from "@/components/canvas/runtime/components/layout/workspace/list-pagination";
-import {
-  DEFAULT_PAGE_SIZE,
-  PAGE_SIZE_OPTIONS,
-  paginationRange,
-} from "@/lib/pagination";
+import { DEFAULT_PAGE_SIZE, paginationRange } from "@/lib/pagination";
 import { GatewayAction } from "./gateway-action";
 
 export const GatewayFilterSlot = createContext<HTMLDivElement | null>(null);
@@ -278,7 +274,6 @@ export function GatewayTable({
         total={matching.length}
         current={page}
         pageSize={pageSize}
-        pageSizeOptions={PAGE_SIZE_OPTIONS}
         onPageChange={setCurrent}
         onPageSizeChange={(size) => {
           setPageSize(size);

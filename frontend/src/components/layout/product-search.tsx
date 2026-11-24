@@ -43,7 +43,8 @@ const getServerPlatformKey = () => "Ctrl";
 
 /** One command palette per BasicLayout; result data stays in its owning page. */
 export function ProductSearch({ search }: { search?: PageSearch }) {
-  return search?.mode === "hidden" ? null : search?.mode === "explore" ? (
+  return !search || search.mode === "hidden" ? null : search?.mode ===
+    "explore" ? (
     <ExploreSearch search={search} />
   ) : search?.mode === "inline" ? (
     <ProductInlineSearch search={search} />
@@ -52,9 +53,8 @@ export function ProductSearch({ search }: { search?: PageSearch }) {
   );
 }
 
-function ProductCommandSearch({ search }: { search?: PageSearch }) {
+function ProductCommandSearch({ search: current }: { search: PageSearch }) {
   const router = useRouter();
-  const [value, setValue] = useState("");
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
@@ -63,15 +63,6 @@ function ProductCommandSearch({ search }: { search?: PageSearch }) {
     getPlatformKey,
     getServerPlatformKey,
   );
-  const current = search ?? {
-    value,
-    onValueChange: setValue,
-    label: "搜索灵感",
-    onSearch: (query: string) =>
-      router.push(
-        query ? `/explore?q=${encodeURIComponent(query)}` : "/explore",
-      ),
-  };
   const disabled = Boolean(current.disabled);
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {

@@ -356,8 +356,8 @@ it("四页共用导航和账号节点，分组状态独立并在切页和收起�
       within(header).queryByRole("link", { name: "积分超市" }) !== null,
     ).toBe(true);
     expect(
-      within(header).queryByRole("button", { name: "搜索灵感" }) !== null,
-    ).toBe(pathname !== "/");
+      within(header).queryByRole("button", { name: "搜索灵感" }),
+    ).toBeNull();
     expect(within(header).queryByRole("link", { name: "企业服务" })).toBeNull();
   }
   fireEvent.click(canvas);
@@ -494,7 +494,7 @@ it("手机顶栏使用共享账号组，主题归入账号菜单且不虚构会�
     </SWRConfig>,
   );
   const header = await screen.findByRole("banner", { name: "页面顶栏" });
-  expect(within(header).getByRole("button", { name: "搜索灵感" })).toBeTruthy();
+  expect(within(header).queryByRole("button", { name: "搜索灵感" })).toBeNull();
   expect(within(header).getByRole("button", { name: /消息中心/ })).toBeTruthy();
   expect(within(header).queryByRole("button", { name: "积分商城" })).toBeNull();
   expect(within(header).getByRole("button", { name: "账号菜单" })).toBeTruthy();

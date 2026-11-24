@@ -1,4 +1,5 @@
 "use client";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { PageTabsList as TabsList } from "@/components/canvas/runtime/components/layout/workspace/page-tabs-list";
 import { PageHeader } from "@/components/canvas/runtime/components/layout/workspace/page-header";
 
@@ -37,7 +38,6 @@ import {
   unreadBadge,
 } from "./lib/notification-state";
 
-const PAGE_SIZES = [20, 50] as const;
 function categoryLabel(category?: string) {
   return category === "TASK"
     ? "任务"
@@ -110,7 +110,7 @@ function Inbox({
   }
   const [category, setCategory] = useState<string>("all");
   const [unreadOnly, setUnreadOnly] = useState(false);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const parameter = params?.get("notificationId");
   const linkedId =
@@ -478,7 +478,7 @@ function Inbox({
             itemCount={page.data?.items?.length}
             current={cursors.length}
             pageSize={pageSize}
-            pageSizeOptions={PAGE_SIZES}
+
             disabled={pageLoading || page.isValidating || !!pageError}
             hasNextPage={!!page.data?.nextCursor}
             onPageChange={(next) =>

@@ -17,10 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  PAGE_SIZE_OPTIONS,
-  paginationRange,
-} from "@/components/canvas/runtime/lib/pagination";
+import { PAGE_SIZE_OPTIONS, paginationRange } from "@/lib/pagination";
 
 type NumberedProps = {
   label: string;
@@ -29,7 +26,6 @@ type NumberedProps = {
   pageSize: number;
   disabled?: boolean;
   pending?: boolean;
-  pageSizeOptions?: readonly number[];
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
 };
@@ -48,7 +44,6 @@ export function ListPagination(props: NumberedProps | CursorProps) {
     onPageChange,
     onPageSizeChange,
     pending = false,
-    pageSizeOptions = PAGE_SIZE_OPTIONS,
   } = props;
   const disabled = props.disabled || pending;
   const sizeId = useId();
@@ -98,7 +93,7 @@ export function ListPagination(props: NumberedProps | CursorProps) {
             </SelectTrigger>
             <SelectContent>
               <SelectGroup>
-                {pageSizeOptions.map((size) => (
+                {PAGE_SIZE_OPTIONS.map((size) => (
                   <SelectItem key={size} value={String(size)}>
                     {size} 条
                   </SelectItem>
@@ -112,13 +107,14 @@ export function ListPagination(props: NumberedProps | CursorProps) {
             <Button
               type="button"
               variant="outline"
-              size="sm"
+              size="icon"
+              className="max-md:size-11"
+              title="上一页"
               aria-label="上一页"
               disabled={disabled || activePage <= 1}
               onClick={() => onPageChange(activePage - 1)}
             >
               <ChevronLeft data-icon="inline-start" />
-              <span className="workspace-pagination-direction">上一页</span>
             </Button>
           </PaginationItem>
           <PaginationItem
@@ -131,12 +127,13 @@ export function ListPagination(props: NumberedProps | CursorProps) {
             <Button
               type="button"
               variant="outline"
-              size="sm"
+              size="icon"
+              className="max-md:size-11"
+              title="下一页"
               aria-label="下一页"
               disabled={disabled || !canNext}
               onClick={() => onPageChange(activePage + 1)}
             >
-              <span className="workspace-pagination-direction">下一页</span>
               <ChevronRight data-icon="inline-end" />
             </Button>
           </PaginationItem>
