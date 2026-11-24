@@ -257,14 +257,3 @@ INSERT INTO catalog.model_image_limit(adapter_key,provider_model_id,images_per_m
  ('volcengine_ark','doubao-seedream-4-5-251128',500),
  ('volcengine_ark','doubao-seedream-4-0-250828',500)
 ON CONFLICT(adapter_key,provider_model_id) DO UPDATE SET images_per_minute=excluded.images_per_minute;
-
--- Local whisper.cpp is explicitly zero supplier cost / zero user credits.
--- The actual loopback endpoint comes only from trusted process configuration.
-INSERT INTO ai.model(id,name,document,enabled) VALUES(
- 'a1000000-0000-4000-8000-000000000001','local/whisper',
- '{"id":"a1000000-0000-4000-8000-000000000001","name":"local/whisper","protocol":"local","capability":"audio.transcribe","price":{"explicit_free":true,"input":0,"cache_read":0,"cache_write":0,"output":0,"request":0,"currency":"CNY","fx":"1","multiplier":"1","discount":"1"},"max_input":1048576,"max_output":1048576,"purchase_cap":0,"tools":false,"stream":false}',true) ON CONFLICT DO NOTHING;
-INSERT INTO ai.quota(name,concurrency,requests_per_minute) VALUES('local/whisper',1,60) ON CONFLICT DO NOTHING;
-INSERT INTO ai.credential(id,supplier_id,key_id,ciphertext,state) VALUES('a1000000-0000-4000-8000-000000000002','a1000000-0000-4000-8000-000000000003','local-policy','local-not-a-provider-key'::bytea,'active') ON CONFLICT DO NOTHING;
-INSERT INTO ai.route(id,model_id,credential_id,quota_group,priority,document,enabled) VALUES(
- 'a1000000-0000-4000-8000-000000000004','a1000000-0000-4000-8000-000000000001','a1000000-0000-4000-8000-000000000002','local/whisper',0,
- '{"id":"a1000000-0000-4000-8000-000000000004","model_id":"a1000000-0000-4000-8000-000000000001","supplier":"a1000000-0000-4000-8000-000000000003","credential":"a1000000-0000-4000-8000-000000000002","group":"local/whisper","base_url":"https://local.invalid","upstream_model":"whisper.cpp","protocol":"local","purchase":{"explicit_free":true,"input":0,"cache_read":0,"cache_write":0,"output":0,"request":0,"currency":"CNY","fx":"1","multiplier":"1","discount":"1"},"key_id":"local-policy","priority":0}',true) ON CONFLICT DO NOTHING;

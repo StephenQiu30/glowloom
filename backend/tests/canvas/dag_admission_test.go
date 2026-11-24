@@ -106,7 +106,7 @@ func TestDAGReadOnlyGraphCannotAdmitNewExecutionInputs(t *testing.T) {
 			if _, err := application.NewTimelineReader(store).FreezeTimeline(t.Context(), actor, project, doc.ID, timeline.ID, 2); !errors.Is(err, domain.ErrGraphReadOnly) || !errors.Is(err, domain.ErrInvalidCommand) {
 				t.Fatal("export admitted from protected graph", err)
 			}
-			if _, err := application.NewTranscriptionSourceReader(store).FreezeTranscriptionSource(t.Context(), actor, project, doc.ID, audio.ID, 2); !errors.Is(err, domain.ErrGraphReadOnly) || !errors.Is(err, domain.ErrInvalidCommand) {
+			if _, err := application.NewSavedMediaSourceReader(store).FreezeMediaSource(t.Context(), actor, project, doc.ID, audio.ID, 2); !errors.Is(err, domain.ErrGraphReadOnly) || !errors.Is(err, domain.ErrInvalidCommand) {
 				t.Fatal("source admitted from protected graph", err)
 			}
 			var revision, logs, receipts, operations int64

@@ -15,7 +15,6 @@ import * as projects from "./projects";
 import * as script from "./script";
 import * as mediaDepths from "./mediaDepths";
 import * as mediaExports from "./mediaExports";
-import * as mediaTranscriptions from "./mediaTranscriptions";
 import * as models from "./models";
 import * as diagnostics from "./diagnostics";
 import * as projectCopies from "./projectCopies";
@@ -43,7 +42,6 @@ export default {
   script,
   mediaDepths,
   mediaExports,
-  mediaTranscriptions,
   models,
   diagnostics,
   projectCopies,

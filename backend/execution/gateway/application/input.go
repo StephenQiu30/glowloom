@@ -20,9 +20,6 @@ func Prepare(model domain.Model, actor, scope, project, run uuid.UUID, key, orig
 	if model.Protocol == domain.EmbeddingProtocol {
 		return prepareEmbedding(c, raw)
 	}
-	if model.Protocol == "local" {
-		return prepareLocal(c, raw)
-	}
 	if model.Protocol == "media" {
 		return prepareMedia(c, raw)
 	}

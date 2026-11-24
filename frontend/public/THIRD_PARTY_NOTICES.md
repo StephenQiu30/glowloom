@@ -28,12 +28,6 @@
 
 未复制品牌图像、模型权重、第三方媒体或其他工具资源。来源登记说明实际改写范围，不表示上游全部业务工具、真实生成或产品验收完成。
 
-## 字幕转写运行时与模型
-
-本机字幕转写使用官方 [ggml-org/whisper.cpp v1.9.4](https://github.com/ggml-org/whisper.cpp/tree/927cfce34f31707e17f2bff35c349632fb9e2c3a)，固定源码提交 `927cfce34f31707e17f2bff35c349632fb9e2c3a`；代码适用 [MIT 许可](https://github.com/ggml-org/whisper.cpp/blob/927cfce34f31707e17f2bff35c349632fb9e2c3a/LICENSE)，Copyright 2023–2026 The ggml authors。
-
-采用的多语 `ggml-base.bin` 权重来自官方转换仓库 [ggerganov/whisper.cpp](https://huggingface.co/ggerganov/whisper.cpp/blob/5359861c739e955e79d9a303bcbc70fb988958b1/README.md)，固定提交 `5359861c739e955e79d9a303bcbc70fb988958b1`，模型卡声明 MIT；文件 147,951,465 字节，SHA256 `60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe`。源代码与权重保存在仓库外，使用原字节。Glowloom 的 Go adapter 管理音频预处理、受控请求、时间戳与语言验证、取消和私有结果保存，不将该原生运行时改为业务服务或供应商费用事实。
-
 ## 视频深度推理
 
 Glowloom 的 Go 任务消费者使用固定 [Video Depth Anything](https://github.com/DepthAnything/Video-Depth-Anything/tree/4f5ae23172ba60fd7bc11ef671cca678842c7072) 的 18 个实际模型依赖文件作为离线执行包，保留源文件头部及 Apache-2.0 声明。该包包含 ByteDance、Meta Platforms（DINOv2）、Hugging Face（attention）和 guoyww/AnimateDiff（motion module）的原始署名；完整原许可保存在 [docs/licenses/video-depth-anything.txt](/licenses/video-depth-anything.txt)，公开入口 `/licenses/video-depth-anything.txt`。最小执行包清单聚合 SHA256 为 `275d52984b0f60536f53e778c8d38b082a8ff945b174f49d449e6860d1ee0342`；逐文件来源与摘要由 `backend/internal/mediatool/adapter/videodepth/source_manifest.json` 声明。未调用的上游 CLI、Gradio、stream 与未核验许可的 Tencent `dc_utils.py` 不包含在此执行包中。

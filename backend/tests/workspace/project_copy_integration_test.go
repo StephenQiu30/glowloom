@@ -49,7 +49,7 @@ func (r privateCopyReference) Reference(ctx context.Context, actor identityapp.P
 
 func projectCopyStore(db *gorm.DB) *workspacepg.ProjectCopyStore {
 	return workspaceCopyStore(db, func(tx *gorm.DB) workspaceapp.ProjectWorkGuard {
-		return owningProjectWork{workspaceOperationStore(tx), mediaWorkBoundary{owner: workspaceMediaStore(tx)}, toolpg.NewStore(tx, nil, nil), toolpg.NewTranscriptionStore(tx, nil, nil), toolpg.NewDepthStore(tx, nil, nil), workspaceCopyStore(tx, nil, nil)}
+		return owningProjectWork{workspaceOperationStore(tx), mediaWorkBoundary{owner: workspaceMediaStore(tx)}, toolpg.NewStore(tx, nil, nil), toolpg.NewDepthStore(tx, nil, nil), workspaceCopyStore(tx, nil, nil)}
 	}, func(tx *gorm.DB) workspaceapp.ProjectCopyOwners {
 		return workspaceapp.ProjectCopyOwners{
 			Media: workspaceMediaCopyStore(tx), Budget: workspaceCopyBudgetStore(tx), Cover: actualProjectCopyCoverOwner{tx: tx},

@@ -87,13 +87,16 @@ func validateRoute(model domain.Model, route domain.Route, concurrency, rpm int)
 	if route.Protocol == domain.EmbeddingProtocol && (route.BaseURL != domain.EmbeddingBaseURL || route.UpstreamModel != domain.EmbeddingModel || route.Purchase.Input <= 0 || route.Purchase.Request != 0 || route.Purchase.Output != 0 || route.Purchase.CacheRead != 0 || route.Purchase.CacheWrite != 0) {
 		return domain.ErrInvalid
 	}
-	if route.Protocol != "local" && route.Purchase.ExplicitFree {
+	if route.Purchase.ExplicitFree {
 		return domain.ErrInvalid
 	}
 	if route.Protocol == "media" {
 		var config catalog.ProviderConfig
 		if decodeRouteDriver(route.DriverConfig, &config) != nil || config.Validate() != nil || config.BaseURL != route.BaseURL || !slices.Contains(config.Capabilities, strings.TrimSuffix(model.Capability, ".generate")) || !model.AcceptsMediaPrice(route.Purchase) ||
 			model.VideoMetering != nil && config.AdapterKey != "volcengine_ark" {
+			return domain.ErrInvalid
+		}
+		if model.Capability == "audio.generate" && slices.Contains(model.Modes, "text2audio") && config.AdapterKey != "volcengine_speech" {
 			return domain.ErrInvalid
 		}
 		if config.AdapterKey == "volcengine_ark" && strings.HasPrefix(route.UpstreamModel, "doubao-seedance-2-5-") && slices.Contains(model.Modes, "image2video") {

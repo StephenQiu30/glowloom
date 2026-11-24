@@ -12,9 +12,9 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 )
 
-// FreezeTranscriptionSource retains project, document, and media read locks until
-// the outer transcription transaction commits its immutable source facts.
-func (s *Store) FreezeTranscriptionSource(ctx context.Context, actor identityapp.Principal, project, canvas, node uuid.UUID, revision int64) (uuid.UUID, error) {
+// FreezeMediaSource retains project, document, and media read locks until
+// the outer admission transaction commits its immutable source facts.
+func (s *Store) FreezeMediaSource(ctx context.Context, actor identityapp.Principal, project, canvas, node uuid.UUID, revision int64) (uuid.UUID, error) {
 	if s == nil || s.db == nil || s.media == nil {
 		return uuid.Nil, domain.ErrInvalidCommand
 	}

@@ -61,7 +61,6 @@ type Config struct {
 	MediaNormalizationServerName   string
 	MediaResultAllowedOrigins      string
 	MediaAllowTestLoopbackTLS      bool
-	WhisperEndpoint                string
 	VideoDepthPythonPath           string
 	VideoDepthSourceDir            string
 	VideoDepthModelPath            string
@@ -172,7 +171,6 @@ func Load() (Config, error) {
 		MediaNormalizationServerName:   strings.TrimSpace(v.GetString("GLOWLOOM_MEDIA_NORMALIZATION_SERVER_NAME")),
 		MediaResultAllowedOrigins:      strings.TrimSpace(v.GetString("GLOWLOOM_MEDIA_RESULT_ALLOWED_ORIGINS")),
 		MediaAllowTestLoopbackTLS:      v.GetBool("GLOWLOOM_MEDIA_ALLOW_TEST_LOOPBACK_TLS"),
-		WhisperEndpoint:                strings.TrimSpace(v.GetString("GLOWLOOM_WHISPER_ENDPOINT")),
 		VideoDepthPythonPath:           strings.TrimSpace(v.GetString("GLOWLOOM_VIDEO_DEPTH_PYTHON_PATH")),
 		VideoDepthSourceDir:            strings.TrimSpace(v.GetString("GLOWLOOM_VIDEO_DEPTH_SOURCE_DIR")),
 		VideoDepthModelPath:            strings.TrimSpace(v.GetString("GLOWLOOM_VIDEO_DEPTH_MODEL_PATH")),

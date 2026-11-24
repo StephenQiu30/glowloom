@@ -393,13 +393,6 @@ POST /media-exports/:job_id/retry
 GET /media-exports/:job_id/download
 GET /media-exports/:job_id/subtitles
 GET /media-export-launch
-POST /projects/:pid/media-transcriptions
-GET /projects/:pid/media-transcriptions
-GET /media-transcriptions/:job_id
-GET /media-transcriptions/:job_id/result
-GET /media-transcriptions/:job_id/subtitles
-POST /media-transcriptions/:job_id/cancel
-POST /media-transcriptions/:job_id/retry
 `
 
 const executionRoutes = `

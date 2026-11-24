@@ -459,25 +459,6 @@ func TestMediaToolQueuedDeliveryRechecksAuthority(t *testing.T) {
 	}
 }
 
-func TestTranscriptionStartRechecksRevocation(t *testing.T) {
-	tx, actor, team, _, project, _ := projectConsumerFixture(t)
-	installMediaScopeMigration(t, tx)
-	job, worker := uuid.New(), uuid.New()
-	if err := tx.Exec(`INSERT INTO mediatool.transcription_job(id,project_id,org_id,actor_id,actor_role,canvas_id,node_id,source_revision,language,frozen,status,stage,progress,attempt,revision,inference_state,active_worker,created_at,updated_at) VALUES(?,?,?,?,NULL,?,?,1,'auto','{}','running','downloading',5,1,1,'none',?,now(),now())`, job, project, actor.OrgID, actor.ID, uuid.New(), uuid.New(), worker).Error; err != nil {
-		t.Fatal(err)
-	}
-	store := pgtool.NewTranscriptionStore(tx, nil, func(tx *gorm.DB) toolapp.DerivedMedia {
-		return identityDerivedMedia(mediaapp.NewDerivedService(pgmedia.NewScopedStore(tx, func(tx *gorm.DB) mediaapp.ScopeAccess { return mediaScopeTestAccess{tx: tx, worker: true} })))
-	})
-	if err := tx.Exec(`UPDATE workspace.team_member SET status='removed' WHERE team_id=? AND user_id=?`, team, actor.ID).Error; err != nil {
-		t.Fatal(err)
-	}
-	err := store.StartInference(t.Context(), toolapp.TranscriptionWorkID{JobID: job, Attempt: 1, ExecutionID: worker})
-	if !errors.Is(err, workspacesource.ErrScopeNotFound) {
-		t.Fatalf("revoked inference submitted: %v", err)
-	}
-}
-
 func TestMediaAssetLibraryDocumentIsolation(t *testing.T) {
 	tx, actor, team, scope, project, factory := projectConsumerFixture(t)
 	personal := actor

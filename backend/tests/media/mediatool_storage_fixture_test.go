@@ -1,14 +1,7 @@
 package media_test
 
 import (
-	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
-	"path"
-	"strconv"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -18,7 +11,6 @@ import (
 	toolpg "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/postgres"
 	toolflow "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/workflow"
 	toolapp "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
-	tooldomain "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/domain"
 )
 
 // mediatoolFixtureDB activates the explicit task-owned storage configuration.
@@ -46,11 +38,8 @@ func mediatoolStorageLedger(tx *gorm.DB) toolapp.ToolStorageLedger {
 func mediatoolExportStore(db *gorm.DB, timeline toolpg.TimelineFactory, media toolpg.MediaFactory) *toolpg.Store {
 	return toolpg.NewStore(db, timeline, media).WithStorageAdmission(mediatoolStorageLedger)
 }
-func mediatoolDepthStore(db *gorm.DB, source toolpg.TranscriptionSourceFactory, media toolpg.DepthMediaFactory) *toolpg.DepthStore {
+func mediatoolDepthStore(db *gorm.DB, source toolpg.SavedMediaSourceFactory, media toolpg.DepthMediaFactory) *toolpg.DepthStore {
 	return toolpg.NewDepthStore(db, source, media).WithStorageAdmission(mediatoolStorageLedger)
-}
-func mediatoolTranscriptionStore(db *gorm.DB, source toolpg.TranscriptionSourceFactory, media toolpg.MediaFactory) *toolpg.TranscriptionStore {
-	return toolpg.NewTranscriptionStore(db, source, media).WithStorageAdmission(mediatoolStorageLedger)
 }
 func mediatoolRoutedObjects(t *testing.T, db *gorm.DB) *toolflow.RoutedObjects {
 	t.Helper()
@@ -92,50 +81,4 @@ func mediatoolFixtureLocation(t *testing.T, db *gorm.DB, kind mediaapp.StorageWo
 		t.Fatal(err)
 	}
 	return location.ID
-}
-
-// mediatoolTranscriptReceipt seeds ledger proof only for rollback lock tests;
-// actual provider writes and JSON byte readback are covered by routed HTTP tests.
-func mediatoolTranscriptReceipt(t *testing.T, db *gorm.DB, work toolapp.TranscriptionWorkID, draft tooldomain.Transcript) {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-	var row struct {
-		ProjectID uuid.UUID
-		Frozen    string
-	}
-	if err := db.Raw(`SELECT project_id,frozen::text FROM mediatool.transcription_job WHERE id=?`, work.JobID).Scan(&row).Error; err != nil {
-		t.Fatal(err)
-	}
-	var frozen tooldomain.FrozenTranscription
-	if err := json.Unmarshal([]byte(row.Frozen), &frozen); err != nil {
-		t.Fatal(err)
-	}
-	raw, err := json.Marshal(struct {
-		Version      int                   `json:"version"`
-		JobID        string                `json:"job_id"`
-		Attempt      int                   `json:"attempt"`
-		SourceSHA256 string                `json:"source_sha256"`
-		Draft        tooldomain.Transcript `json:"draft"`
-	}{1, work.JobID.String(), work.Attempt, frozen.Input.SHA256, draft})
-	if err != nil {
-		t.Fatal(err)
-	}
-	routes := pgmedia.NewStorageRoutes(db)
-	intent, err := routes.ReadStorageWork(ctx, toolapp.StorageOwner(mediaapp.StorageWorkKindTranscription, row.ProjectID, work.JobID, work.Attempt))
-	if err != nil {
-		t.Fatal(err)
-	}
-	key := path.Join("projects", row.ProjectID.String(), "transcriptions", work.JobID.String(), "attempt-"+strconv.Itoa(work.Attempt)+".json")
-	location, err := routes.ReserveWorkLocation(ctx, intent.ID, key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := routes.BeginWorkWrite(ctx, intent.ID, location); err != nil {
-		t.Fatal(err)
-	}
-	digest := sha256.Sum256(raw)
-	if err := routes.ConfirmWorkLocation(ctx, intent.ID, location, mediaapp.ObjectInfo{Size: int64(len(raw)), ContentType: "application/json", SHA256: hex.EncodeToString(digest[:])}); err != nil {
-		t.Fatal(err)
-	}
 }

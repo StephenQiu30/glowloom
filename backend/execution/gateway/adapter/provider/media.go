@@ -105,6 +105,9 @@ func (c *Client) sendMedia(ctx context.Context, d application.Dispatch, key stri
 		model.VideoMetering != nil && config.AdapterKey != "volcengine_ark" || d.Call.Stream {
 		return domain.Receipt{}, mediaPreflightError(d)
 	}
+	if model.Capability == "audio.generate" && slices.Contains(model.Modes, "text2audio") && config.AdapterKey != "volcengine_speech" {
+		return domain.Receipt{}, mediaPreflightError(d)
+	}
 	if _, installed := providerhttp.GetDriver(config.AdapterKey); !installed {
 		return domain.Receipt{}, mediaPreflightError(d)
 	}

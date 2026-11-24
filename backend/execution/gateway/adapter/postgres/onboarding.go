@@ -82,7 +82,7 @@ func activeModel(tx *gorm.DB, model domain.Model) (domain.Model, error) {
 
 // StageModel saves the reviewed preset and sale without changing public availability.
 func (s *Store) StageModel(ctx context.Context, m domain.Model) error {
-	if m.Validate() != nil || m.Protocol == "local" || strings.TrimSpace(m.Name) != m.Name || len(m.Name) > 160 {
+	if m.Validate() != nil || strings.TrimSpace(m.Name) != m.Name || len(m.Name) > 160 {
 		return domain.ErrInvalid
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {

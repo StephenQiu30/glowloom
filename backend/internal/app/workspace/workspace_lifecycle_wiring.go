@@ -61,7 +61,7 @@ func ProvideWorkspaceLifecycleStore(database *gorm.DB) *pgworkspace.Store {
 // ProvideProjectWorkGuard assembles project lifecycle work guards.
 func ProvideProjectWorkGuard(tx *gorm.DB) workspaceapp.ProjectWorkGuard {
 	return projectWorkGuard{owners: []workspaceapp.ProjectWorkGuard{
-		operationwire.ProvideOperationStore(tx), mediaProjectWorkGuard{owner: pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess)}, pgmediatool.NewStore(tx, nil, nil), mediawire.ProvideMediaTranscriptionStore(tx, false),
+		operationwire.ProvideOperationStore(tx), mediaProjectWorkGuard{owner: pgmedia.NewScopedStore(tx, mediawire.NewMediaScopeAccess)}, pgmediatool.NewStore(tx, nil, nil),
 		pgworkspace.NewProjectCopyStore(tx, nil, nil),
 		mediawire.ProvideMediaDepthStore(tx, false),
 		scriptWorkGuard{store: scriptwire.ProvideScriptSourceStore(tx)},

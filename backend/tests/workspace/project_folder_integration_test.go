@@ -54,7 +54,7 @@ func folderTestDB(t *testing.T) (context.Context, *gorm.DB, *gorm.DB) {
 }
 
 func folderWork(tx *gorm.DB) workspaceapp.ProjectWorkGuard {
-	return owningProjectWork{workspaceOperationStore(tx), mediaWorkBoundary{owner: workspaceMediaStore(tx)}, toolpg.NewStore(tx, nil, nil), toolpg.NewTranscriptionStore(tx, nil, nil), toolpg.NewDepthStore(tx, nil, nil), workspaceCopyStore(tx, nil, nil)}
+	return owningProjectWork{workspaceOperationStore(tx), mediaWorkBoundary{owner: workspaceMediaStore(tx)}, toolpg.NewStore(tx, nil, nil), toolpg.NewDepthStore(tx, nil, nil), workspaceCopyStore(tx, nil, nil)}
 }
 
 func folderStore(db *gorm.DB) *workspacepg.FolderStore {

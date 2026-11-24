@@ -76,11 +76,7 @@ func (s *Service) ExecuteDispatch(ctx context.Context, d Dispatch, emit func(jso
 		return s.store.ReleaseNotSent(ctx, d)
 	}
 	deadline := call.Deadline
-	maximum := 180 * time.Second
-	if call.Model.Protocol == "local" {
-		maximum = 20 * time.Minute
-	}
-	if latest := time.Now().Add(maximum); deadline.After(latest) {
+	if latest := time.Now().Add(180 * time.Second); deadline.After(latest) {
 		deadline = latest
 	}
 	sendCtx, cancel := context.WithDeadline(ctx, deadline)

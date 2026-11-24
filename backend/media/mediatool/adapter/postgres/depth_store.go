@@ -23,18 +23,21 @@ import (
 )
 
 // DepthMediaFactory binds exact pending result cleanup to its media owner.
+// SavedMediaSourceFactory binds the canvas reader to the admission transaction.
+type SavedMediaSourceFactory func(*gorm.DB) application.SavedMediaSourceReader
+
 type DepthMediaFactory func(*gorm.DB) application.DepthDerivedMedia
 
 // DepthStore owns native depth facts and consumes the existing canvas/media ports.
 type DepthStore struct {
 	db      *gorm.DB
-	source  TranscriptionSourceFactory
+	source  SavedMediaSourceFactory
 	media   DepthMediaFactory
 	storage StorageFactory
 }
 
 // NewDepthStore injects transaction-bound saved source and pending media owners.
-func NewDepthStore(db *gorm.DB, source TranscriptionSourceFactory, media DepthMediaFactory) *DepthStore {
+func NewDepthStore(db *gorm.DB, source SavedMediaSourceFactory, media DepthMediaFactory) *DepthStore {
 	return &DepthStore{db: db, source: source, media: media}
 }
 
@@ -254,7 +257,7 @@ func (s *DepthStore) Create(ctx context.Context, actor identityapp.Principal, pr
 		if err := depthQuota(tx, project); err != nil {
 			return err
 		}
-		id, err := s.source(tx).FreezeTranscriptionSource(ctx, actor, project, in.CanvasID, in.NodeID, in.Revision)
+		id, err := s.source(tx).FreezeMediaSource(ctx, actor, project, in.CanvasID, in.NodeID, in.Revision)
 		if err != nil {
 			if errors.Is(normalize(err), application.ErrInvalidExport) {
 				return application.ErrInvalidDepthInput

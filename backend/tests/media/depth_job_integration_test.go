@@ -63,10 +63,10 @@ func depthWorkerStore(db *gorm.DB, enabled bool) *toolpg.DepthStore {
 }
 
 func depthStoreWithScope(db *gorm.DB, enabled bool, scopes pgmedia.ScopeAccessFactory) *toolpg.DepthStore {
-	var source toolpg.TranscriptionSourceFactory
+	var source toolpg.SavedMediaSourceFactory
 	if enabled {
-		source = func(tx *gorm.DB) toolapp.TranscriptionSourceReader {
-			return canvasapp.NewTranscriptionSourceReader(mediaCanvasStoreWithScope(tx, func(db *gorm.DB) canvasapp.MediaReader {
+		source = func(tx *gorm.DB) toolapp.SavedMediaSourceReader {
+			return canvasapp.NewSavedMediaSourceReader(mediaCanvasStoreWithScope(tx, func(db *gorm.DB) canvasapp.MediaReader {
 				return mediawire.LegacyAssetReader(mediaapp.NewAssetQuery(pgmedia.NewScopedStore(db, scopes)))
 			}, scopes))
 		}
@@ -87,7 +87,7 @@ func depthHTTP(t *testing.T) *depthHTTPFixture {
 	if err != nil {
 		t.Fatal("actual private video upload", err)
 	}
-	node := transcriptionNode(t, db, actor, project, result.Asset.ID, "video")
+	node := savedDepthSource(t, db, actor, project, result.Asset.ID, "video")
 	f := &depthHTTPFixture{db: db, store: depthStore(db, true), workerStore: depthWorkerStore(db, true), objects: objects, actor: actor, project: project, source: result.Asset.ID, input: toolapp.DepthCreateInput{CanvasID: node.CanvasID, NodeID: node.NodeID, Revision: node.Revision}, router: gin.New()}
 	f.router.Use(httpapi.Middleware("http://localhost:3000"))
 	g := f.router.Group("/api")
@@ -532,4 +532,22 @@ func TestDepthJobActualCancellationWaitsNativeCessation(t *testing.T) {
 	if err := f.db.Raw(`SELECT count(*) FROM mediatool.depth_result_intent WHERE job_id=?`, j.ID).Scan(&outputs).Error; err != nil || outputs != 0 {
 		t.Fatal("cancelled native output published", outputs, err)
 	}
+}
+
+func savedDepthSource(t *testing.T, db *gorm.DB, actor identityapp.Principal, project, asset uuid.UUID, kind string) toolapp.DepthCreateInput {
+	t.Helper()
+	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader {
+		return mediawire.LegacyAssetReader(mediaapp.NewAssetQuery(mediaTestStore(tx)))
+	}
+	service := canvasfixture.NewService(mediaCanvasStore(db, mediaFactory))
+	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), canvasapp.CreateInput{Name: "Actual depth source"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	node := canvasdomain.Node{ID: uuid.New(), NodeType: kind, NodeAction: "resource", Title: "Depth source", RefType: "media_asset", RefID: &asset}
+	saved, err := service.Edit(t.Context(), actor, doc.ID, uuid.NewString(), canvasfixture.EditInput{ClientID: canvasfixture.ClientID, OperationVersion: 1, BaseRevision: doc.Revision, Operations: canvasfixture.Concat(canvasfixture.Nodes([]canvasdomain.Node{node}))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return toolapp.DepthCreateInput{CanvasID: doc.ID, NodeID: node.ID, Revision: saved.Revision}
 }

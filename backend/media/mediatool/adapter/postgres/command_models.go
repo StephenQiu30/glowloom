@@ -61,20 +61,6 @@ type depthCommandRecord struct {
 
 func (depthCommandRecord) TableName() string { return "mediatool.depth_command" }
 
-type transcriptionCommandRecord struct {
-	ActorID      uuid.UUID `gorm:"primaryKey"`
-	RequestID    uuid.UUID `gorm:"primaryKey"`
-	JobID        uuid.UUID
-	RequestHash  string
-	Response     jsonDocument
-	EventID      *uuid.UUID
-	EventAction  *string
-	EventAttempt *int
-	CreatedAt    time.Time
-}
-
-func (transcriptionCommandRecord) TableName() string { return "mediatool.transcription_command" }
-
 type mediatoolOutboxRecord struct {
 	ID           uuid.UUID `gorm:"primaryKey"`
 	Topic        string

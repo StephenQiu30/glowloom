@@ -49,13 +49,10 @@ export const protocolLabels: Record<string, string> = {
   responses: "Responses",
   messages: "Messages",
   media: "媒体生成",
-  local: "本地运行",
   [arkEmbedding.protocol]: "豆包文本向量",
 };
 
-const protocolOptions = Object.entries(protocolLabels).filter(
-  ([key]) => key !== "local",
-);
+const protocolOptions = Object.entries(protocolLabels);
 const currencyOptions = [
   ["CNY", "人民币 CNY"],
   ["USD", "美元 USD"],
@@ -357,8 +354,7 @@ export function RouteForm({
   defaultScope?: string;
 }) {
   const models = configuration.models.filter(
-    ({ model, enabled, draft }) =>
-      (enabled || draft) && model.protocol !== "local",
+    ({ enabled, draft }) => enabled || draft,
   );
   const [selected, setSelected] = useState(initialModelID ?? "");
   const model =
@@ -412,7 +408,9 @@ function PreparedRouteForm({
   const drivers = configuration.media_drivers.filter(
     (option) =>
       model.capability !== undefined &&
-      option.parameters[model.capability] !== undefined,
+      option.parameters[model.capability] !== undefined &&
+      (!model.modes?.includes("text2audio") ||
+        option.key === "volcengine_speech"),
   );
   const [driverKey, setDriverKey] = useState("");
   const [supplier, setSupplier] = useState("");
@@ -441,9 +439,7 @@ function PreparedRouteForm({
     ({ route, enabled }) => enabled && route.model_id === model.id,
   );
   const supplierRoutes = new Map(
-    configuration.routes
-      .filter(({ route }) => route.protocol !== "local")
-      .map(({ route }) => [route.supplier, route]),
+    configuration.routes.map(({ route }) => [route.supplier, route]),
   );
   return (
     <form

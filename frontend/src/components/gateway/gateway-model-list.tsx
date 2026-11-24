@@ -271,7 +271,7 @@ export function GatewayModelList({
                         icon={Eye}
                         href={`/models/${model.id}`}
                       />
-                      {(enabled || draft) && model.protocol !== "local" && (
+                      {(enabled || draft) && (
                         <GatewayAction
                           onClick={() => startRoute(model.id)}
                           label="准备采购"

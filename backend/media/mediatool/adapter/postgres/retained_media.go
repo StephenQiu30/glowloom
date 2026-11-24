@@ -110,6 +110,14 @@ func (f *retainedMediaFacts) source(source domain.FrozenSource) error {
 	return f.key(source.ObjectKey)
 }
 
+// Read only the fields needed to retain source assets referenced by historical jobs.
+type historicalTranscriptionRow struct {
+	Frozen   []byte
+	Language string
+}
+
+func (historicalTranscriptionRow) TableName() string { return "mediatool.transcription_job" }
+
 func (r *RetainedMediaReader) read(ctx context.Context, actor identityapp.Principal, project uuid.UUID) (retainedMediaFacts, error) {
 	facts := retainedMediaFacts{assets: make(map[uuid.UUID]struct{}), keys: make(map[string]struct{})}
 	if r == nil || r.tx == nil || r.tx.Statement == nil || r.access == nil || project == uuid.Nil {
@@ -131,7 +139,7 @@ func (r *RetainedMediaReader) read(ctx context.Context, actor identityapp.Princi
 		field string
 	}{
 		{tx.Model(&jobRow{}).Where("org_id = ? AND project_id = ?", actor.OrgID, project), "frozen::text"},
-		{tx.Model(&transcriptionRow{}).Where("org_id = ? AND project_id = ?", actor.OrgID, project), "frozen::text"},
+		{tx.Model(&historicalTranscriptionRow{}).Where("org_id = ? AND project_id = ?", actor.OrgID, project), "frozen::text"},
 		{tx.Model(&depthRow{}).Where("org_id = ? AND project_id = ?", actor.OrgID, project), "frozen::text"},
 		{tx.Model(&depthResultIntentRecord{}).Joins("JOIN mediatool.depth_job ON mediatool.depth_job.id = mediatool.depth_result_intent.job_id").Where("mediatool.depth_job.org_id = ? AND mediatool.depth_job.project_id = ?", actor.OrgID, project), "mediatool.depth_result_intent.artifact::text"},
 	}
@@ -152,11 +160,14 @@ func (r *RetainedMediaReader) read(ctx context.Context, actor identityapp.Princi
 	if err := readRetainedExports(tx, actor, project, &facts); err != nil {
 		return retainedMediaFacts{}, fmt.Errorf("read retained export media: %w", err)
 	}
-	if err := eachRetainedRow(tx, tx.Model(&transcriptionRow{}).
+	if err := eachRetainedRow(tx, tx.Model(&historicalTranscriptionRow{}).
 		Select("CASE WHEN octet_length(frozen::text) <= ? THEN frozen ELSE NULL END AS frozen, language", 1<<20).
-		Where("org_id = ? AND project_id = ?", actor.OrgID, project).Order("id").Limit(retainedMediaLimit+1), func(row transcriptionRow) error {
-		var frozen domain.FrozenTranscription
-		if facts.body(row.Frozen, &frozen) != nil || frozen.Language != row.Language || !domain.ValidTranscriptionLanguage(frozen.Language) || (frozen.Input.Kind != "audio" && frozen.Input.Kind != "video") || frozen.Input.ByteSize > 500<<20 || frozen.Input.DurationMS == nil || *frozen.Input.DurationMS < 1 || *frozen.Input.DurationMS > 86400000 {
+		Where("org_id = ? AND project_id = ?", actor.OrgID, project).Order("id").Limit(retainedMediaLimit+1), func(row historicalTranscriptionRow) error {
+		var frozen struct {
+			Input    domain.FrozenSource `json:"input"`
+			Language string              `json:"language"`
+		}
+		if facts.body(row.Frozen, &frozen) != nil || frozen.Language != row.Language || (frozen.Input.Kind != "audio" && frozen.Input.Kind != "video") || frozen.Input.ByteSize > 500<<20 || frozen.Input.DurationMS == nil || *frozen.Input.DurationMS < 1 || *frozen.Input.DurationMS > 86400000 {
 			return application.ErrUnavailable
 		}
 		return facts.source(frozen.Input)

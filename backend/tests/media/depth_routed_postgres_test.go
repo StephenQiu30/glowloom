@@ -31,12 +31,12 @@ import (
 
 type routedDepthSource struct{ asset uuid.UUID }
 
-func (s routedDepthSource) FreezeTranscriptionSource(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, uuid.UUID, int64) (uuid.UUID, error) {
+func (s routedDepthSource) FreezeMediaSource(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, uuid.UUID, int64) (uuid.UUID, error) {
 	return s.asset, nil
 }
 
 func routedDepthStore(db *gorm.DB, source uuid.UUID, worker bool) *pgtool.DepthStore {
-	return mediatoolDepthStore(db, func(*gorm.DB) toolapp.TranscriptionSourceReader {
+	return mediatoolDepthStore(db, func(*gorm.DB) toolapp.SavedMediaSourceReader {
 		return routedDepthSource{asset: source}
 	}, func(tx *gorm.DB) toolapp.DepthDerivedMedia {
 		if worker {

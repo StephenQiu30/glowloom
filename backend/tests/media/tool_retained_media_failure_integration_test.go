@@ -135,7 +135,10 @@ func TestMediaToolRetainedFailureDoesNotAllocateUnrelatedTranscriptResult(t *tes
 	database, actor, project := retainedToolDatabase(t)
 	duration := int32(1000)
 	input := tooldomain.FrozenSource{AssetID: uuid.New(), Revision: 1, Kind: "audio", ObjectKey: "projects/" + project.String() + "/audio/fixture/source.m4a", MIMEType: "audio/mp4", ByteSize: 100, SHA256: strings.Repeat("a", 64), DurationMS: &duration}
-	frozen, err := json.Marshal(tooldomain.FrozenTranscription{Language: "zh", Input: input})
+	frozen, err := json.Marshal(struct {
+		Language string                  `json:"language"`
+		Input    tooldomain.FrozenSource `json:"input"`
+	}{Language: "zh", Input: input})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,13 +167,11 @@ func TestMediaToolRetainedFailureDoesNotAllocateUnrelatedTranscriptResult(t *tes
 		return after.TotalAlloc - before.TotalAlloc
 	}
 	baseline := allocation()
-	transcript := tooldomain.Transcript{Version: 1, Language: "zh", DurationMS: 1000}
-	for index := range 255 {
-		transcript.Segments = append(transcript.Segments, tooldomain.SubtitleSegment{StartMS: int64(index), EndMS: int64(index + 1), Text: strings.Repeat("x", 32700)})
+	segments := make([]map[string]any, 255)
+	for index := range segments {
+		segments[index] = map[string]any{"start_ms": index, "end_ms": index + 1, "text": strings.Repeat("x", 32700)}
 	}
-	if transcript.Validate() != nil {
-		t.Fatal("large result must remain a valid formal transcript")
-	}
+	transcript := map[string]any{"version": 1, "language": "zh", "duration_ms": 1000, "segments": segments}
 	result, err := json.Marshal(transcript)
 	if err != nil || len(result) < 7<<20 || len(result) >= 8<<20 {
 		t.Fatal("expected a valid result near the 8 MiB contract boundary", len(result), err)

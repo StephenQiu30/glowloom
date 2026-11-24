@@ -147,10 +147,7 @@ func (m Model) Validate() error {
 	if m.ID == uuid.Nil || m.Name == "" || !Protocol(m.Protocol) || m.Price.Validate() != nil || m.MaxInput < 1 || m.MaxInput > 1<<20 || m.MaxOutput < 1 || m.MaxOutput > 1<<20 || m.PurchaseCap < 0 {
 		return ErrInvalid
 	}
-	if m.Protocol != "local" && m.Price.ExplicitFree {
-		return ErrInvalid
-	}
-	if m.Protocol == "local" && (m.Name != "local/whisper" || !m.Price.ExplicitFree || m.Price.Input != 0 || m.Price.Output != 0 || m.Price.CacheRead != 0 || m.Price.CacheWrite != 0 || m.Price.Request != 0 || m.Tools || m.Stream) {
+	if m.Price.ExplicitFree {
 		return ErrInvalid
 	}
 	if m.OutputPolicy != "" && (m.Protocol != "media" || m.OutputPolicy != "provider_success_v1") {
@@ -180,7 +177,7 @@ func (m Model) Validate() error {
 
 // Protocol reports whether the native text protocol is supported.
 func Protocol(s string) bool {
-	return s == "chat" || s == "responses" || s == "messages" || s == "media" || s == "local" || s == EmbeddingProtocol
+	return s == "chat" || s == "responses" || s == "messages" || s == "media" || s == EmbeddingProtocol
 }
 
 // Route references its own purchase version and encrypted credential identity.

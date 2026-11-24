@@ -60,7 +60,7 @@ func depthLockFixture(t *testing.T) (*depthHTTPFixture, tooldomain.DepthJob) {
 	if err := tx.Exec(`UPDATE media.media_asset SET status='ready',moderation_status='passed' WHERE id=?`, a.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	node := transcriptionNode(t, tx, actor, project, a.ID, "video")
+	node := savedDepthSource(t, tx, actor, project, a.ID, "video")
 	f := &depthHTTPFixture{db: tx, actor: actor, project: project, source: a.ID, store: depthStore(tx, true), workerStore: depthWorkerStore(tx, true)}
 	j, err := f.store.Create(t.Context(), actor, project, uuid.New(), toolapp.DepthCreateInput{CanvasID: node.CanvasID, NodeID: node.NodeID, Revision: node.Revision})
 	if err != nil {

@@ -270,8 +270,7 @@ function GatewayConfigurationPage({
 
   const showCreate = showListing && configuration;
   const hasRoutableModel = configuration?.models.some(
-    ({ model, enabled, draft }) =>
-      (enabled || draft) && model.protocol !== "local",
+    ({ enabled, draft }) => enabled || draft,
   );
   return (
     <TooltipProvider>
@@ -866,15 +865,13 @@ function EntityDetail({
             <Separator />
             <Detail label="版本标识" value={id} />
             <div className="flex flex-wrap gap-2">
-              {model &&
-                (modelRow?.draft || modelRow?.enabled) &&
-                model.protocol !== "local" && (
-                  <GatewayAction
-                    onClick={() => startRoute(model.id)}
-                    label="准备采购"
-                    icon={Route}
-                  />
-                )}
+              {model && (modelRow?.draft || modelRow?.enabled) && (
+                <GatewayAction
+                  onClick={() => startRoute(model.id)}
+                  label="准备采购"
+                  icon={Route}
+                />
+              )}
               {candidate && (
                 <GatewayAction
                   onClick={() => openCandidate(candidate.id)}

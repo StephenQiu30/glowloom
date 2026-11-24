@@ -75,8 +75,3 @@ func acceptToolMedia(ctx context.Context, tx *gorm.DB, f StorageFactory, owner m
 }
 
 // WithStorageAdmission freezes the transcript attempt output before dispatch.
-func (s *TranscriptionStore) WithStorageAdmission(f StorageFactory) *TranscriptionStore {
-	c := *s
-	c.storage = f
-	return &c
-}

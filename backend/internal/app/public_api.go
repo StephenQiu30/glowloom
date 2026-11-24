@@ -233,15 +233,6 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	exportHandler := toolhttp.NewHandler(exports, exportQuery)
 	exportHandler.Register(protected)
 	exportHandler.RegisterLaunch(api)
-	transcriber, err := mediawire.ProvideTranscriber(cfg)
-	if err != nil {
-		return nil, err
-	}
-	transcriptions := mediawire.ProvideMediaTranscriptionStore(database, transcriber != nil)
-	if subjectObjects.Registry() != nil {
-		transcriptions = mediawire.ProvideRoutedMediaTranscriptionStore(database, transcriber != nil, mediawire.NewMediaScopeAccess)
-	}
-	toolhttp.NewTranscriptionHandler(transcriptions).Register(protected)
 	depths := mediawire.ProvideRoutedMediaDepthStore(database, cfg.VideoDepthPythonPath != "", mediawire.NewMediaScopeAccess)
 	depthQuery := toolapp.NewRoutedDepthQuery(depths, subjectObjects.Routed, subjectObjects.Routed, cfg.ObjectStorage.Access.PreviewTTL)
 	toolhttp.NewDepthHandler(depths, depthQuery).Register(protected)

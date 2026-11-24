@@ -23,7 +23,7 @@ import (
 
 type reviewScopeSource struct{ asset uuid.UUID }
 
-func (s reviewScopeSource) FreezeTranscriptionSource(context.Context, identity.Principal, uuid.UUID, uuid.UUID, uuid.UUID, int64) (uuid.UUID, error) {
+func (s reviewScopeSource) FreezeMediaSource(context.Context, identity.Principal, uuid.UUID, uuid.UUID, uuid.UUID, int64) (uuid.UUID, error) {
 	return s.asset, nil
 }
 
@@ -51,7 +51,7 @@ func reviewTimeline(asset uuid.UUID) canvas.TimelineConfig {
 	return canvas.TimelineConfig{Version: 1, AspectRatio: "16:9", FPS: 25, Tracks: []canvas.TimelineTrack{{ID: track, Kind: "video", Label: "Source", Visible: true}}, Clips: []canvas.TimelineClip{{ID: uuid.New(), TrackID: track, Kind: "video", AssetID: &asset, Title: "Source", DurationMS: 1000, Volume: 1}}, SubtitleStyle: canvas.SubtitleStyle{FontSize: 24, Color: "#ffffff", Position: "bottom"}}
 }
 func TestMediaRequestControlPreservesSessionPrincipal(t *testing.T) {
-	for _, kind := range []string{"export_retry", "transcription_retry", "depth_retry", "depth_review"} {
+	for _, kind := range []string{"export_retry", "depth_retry", "depth_review"} {
 		t.Run(kind, func(t *testing.T) {
 			tx, actor, _, scope, project, factory := projectConsumerFixture(t)
 			installMediaScopeMigration(t, tx)
@@ -63,7 +63,7 @@ func TestMediaRequestControlPreservesSessionPrincipal(t *testing.T) {
 			mediaFactory := func(tx *gorm.DB) tool.DerivedMedia {
 				return identityDerivedMedia(media.NewDerivedService(pgmedia.NewScopedStore(tx, scopes)))
 			}
-			source := func(*gorm.DB) tool.TranscriptionSourceReader { return reviewScopeSource{asset.ID} }
+			source := func(*gorm.DB) tool.SavedMediaSourceReader { return reviewScopeSource{asset.ID} }
 			var action func(identity.Principal) error
 			switch kind {
 			case "export_retry":
@@ -73,19 +73,6 @@ func TestMediaRequestControlPreservesSessionPrincipal(t *testing.T) {
 					t.Fatal(err)
 				}
 				if err = tx.Exec(`UPDATE mediatool.export_job SET status='failed',stage='failed' WHERE id=?`, job.ID).Error; err != nil {
-					t.Fatal(err)
-				}
-				action = func(a identity.Principal) error {
-					_, e := store.Control(t.Context(), a, project, job.ID, uuid.New(), job.Revision, "retry")
-					return e
-				}
-			case "transcription_retry":
-				store := pgtool.NewTranscriptionStore(tx, source, mediaFactory)
-				job, err := store.Create(t.Context(), actor, project, uuid.New(), tool.TranscriptionCreateInput{CanvasID: uuid.New(), NodeID: uuid.New(), Revision: 1, Language: "auto"})
-				if err != nil {
-					t.Fatal(err)
-				}
-				if err = tx.Exec(`UPDATE mediatool.transcription_job SET status='failed',stage='failed' WHERE id=?`, job.ID).Error; err != nil {
 					t.Fatal(err)
 				}
 				action = func(a identity.Principal) error {

@@ -502,11 +502,6 @@ declare namespace API {
     job_id: string;
   };
 
-  type cancelMediaTranscriptionParams = {
-    /** Transcription UUID */
-    job_id: string;
-  };
-
   type cancelMediaTransferParams = {
     /** 转移UUID */
     job_id: string;
@@ -940,11 +935,6 @@ declare namespace API {
   };
 
   type createMediaExportParams = {
-    /** Project UUID */
-    pid: string;
-  };
-
-  type createMediaTranscriptionParams = {
     /** Project UUID */
     pid: string;
   };
@@ -1694,13 +1684,6 @@ declare namespace API {
     asset_id: string;
   };
 
-  type downloadMediaTranscriptionSubtitlesParams = {
-    /** Transcription UUID */
-    job_id: string;
-    /** Project UUID */
-    project_id: string;
-  };
-
   type downloadPlatformUserExportParams = {
     /** Export ID */
     id: string;
@@ -2254,20 +2237,6 @@ declare namespace API {
   type getMediaPurgeParams = {
     /** 清理UUID */
     job_id: string;
-  };
-
-  type getMediaTranscriptionParams = {
-    /** Transcription UUID */
-    job_id: string;
-    /** Project UUID */
-    project_id: string;
-  };
-
-  type getMediaTranscriptionResultParams = {
-    /** Transcription UUID */
-    job_id: string;
-    /** Project UUID */
-    project_id: string;
   };
 
   type getMediaTransferParams = {
@@ -3248,19 +3217,6 @@ declare namespace API {
     page?: number;
     /** 1..100；默认20 */
     page_size?: number;
-  };
-
-  type listMediaTranscriptionsParams = {
-    /** Project UUID */
-    pid: string;
-    /** Canvas UUID */
-    canvas_id?: string;
-    /** Timeline node UUID */
-    node_id?: string;
-    /** 1..200, default 50 */
-    limit?: number;
-    /** Project and source bound cursor */
-    cursor?: string;
   };
 
   type listMediaTransfersParams = {
@@ -5263,11 +5219,6 @@ declare namespace API {
     job_id: string;
   };
 
-  type retryMediaTranscriptionParams = {
-    /** Transcription UUID */
-    job_id: string;
-  };
-
   type retryMediaTransferParams = {
     /** 转移UUID */
     job_id: string;
@@ -6296,12 +6247,6 @@ declare namespace API {
     rid: string;
   };
 
-  type SubtitleSegment = {
-    end_ms?: number;
-    start_ms?: number;
-    text?: string;
-  };
-
   type SubtitleStyle = {
     color?: string;
     font_size?: number;
@@ -6637,93 +6582,6 @@ declare namespace API {
     muted?: boolean;
     visible?: boolean;
   };
-
-  type Transcript = {
-    duration_ms?: number;
-    language?: string;
-    segments?: SubtitleSegment[];
-    version?: number;
-  };
-
-  type TranscriptionCreateInput = {
-    canvas_id?: string;
-    language?: string;
-    node_id?: string;
-    revision?: number;
-  };
-
-  type TranscriptionJob = {
-    attempt?: number;
-    created_at?: string;
-    failure_code?: string | null;
-    id?: string;
-    language?: string;
-    progress?: number;
-    project_id?: string;
-    result_sha256?: string | null;
-    revision?: number;
-    source?: TranscriptionSource;
-    stage?: TranscriptionStage;
-    status?: TranscriptionStatus;
-    updated_at?: string;
-  };
-
-  type TranscriptionJobResponse = {
-    attempt?: number;
-    created_at?: string;
-    failure_code?: string | null;
-    id?: string;
-    language?: string;
-    progress?: number;
-    project_id?: string;
-    result_sha256?: string | null;
-    revision?: number;
-    source?: TranscriptionSource;
-    stage?: TranscriptionStage;
-    status?: TranscriptionStatus;
-    updated_at?: string;
-  };
-
-  type TranscriptionPage = {
-    items?: TranscriptionJob[];
-    next_cursor?: string | null;
-  };
-
-  type TranscriptionResult = {
-    draft?: Transcript;
-    job_id?: string;
-    revision?: number;
-    sha256?: string;
-    source_asset_id?: string;
-    source_asset_revision?: number;
-    source_sha256?: string;
-    srt?: string;
-  };
-
-  type TranscriptionSource = {
-    canvas_id?: string;
-    node_id?: string;
-    revision?: number;
-  };
-
-  type TranscriptionStage =
-    | "queued"
-    | "downloading"
-    | "preparing_audio"
-    | "transcribing"
-    | "cancelling"
-    | "awaiting_reconciliation"
-    | "complete"
-    | "cancelled"
-    | "failed";
-
-  type TranscriptionStatus =
-    | "queued"
-    | "running"
-    | "succeeded"
-    | "failed"
-    | "cancel_requested"
-    | "cancelled";
 
   type TransferControlRequest = {
     revision?: number;

@@ -17,7 +17,7 @@ import (
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
-func TestTranscriptionSourceFreezesFormalNodeAndLocksUntilOuterCommit(t *testing.T) {
+func TestSavedMediaSourceFreezesFormalNodeAndLocksUntilOuterCommit(t *testing.T) {
 	database := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
 	service := canvasfixture.NewService(canvasStore(database))
@@ -36,8 +36,8 @@ func TestTranscriptionSourceFreezesFormalNodeAndLocksUntilOuterCommit(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	reader := application.NewTranscriptionSourceReader(canvasStore(database))
-	frozen, err := reader.FreezeTranscriptionSource(t.Context(), actor, project, doc.ID, node.ID, saved.Revision)
+	reader := application.NewSavedMediaSourceReader(canvasStore(database))
+	frozen, err := reader.FreezeMediaSource(t.Context(), actor, project, doc.ID, node.ID, saved.Revision)
 	if err != nil || frozen != asset {
 		t.Fatalf("formal source: %v %v", frozen, err)
 	}
@@ -46,7 +46,7 @@ func TestTranscriptionSourceFreezesFormalNodeAndLocksUntilOuterCommit(t *testing
 		t.Fatalf("reader changed canvas: %v", err)
 	}
 	if err := database.Transaction(func(tx *gorm.DB) error {
-		_, err := application.NewTranscriptionSourceReader(canvasStore(tx)).FreezeTranscriptionSource(t.Context(), actor, project, doc.ID, node.ID, saved.Revision)
+		_, err := application.NewSavedMediaSourceReader(canvasStore(tx)).FreezeMediaSource(t.Context(), actor, project, doc.ID, node.ID, saved.Revision)
 		if err != nil {
 			return err
 		}
@@ -69,26 +69,26 @@ func TestTranscriptionSourceFreezesFormalNodeAndLocksUntilOuterCommit(t *testing
 	}); err != nil {
 		t.Fatal(err)
 	}
-	_, err = reader.FreezeTranscriptionSource(t.Context(), actor, project, doc.ID, node.ID, saved.Revision-1)
+	_, err = reader.FreezeMediaSource(t.Context(), actor, project, doc.ID, node.ID, saved.Revision-1)
 	var stale *application.RevisionConflict
 	if !errors.As(err, &stale) {
 		t.Fatalf("stale source accepted: %v", err)
 	}
 	_, foreign := seedCanvasActor(t, database)
-	_, err = reader.FreezeTranscriptionSource(t.Context(), actor, foreign, doc.ID, node.ID, saved.Revision)
+	_, err = reader.FreezeMediaSource(t.Context(), actor, foreign, doc.ID, node.ID, saved.Revision)
 	if !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatalf("foreign source accepted: %v", err)
 	}
 	if err := database.Exec(`UPDATE media.media_asset SET status='processing',moderation_status='pending' WHERE id=?`, asset).Error; err != nil {
 		t.Fatal(err)
 	}
-	_, err = reader.FreezeTranscriptionSource(t.Context(), actor, project, doc.ID, node.ID, saved.Revision)
+	_, err = reader.FreezeMediaSource(t.Context(), actor, project, doc.ID, node.ID, saved.Revision)
 	if !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatalf("unreviewed source accepted: %v", err)
 	}
 }
 
-func TestTranscriptionSourceRejectsImageAndKindChangedAfterSave(t *testing.T) {
+func TestSavedMediaSourceRejectsImageAndKindChangedAfterSave(t *testing.T) {
 	database := canvasDB(t, "GLOWLOOM_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
 	service := canvasfixture.NewService(canvasStore(database))
@@ -103,19 +103,19 @@ func TestTranscriptionSourceRejectsImageAndKindChangedAfterSave(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reader := application.NewTranscriptionSourceReader(canvasStore(database))
-	_, err = reader.FreezeTranscriptionSource(t.Context(), actor, project, doc.ID, image.ID, saved.Revision)
+	reader := application.NewSavedMediaSourceReader(canvasStore(database))
+	_, err = reader.FreezeMediaSource(t.Context(), actor, project, doc.ID, image.ID, saved.Revision)
 	if !errors.Is(err, domain.ErrInvalidCommand) {
 		t.Fatalf("image source accepted: %v", err)
 	}
-	id, err := reader.FreezeTranscriptionSource(t.Context(), actor, project, doc.ID, audio.ID, saved.Revision)
+	id, err := reader.FreezeMediaSource(t.Context(), actor, project, doc.ID, audio.ID, saved.Revision)
 	if err != nil || id != audioID {
 		t.Fatalf("audio source: %v %v", id, err)
 	}
 	if err := database.Exec(`UPDATE media.media_asset SET kind='video' WHERE id=?`, audioID).Error; err != nil {
 		t.Fatal(err)
 	}
-	_, err = reader.FreezeTranscriptionSource(t.Context(), actor, project, doc.ID, audio.ID, saved.Revision)
+	_, err = reader.FreezeMediaSource(t.Context(), actor, project, doc.ID, audio.ID, saved.Revision)
 	if !errors.Is(err, mediadomain.ErrInvalidMediaAsset) {
 		t.Fatalf("changed source kind accepted: %v", err)
 	}

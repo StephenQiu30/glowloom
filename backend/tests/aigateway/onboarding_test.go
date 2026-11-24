@@ -538,3 +538,21 @@ func TestOnboardingConfigurationShowsActualProviderMetadata(t *testing.T) {
 		return row.ID == in.Route.ID && row.ProviderKey == "deepseek" && row.Upstream == in.Route.UpstreamModel
 	}))
 }
+
+func TestOnboardingConfigurationExcludesHistoricalLocalSpeech(t *testing.T) {
+	db, store, model, actor := fixture(t)
+	legacy := model
+	legacy.ID, legacy.Name, legacy.Protocol = uuid.New(), "local/whisper", "local"
+	data, err := json.Marshal(legacy)
+	require.NoError(t, err)
+	require.NoError(t, db.Exec("INSERT INTO ai.model (id,name,document,enabled) VALUES (?,?,?::jsonb,true)", legacy.ID, legacy.Name, string(data)).Error)
+
+	configuration, err := store.Configuration(t.Context())
+	require.NoError(t, err)
+	raw, err := json.Marshal(configuration["models"])
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), legacy.Name)
+
+	_, err = application.Prepare(legacy, actor.ID, actor.ScopeID, uuid.Nil, uuid.Nil, "retired-local", "transcription", nil)
+	require.ErrorIs(t, err, domain.ErrInvalid)
+}

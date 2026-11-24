@@ -17,7 +17,6 @@ import (
 	mediatask "github.com/StephenQiu30/glowloom-server/backend/media/adapter/task"
 	tooltask "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/task"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/app/aigateway"
 	catalogwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/catalog"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
@@ -121,18 +120,6 @@ func buildBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Conne
 		exports := mediawire.ProvideRoutedMediaExportStore(dbConn.DB, mediawire.NewMediaWorkerScopeAccess)
 		exportWorker := toolapp.NewRoutedWorker(exports, mediawire.ToolObjects(dbConn.DB, registry), toolproject.NewRenderer(exportRenderer), mediaflow.FFProber{}, mediaflow.FFUploadRenderer{})
 		handlers[tooltask.Export] = tooltask.ExportHandler(exportWorker, exports)
-		transcriber, err := mediawire.ProvideTranscriber(cfg)
-		if err != nil {
-			return nil, err
-		}
-		audioPreprocessor, err := toolff.NewAudioPreprocessor(mediaflow.FFProber{})
-		if err != nil {
-			return nil, fmt.Errorf("configure speech audio preparation: %w", err)
-		}
-		transcriber = aigateway.TrackTranscriber(dbConn.DB, transcriber)
-		transcriptions := mediawire.ProvideRoutedMediaTranscriptionStore(dbConn.DB, transcriber != nil, mediawire.NewMediaWorkerScopeAccess)
-		transcriptionWorker := toolapp.NewRoutedTranscriptionWorker(transcriptions, mediawire.ToolObjects(dbConn.DB, registry), audioPreprocessor, transcriber)
-		handlers[tooltask.Transcription] = tooltask.TranscriptionHandler(transcriptionWorker, transcriptions)
 		depthWorker, depths, err := mediawire.ProvideMediaDepthWorker(dbConn.DB, registry, cfg)
 		if err != nil {
 			return nil, err

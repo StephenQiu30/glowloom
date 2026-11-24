@@ -24,7 +24,7 @@ func (s *Store) Configuration(ctx context.Context) (map[string]any, error) {
 			Enabled  bool
 			Draft    bool
 		}
-		if err := tx.Raw("SELECT document,enabled,draft FROM ai.model ORDER BY name,id LIMIT 500").Scan(&models).Error; err != nil {
+		if err := tx.Raw("SELECT document,enabled,draft FROM ai.model WHERE document->>'protocol'<>'local' ORDER BY name,id LIMIT 500").Scan(&models).Error; err != nil {
 			return err
 		}
 		products := []map[string]any{}
@@ -62,7 +62,7 @@ func (s *Store) Configuration(ctx context.Context) (map[string]any, error) {
 			Document []byte
 			Enabled  bool
 		}
-		if err := tx.Raw("SELECT document,enabled FROM ai.route WHERE deleted_at IS NULL ORDER BY model_id,priority,id LIMIT 1000").Scan(&routes).Error; err != nil {
+		if err := tx.Raw("SELECT document,enabled FROM ai.route WHERE deleted_at IS NULL AND document->>'protocol'<>'local' ORDER BY model_id,priority,id LIMIT 1000").Scan(&routes).Error; err != nil {
 			return err
 		}
 		supplies := []map[string]any{}
@@ -79,7 +79,7 @@ func (s *Store) Configuration(ctx context.Context) (map[string]any, error) {
 			SupplierID uuid.UUID `json:"supplier_id"`
 			State      string    `json:"state"`
 		}
-		if err := tx.Raw("SELECT id,supplier_id,state FROM ai.credential ORDER BY id LIMIT 1000").Scan(&credentials).Error; err != nil {
+		if err := tx.Raw("SELECT id,supplier_id,state FROM ai.credential WHERE key_id<>'local-policy' ORDER BY id LIMIT 1000").Scan(&credentials).Error; err != nil {
 			return err
 		}
 		out["credentials"] = credentials
@@ -88,7 +88,7 @@ func (s *Store) Configuration(ctx context.Context) (map[string]any, error) {
 			Concurrency int    `json:"concurrency"`
 			RPM         int    `json:"rpm"`
 		}
-		if err := tx.Raw("SELECT name,concurrency,requests_per_minute AS rpm FROM ai.quota ORDER BY name LIMIT 1000").Scan(&quotas).Error; err != nil {
+		if err := tx.Raw("SELECT name,concurrency,requests_per_minute AS rpm FROM ai.quota WHERE name<>'local/whisper' ORDER BY name LIMIT 1000").Scan(&quotas).Error; err != nil {
 			return err
 		}
 		out["quotas"] = quotas
@@ -115,9 +115,6 @@ func (s *Store) Configuration(ctx context.Context) (map[string]any, error) {
 
 // routeProviderKey identifies a display logo from the route's actual adapter or direct endpoint.
 func routeProviderKey(route domain.Route) string {
-	if route.Protocol == "local" {
-		return "local"
-	}
 	endpoint, err := url.Parse(route.BaseURL)
 	if err != nil || endpoint.Scheme != "https" || (endpoint.Port() != "" && endpoint.Port() != "443") {
 		return ""

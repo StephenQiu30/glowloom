@@ -28,5 +28,15 @@ func (s *Store) HasInflightWork(ctx context.Context, actor identityapp.Principal
 		Count(&count).Error; err != nil {
 		return false, fmt.Errorf("read mediatool project work: %w", err)
 	}
-	return count > 0, nil
+	if count > 0 {
+		return true, nil
+	}
+	// Historical jobs continue to block project deletion while their inference is unresolved.
+	var active bool
+	if err := s.db.WithContext(ctx).Raw(`SELECT EXISTS (
+ SELECT 1 FROM mediatool.transcription_job WHERE project_id = ? AND org_id = ?
+ AND status IN ('queued','running','cancel_requested'))`, projectID, actor.OrgID).Row().Scan(&active); err != nil {
+		return false, fmt.Errorf("read historical transcription work: %w", err)
+	}
+	return active, nil
 }

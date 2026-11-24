@@ -52,7 +52,7 @@ func PurchaseBound(m domain.Model, p domain.Price) (int64, error) {
 // PlanOnboarding constructs probes from the actual enabled product contract.
 func PlanOnboarding(in Onboarding, model domain.Model) (OnboardingPlan, error) {
 	var plan OnboardingPlan
-	if model.Validate() != nil || model.Protocol == "local" || in.Scope == uuid.Nil || in.Route.ModelID != model.ID {
+	if model.Validate() != nil || in.Scope == uuid.Nil || in.Route.ModelID != model.ID {
 		return plan, domain.ErrInvalid
 	}
 	if model.Protocol == "media" {

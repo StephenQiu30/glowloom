@@ -17,8 +17,8 @@ import (
 	toolapp "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
 )
 
-func provideMediaToolSourceWithAccess(tx *gorm.DB, scopes pgmedia.ScopeAccessFactory) toolapp.TranscriptionSourceReader {
-	return canvasapp.NewTranscriptionSourceReader(pgcanvas.NewScopedStore(tx,
+func provideMediaToolSourceWithAccess(tx *gorm.DB, scopes pgmedia.ScopeAccessFactory) toolapp.SavedMediaSourceReader {
+	return canvasapp.NewSavedMediaSourceReader(pgcanvas.NewScopedStore(tx,
 		func(mediaTx *gorm.DB) canvasapp.MediaReader {
 			return LegacyAssetReader(mediaapp.NewAssetQuery(pgmedia.NewScopedStore(mediaTx, scopes)))
 		}, func(tx *gorm.DB) canvasapp.ProjectAccess { return canvasScopedAccess{ScopeAccess: scopes(tx), tx: tx} }))
@@ -32,9 +32,9 @@ func ProvideMediaDepthStore(database *gorm.DB, enabled bool) *pgtool.DepthStore 
 
 // ProvideMediaDepthStoreWithAccess assembles the depth store with explicit scope access.
 func ProvideMediaDepthStoreWithAccess(database *gorm.DB, enabled bool, scopes pgmedia.ScopeAccessFactory) *pgtool.DepthStore {
-	var source pgtool.TranscriptionSourceFactory
+	var source pgtool.SavedMediaSourceFactory
 	if enabled {
-		source = func(tx *gorm.DB) toolapp.TranscriptionSourceReader {
+		source = func(tx *gorm.DB) toolapp.SavedMediaSourceReader {
 			return provideMediaToolSourceWithAccess(tx, scopes)
 		}
 	}

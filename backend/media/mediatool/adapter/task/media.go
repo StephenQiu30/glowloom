@@ -12,14 +12,12 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 	"github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
-	"github.com/StephenQiu30/glowloom-server/backend/media/mediatool/domain"
 )
 
-// Media tool task kinds identify export, transcription and depth execution.
+// Media tool task kinds identify export and depth execution.
 const (
-	Export        = "mediatool.export"
-	Transcription = "mediatool.transcription"
-	Depth         = "mediatool.depth"
+	Export = "mediatool.export"
+	Depth  = "mediatool.depth"
 )
 
 func execID(j taskruntime.Job, epoch int64) uuid.UUID {
@@ -69,61 +67,6 @@ func ExportHandler(worker *application.Worker, store ExportStore) taskruntime.Ha
 		finishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 		defer cancel()
 		finish := store.Finish(finishCtx, id, cancelled, code)
-		if errors.Is(finish, application.ErrConflict) {
-			return store.FailWorkflow(finishCtx, id)
-		}
-		return finish
-	})
-}
-
-// TranscriptionHandler executes admitted transcription work using its original task reference.
-func TranscriptionHandler(worker *application.TranscriptionWorker, store application.TranscriptionWorkerStore) taskruntime.Handler {
-	return taskruntime.WithReference(30*time.Minute, func(ctx context.Context, j taskruntime.Job, id application.TranscriptionWorkID) (err error) {
-		// The current SQL epoch fences all domain writes from the abandoned
-		// process; reclaim only the exact previous execution of this task.
-		if j.Epoch > 1 {
-			id.ExecutionID = execID(j, j.Epoch-1)
-			if err := store.Release(ctx, id); err != nil && !errors.Is(err, application.ErrConflict) {
-				return err
-			}
-		}
-		id.ExecutionID = execID(j, j.Epoch)
-		defer func() {
-			stop, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-			defer cancel()
-			if release := store.Release(stop, id); release != nil && !errors.Is(release, application.ErrConflict) {
-				err = errors.Join(err, fmt.Errorf("release transcription: %w", release))
-			}
-		}()
-		_, err = worker.Execute(ctx, id)
-		if err == nil || ctx.Err() != nil && !errors.Is(context.Cause(ctx), taskruntime.ErrStopRequested) {
-			return err
-		}
-		uncertain := errors.Is(err, application.ErrInferenceUncertain)
-		code := "transcription_failed"
-		switch {
-		case uncertain:
-			code = "inference_unknown"
-		case errors.Is(err, application.ErrNoAudio):
-			code = "no_audio_stream"
-		case errors.Is(err, application.ErrNoSpeech):
-			code = "no_speech"
-		case errors.Is(err, domain.ErrInvalidTranscript):
-			code = "invalid_result"
-		case errors.Is(err, application.ErrUnavailable):
-			if j.Failures < 2 {
-				return err
-			}
-			code = "dependency_unavailable"
-		case errors.Is(context.Cause(ctx), taskruntime.ErrStopRequested), errors.Is(err, application.ErrInvalidTranscription), errors.Is(err, application.ErrCancelled), errors.Is(err, application.ErrConflict):
-		default:
-			if j.Failures < 2 {
-				return err
-			}
-		}
-		finishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-		defer cancel()
-		finish := store.Finish(finishCtx, id, !uncertain, code)
 		if errors.Is(finish, application.ErrConflict) {
 			return store.FailWorkflow(finishCtx, id)
 		}
