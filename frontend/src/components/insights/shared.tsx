@@ -73,7 +73,7 @@ export function Panel({
   children: ReactNode;
 }) {
   return (
-    <Card variant="flat">
+    <Card>
       <CardHeader>
         <CardTitle>{title}</CardTitle>
         {description ? <CardDescription>{description}</CardDescription> : null}
@@ -92,7 +92,7 @@ export function Metric({
   context?: string;
 }) {
   return (
-    <Card variant="flat" className="insights-metric">
+    <Card className="insights-metric">
       <CardHeader>
         <CardDescription>{label}</CardDescription>
       </CardHeader>

@@ -1,7 +1,7 @@
 .navigation {
   display: flex;
   align-items: center;
-  gap: var(--spacing);
+  gap: var(--secondary-tab-gap);
   container-type: inline-size;
   min-width: 0;
   width: 100%;
@@ -12,7 +12,6 @@
   overflow-x: auto;
   scrollbar-width: none;
   overscroll-behavior-x: contain;
-  padding-block: 2px;
 }
 .viewport::-webkit-scrollbar {
   display: none;
@@ -23,10 +22,4 @@
 }
 .arrow {
   flex: none;
-}
-.sceneList {
-  gap: clamp(6px, 1cqi, 12px);
-}
-.scenes {
-  margin-bottom: clamp(16px, 2cqi, 24px);
 }

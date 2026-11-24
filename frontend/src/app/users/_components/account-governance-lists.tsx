@@ -17,6 +17,7 @@ import {
 import { useReadBoundary } from "@/components/governance/use-read-boundary";
 import type { ConfirmAction } from "@/components/governance/confirmation";
 import { authErrorMessage } from "@/components/auth/contracts";
+import { Item } from "@/components/ui/item";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -162,44 +163,51 @@ export function AccountGovernanceLists({
         <ContentState className="min-h-40" title="暂无邀请" />
       ) : null}
       {invites?.items?.map((i) => (
-        <article key={i.id} className="grid gap-2 rounded-xl border p-4">
-          <p className="break-all">
-            {i.email} · {i.status}
-          </p>
-          <p>有效期至 {i.expires_at}</p>
-          {i.status === "pending" ? (
-            <div className="flex gap-2">
-              {[true, false].map((resend) => (
-                <Button
-                  key={String(resend)}
-                  variant="outline"
-                  onClick={() =>
-                    onAction({
-                      title: resend ? "重发邀请" : "撤销邀请",
-                      effect: resend
-                        ? "旧链接立即失效；新链接进入通知队列。"
-                        : "此邀请立即失效。",
-                      reason: !resend,
-                      run: (reason, signal) =>
-                        (resend
-                          ? resendAccountInvitation
-                          : revokeAccountInvitation)(
-                          { id: i.id! },
-                          {
-                            expected_revision: i.revision,
-                            ...(!resend ? { reason } : {}),
-                          },
-                          { signal },
-                        ),
-                    })
-                  }
-                >
-                  {resend ? "重发" : "撤销"}
-                </Button>
-              ))}
-            </div>
-          ) : null}
-        </article>
+        <Item
+          key={i.id}
+          variant="muted"
+          asChild
+          className="flex-col items-stretch"
+        >
+          <article>
+            <p className="break-all">
+              {i.email} · {i.status}
+            </p>
+            <p>有效期至 {i.expires_at}</p>
+            {i.status === "pending" ? (
+              <div className="flex gap-2">
+                {[true, false].map((resend) => (
+                  <Button
+                    key={String(resend)}
+                    variant="outline"
+                    onClick={() =>
+                      onAction({
+                        title: resend ? "重发邀请" : "撤销邀请",
+                        effect: resend
+                          ? "旧链接立即失效；新链接进入通知队列。"
+                          : "此邀请立即失效。",
+                        reason: !resend,
+                        run: (reason, signal) =>
+                          (resend
+                            ? resendAccountInvitation
+                            : revokeAccountInvitation)(
+                            { id: i.id! },
+                            {
+                              expected_revision: i.revision,
+                              ...(!resend ? { reason } : {}),
+                            },
+                            { signal },
+                          ),
+                      })
+                    }
+                  >
+                    {resend ? "重发" : "撤销"}
+                  </Button>
+                ))}
+              </div>
+            ) : null}
+          </article>
+        </Item>
       ))}
       <PageSizeSelect
         label="邀请与授权每页数量"
@@ -284,32 +292,39 @@ export function AccountGovernanceLists({
         <ContentState className="min-h-40" title="暂无管理授权提议" />
       ) : null}
       {proposals?.items?.map((p) => (
-        <article key={p.id} className="rounded-xl border p-4">
-          <p className="break-all">
-            {p.kind} · {p.target_user_id} · {p.status}
-          </p>
-          <p>{p.reason}</p>
-          {p.status === "pending" ? (
-            <Button
-              variant="outline"
-              onClick={() =>
-                onAction({
-                  title: "撤销授权提议",
-                  effect: "目标用户将无法接受该提议。",
-                  reason: true,
-                  run: (reason, signal) =>
-                    cancelProposal(
-                      { id: p.id! },
-                      { expected_revision: p.revision, reason },
-                      { signal },
-                    ),
-                })
-              }
-            >
-              撤销提议
-            </Button>
-          ) : null}
-        </article>
+        <Item
+          key={p.id}
+          variant="muted"
+          asChild
+          className="flex-col items-start"
+        >
+          <article>
+            <p className="break-all">
+              {p.kind} · {p.target_user_id} · {p.status}
+            </p>
+            <p>{p.reason}</p>
+            {p.status === "pending" ? (
+              <Button
+                variant="outline"
+                onClick={() =>
+                  onAction({
+                    title: "撤销授权提议",
+                    effect: "目标用户将无法接受该提议。",
+                    reason: true,
+                    run: (reason, signal) =>
+                      cancelProposal(
+                        { id: p.id! },
+                        { expected_revision: p.revision, reason },
+                        { signal },
+                      ),
+                  })
+                }
+              >
+                撤销提议
+              </Button>
+            ) : null}
+          </article>
+        </Item>
       ))}
       {proposals?.next_cursor ? (
         <Button

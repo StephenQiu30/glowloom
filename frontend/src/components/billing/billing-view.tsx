@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PageHeader } from "@/components/layout/page-header";
 import { PageLayout } from "@/components/layout/page-layout";
 import { ContentState } from "@/components/layout/content-state";
 import { Button } from "@/components/ui/button";
@@ -73,10 +74,8 @@ export function BillingView({
   );
   return (
     <PageLayout screen="billing" fullBleed>
-      <section className="billing-page flex flex-col gap-3">
-        <h1 className="text-2xl font-semibold md:text-[1.75rem]">
-          {billingSections[section].title}
-        </h1>
+      <section className="billing-page flex flex-col gap-(--layout-gap)">
+        <PageHeader title={billingSections[section].title} />
         {section === "overview" ? (
           <Card className="max-w-2xl">
             <CardHeader>
@@ -131,10 +130,7 @@ export function BillingView({
           activeWallet?.history_available ? (
             <div className="flex max-w-2xl flex-col gap-4">
               {activeWallet.entries?.length ? (
-                <Card
-                  variant="flat"
-                  className="rounded-lg border bg-background py-0"
-                >
+                <Card className="rounded-lg py-0">
                   <CardContent className="px-0">
                     <ul className="divide-y" aria-label="积分流水">
                       {activeWallet.entries.map((entry) => (

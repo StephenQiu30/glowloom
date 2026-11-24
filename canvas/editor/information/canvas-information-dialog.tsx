@@ -170,7 +170,7 @@ export function CanvasInformationDialog({
             setDetails(false);
           }}
         >
-          <TabsList variant="workspace">
+          <TabsList aria-label="画布信息视图">
             <TabsTrigger value="basic">基础信息</TabsTrigger>
             <TabsTrigger value="usage">积分消耗</TabsTrigger>
           </TabsList>

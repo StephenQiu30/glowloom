@@ -19,7 +19,7 @@ export function ProductUtilityNavigation() {
       <Button
         asChild
         size="toolbar"
-        variant="outline"
+        variant="secondary"
         className="product-utility-action"
       >
         <Link href="/billing/recharge">

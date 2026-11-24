@@ -115,7 +115,7 @@ function LoadingBody({ layout }: { layout: LoadingLayout }) {
           <div className="creation-hero flex flex-col items-center gap-4 md:gap-6">
             <Skeleton className="h-9 w-full max-w-sm md:h-12 md:max-w-md" />
             <Skeleton className="h-10 w-[228px] max-w-full rounded-full max-md:h-12" />
-            <div className="flex h-40 w-full flex-col justify-between rounded-3xl border bg-card p-4 max-md:h-54">
+            <div className="flex h-40 w-full flex-col justify-between rounded-3xl bg-card p-4 max-md:h-54">
               <div className="flex items-start gap-3">
                 <Skeleton className="h-12 w-10 shrink-0 rounded-lg max-md:h-16 max-md:w-12" />
                 <Skeleton className="mt-1 h-4 w-3/5" />
@@ -151,7 +151,7 @@ function LoadingBody({ layout }: { layout: LoadingLayout }) {
       return <MediaGrid />;
     case "table":
       return (
-        <div className="flex flex-col divide-y rounded-xl border border-border">
+        <div className="flex flex-col divide-y">
           <div className="grid grid-cols-3 gap-4 bg-muted/40 px-4 py-4 md:grid-cols-4">
             {placeholderRows.map((index) => (
               <Skeleton key={index} className="h-3 w-2/3 last:max-md:hidden" />

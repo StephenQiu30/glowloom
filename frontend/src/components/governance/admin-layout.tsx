@@ -5,7 +5,7 @@ import { X } from "lucide-react";
 import type { AdminSection } from "@/components/layout/routes";
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { HeaderLinks } from "@/components/layout/header-navigation";
-import { PageHeader } from "@/components/canvas/runtime/components/layout/workspace/page-header";
+import { PageHeader } from "@/components/layout/page-header";
 import { Toolbar, ToolbarGroup } from "@/components/ui/toolbar";
 
 const adminLinks = [

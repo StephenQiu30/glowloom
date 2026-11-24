@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { Fragment, useRef, useState } from "react";
-import { PageHeader } from "@/components/canvas/runtime/components/layout/workspace/page-header";
+import { PageHeader } from "@/components/layout/page-header";
 import { PageLayout } from "@/components/layout/page-layout";
 import { HeaderNavigation } from "@/components/layout/header-navigation";
 import { ContentState } from "@/components/layout/content-state";
@@ -10,23 +10,45 @@ import { Button } from "@/components/ui/button";
 import { ExploreReferenceExamples } from "@/components/inspiration/gallery";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { exploreCategories } from "./explore-categories";
+import { exploreCategories, featuredCategory } from "./explore-categories";
 import { OverflowNavigation } from "./overflow-navigation";
-import styles from "./explore.module.css";
 
 export function ExplorePage({ initialQuery = "" }: { initialQuery?: string }) {
   const [search, setSearch] = useState(initialQuery);
   const router = useRouter();
   const featuredTab = useRef<HTMLButtonElement>(null);
   const [selection, setSelection] = useState({
-    category: exploreCategories[0].id,
-    scene: exploreCategories[0].scenes[0]?.id ?? "",
+    category: featuredCategory.id,
+    scene: "",
   });
-  const category = exploreCategories.find(
-    (item) => item.id === selection.category,
-  )!;
+  const category =
+    exploreCategories.find((item) => item.id === selection.category) ??
+    featuredCategory;
   const scene = category.scenes.find((item) => item.id === selection.scene);
+  const isFeatured = category.id === featuredCategory.id;
+  const sceneLabel = category.kind === "skill" ? "技能分类" : "作品场景";
+  const content =
+    isFeatured || (category.sceneExamples && scene) ? (
+      <ExploreReferenceExamples
+        scene={isFeatured ? undefined : scene?.label}
+        query=""
+      />
+    ) : (
+      <ContentState
+        title={`${category.kind === "skill" ? "技能" : category.kind === "activity" ? "活动" : "作品"}尚未开放`}
+        actions={
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setSelection({ category: featuredCategory.id, scene: "" });
+              featuredTab.current?.focus();
+            }}
+          >
+            浏览精选
+          </Button>
+        }
+      />
+    );
 
   return (
     <PageLayout
@@ -37,7 +59,7 @@ export function ExplorePage({ initialQuery = "" }: { initialQuery?: string }) {
         onValueChange: setSearch,
         onSearch: (value) =>
           router.push(
-            `/explore/search?result=${encodeURIComponent(value)}&type=${category.kind === "skill" ? "skill" : ["work.drama", "work.film", "work.animation"].includes(category.id) ? "shortFilm" : "inspiration"}`,
+            `/explore/search?result=${encodeURIComponent(value)}&type=${category.searchType ?? "inspiration"}`,
           ),
         label: "搜索",
         placeholder: "搜索",
@@ -67,7 +89,9 @@ export function ExplorePage({ initialQuery = "" }: { initialQuery?: string }) {
                 )}
                 <TabsTrigger
                   value={item.id}
-                  ref={item.id === "featured" ? featuredTab : undefined}
+                  ref={
+                    item.id === featuredCategory.id ? featuredTab : undefined
+                  }
                 >
                   {item.label}
                 </TabsTrigger>
@@ -76,52 +100,32 @@ export function ExplorePage({ initialQuery = "" }: { initialQuery?: string }) {
           </TabsList>
         </HeaderNavigation>
         <TabsContent value={category.id}>
-          {category.scenes.length > 0 && (
-            <div className={styles.scenes}>
-              <OverflowNavigation
-                key={category.id}
-                label={category.kind === "skill" ? "技能分类" : "作品场景"}
-              >
-                <ToggleGroup
-                  className={styles.sceneList}
-                  type="single"
-                  value={selection.scene}
-                  aria-label={
-                    category.kind === "skill" ? "技能分类" : "作品场景"
-                  }
-                  onValueChange={(value) => {
-                    if (value)
-                      setSelection({ category: category.id, scene: value });
-                  }}
-                >
-                  {category.scenes.map((item) => (
-                    <ToggleGroupItem key={item.id} value={item.id}>
-                      {item.label}
-                    </ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
-              </OverflowNavigation>
-            </div>
-          )}
-          {category.id === "featured" ? (
-            <ExploreReferenceExamples query="" />
-          ) : category.id === "work.advertising" && scene ? (
-            <ExploreReferenceExamples scene={scene.label} query="" />
-          ) : (
-            <ContentState
-              title={`${category.kind === "skill" ? "技能" : category.kind === "activity" ? "活动" : "作品"}尚未开放`}
-              actions={
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    setSelection({ category: "featured", scene: "" });
-                    featuredTab.current?.focus();
-                  }}
-                >
-                  浏览精选
-                </Button>
+          {category.scenes.length ? (
+            <Tabs
+              key={category.id}
+              value={selection.scene}
+              onValueChange={(value) =>
+                setSelection({ category: category.id, scene: value })
               }
-            />
+              className="min-w-0 gap-(--layout-gap)"
+            >
+              <OverflowNavigation label={sceneLabel}>
+                <TabsList variant="secondary" aria-label={sceneLabel}>
+                  {category.scenes.map((item) => (
+                    <TabsTrigger key={item.id} value={item.id}>
+                      {item.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </OverflowNavigation>
+              {category.scenes.map((item) => (
+                <TabsContent key={item.id} value={item.id}>
+                  {item.id === selection.scene ? content : null}
+                </TabsContent>
+              ))}
+            </Tabs>
+          ) : (
+            content
           )}
         </TabsContent>
       </Tabs>

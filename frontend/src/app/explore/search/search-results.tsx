@@ -48,7 +48,7 @@ export function ExploreSearchResults({
         <ExploreSearch search={search} />
       </div>
       <Tabs value={type} onValueChange={(next) => navigate(query, next)}>
-        <TabsList variant="workspace" aria-label="搜索类型">
+        <TabsList variant="secondary" aria-label="搜索类型">
           {types.map((item) => (
             <TabsTrigger key={item.id} value={item.id}>
               {item.label}

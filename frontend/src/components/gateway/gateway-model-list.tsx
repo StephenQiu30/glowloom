@@ -156,13 +156,9 @@ export function GatewayModelList({
         onValueChange={setCategory}
         className="min-w-0 gap-2"
       >
-        <TabsList
-          aria-label="模型能力分类"
-          variant="workspace"
-          className="w-full sm:w-fit"
-        >
+        <TabsList variant="secondary" aria-label="模型能力分类">
           {categories.map(([key, label]) => (
-            <TabsTrigger key={key} value={key} className="px-2.5">
+            <TabsTrigger key={key} value={key}>
               {label}
             </TabsTrigger>
           ))}

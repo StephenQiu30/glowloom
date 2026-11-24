@@ -349,17 +349,12 @@ function GatewayConfigurationPage({
             role="group"
             className="flex min-w-0 items-center gap-1"
           >
-            <TabsList
-              aria-label="网关管理"
-              variant="workspace"
-              className="flex-1 overscroll-x-contain"
-            >
+            <TabsList variant="secondary" aria-label="网关管理">
               {tabs.map(([value, label]) => (
                 <TabsTrigger
                   key={value}
                   value={value}
                   disabled={!configuration}
-                  className="px-2.5"
                 >
                   {label}
                 </TabsTrigger>

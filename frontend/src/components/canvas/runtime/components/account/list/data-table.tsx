@@ -132,7 +132,7 @@ export function DataTable<TData extends { id?: string | number }>({
 
   return (
     <div
-      className="min-w-0 shrink-0 overflow-hidden rounded-md border"
+      className="min-w-0 shrink-0 overflow-hidden rounded-md"
       aria-busy={loading}
     >
       <Table aria-label={label}>

@@ -11,6 +11,13 @@ import { isProjectID, type Project } from "@/components/projects/project";
 import { ProjectMediaPreview } from "@/components/media/project-media";
 import { UploadDialog } from "@/components/media/upload-dialog";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Field, FieldLabel } from "@/components/ui/field";
 import {
@@ -328,16 +335,22 @@ export function VideoPanel({
           )}
         </>
       )}
-      <div className="rounded-lg border p-4">
-        <h3 className="mb-2 font-medium">剪辑和导出</h3>
-        <p className="mb-3 text-sm text-muted-foreground">
-          在同一短剧画布添加时间线节点，导入项目素材，编排片段并导出。3D
-          导演台也可从画布添加。
-        </p>
-        <Button asChild variant="outline">
-          <Link href={canvas}>打开短剧画布</Link>
-        </Button>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            <h3>剪辑和导出</h3>
+          </CardTitle>
+          <CardDescription>
+            在同一短剧画布添加时间线节点，导入项目素材，编排片段并导出。3D
+            导演台也可从画布添加。
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button asChild variant="outline">
+            <Link href={canvas}>打开短剧画布</Link>
+          </Button>
+        </CardContent>
+      </Card>
       {upload && (
         <UploadDialog
           projectID={project.id}

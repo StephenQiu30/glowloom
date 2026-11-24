@@ -12,6 +12,7 @@ import {
 import { authErrorMessage } from "@/components/auth/contracts";
 import type { ConfirmAction } from "@/components/governance/confirmation";
 import { useReadBoundary } from "@/components/governance/use-read-boundary";
+import { Item } from "@/components/ui/item";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -126,44 +127,52 @@ export function PlatformTeamInvitations({
         <ContentState className="min-h-40" title="暂无历史邀请" />
       ) : null}
       {page?.items?.map((i) => (
-        <article key={i.id} className="grid gap-2 rounded-xl border p-3">
-          <p className="break-all">
-            {i.email} ·{" "}
-            {i.team_role === "team_admin" ? "团队管理员" : "普通成员"}
-          </p>
-          <p>
-            {(
-              {
-                pending: "待接受",
-                accepted: "已接受",
-                declined: "已拒绝",
-                revoked: "已撤销",
-                expired: "已过期",
-              } as Record<string, string>
-            )[i.status ?? ""] ?? "状态待确认"}{" "}
-            · 有效期至 {i.expires_at}
-          </p>
-          {i.status === "pending" ? (
-            <Button
-              variant="outline"
-              onClick={() =>
-                onAction({
-                  title: "撤销团队历史邀请",
-                  effect: "该邀请将立即失效，已加入的团队关系不受此操作影响。",
-                  reason: true,
-                  run: (reason, signal) =>
-                    revokePlatformTeamInvitation(
-                      { id: teamID, iid: i.id! },
-                      { expected_revision: i.revision, reason },
-                      { signal },
-                    ),
-                })
-              }
-            >
-              撤销邀请
-            </Button>
-          ) : null}
-        </article>
+        <Item
+          key={i.id}
+          variant="muted"
+          asChild
+          className="flex-col items-start"
+        >
+          <article>
+            <p className="break-all">
+              {i.email} ·{" "}
+              {i.team_role === "team_admin" ? "团队管理员" : "普通成员"}
+            </p>
+            <p>
+              {(
+                {
+                  pending: "待接受",
+                  accepted: "已接受",
+                  declined: "已拒绝",
+                  revoked: "已撤销",
+                  expired: "已过期",
+                } as Record<string, string>
+              )[i.status ?? ""] ?? "状态待确认"}{" "}
+              · 有效期至 {i.expires_at}
+            </p>
+            {i.status === "pending" ? (
+              <Button
+                variant="outline"
+                onClick={() =>
+                  onAction({
+                    title: "撤销团队历史邀请",
+                    effect:
+                      "该邀请将立即失效，已加入的团队关系不受此操作影响。",
+                    reason: true,
+                    run: (reason, signal) =>
+                      revokePlatformTeamInvitation(
+                        { id: teamID, iid: i.id! },
+                        { expected_revision: i.revision, reason },
+                        { signal },
+                      ),
+                  })
+                }
+              >
+                撤销邀请
+              </Button>
+            ) : null}
+          </article>
+        </Item>
       ))}
       <PageSizeSelect
         label="团队邀请每页数量"

@@ -19,6 +19,7 @@ import {
 import { uploadMediaAsset } from "@/api/media";
 import { isProjectID } from "@/components/projects/project";
 import { ContentState } from "@/components/layout/content-state";
+import { Item } from "@/components/ui/item";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -433,10 +434,7 @@ export function ScriptPanel({
           </Alert>
         )}
         {imports.data?.items?.map((job) => (
-          <div
-            key={job.id}
-            className="flex flex-col gap-2 rounded-lg border p-3 text-sm"
-          >
+          <Item key={job.id} variant="muted" className="flex-col items-start">
             <p>{job.status ? importStatuses[job.status] : "状态待核对"}</p>
             {job.files?.map((entry) => (
               <p key={entry.asset_id}>
@@ -484,7 +482,7 @@ export function ScriptPanel({
                 )}
               </div>
             )}
-          </div>
+          </Item>
         ))}
       </section>
       {write.error && (

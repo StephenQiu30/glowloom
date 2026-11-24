@@ -132,7 +132,7 @@ export function InspirationGallery({ searchQuery }: { searchQuery?: string }) {
       <Tabs value={category} onValueChange={setCategory} className="gap-0">
         <div className="gallery-toolbar">
           <div className="gallery-categories">
-            <TabsList variant="navigation">
+            <TabsList variant="secondary" aria-label="创作灵感分类">
               {homeCategories.map((c) => (
                 <TabsTrigger key={c} value={c}>
                   {c}

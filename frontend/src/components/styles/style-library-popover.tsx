@@ -284,7 +284,7 @@ function ScopedStyleLibrary({
           </PopoverHeader>
           <Tabs value={tab} onValueChange={(next) => filter(next, search)}>
             <div className="overflow-x-auto">
-              <TabsList variant="navigation" aria-label="风格分类">
+              <TabsList aria-label="风格分类">
                 {tabs.map((item) => (
                   <TabsTrigger
                     key={item.id}

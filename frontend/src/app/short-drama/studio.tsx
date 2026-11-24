@@ -16,6 +16,8 @@ import { useOptionalSession } from "@/components/auth/session";
 import { useLoginDialog } from "@/components/layout/basic-layout";
 import { useSpace } from "@/components/spaces/space-context";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Toolbar } from "@/components/ui/toolbar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { StudioComposer } from "./studio-composer";
@@ -68,51 +70,46 @@ function StudioWorkspace() {
         <h1 id="short-drama-title" className="sr-only">
           短剧工作室
         </h1>
-        <Tabs value={mode} onValueChange={setMode} className="min-w-0 gap-0">
-          <div className="flex min-w-0 items-center justify-between gap-1 rounded-t-2xl border bg-muted px-1.5 py-1 md:px-3">
-            <TabsList
-              aria-label="短剧创作方式"
-              className="min-w-0 shrink-0 bg-transparent"
-            >
-              {modes.map(({ id, label, icon: Icon }) => (
-                <TabsTrigger
-                  key={id}
-                  value={id}
-                  className="px-1.5 text-xs sm:px-3 sm:text-sm"
-                >
-                  <Icon aria-hidden="true" className="hidden sm:block" />
-                  {label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="gap-1 px-1.5 text-xs sm:px-3 sm:text-sm"
-              disabled={createDisabled}
-              onClick={() => (session ? setCreating("canvas") : login())}
-            >
-              <ArrowUpRight data-icon="inline-start" aria-hidden="true" />
-              短剧画布
-            </Button>
-          </div>
-          {modes.map(({ id }) => (
-            <TabsContent key={id} value={id} forceMount hidden={mode !== id}>
-              <StudioComposer
-                mode={id}
+        <Card className="gap-0 p-0">
+          <Tabs value={mode} onValueChange={setMode} className="min-w-0 gap-0">
+            <Toolbar className="min-w-0 flex-nowrap justify-between px-3 pt-3 md:px-4 md:pt-4">
+              <TabsList aria-label="短剧创作方式">
+                {modes.map(({ id, label, icon: Icon }) => (
+                  <TabsTrigger key={id} value={id}>
+                    <Icon aria-hidden="true" className="hidden sm:block" />
+                    {label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+              <Button
+                type="button"
+                variant="ghost"
+                size="toolbar"
+                className="shrink-0"
                 disabled={createDisabled}
-                owner={
-                  session && selected
-                    ? { actorId: session.actor.id, scopeId: selected.id }
-                    : undefined
-                }
-                onAuthenticate={login}
-                onStart={(input) => (session ? setCreating(input) : login())}
-              />
-            </TabsContent>
-          ))}
-        </Tabs>
+                onClick={() => (session ? setCreating("canvas") : login())}
+              >
+                <ArrowUpRight data-icon="inline-start" aria-hidden="true" />
+                短剧画布
+              </Button>
+            </Toolbar>
+            {modes.map(({ id }) => (
+              <TabsContent key={id} value={id} forceMount hidden={mode !== id}>
+                <StudioComposer
+                  mode={id}
+                  disabled={createDisabled}
+                  owner={
+                    session && selected
+                      ? { actorId: session.actor.id, scopeId: selected.id }
+                      : undefined
+                  }
+                  onAuthenticate={login}
+                  onStart={(input) => (session ? setCreating(input) : login())}
+                />
+              </TabsContent>
+            ))}
+          </Tabs>
+        </Card>
       </section>
 
       <section

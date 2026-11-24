@@ -20,10 +20,10 @@ export function Toolbar({
 
 export function ToolbarGroup({
   className,
-  appearance = "framed",
+  appearance = "surface",
   ...props
 }: ComponentProps<"div"> & {
-  appearance?: "framed" | "plain";
+  appearance?: "surface" | "plain";
 }) {
   return (
     <div

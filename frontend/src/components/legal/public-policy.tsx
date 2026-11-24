@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PageHeader } from "@/components/layout/page-header";
 import { ArrowLeft, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -117,12 +118,10 @@ export function PublicPolicy({
           </a>
         </Button>
       </div>
-      <header className="workspace-page-heading">
-        <h1>{document.title}</h1>
-        <p className="workspace-page-description">
-          协议包 {version} · 本地审阅版
-        </p>
-      </header>
+      <PageHeader
+        title={document.title}
+        description={`协议包 ${version} · 本地审阅版`}
+      />
       <Separator />
       <article className="policy-body">
         <PolicyBody text={document.text} />

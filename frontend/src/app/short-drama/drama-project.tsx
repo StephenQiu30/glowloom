@@ -8,10 +8,12 @@ import { getProject } from "@/api/projects";
 import { getScriptWorkspace } from "@/api/script";
 import { useOptionalSession } from "@/components/auth/session";
 import { useLoginDialog } from "@/components/layout/basic-layout";
+import { PageHeader } from "@/components/layout/page-header";
 import { ContentState } from "@/components/layout/content-state";
 import { canvasHref, requireProject } from "@/components/projects/project";
 import { useSpace } from "@/components/spaces/space-context";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   emptyPromptDraft,
@@ -248,17 +250,14 @@ function ProjectWorkspace({
   const activeTab = tab;
   return (
     <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-5 pb-8">
-      <header className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 sm:flex sm:flex-wrap">
-        <Button variant="ghost" size="sm" className="row-start-2" asChild>
+      <PageHeader title={project.data.name}>
+        <Button variant="ghost" asChild>
           <Link href="/short-drama">短剧首页</Link>
         </Button>
-        <h1 className="col-span-2 row-start-1 min-w-0 text-xl font-semibold wrap-anywhere sm:flex-1">
-          {project.data.name}
-        </h1>
-        <Button variant="outline" className="row-start-2" asChild>
+        <Button variant="outline" asChild>
           <Link href={canvas}>打开短剧画布</Link>
         </Button>
-      </header>
+      </PageHeader>
       <Tabs
         className="min-w-0"
         value={activeTab}
@@ -266,10 +265,7 @@ function ProjectWorkspace({
           if (!locked) selectTab(value as Tab);
         }}
       >
-        <TabsList
-          aria-label="短剧项目阶段"
-          className="project-stage-tabs max-w-full flex-wrap justify-start group-data-horizontal/tabs:h-auto"
-        >
+        <TabsList variant="secondary" aria-label="短剧项目阶段">
           <TabsTrigger value="script" disabled={locked}>
             剧本
           </TabsTrigger>
@@ -393,9 +389,11 @@ function ProjectWorkspace({
             onSuggestionApplied={() => setSuggestion(undefined)}
           />
           {assistantOpen && assistantDraft && (
-            <section className="mt-5 rounded-xl border p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="font-semibold">故事板助手</h2>
+            <Card className="mt-(--layout-gap)">
+              <CardHeader className="flex items-center justify-between">
+                <CardTitle>
+                  <h2>故事板助手</h2>
+                </CardTitle>
                 <Button
                   variant="ghost"
                   disabled={locked}
@@ -403,34 +401,36 @@ function ProjectWorkspace({
                 >
                   收起
                 </Button>
-              </div>
-              <ConversationWorkspace
-                key={`${episodeScope}/${rewriteLine ?? "episode"}`}
-                embedded
-                ownerKey={owner}
-                projectID={projectID}
-                sessionID={assistantSession}
-                enabled={canWrite}
-                initialDraft={assistantDraft}
-                onDraftChange={setAssistantDraft}
-                onChooseProject={noProjectChange}
-                onAccepted={setAssistantSession}
-                onLock={setAssistantLocked}
-                useReplyLabel="选用这条片段建议"
-                onUseReply={
-                  canWrite && episodeScope && rewriteLine
-                    ? (text) => {
-                        setSuggestion({
-                          episodeID: episodeScope,
-                          lineID: rewriteLine,
-                          text,
-                        });
-                        setAssistantOpen(false);
-                      }
-                    : undefined
-                }
-              />
-            </section>
+              </CardHeader>
+              <CardContent>
+                <ConversationWorkspace
+                  key={`${episodeScope}/${rewriteLine ?? "episode"}`}
+                  embedded
+                  ownerKey={owner}
+                  projectID={projectID}
+                  sessionID={assistantSession}
+                  enabled={canWrite}
+                  initialDraft={assistantDraft}
+                  onDraftChange={setAssistantDraft}
+                  onChooseProject={noProjectChange}
+                  onAccepted={setAssistantSession}
+                  onLock={setAssistantLocked}
+                  useReplyLabel="选用这条片段建议"
+                  onUseReply={
+                    canWrite && episodeScope && rewriteLine
+                      ? (text) => {
+                          setSuggestion({
+                            episodeID: episodeScope,
+                            lineID: rewriteLine,
+                            text,
+                          });
+                          setAssistantOpen(false);
+                        }
+                      : undefined
+                  }
+                />
+              </CardContent>
+            </Card>
           )}
         </TabsContent>
       </Tabs>

@@ -14,6 +14,7 @@ import {
   saveScriptEpisodeStructure,
 } from "@/api/script";
 import { isProjectID } from "@/components/projects/project";
+import { Item } from "@/components/ui/item";
 import { Button } from "@/components/ui/button";
 import {
   Collapsible,
@@ -148,7 +149,7 @@ export function EpisodePanel(props: Scope) {
         </Alert>
       )}
       {candidate?.boundaries?.length ? (
-        <div className="flex flex-col gap-3 rounded-lg border p-4">
+        <Item variant="muted" className="flex-col items-stretch">
           <h3 className="font-medium">
             候选分集 · {candidate.boundaries.length} 集
           </h3>
@@ -205,7 +206,7 @@ export function EpisodePanel(props: Scope) {
                 )}
             </div>
           )}
-        </div>
+        </Item>
       ) : null}
       {write.error && (
         <Alert role="alert">
@@ -392,181 +393,188 @@ function EpisodeEditor({
   }
 
   return (
-    <article className="flex min-w-0 flex-col gap-4 rounded-lg border p-4">
-      <header className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h3 className="font-semibold">
-            第 {episode.seq_no} 集 · {episode.title}
-          </h3>
-          {persisted && !edited && (
-            <p className="text-xs text-muted-foreground">
-              {isProjectID(current.confirmed_structure_id) &&
-              current.confirmed_structure_id === current.current_structure_id
-                ? "分镜已确认"
-                : "分镜草稿已保存"}
-            </p>
-          )}
-        </div>
-        <Button
-          variant="outline"
-          disabled={!writable || !source.data?.text || write.locked}
-          onClick={() =>
-            onAssistant(
-              id,
-              episode.title ?? "本集",
-              Array.from(source.data?.text ?? "")
-                .slice(0, 1200)
-                .join(""),
-            )
-          }
-        >
-          故事板助手
-        </Button>
-      </header>
-      {source.error ? (
-        <Alert role="alert">
-          <AlertDescription>无法读取分集正文。</AlertDescription>
-        </Alert>
-      ) : (
-        <Collapsible>
-          <CollapsibleTrigger asChild>
-            <Button variant="outline" size="sm">
-              剧本正文{stop < end ? "（节选）" : ""}
-            </Button>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <pre className="mt-2 max-h-72 overflow-auto font-sans text-sm whitespace-pre-wrap">
-              {source.data?.text ?? "正在读取…"}
-            </pre>
-          </CollapsibleContent>
-        </Collapsible>
-      )}
-      {saved.error && (
-        <Alert role="alert">
-          <AlertDescription>无法读取分镜草稿。</AlertDescription>
-        </Alert>
-      )}
-      {saved.isLoading && <p role="status">正在读取分镜草稿…</p>}
-      {document?.scenes?.map((scene, sceneIndex) => (
-        <section key={scene.scene_key} className="flex flex-col gap-2">
-          <h4 className="text-sm font-medium">
-            {scene.heading || `场景 ${sceneIndex + 1}`}
-          </h4>
-          {scene.items?.map((item, itemIndex) => (
-            <Field key={item.line_key}>
-              <FieldLabel htmlFor={item.line_key}>
-                片段 {itemIndex + 1}
-                {item.speaker_text ? ` · ${item.speaker_text}` : ""}
-              </FieldLabel>
-              <Textarea
-                id={item.line_key}
-                value={item.content ?? ""}
-                disabled={!writable || write.locked}
-                onChange={(event) =>
-                  updateItem(sceneIndex, itemIndex, event.target.value)
-                }
-              />
-              {writable && item.line_key && item.content?.trim() && (
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={write.locked}
-                    onClick={() =>
-                      onRewrite(
-                        id,
-                        item.line_key!,
-                        episode.title ?? "本集",
-                        item.content!,
-                      )
-                    }
-                  >
-                    请助手改写片段
-                  </Button>
-                  {!edited && (
+    <Item
+      variant="muted"
+      asChild
+      className="min-w-0 flex-col items-stretch gap-4"
+    >
+      <article>
+        <header className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="font-semibold">
+              第 {episode.seq_no} 集 · {episode.title}
+            </h3>
+            {persisted && !edited && (
+              <p className="text-xs text-muted-foreground">
+                {isProjectID(current.confirmed_structure_id) &&
+                current.confirmed_structure_id === current.current_structure_id
+                  ? "分镜已确认"
+                  : "分镜草稿已保存"}
+              </p>
+            )}
+          </div>
+          <Button
+            variant="outline"
+            disabled={!writable || !source.data?.text || write.locked}
+            onClick={() =>
+              onAssistant(
+                id,
+                episode.title ?? "本集",
+                Array.from(source.data?.text ?? "")
+                  .slice(0, 1200)
+                  .join(""),
+              )
+            }
+          >
+            故事板助手
+          </Button>
+        </header>
+        {source.error ? (
+          <Alert role="alert">
+            <AlertDescription>无法读取分集正文。</AlertDescription>
+          </Alert>
+        ) : (
+          <Collapsible>
+            <CollapsibleTrigger asChild>
+              <Button variant="outline" size="sm">
+                剧本正文{stop < end ? "（节选）" : ""}
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <pre className="mt-2 max-h-72 overflow-auto font-sans text-sm whitespace-pre-wrap">
+                {source.data?.text ?? "正在读取…"}
+              </pre>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+        {saved.error && (
+          <Alert role="alert">
+            <AlertDescription>无法读取分镜草稿。</AlertDescription>
+          </Alert>
+        )}
+        {saved.isLoading && <p role="status">正在读取分镜草稿…</p>}
+        {document?.scenes?.map((scene, sceneIndex) => (
+          <section key={scene.scene_key} className="flex flex-col gap-2">
+            <h4 className="text-sm font-medium">
+              {scene.heading || `场景 ${sceneIndex + 1}`}
+            </h4>
+            {scene.items?.map((item, itemIndex) => (
+              <Field key={item.line_key}>
+                <FieldLabel htmlFor={item.line_key}>
+                  片段 {itemIndex + 1}
+                  {item.speaker_text ? ` · ${item.speaker_text}` : ""}
+                </FieldLabel>
+                <Textarea
+                  id={item.line_key}
+                  value={item.content ?? ""}
+                  disabled={!writable || write.locked}
+                  onChange={(event) =>
+                    updateItem(sceneIndex, itemIndex, event.target.value)
+                  }
+                />
+                {writable && item.line_key && item.content?.trim() && (
+                  <div className="flex flex-wrap gap-2">
                     <Button
                       variant="outline"
                       size="sm"
                       disabled={write.locked}
-                      onClick={() => onShot(item.content!)}
+                      onClick={() =>
+                        onRewrite(
+                          id,
+                          item.line_key!,
+                          episode.title ?? "本集",
+                          item.content!,
+                        )
+                      }
                     >
-                      生成片段
+                      请助手改写片段
                     </Button>
-                  )}
-                  {suggestion?.episodeID === id &&
-                    suggestion.lineID === item.line_key && (
+                    {!edited && (
                       <Button
-                        variant="secondary"
+                        variant="outline"
                         size="sm"
                         disabled={write.locked}
-                        onClick={() => {
-                          updateItem(sceneIndex, itemIndex, suggestion.text);
-                          onSuggestionApplied();
-                        }}
+                        onClick={() => onShot(item.content!)}
                       >
-                        应用助手建议
+                        生成片段
                       </Button>
                     )}
-                </div>
-              )}
-            </Field>
-          ))}
-        </section>
-      ))}
-      {writable && !saved.error && !saved.isLoading && (
-        <div className="flex flex-wrap gap-2">
-          {!document && (
-            <Button
-              variant="outline"
-              disabled={write.locked || !source.data?.text || stop !== end}
-              onClick={draftFromScript}
-            >
-              从剧本正文拆出片段草稿
-            </Button>
-          )}
-          {edited && (
-            <Button
-              disabled={
-                write.locked ||
-                !edited.scenes?.every((scene) =>
-                  scene.items?.every((item) => !!item.content?.trim()),
-                )
-              }
-              onClick={() => save(false)}
-            >
-              保存分镜草稿
-            </Button>
-          )}
-          {persisted &&
-            !edited &&
-            current.current_structure_id !== current.confirmed_structure_id && (
+                    {suggestion?.episodeID === id &&
+                      suggestion.lineID === item.line_key && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={write.locked}
+                          onClick={() => {
+                            updateItem(sceneIndex, itemIndex, suggestion.text);
+                            onSuggestionApplied();
+                          }}
+                        >
+                          应用助手建议
+                        </Button>
+                      )}
+                  </div>
+                )}
+              </Field>
+            ))}
+          </section>
+        ))}
+        {writable && !saved.error && !saved.isLoading && (
+          <div className="flex flex-wrap gap-2">
+            {!document && (
+              <Button
+                variant="outline"
+                disabled={write.locked || !source.data?.text || stop !== end}
+                onClick={draftFromScript}
+              >
+                从剧本正文拆出片段草稿
+              </Button>
+            )}
+            {edited && (
               <Button
                 disabled={
                   write.locked ||
-                  head.adopted_version_id !== episode.script_version_id
+                  !edited.scenes?.every((scene) =>
+                    scene.items?.every((item) => !!item.content?.trim()),
+                  )
                 }
-                onClick={() => save(true)}
+                onClick={() => save(false)}
               >
-                确认分镜
+                保存分镜草稿
               </Button>
             )}
-        </div>
-      )}
-      {write.error && (
-        <Alert role="alert">
-          <AlertDescription>
-            {write.error}{" "}
-            {write.unknown && (
-              <Button
-                disabled={write.pending}
-                onClick={() => void write.submit()}
-              >
-                重试原操作
-              </Button>
-            )}
-          </AlertDescription>
-        </Alert>
-      )}
-    </article>
+            {persisted &&
+              !edited &&
+              current.current_structure_id !==
+                current.confirmed_structure_id && (
+                <Button
+                  disabled={
+                    write.locked ||
+                    head.adopted_version_id !== episode.script_version_id
+                  }
+                  onClick={() => save(true)}
+                >
+                  确认分镜
+                </Button>
+              )}
+          </div>
+        )}
+        {write.error && (
+          <Alert role="alert">
+            <AlertDescription>
+              {write.error}{" "}
+              {write.unknown && (
+                <Button
+                  disabled={write.pending}
+                  onClick={() => void write.submit()}
+                >
+                  重试原操作
+                </Button>
+              )}
+            </AlertDescription>
+          </Alert>
+        )}
+      </article>
+    </Item>
   );
 }

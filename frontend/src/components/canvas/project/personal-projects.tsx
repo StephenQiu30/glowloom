@@ -3,7 +3,7 @@ import { pageBusinessMemory } from "@/lib/page-business-memory";
 
 import { FilterToolbar } from "@/components/canvas/runtime/components/layout/workspace/filter-toolbar";
 import { PageTabsList as TabsList } from "@/components/canvas/runtime/components/layout/workspace/page-tabs-list";
-import { PageHeader } from "@/components/canvas/runtime/components/layout/workspace/page-header";
+import { PageHeader } from "@/components/layout/page-header";
 import { useDeferredValue, useEffect, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import useLiveQuery from "@/components/canvas/runtime/lib/use-live-query";

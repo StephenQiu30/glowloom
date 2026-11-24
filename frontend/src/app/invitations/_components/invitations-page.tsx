@@ -2,6 +2,8 @@
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { PageSizeSelect } from "@/components/ui/page-size-select";
 import { readErrorMessage } from "@/lib/read-error";
+import { PageHeader } from "@/components/layout/page-header";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ContentState } from "@/components/layout/content-state";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useEffect, useRef, useState } from "react";
@@ -93,8 +95,8 @@ export function InvitationsPage() {
     return () => c.abort();
   }, [session?.actor.id, retry, pageSize]);
   return (
-    <div className="mx-auto grid w-full max-w-3xl gap-6 p-4">
-      <h1 className="text-2xl">邀请与授权</h1>
+    <div className="grid w-full max-w-3xl gap-(--layout-gap)">
+      <PageHeader title="邀请与授权" />
       {notice ? <FeedbackToast message={notice} tone="info" /> : null}
       {error ? (
         <FeedbackToast
@@ -133,72 +135,78 @@ export function InvitationsPage() {
           }
         />
       ) : preview ? (
-        <section className="grid gap-3 rounded-xl border p-4">
-          <h2>收到邀请</h2>
-          <p>
-            {preview.kind === "team"
-              ? `团队邀请：${preview.team_id}，角色 ${preview.team_role}`
-              : "账号邀请"}
-          </p>
-          <p>
-            有效期至 {preview.expires_at}
-            。仅邀请所指定且已验证的邮箱账号能够接受。
-          </p>
-          {session ? (
-            <div className="flex gap-2">
-              {[true, false].map((accept) => (
-                <Button
-                  key={String(accept)}
-                  variant={accept ? "default" : "outline"}
-                  onClick={() =>
-                    setAction({
-                      title: accept ? "接受邀请" : "拒绝邀请",
-                      effect: accept
-                        ? "接受团队邀请将加入该团队；平台角色保持原状态。"
-                        : "拒绝后该邀请将不可再使用。",
-                      password: false,
-                      run: async (_r, signal) => {
-                        await (accept ? acceptInvitation : declineInvitation)(
-                          { token: pendingInvitation() },
-                          { signal },
-                        );
-                        if (!signal.aborted) {
-                          clearInvitation();
-                          setToken("");
-                          setPreview(null);
-                          setNotice(accept ? "邀请已接受。" : "邀请已拒绝。");
-                          await space.refresh();
-                        }
-                      },
-                    })
-                  }
-                >
-                  {accept ? "接受邀请" : "拒绝邀请"}
-                </Button>
-              ))}
-            </div>
-          ) : (
-            <div className="flex gap-4">
-              <Link href="/login" className="underline">
-                使用受邀邮箱登录
-              </Link>
-              <Link href="/register" className="underline">
-                验证邮箱并注册
-              </Link>
-            </div>
-          )}
-          <Button
-            variant="outline"
-            onClick={() => {
-              clearInvitation();
-              setToken("");
-              setPreview(null);
-              setNotice("已清除当前邀请链接，可稍后重新打开邮件处理。");
-            }}
-          >
-            暂不处理并清除邀请
-          </Button>
-        </section>
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              <h2>收到邀请</h2>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            <p>
+              {preview.kind === "team"
+                ? `团队邀请：${preview.team_id}，角色 ${preview.team_role}`
+                : "账号邀请"}
+            </p>
+            <p>
+              有效期至 {preview.expires_at}
+              。仅邀请所指定且已验证的邮箱账号能够接受。
+            </p>
+            {session ? (
+              <div className="flex gap-2">
+                {[true, false].map((accept) => (
+                  <Button
+                    key={String(accept)}
+                    variant={accept ? "default" : "outline"}
+                    onClick={() =>
+                      setAction({
+                        title: accept ? "接受邀请" : "拒绝邀请",
+                        effect: accept
+                          ? "接受团队邀请将加入该团队；平台角色保持原状态。"
+                          : "拒绝后该邀请将不可再使用。",
+                        password: false,
+                        run: async (_r, signal) => {
+                          await (accept ? acceptInvitation : declineInvitation)(
+                            { token: pendingInvitation() },
+                            { signal },
+                          );
+                          if (!signal.aborted) {
+                            clearInvitation();
+                            setToken("");
+                            setPreview(null);
+                            setNotice(accept ? "邀请已接受。" : "邀请已拒绝。");
+                            await space.refresh();
+                          }
+                        },
+                      })
+                    }
+                  >
+                    {accept ? "接受邀请" : "拒绝邀请"}
+                  </Button>
+                ))}
+              </div>
+            ) : (
+              <div className="flex gap-4">
+                <Link href="/login" className="underline">
+                  使用受邀邮箱登录
+                </Link>
+                <Link href="/register" className="underline">
+                  验证邮箱并注册
+                </Link>
+              </div>
+            )}
+            <Button
+              variant="outline"
+              onClick={() => {
+                clearInvitation();
+                setToken("");
+                setPreview(null);
+                setNotice("已清除当前邀请链接，可稍后重新打开邮件处理。");
+              }}
+            >
+              暂不处理并清除邀请
+            </Button>
+          </CardContent>
+        </Card>
       ) : !token ? (
         <ContentState
           className="min-h-40"
@@ -239,36 +247,42 @@ export function InvitationsPage() {
           {!proposalsPending &&
             !proposalsError &&
             proposals?.items?.map((p) => (
-              <article key={p.id} className="grid gap-2 rounded-xl border p-4">
-                <p>
-                  {p.kind} · {p.status} · {p.reason}
-                </p>
-                <p>有效期至 {p.expires_at}</p>
-                {p.status === "pending" ? (
-                  <div className="flex gap-2">
-                    {[true, false].map((accept) => (
-                      <Button
-                        key={String(accept)}
-                        onClick={() =>
-                          setAction({
-                            title: accept ? "接受管理授权" : "拒绝管理授权",
-                            effect:
-                              "接受后获得提议对应的管理职责。团队权限与平台权限分别生效。",
-                            run: (_r, signal) =>
-                              (accept ? acceptProposal : declineProposal)(
-                                { id: p.id! },
-                                { expected_revision: p.revision },
-                                { signal },
-                              ),
-                          })
-                        }
-                      >
-                        {accept ? "接受授权" : "拒绝授权"}
-                      </Button>
-                    ))}
-                  </div>
-                ) : null}
-              </article>
+              <Card key={p.id} size="sm">
+                <CardHeader>
+                  <CardTitle>
+                    {p.kind} · {p.status} · {p.reason}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="grid gap-2">
+                  <p className="text-muted-foreground">
+                    有效期至 {p.expires_at}
+                  </p>
+                  {p.status === "pending" ? (
+                    <div className="flex gap-2">
+                      {[true, false].map((accept) => (
+                        <Button
+                          key={String(accept)}
+                          onClick={() =>
+                            setAction({
+                              title: accept ? "接受管理授权" : "拒绝管理授权",
+                              effect:
+                                "接受后获得提议对应的管理职责。团队权限与平台权限分别生效。",
+                              run: (_r, signal) =>
+                                (accept ? acceptProposal : declineProposal)(
+                                  { id: p.id! },
+                                  { expected_revision: p.revision },
+                                  { signal },
+                                ),
+                            })
+                          }
+                        >
+                          {accept ? "接受授权" : "拒绝授权"}
+                        </Button>
+                      ))}
+                    </div>
+                  ) : null}
+                </CardContent>
+              </Card>
             ))}
           <PageSizeSelect
             label="待处理授权每页数量"

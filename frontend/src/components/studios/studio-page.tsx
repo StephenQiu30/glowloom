@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { ReferenceCover } from "@/components/inspiration/reference-cover";
 import Link from "next/link";
 import { Plus, X } from "lucide-react";
-import { PageHeader } from "@/components/canvas/runtime/components/layout/workspace/page-header";
+import { PageHeader } from "@/components/layout/page-header";
 import { PageLayout } from "@/components/layout/page-layout";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";

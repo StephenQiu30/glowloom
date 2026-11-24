@@ -12,8 +12,6 @@ const toggleVariants = cva(
     variants: {
       variant: {
         default: "bg-transparent",
-        workspace:
-          "bg-transparent text-workspace-muted-foreground hover:bg-transparent hover:text-workspace-foreground aria-pressed:bg-transparent data-[state=on]:bg-transparent data-[state=on]:text-workspace-foreground",
         text: "bg-transparent text-muted-foreground aria-pressed:bg-transparent data-[state=on]:bg-transparent data-[state=on]:text-foreground",
         pill: "data-[variant=pill]:rounded-full bg-transparent text-muted-foreground hover:bg-accent aria-pressed:bg-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:hover:bg-primary data-[state=on]:hover:text-primary-foreground",
         outline: "border border-input bg-transparent hover:bg-muted",

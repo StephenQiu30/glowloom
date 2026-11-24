@@ -1,5 +1,5 @@
 "use client";
-import { PageHeader } from "@/components/canvas/runtime/components/layout/workspace/page-header";
+import { PageHeader } from "@/components/layout/page-header";
 
 import Link from "next/link";
 import { FileQuestion } from "lucide-react";

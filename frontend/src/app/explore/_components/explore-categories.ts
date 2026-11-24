@@ -3,18 +3,28 @@ type ExploreCategory = {
   label: string;
   kind: "work" | "skill" | "activity";
   scenes: { id: string; label: string }[];
+  searchType?: "shortFilm" | "skill";
+  sceneExamples?: boolean;
 };
 
 function scenes(namespace: string, values: [string, string][]) {
   return values.map(([id, label]) => ({ id: namespace + "." + id, label }));
 }
 
+export const featuredCategory: ExploreCategory = {
+  id: "featured",
+  label: "精选",
+  kind: "work",
+  scenes: [],
+};
+
 export const exploreCategories: ExploreCategory[] = [
-  { id: "featured", label: "精选", kind: "work", scenes: [] },
+  featuredCategory,
   {
     id: "work.drama",
     label: "短剧漫剧",
     kind: "work",
+    searchType: "shortFilm",
     scenes: scenes("drama", [
       ["short", "短剧作品"],
       ["comic", "漫剧作品"],
@@ -24,6 +34,7 @@ export const exploreCategories: ExploreCategory[] = [
     id: "work.film",
     label: "影视作品",
     kind: "work",
+    searchType: "shortFilm",
     scenes: scenes("film", [
       ["short", "短片作品"],
       ["music", "音乐MV"],
@@ -34,6 +45,7 @@ export const exploreCategories: ExploreCategory[] = [
     id: "work.animation",
     label: "动画动漫",
     kind: "work",
+    searchType: "shortFilm",
     scenes: scenes("animation", [
       ["film", "动画影片"],
       ["visual", "视觉设定"],
@@ -43,6 +55,7 @@ export const exploreCategories: ExploreCategory[] = [
     id: "work.advertising",
     label: "广告营销",
     kind: "work",
+    sceneExamples: true,
     scenes: scenes("advertising", [
       ["brand", "品牌广告"],
       ["social", "社媒营销"],
@@ -79,6 +92,7 @@ export const exploreCategories: ExploreCategory[] = [
     id: "skill",
     label: "技能",
     kind: "skill",
+    searchType: "skill",
     scenes: scenes("skill", [
       ["recommended", "热门推荐"],
       ["film", "影视短片"],

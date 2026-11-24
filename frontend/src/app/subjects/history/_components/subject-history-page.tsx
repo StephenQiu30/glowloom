@@ -8,7 +8,7 @@ import { useSpace } from "@/components/spaces/space-context";
 import { ContentState } from "@/components/layout/content-state";
 import { HeaderNavigation } from "@/components/layout/header-navigation";
 import { PageLayout } from "@/components/layout/page-layout";
-import { PageHeading } from "@/components/layout/page-heading";
+import { PageHeader } from "@/components/layout/page-header";
 import { ProjectPicker } from "@/components/projects/project-picker";
 import type { Project } from "@/components/projects/project";
 import { kinds } from "@/components/subjects/contracts";
@@ -64,14 +64,11 @@ export function SubjectHistoryPage() {
   const space = useSpace();
   return (
     <PageLayout screen="subjects">
-      <PageHeading
-        title="项目历史主体"
-        actions={
-          <Button asChild variant="outline">
-            <Link href="/subjects">返回主体</Link>
-          </Button>
-        }
-      />
+      <PageHeader title="项目历史主体" className="mb-(--layout-gap)">
+        <Button asChild variant="outline">
+          <Link href="/subjects">返回主体</Link>
+        </Button>
+      </PageHeader>
       {session && space.selected ? (
         <ProjectHistory key={`${session.actor.id}/${space.selected.id}`} />
       ) : (

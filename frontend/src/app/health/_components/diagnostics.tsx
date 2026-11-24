@@ -432,7 +432,7 @@ function DiagnosticsContent() {
       <section className="insights">
         <h1 className="sr-only">运行诊断</h1>
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList variant="workspace" aria-label="运行日志视图">
+          <TabsList variant="secondary" aria-label="运行日志视图">
             <TabsTrigger value="overview">概览</TabsTrigger>
             <TabsTrigger value="logs">日志</TabsTrigger>
           </TabsList>

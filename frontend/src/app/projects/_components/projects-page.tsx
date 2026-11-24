@@ -1,6 +1,6 @@
 "use client";
 import { Suspense, useState } from "react";
-import { PageHeading } from "@/components/layout/page-heading";
+import { PageHeader } from "@/components/layout/page-header";
 import { NewCanvasButton } from "@/components/projects/new-canvas-button";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageLayout } from "@/components/layout/page-layout";
@@ -55,10 +55,9 @@ function ProjectsContent({
         label: "搜索画布",
       }}
     >
-      <PageHeading
-        title="我的画布"
-        actions={<NewCanvasButton>新建画布</NewCanvasButton>}
-      />
+      <PageHeader title="我的画布" className="mb-(--layout-gap)">
+        <NewCanvasButton>新建画布</NewCanvasButton>
+      </PageHeader>
       <ProjectList
         key={`${query}:${filter}:${sort}`}
         query={query}

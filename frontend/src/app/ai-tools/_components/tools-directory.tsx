@@ -16,7 +16,7 @@ import {
 import { useOptionalSession } from "@/components/auth/session";
 import { useLoginDialog } from "@/components/layout/basic-layout";
 import { HeaderNavigation } from "@/components/layout/header-navigation";
-import { PageHeader } from "@/components/canvas/runtime/components/layout/workspace/page-header";
+import { PageHeader } from "@/components/layout/page-header";
 import { PageLayout } from "@/components/layout/page-layout";
 import { AssetCreateProject } from "@/components/projects/asset-create-project";
 import { useSpace } from "@/components/spaces/space-context";
@@ -130,11 +130,7 @@ export function ToolsDirectory() {
                       const titleID = `ai-tool-${tool.id}`;
                       return (
                         <li key={tool.id} className="min-w-0">
-                          <Card
-                            variant="flat"
-                            size="sm"
-                            className="tool-directory-card"
-                          >
+                          <Card size="sm" className="tool-directory-card">
                             <CardContent className="tool-directory-icon">
                               <Icon
                                 aria-hidden="true"

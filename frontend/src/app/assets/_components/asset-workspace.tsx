@@ -8,11 +8,10 @@ import { ChevronDown } from "lucide-react";
 import { useOptionalSession } from "@/components/auth/session";
 import { useSpace } from "@/components/spaces/space-context";
 import { useLoginDialog } from "@/components/layout/basic-layout";
-import { PageHeader } from "@/components/canvas/runtime/components/layout/workspace/page-header";
+import { PageHeader } from "@/components/layout/page-header";
 import { PageLayout } from "@/components/layout/page-layout";
 import { HeaderNavigation } from "@/components/layout/header-navigation";
 import { ContentState } from "@/components/layout/content-state";
-import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -259,9 +258,8 @@ function WorkspaceScope({
               view === "motion" ||
               view === "marketing") && (
               <ToggleGroup
-                variant="workspace"
                 size="toolbar"
-                spacing={0}
+                spacing={1}
                 type="single"
                 value={kind}
                 onValueChange={(value) => {
@@ -294,9 +292,8 @@ function WorkspaceScope({
             )}
             {view === "canvas" && (
               <ToggleGroup
-                variant="workspace"
                 size="toolbar"
-                spacing={0}
+                spacing={1}
                 type="single"
                 value={collection}
                 onValueChange={(value) => {
@@ -311,12 +308,6 @@ function WorkspaceScope({
                   历史画布
                 </ToggleGroupItem>
               </ToggleGroup>
-            )}
-            {view !== "short_drama" && (
-              <Separator
-                orientation="vertical"
-                className="hidden h-4 sm:block data-vertical:self-center"
-              />
             )}
             <div className="flex flex-wrap items-center">
               <AssetFilterMenu

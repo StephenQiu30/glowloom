@@ -315,7 +315,6 @@ export function CanvasStoryboardWorkspace({
                 className="relative min-w-0 gap-3"
               >
                 <TabsList
-                  variant="navigation"
                   aria-label="故事板内容"
                   className="max-lg:h-11 lg:absolute lg:top-0 lg:left-0"
                 >

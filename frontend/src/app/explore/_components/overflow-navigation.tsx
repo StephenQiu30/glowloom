@@ -29,7 +29,7 @@ export function OverflowNavigation({
     const measure = () => {
       // Compare with the full row so arrows cannot sustain false overflow.
       const next = {
-        overflow: inner.scrollWidth > outer.clientWidth + 1,
+        overflow: inner.scrollWidth > outer.clientWidth,
         start: view.scrollLeft <= 1,
         end: view.scrollLeft + view.clientWidth >= view.scrollWidth - 1,
       };
@@ -43,7 +43,7 @@ export function OverflowNavigation({
     };
     const observer = new ResizeObserver(() => {
       const selected = inner.querySelector<HTMLElement>(
-        '[aria-selected="true"], [aria-checked="true"]',
+        '[aria-selected="true"]',
       );
       if (selected) keepVisible(view, selected);
       measure();
@@ -63,7 +63,7 @@ export function OverflowNavigation({
     const view = viewport.current;
     if (!view) return;
     view.scrollBy({
-      left: direction * view.clientWidth * 0.8,
+      left: direction * view.clientWidth,
       behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
         ? "instant"
         : "smooth",

@@ -140,7 +140,7 @@ export function ToolAssetPicker({
           setKind(next);
         }}
       >
-        <TabsList variant="pill" aria-label="类型">
+        <TabsList aria-label="类型">
           {media.map((value) => (
             <TabsTrigger key={value} value={value} disabled={confirming}>
               {titles[value]}

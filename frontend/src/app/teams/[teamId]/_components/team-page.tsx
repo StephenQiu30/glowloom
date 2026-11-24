@@ -1,4 +1,6 @@
 "use client";
+import { PageHeader } from "@/components/layout/page-header";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ContentState } from "@/components/layout/content-state";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -47,8 +49,8 @@ export function TeamPage({ id }: { id: string }) {
   }
   const manage = team?.capabilities.includes("team:manage");
   return (
-    <div className="mx-auto grid w-full max-w-5xl gap-6 p-4">
-      <h1 className="text-2xl">团队管理</h1>
+    <div className="grid w-full max-w-5xl gap-(--layout-gap)">
+      <PageHeader title="团队管理" />
       {error ? (
         <ContentState
           state="error"
@@ -70,92 +72,120 @@ export function TeamPage({ id }: { id: string }) {
       ) : null}
       {team ? (
         <>
-          <section className="grid gap-4 rounded-xl border p-4">
-            <h2>{team.name}</h2>
-            <p>
-              {team.status} · {team.member_count} 位成员
-              {team.governance_blocked ? " · 管理操作已冻结" : ""}
-            </p>
-            {manage ? (
-              <>
-                <AvatarEditor
-                  assetID={team.avatar_asset_id}
-                  onConflict={() => setReload((n) => n + 1)}
-                  load={(signal) => teamAvatar({ id }, { signal })}
-                  bind={async (asset, signal) => {
-                    const body = { expected_revision: team.revision };
-                    await renameTeam({ id }, body, {
-                      signal,
-                      data: { ...body, avatar_asset_id: asset },
-                    });
-                    const t = await getTeam({ id }, { signal });
-                    if (!signal.aborted) setTeam(t);
-                  }}
-                />
-                <form
-                  className="flex flex-wrap gap-2"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    setAction({
-                      title: "保存团队资料",
-                      effect: "更新团队名称。成员和创作归属保持原状态。",
-                      password: false,
-                      run: (_r, signal) =>
-                        renameTeam(
-                          { id },
-                          {
-                            expected_revision: team.revision,
-                            name: name.trim(),
-                          },
-                          { signal },
-                        ),
-                    });
-                  }}
-                >
-                  <Input
-                    aria-label="团队名称"
-                    required
-                    minLength={2}
-                    maxLength={50}
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                <h2>{team.name}</h2>
+              </CardTitle>
+              <p className="text-muted-foreground">
+                {team.status} · {team.member_count} 位成员
+                {team.governance_blocked ? " · 管理操作已冻结" : ""}
+              </p>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              {manage ? (
+                <>
+                  <AvatarEditor
+                    assetID={team.avatar_asset_id}
+                    onConflict={() => setReload((n) => n + 1)}
+                    load={(signal) => teamAvatar({ id }, { signal })}
+                    bind={async (asset, signal) => {
+                      const body = { expected_revision: team.revision };
+                      await renameTeam({ id }, body, {
+                        signal,
+                        data: { ...body, avatar_asset_id: asset },
+                      });
+                      const t = await getTeam({ id }, { signal });
+                      if (!signal.aborted) setTeam(t);
+                    }}
                   />
-                  <Button>保存团队名称</Button>
-                </form>
+                  <form
+                    className="flex flex-wrap gap-2"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      setAction({
+                        title: "保存团队资料",
+                        effect: "更新团队名称。成员和创作归属保持原状态。",
+                        password: false,
+                        run: (_r, signal) =>
+                          renameTeam(
+                            { id },
+                            {
+                              expected_revision: team.revision,
+                              name: name.trim(),
+                            },
+                            { signal },
+                          ),
+                      });
+                    }}
+                  >
+                    <Input
+                      aria-label="团队名称"
+                      required
+                      minLength={2}
+                      maxLength={50}
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                    />
+                    <Button>保存团队名称</Button>
+                  </form>
+                  <Button
+                    variant="outline"
+                    onClick={() =>
+                      setAction({
+                        title: team.invitation_enabled
+                          ? "关闭团队邀请"
+                          : "开放团队邀请",
+                        effect: team.invitation_enabled
+                          ? "关闭后未接受的邀请失效。"
+                          : "允许管理员继续邀请成员。",
+                        password: false,
+                        run: (_r, signal) =>
+                          updateTeamSettings(
+                            { id },
+                            {
+                              expected_revision: team.revision,
+                              invitation_enabled: !team.invitation_enabled,
+                            },
+                            { signal },
+                          ),
+                      })
+                    }
+                  >
+                    {team.invitation_enabled ? "关闭团队邀请" : "开放团队邀请"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() =>
+                      setAction({
+                        title: "归档团队",
+                        effect:
+                          "归档后团队内容只读，未完成的创作可能阻止归档。",
+                        reason: true,
+                        run: (reason, signal) =>
+                          archiveTeam(
+                            { id },
+                            { expected_revision: team.revision, reason },
+                            { signal },
+                          ),
+                      })
+                    }
+                  >
+                    归档团队
+                  </Button>
+                </>
+              ) : null}
+              {team.role === "team_admin" &&
+              team.status === "archived" &&
+              !team.governance_blocked ? (
                 <Button
-                  variant="outline"
                   onClick={() =>
                     setAction({
-                      title: team.invitation_enabled
-                        ? "关闭团队邀请"
-                        : "开放团队邀请",
-                      effect: team.invitation_enabled
-                        ? "关闭后未接受的邀请失效。"
-                        : "允许管理员继续邀请成员。",
-                      password: false,
-                      run: (_r, signal) =>
-                        updateTeamSettings(
-                          { id },
-                          {
-                            expected_revision: team.revision,
-                            invitation_enabled: !team.invitation_enabled,
-                          },
-                          { signal },
-                        ),
-                    })
-                  }
-                >
-                  {team.invitation_enabled ? "关闭团队邀请" : "开放团队邀请"}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    setAction({
-                      title: "归档团队",
-                      effect: "归档后团队内容只读，未完成的创作可能阻止归档。",
+                      title: "恢复归档团队",
+                      effect: "恢复后重新允许团队创作；平台冻结独立生效。",
                       reason: true,
                       run: (reason, signal) =>
-                        archiveTeam(
+                        restoreTeam(
                           { id },
                           { expected_revision: team.revision, reason },
                           { signal },
@@ -163,55 +193,34 @@ export function TeamPage({ id }: { id: string }) {
                     })
                   }
                 >
-                  归档团队
+                  恢复团队
                 </Button>
-              </>
-            ) : null}
-            {team.role === "team_admin" &&
-            team.status === "archived" &&
-            !team.governance_blocked ? (
+              ) : null}
               <Button
+                variant="destructive"
                 onClick={() =>
                   setAction({
-                    title: "恢复归档团队",
-                    effect: "恢复后重新允许团队创作；平台冻结独立生效。",
-                    reason: true,
-                    run: (reason, signal) =>
-                      restoreTeam(
+                    title: "退出团队",
+                    effect:
+                      "退出后失去团队内容访问权限。个人账号保留；最后一位管理员须先完成管理转交。",
+                    run: async (_r, signal) => {
+                      await leaveTeam(
                         { id },
-                        { expected_revision: team.revision, reason },
+                        { expected_revision: team.membership_revision },
                         { signal },
-                      ),
+                      );
+                      if (!signal.aborted) {
+                        await space.refresh();
+                        router.replace("/teams");
+                      }
+                    },
                   })
                 }
               >
-                恢复团队
+                退出团队
               </Button>
-            ) : null}
-            <Button
-              variant="destructive"
-              onClick={() =>
-                setAction({
-                  title: "退出团队",
-                  effect:
-                    "退出后失去团队内容访问权限。个人账号保留；最后一位管理员须先完成管理转交。",
-                  run: async (_r, signal) => {
-                    await leaveTeam(
-                      { id },
-                      { expected_revision: team.membership_revision },
-                      { signal },
-                    );
-                    if (!signal.aborted) {
-                      await space.refresh();
-                      router.replace("/teams");
-                    }
-                  },
-                })
-              }
-            >
-              退出团队
-            </Button>
-          </section>
+            </CardContent>
+          </Card>
           <MemberDirectory team={team} reload={reload} onAction={setAction} />
           {manage ? (
             <GovernanceLists teamID={id} reload={reload} onAction={setAction} />

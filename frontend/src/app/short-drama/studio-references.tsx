@@ -120,8 +120,7 @@ export function StudioReferences({
   const trigger = compact ? (
     <Button
       variant="ghost"
-      size="sm"
-      className="px-2"
+      size="toolbar-icon"
       disabled={disabled}
       aria-label="添加参考素材"
     >
@@ -146,8 +145,7 @@ export function StudioReferences({
         {libraryOnly ? (
           <Button
             variant="ghost"
-            size="sm"
-            className="px-2"
+            size="toolbar"
             disabled={disabled}
             onClick={() => choose("library")}
           >

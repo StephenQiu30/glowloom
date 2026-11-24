@@ -1200,7 +1200,7 @@ function TimelineWorkspace({
             </Tabs>
             <div className="flex items-center justify-between gap-1">
               <Tabs value={filter} onValueChange={setFilter}>
-                <TabsList variant="workspace">
+                <TabsList aria-label="轨道分组">
                   {[
                     ["all", "全部"],
                     ["image", "图片"],

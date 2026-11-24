@@ -12,7 +12,7 @@ import {
 import { Plus, Search, UserRound, MapPin, Box } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { PageHeading } from "@/components/layout/page-heading";
+import { PageHeader } from "@/components/layout/page-header";
 import {
   DataPagination,
   type PageSize,
@@ -154,10 +154,9 @@ export function SubjectList({
   return (
     <>
       {pageTitle ? (
-        <PageHeading
-          title={pageTitle}
-          actions={<Button onClick={() => setCreate(true)}>新建主体</Button>}
-        />
+        <PageHeader title={pageTitle} className="mb-(--layout-gap)">
+          <Button onClick={() => setCreate(true)}>新建主体</Button>
+        </PageHeader>
       ) : null}
       <div className="subject-toolbar">
         {searchQuery === undefined ? (

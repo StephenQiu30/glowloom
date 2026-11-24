@@ -57,9 +57,8 @@ export function UnifiedSubjectToolbar({
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 max-md:gap-y-4">
         {showTypes && (
           <ToggleGroup
-            variant="workspace"
             size="toolbar"
-            spacing={0}
+            spacing={1}
             type="single"
             value={value.type || "all"}
             className="max-w-full justify-start overflow-x-auto"

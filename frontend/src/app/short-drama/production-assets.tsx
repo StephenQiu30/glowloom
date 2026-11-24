@@ -5,6 +5,8 @@ import {
   type PageSize,
 } from "@/components/media/data-pagination";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ContentState } from "@/components/layout/content-state";
+import { Item, ItemGroup, ItemTitle } from "@/components/ui/item";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -105,7 +107,7 @@ export function ProductionAssets({
           }
         }}
       >
-        <TabsList aria-label="制作资产分类">
+        <TabsList variant="secondary" aria-label="制作资产分类">
           <TabsTrigger value="media" disabled={write.locked}>
             项目素材
           </TabsTrigger>
@@ -124,9 +126,15 @@ export function ProductionAssets({
               </AlertDescription>
             </Alert>
           )}
-          {media.isLoading && <p role="status">正在读取项目素材…</p>}
+          {media.isLoading && (
+            <ContentState
+              state="loading"
+              title="正在读取项目素材"
+              loadingLayout="grid"
+            />
+          )}
           {media.data && !media.data.items?.length && (
-            <p className="text-muted-foreground">暂无项目素材。</p>
+            <ContentState title="暂无项目素材" />
           )}
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             {media.data?.items?.map(
@@ -215,7 +223,13 @@ export function ProductionAssets({
                 </Button>
               </form>
             )}
-            {entities.isLoading && <p role="status">正在读取{label}…</p>}
+            {entities.isLoading && (
+              <ContentState
+                state="loading"
+                title={`正在读取${label}`}
+                loadingLayout="list"
+              />
+            )}
             {entities.error && (
               <Alert role="alert">
                 <AlertDescription>
@@ -225,18 +239,21 @@ export function ProductionAssets({
               </Alert>
             )}
             {entities.data && !entities.data.entries?.length && (
-              <p className="text-muted-foreground">暂无{label}。</p>
+              <ContentState title={`暂无${label}`} />
             )}
-            <ul className="grid gap-2">
-              {entities.data?.entries?.map((entry, index) => (
-                <li
-                  key={entry.head?.id ?? index}
-                  className="rounded-md border p-3"
-                >
-                  {entry.name}
-                </li>
-              ))}
-            </ul>
+            {entities.data?.entries?.length ? (
+              <ItemGroup aria-label={label}>
+                {entities.data.entries.map((entry, index) => (
+                  <Item
+                    key={entry.head?.id ?? index}
+                    role="listitem"
+                    variant="muted"
+                  >
+                    <ItemTitle>{entry.name}</ItemTitle>
+                  </Item>
+                ))}
+              </ItemGroup>
+            ) : null}
           </TabsContent>
         ))}
       </Tabs>

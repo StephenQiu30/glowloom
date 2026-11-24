@@ -152,11 +152,7 @@ export function CanvasNodeSearch({
                 ref={categories}
                 className="[scrollbar-width:none] overflow-x-auto overflow-y-hidden pr-6"
               >
-                <TabsList
-                  variant="workspace"
-                  aria-label="节点类型筛选"
-                  className="h-8! justify-start gap-4 p-0"
-                >
+                <TabsList aria-label="节点类型筛选" className="max-w-none">
                   {canvasSearchTypes.map((item) => (
                     <TabsTrigger
                       key={item.type}
@@ -168,7 +164,7 @@ export function CanvasNodeSearch({
                           inline: "nearest",
                         })
                       }
-                      className="h-8 flex-none gap-1 rounded-none border-0 px-0 text-xs font-normal after:bottom-0! after:h-px!"
+                      className="flex-none gap-1"
                     >
                       {item.label}
                       {counts[item.type] > 0 && (

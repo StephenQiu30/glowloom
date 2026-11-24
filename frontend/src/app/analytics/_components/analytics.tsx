@@ -119,7 +119,7 @@ function CreationView({
             </Notice>
           ) : null}
           <Tabs value={view} onValueChange={setView}>
-            <TabsList variant="workspace">
+            <TabsList variant="secondary" aria-label="创作分析视图">
               <TabsTrigger value="overview">创作概览</TabsTrigger>
               <TabsTrigger value="retention">转化与留存</TabsTrigger>
             </TabsList>

@@ -27,7 +27,7 @@ export function PageSizeSelect({
 }) {
   const id = useId();
   return (
-    <Field orientation="horizontal" className="w-auto gap-2">
+    <Field orientation="horizontal" className="w-fit max-w-full gap-2">
       <FieldLabel htmlFor={id} className="max-sm:sr-only">
         每页
       </FieldLabel>
@@ -41,6 +41,7 @@ export function PageSizeSelect({
       >
         <SelectTrigger
           id={id}
+          variant="quiet"
           aria-label={label}
           className="w-20 text-sm data-[size=default]:h-9 max-md:data-[size=default]:h-11"
         >

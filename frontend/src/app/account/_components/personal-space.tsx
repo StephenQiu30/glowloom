@@ -7,7 +7,7 @@ import { useSession } from "@/components/auth/session";
 import { getMyAvatar } from "@/api/media";
 import { BoundAvatar } from "@/components/account/avatar-editor";
 import { PageLayout } from "@/components/layout/page-layout";
-import { PageHeading } from "@/components/layout/page-heading";
+import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -38,21 +38,18 @@ export function PersonalSpace() {
   );
   return (
     <PageLayout screen="account">
-      <PageHeading
-        title="个人空间"
-        actions={
-          <Button
-            ref={settingsTrigger}
-            variant="ghost"
-            onClick={() => {
-              setSettingsView("home");
-              setSettings(true);
-            }}
-          >
-            账号设置
-          </Button>
-        }
-      />
+      <PageHeader title="个人空间" className="mb-(--layout-gap)">
+        <Button
+          ref={settingsTrigger}
+          variant="ghost"
+          onClick={() => {
+            setSettingsView("home");
+            setSettings(true);
+          }}
+        >
+          账号设置
+        </Button>
+      </PageHeader>
       <div className="personal-space-layout">
         <aside className="personal-profile" aria-label="个人资料">
           <div className="personal-profile-identity">
@@ -79,7 +76,7 @@ export function PersonalSpace() {
           </Button>
         </aside>
         <Tabs defaultValue="works" className="personal-content">
-          <TabsList variant="surface" aria-label="个人内容">
+          <TabsList variant="secondary" aria-label="个人内容">
             <TabsTrigger value="works">作品</TabsTrigger>
             <TabsTrigger value="favorites">收藏</TabsTrigger>
             <TabsTrigger value="canvases">画布</TabsTrigger>
