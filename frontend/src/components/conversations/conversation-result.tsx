@@ -1,4 +1,6 @@
 "use client";
+import { NearViewport } from "@/components/media/near-viewport";
+import { Skeleton } from "@/components/ui/skeleton";
 import dynamic from "next/dynamic";
 import type { PromptDraft } from "@/components/generation/prompt-document";
 import { validatePromptDraft } from "@/components/generation/prompt-document";
@@ -36,26 +38,32 @@ export function ConversationResults({
   return (
     <>
       {ids.map((id) => (
-        <TaskDetail
-          key={id}
-          id={id}
-          presentation="asset"
-          resultActions
-          projectID={projectID}
-          onReuse={
-            onReuse
-              ? (task) => {
-                  if (!task.editor_draft) return;
-                  try {
-                    validatePromptDraft(task.editor_draft);
-                    onReuse(task.editor_draft);
-                  } catch {
-                    /* Historical malformed drafts never replace current input. */
-                  }
-                }
-              : undefined
+        <NearViewport
+          key={projectID + "/" + id}
+          placeholder={
+            <Skeleton className="h-36 w-full max-w-sm" aria-label="生成结果" />
           }
-        />
+        >
+          <TaskDetail
+            id={id}
+            presentation="asset"
+            resultActions
+            projectID={projectID}
+            onReuse={
+              onReuse
+                ? (task) => {
+                    if (!task.editor_draft) return;
+                    try {
+                      validatePromptDraft(task.editor_draft);
+                      onReuse(task.editor_draft);
+                    } catch {
+                      /* Historical malformed drafts never replace current input. */
+                    }
+                  }
+                : undefined
+            }
+          />
+        </NearViewport>
       ))}
     </>
   );

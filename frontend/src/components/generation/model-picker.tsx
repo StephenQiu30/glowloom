@@ -1,5 +1,6 @@
 "use client";
 
+import { cn } from "cn";
 import { modelAvailableForMode } from "./model-availability";
 import { ProviderLogo } from "@/components/providers/provider-logo";
 
@@ -125,8 +126,12 @@ export function ModelPicker({
   onChooseProject,
   compact,
   label = "生成模型",
+  triggerClassName,
+  unavailableLabel = "暂无可用模型",
 }: {
   label?: string;
+  triggerClassName?: string;
+  unavailableLabel?: string;
   models: API.ModelResponse[];
   mode?: string | null;
   value: string | null | undefined;
@@ -161,10 +166,10 @@ export function ModelPicker({
             disabled={disabled}
             aria-label={label}
             aria-expanded={projectPromptOpen}
-            className="max-w-60 justify-start"
+            className={cn("max-w-60 justify-start", triggerClassName)}
           >
             {!compact && <Box data-icon="inline-start" />}
-            选择模型
+            <span className="min-w-0 truncate">选择模型</span>
             <ChevronDown
               data-icon="inline-end"
               className="text-muted-foreground"
@@ -213,7 +218,10 @@ export function ModelPicker({
         if (choice && !choice.unavailable) onSelect(choice.model);
       }}
     >
-      <ComposerSelectTrigger aria-label={label} className="max-w-60">
+      <ComposerSelectTrigger
+        aria-label={label}
+        className={cn("max-w-60", triggerClassName)}
+      >
         {current ? (
           <ProviderLogo
             adapterKey={current.model.provider_adapter_key}
@@ -224,7 +232,9 @@ export function ModelPicker({
         ) : !compact ? (
           <Box aria-hidden="true" />
         ) : null}
-        <SelectValue placeholder={choices.length ? "选择模型" : "暂无可用模型"}>
+        <SelectValue
+          placeholder={choices.length ? "选择模型" : unavailableLabel}
+        >
           {current?.name}
         </SelectValue>
       </ComposerSelectTrigger>

@@ -1,4 +1,6 @@
 "use client";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { PageSizeSelect } from "@/components/ui/page-size-select";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import Image from "next/image";
 import { useEffect, useState } from "react";
@@ -180,6 +182,7 @@ function PersonalPicker({
   const [kind, setKind] = useState(allowedKinds[0]!);
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [page, setPage] = useState(1);
   const [revision, setRevision] = useState(0);
   const [selection, setSelection] = useState<PersonalReferenceItem[]>([]);
@@ -192,7 +195,7 @@ function PersonalPicker({
     total: number;
     error: string;
   }>();
-  const key = `${owner.actorId}/${owner.scopeId}/${kind}/${filter}/${search}/${page}/${revision}`;
+  const key = `${owner.actorId}/${owner.scopeId}/${kind}/${filter}/${search}/${pageSize}/${page}/${revision}`;
   useEffect(() => {
     const controller = new AbortController();
     const timer = setTimeout(() => {
@@ -207,7 +210,7 @@ function PersonalPicker({
           catalog_state: "active",
           order: "updated_desc",
           page,
-          page_size: 24,
+          page_size: pageSize,
         },
         { signal: controller.signal },
       )
@@ -225,7 +228,17 @@ function PersonalPicker({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [owner.actorId, owner.scopeId, kind, search, filter, page, revision, key]);
+  }, [
+    owner.actorId,
+    owner.scopeId,
+    kind,
+    search,
+    filter,
+    page,
+    revision,
+    key,
+    pageSize,
+  ]);
   const ready = result?.key === key;
   return (
     <>
@@ -364,6 +377,15 @@ function PersonalPicker({
           </div>
           {error && <FeedbackToast message={error} />}
           <div className="flex items-center justify-between text-sm">
+            <PageSizeSelect
+              label="参考素材每页数量"
+              value={pageSize}
+              disabled={confirming}
+              onChange={(size) => {
+                setPageSize(size);
+                setPage(1);
+              }}
+            />
             <Button
               variant="ghost"
               disabled={page === 1 || !ready}
@@ -374,7 +396,7 @@ function PersonalPicker({
             <span>第{page}页</span>
             <Button
               variant="ghost"
-              disabled={!ready || page * 24 >= (result?.total ?? 0)}
+              disabled={!ready || page * pageSize >= (result?.total ?? 0)}
               onClick={() => setPage((p) => p + 1)}
             >
               下一页

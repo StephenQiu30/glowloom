@@ -104,7 +104,7 @@ const maxPresetCursorBytes = 32 << 10
 // @Produce json
 // @Param style_type query string false "风格类型" Enums(realistic,stylized)
 // @Param style_subtype query string false "子风格" Enums(anime_jp,guofeng_xianxia,cartoon_3d,manhwa)
-// @Param limit query integer false "每页数量（1～200，未传或0默认50）"
+// @Param limit query integer false "每页数量（1～200，未传或0默认20）"
 // @Param cursor query string false "与账号、组织及筛选绑定的游标"
 // @Success 200 {object} StylePresetListResponse
 // @Failure 403 {object} httpapi.Problem
@@ -112,7 +112,7 @@ const maxPresetCursorBytes = 32 << 10
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/style-presets [get]
 func (h *Handler) ListPresets(c *gin.Context) {
-	input := application.ListStylePresetsInput{StyleType: c.Query("style_type"), StyleSubtype: c.Query("style_subtype"), Limit: 50}
+	input := application.ListStylePresetsInput{StyleType: c.Query("style_type"), StyleSubtype: c.Query("style_subtype"), Limit: 20}
 	if raw := c.Query("limit"); raw != "" {
 		limit, err := strconv.Atoi(raw)
 		if err != nil {
@@ -122,7 +122,7 @@ func (h *Handler) ListPresets(c *gin.Context) {
 		input.Limit = limit
 	}
 	if input.Limit == 0 {
-		input.Limit = 50
+		input.Limit = 20
 	}
 	actor := identityhttp.Principal(c)
 	binding := cursorBinding(actor, "style-presets", struct {

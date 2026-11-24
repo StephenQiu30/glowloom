@@ -1,3 +1,4 @@
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { useCallback, useEffect, useState } from "react";
 import { listSubjects } from "@/api/subjects";
 import { RequestError } from "@/lib/request";
@@ -9,7 +10,6 @@ import {
 } from "./unified-contracts";
 import type { SubjectFilter } from "./unified-toolbar";
 
-const BATCH_SIZE = 20;
 type Result = {
   key: string;
   page?: UnifiedSubjectPage;
@@ -24,9 +24,17 @@ export function useSubjectList(
   scopeID: string,
   query: string,
   filter: SubjectFilter,
+  batchSize: number = DEFAULT_PAGE_SIZE,
 ) {
   const [revision, setRevision] = useState(0);
-  const key = JSON.stringify([actorID, scopeID, query, filter, revision]);
+  const key = JSON.stringify([
+    actorID,
+    scopeID,
+    query,
+    filter,
+    revision,
+    batchSize,
+  ]);
   const [position, setPosition] = useState({ key, page: 1, attempt: 0 });
   const pageIndex = position.key === key ? position.page : 1;
   const attempt = position.key === key ? position.attempt : 0;
@@ -50,14 +58,14 @@ export function useSubjectList(
         time_field: filter.order.startsWith("created") ? "created" : "updated",
         order: filter.order,
         page: pageIndex,
-        page_size: BATCH_SIZE,
+        page_size: batchSize,
       },
       { signal: controller.signal },
     )
       .then((value) => requireUnifiedSubjectPage(value, actorID, scopeID))
       .then((page) => {
         if (controller.signal.aborted) return;
-        if (page.page !== pageIndex || page.page_size !== BATCH_SIZE)
+        if (page.page !== pageIndex || page.page_size !== batchSize)
           throw new Error("subject_batch_mismatch");
         setResult((previous) => {
           const oldItems =
@@ -70,7 +78,7 @@ export function useSubjectList(
             key,
             page: { ...page, items: [...oldItems, ...added] },
             hasMore:
-              page.items.length > 0 && pageIndex * BATCH_SIZE < page.total,
+              page.items.length > 0 && pageIndex * batchSize < page.total,
           };
         });
       })
@@ -86,7 +94,7 @@ export function useSubjectList(
         }));
       });
     return () => controller.abort();
-  }, [actorID, scopeID, query, filter, key, pageIndex, attempt]);
+  }, [actorID, scopeID, query, filter, batchSize, key, pageIndex, attempt]);
 
   const loadedPage = current?.page?.page ?? 0;
   const hasMore = current?.hasMore ?? false;

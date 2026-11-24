@@ -1,4 +1,6 @@
 "use client";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { PageSizeSelect } from "@/components/ui/page-size-select";
 import { useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { getSubjectSource } from "@/api/subjects";
@@ -42,6 +44,7 @@ export function UnifiedSubjectSourcePicker({
   // backend/creation/subject/domain/content.go: MaxReferences=120; a primary batch may add one primary.
   maxSelection?: number;
 }) {
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [kind, setKind] = useState(allowedKinds[0]);
   const [group, setGroup] = useState("all");
   const owner = JSON.stringify([actorID, scopeID]);
@@ -62,7 +65,7 @@ export function UnifiedSubjectSourcePicker({
   const flight = useRef<AbortController | null>(null);
   const scrollRoot = useRef<HTMLDivElement>(null);
   const sentinel = useRef<HTMLDivElement>(null);
-  const sources = useSubjectSources(actorID, scopeID, kind, group);
+  const sources = useSubjectSources(actorID, scopeID, kind, group, pageSize);
   const { page, loadMore } = sources;
   const multiple = kind === "image" && !!onSelectMany;
   const limit = multiple
@@ -353,6 +356,12 @@ export function UnifiedSubjectSourcePicker({
               正在读取资产…
             </p>
           ) : null}
+          <PageSizeSelect
+            value={pageSize}
+            label="主体素材每页数量"
+            onChange={setPageSize}
+            disabled={pending}
+          />
           <div ref={sentinel} aria-hidden="true" className="h-px" />
         </div>
         <DialogFooter className="shrink-0">

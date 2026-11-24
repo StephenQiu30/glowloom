@@ -1,10 +1,14 @@
 "use client";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { PageSizeSelect } from "@/components/ui/page-size-select";
 import {
   BillingOutcomeView,
   billingFailureMessage,
 } from "@/components/billing/billing-outcome";
 import { QuoteCostDetail } from "./quote-cost-detail";
 import { AudioSubtitles } from "./audio-subtitles";
+import { ResultFrame, ResultMediaPreview } from "./result-media-preview";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ResultMediaActions } from "./result-media-actions";
 import { ContentState } from "@/components/layout/content-state";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
@@ -241,7 +245,8 @@ function TaskHistory({
     [error, setError] = useState(""),
     [pending, setPending] = useState(false),
     [selected, setSelected] = useState<string | null>(null);
-  async function load(next?: string) {
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
+  async function load(next?: string, size = pageSize) {
     if (pending) return;
     setPending(true);
     setError("");
@@ -249,7 +254,7 @@ function TaskHistory({
       const r = await listProjectOperations({
         pid: projectID,
         capability,
-        limit: 30,
+        limit: size,
         cursor: next,
       });
       if (!Array.isArray(r.items)) throw new RequestError("invalid_receipt");
@@ -310,6 +315,15 @@ function TaskHistory({
               description="提交后的任务会保留在这里。"
             />
           )}
+          <PageSizeSelect
+            value={pageSize}
+            label="生成任务每页数量"
+            onChange={(size) => {
+              setPageSize(size);
+              void load(undefined, size);
+            }}
+            disabled={pending}
+          />
           {cursor && (
             <Button
               variant="ghost"
@@ -569,6 +583,26 @@ function ScopedTaskDetail({
         output.moderation_status === "passed" &&
         !output.text,
     );
+  const ratio =
+    task?.params?.aspect_ratio ?? task?.editor_draft?.params?.aspect_ratio;
+  const mediaKind = task?.capability?.split(".")[0];
+  const visual = mediaKind === "image" || mediaKind === "video";
+  const outputs =
+    task?.outputs?.filter(
+      (o) =>
+        (!outputID || o.id === outputID) &&
+        o.media_asset_id &&
+        o.moderation_status === "passed",
+    ) ?? [];
+  const pendingVisual =
+    visual && task && activeTask(task.status) && !outputs.length && !error ? (
+      <ResultFrame kind={mediaKind} ratio={ratio}>
+        <Skeleton className="absolute inset-0" aria-hidden />
+        <span className="relative text-sm text-muted-foreground">
+          {generationStatusLabel(task)}
+        </span>
+      </ResultFrame>
+    ) : null;
   const preview = (
     <>
       {(task?.status === "completed" ||
@@ -627,23 +661,26 @@ function ScopedTaskDetail({
               )}
             </div>
           ))}
-      {task?.outputs && (
+      {outputs.length > 0 && task && (
         <div
           className={
-            presentation === "asset"
+            outputs.length === 1 || presentation === "asset"
               ? "grid min-w-0 gap-4"
               : "generation-results"
           }
         >
-          {task.outputs
-            .filter(
-              (o) =>
-                (!outputID || o.id === outputID) &&
-                o.media_asset_id &&
-                o.moderation_status === "passed",
-            )
-            .map((o) => (
-              <div key={o.id}>
+          {outputs.map((o) => (
+            <div key={o.id} data-generation-output>
+              {o.kind === "image" || o.kind === "video" ? (
+                <ResultFrame kind={o.kind} ratio={ratio}>
+                  <ResultMediaPreview
+                    key={o.media_asset_id}
+                    kind={o.kind}
+                    projectID={projectID}
+                    assetID={o.media_asset_id!}
+                  />
+                </ResultFrame>
+              ) : (
                 <div
                   className={
                     presentation === "asset"
@@ -670,24 +707,25 @@ function ScopedTaskDetail({
                     />
                   )}
                 </div>
-                {resultActions ? (
-                  <ResultMediaActions
-                    projectID={projectID}
-                    assetID={o.media_asset_id!}
-                    kind={o.kind}
-                    completed={task.status === "completed"}
-                  />
-                ) : null}
-                {onAdopt && (
-                  <Button
-                    disabled={adopting}
-                    onClick={() => void adopt(o.media_asset_id!, o.kind!)}
-                  >
-                    {adopting ? "正在保存结果…" : adoptLabel}
-                  </Button>
-                )}
-              </div>
-            ))}
+              )}
+              {resultActions ? (
+                <ResultMediaActions
+                  projectID={projectID}
+                  assetID={o.media_asset_id!}
+                  kind={o.kind}
+                  completed={task.status === "completed"}
+                />
+              ) : null}
+              {onAdopt && (
+                <Button
+                  disabled={adopting}
+                  onClick={() => void adopt(o.media_asset_id!, o.kind!)}
+                >
+                  {adopting ? "正在保存结果…" : adoptLabel}
+                </Button>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </>
@@ -714,22 +752,60 @@ function ScopedTaskDetail({
             }
           />
         ) : null}
-        {!notice && !recoverable && (!task || activeTask(task.status)) ? (
-          <div className="aspect-video max-h-52 overflow-hidden rounded-lg">
-            <GenerationPlaceholder />
-          </div>
-        ) : (
-          preview
-        )}
+        {!notice &&
+        !recoverable &&
+        !outputs.length &&
+        (!task || activeTask(task.status))
+          ? (pendingVisual ?? (
+              <div className="aspect-video max-h-52 overflow-hidden rounded-lg">
+                <GenerationPlaceholder />
+              </div>
+            ))
+          : preview}
       </section>
     );
   }
+  const parameters = task && (
+    <dl className="grid min-w-0 gap-2 text-sm">
+      <div>
+        <dt className="text-muted-foreground">模型与模式</dt>
+        <dd className="break-words">
+          {[task.model_name || task.model_key, task.capability, task.mode]
+            .filter(Boolean)
+            .join(" · ") || "未提供"}
+        </dd>
+      </div>
+      {task.inputs?.some((input) => input.role === "prompt" && input.text) && (
+        <div>
+          <dt className="text-muted-foreground">提示词</dt>
+          <dd className="max-h-48 overflow-auto break-words whitespace-pre-wrap">
+            {task.inputs
+              .filter((input) => input.role === "prompt" && input.text)
+              .map((input) => input.text)
+              .join("\n")}
+          </dd>
+        </div>
+      )}
+      {task.params && Object.keys(task.params).length > 0 && (
+        <div>
+          <dt className="text-muted-foreground">生成参数</dt>
+          <dd>
+            <pre className="max-h-48 overflow-auto break-words whitespace-pre-wrap">
+              {JSON.stringify(task.params, null, 2)}
+            </pre>
+          </dd>
+        </div>
+      )}
+    </dl>
+  );
   return (
     <section
       className={
-        presentation === "asset"
-          ? "grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]"
-          : "task-detail"
+        presentation === "asset" && resultActions
+          ? "grid min-w-0 gap-2"
+          : presentation === "asset"
+            ? "grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]"
+            : "task-detail"
       }
       aria-live="polite"
     >
@@ -744,7 +820,8 @@ function ScopedTaskDetail({
                 ((output.moderation_status === "passed" &&
                   output.media_asset_id) ||
                   usableTextOutput(output)),
-            ) && (
+            ) &&
+            (pendingVisual ?? (
               <ContentState
                 title={
                   activeTask(task.status)
@@ -763,7 +840,7 @@ function ScopedTaskDetail({
                       : "请刷新生成记录，或稍后重试。"
                 }
               />
-            )}
+            ))}
           {error ? (
             <ContentState
               state="error"
@@ -815,41 +892,20 @@ function ScopedTaskDetail({
           </Button>
         </div>
         {error && presentation !== "asset" && <FeedbackToast message={error} />}
-        {task && (
-          <dl className="grid min-w-0 gap-2 text-sm">
-            <div>
-              <dt className="text-muted-foreground">模型与模式</dt>
-              <dd className="break-words">
-                {[task.model_name || task.model_key, task.capability, task.mode]
-                  .filter(Boolean)
-                  .join(" · ") || "未提供"}
-              </dd>
-            </div>
-            {task.inputs?.some(
-              (input) => input.role === "prompt" && input.text,
-            ) && (
-              <div>
-                <dt className="text-muted-foreground">提示词</dt>
-                <dd className="max-h-48 overflow-auto break-words whitespace-pre-wrap">
-                  {task.inputs
-                    .filter((input) => input.role === "prompt" && input.text)
-                    .map((input) => input.text)
-                    .join("\n")}
-                </dd>
-              </div>
-            )}
-            {task.params && Object.keys(task.params).length > 0 && (
-              <div>
-                <dt className="text-muted-foreground">生成参数</dt>
-                <dd>
-                  <pre className="max-h-48 overflow-auto break-words whitespace-pre-wrap">
-                    {JSON.stringify(task.params, null, 2)}
-                  </pre>
-                </dd>
-              </div>
-            )}
-          </dl>
-        )}
+        {task &&
+          (resultActions ? (
+            <Collapsible>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm">
+                  任务详情
+                  <ChevronDown data-icon="inline-end" />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>{parameters}</CollapsibleContent>
+            </Collapsible>
+          ) : (
+            parameters
+          ))}
         {task?.editor_draft && (
           <Collapsible className="rounded border p-3 text-sm">
             <CollapsibleTrigger asChild>
@@ -958,7 +1014,7 @@ function ScopedTaskDetail({
         {task?.status === "cancelled" && (
           <p>已记录取消。是否收费以账务事实为准，请先核对原任务。</p>
         )}
-        {presentation === "default" && preview}
+        {presentation === "default" && (pendingVisual ?? preview)}
         {task && activeTask(task.status) && task.status !== "cancelling" && (
           <Button variant="outline" onClick={() => setConfirmCancel(true)}>
             取消任务

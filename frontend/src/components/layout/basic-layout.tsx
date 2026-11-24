@@ -1,5 +1,5 @@
 "use client";
-import { FeedbackToast } from "@/components/feedback/feedback-toast";
+import { AccountLogoutDialog } from "@/components/account/account-logout-dialog";
 import {
   createContext,
   useContext,
@@ -17,19 +17,10 @@ import {
   SessionGate,
   useOptionalSession,
   useSessionUpdate,
-  revokeSession,
 } from "@/components/auth/session";
 import { AuthDialog, type AuthMode } from "@/components/auth/auth-dialog";
 import { authenticationReturn } from "@/components/auth/auth-return";
 import { pendingInvitation } from "@/components/auth/invitation-continuity";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
 import { ProductNavigation } from "./product-navigation";
 import { PageOptionsContext, type PageOptions } from "./page-layout";
@@ -134,21 +125,6 @@ function Shell({
       );
   }, [authenticated, initialAuthMode, router]);
   const [logout, setLogout] = useState(false);
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState("");
-  async function leave() {
-    if (pending || !session) return;
-    setPending(true);
-    setError("");
-    try {
-      await revokeSession(session);
-      router.replace("/login");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "退出结果未确认，请重试。");
-    } finally {
-      setPending(false);
-    }
-  }
   return (
     <LoginContext.Provider value={() => setAuth(true)}>
       <a
@@ -212,30 +188,7 @@ function Shell({
             router.replace(authenticationReturn(window.location.search));
         }}
       />
-      <Dialog
-        open={logout}
-        onOpenChange={(value) => {
-          if (!pending) setLogout(value);
-        }}
-      >
-        <DialogContent>
-          <DialogTitle>退出登录？</DialogTitle>
-          <DialogDescription>只退出当前设备。</DialogDescription>
-          {error && <FeedbackToast message={error} />}
-          <DialogFooter>
-            <Button
-              variant="outline"
-              disabled={pending}
-              onClick={() => setLogout(false)}
-            >
-              取消
-            </Button>
-            <Button disabled={pending} onClick={() => void leave()}>
-              {pending ? "正在退出…" : "退出登录"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AccountLogoutDialog open={logout} onOpenChange={setLogout} />
     </LoginContext.Provider>
   );
 }

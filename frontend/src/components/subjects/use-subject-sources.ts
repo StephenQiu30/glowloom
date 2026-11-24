@@ -1,3 +1,4 @@
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { useCallback, useEffect, useState } from "react";
 import { listSubjectSources } from "@/api/subjects";
 import { RequestError } from "@/lib/request";
@@ -22,9 +23,9 @@ export function useSubjectSources(
   scopeID: string,
   kind: SubjectSourceItem["kind"],
   group: string,
+  batchSize: number = DEFAULT_PAGE_SIZE,
 ) {
-  const batchSize = kind === "video" ? 50 : 30;
-  const key = JSON.stringify([actorID, scopeID, kind, group]);
+  const key = JSON.stringify([actorID, scopeID, kind, group, batchSize]);
   const [position, setPosition] = useState({ key, page: 1, attempt: 0 });
   const [result, setResult] = useState<Result | null>(null);
   if (position.key !== key) {

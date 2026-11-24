@@ -45,7 +45,7 @@ func (s *ProjectCopyService) List(ctx context.Context, actor identityapp.Princip
 		return ProjectCopyPage{}, domain.ErrInvalidProjectCopy
 	}
 	if input.Limit == 0 {
-		input.Limit = 50
+		input.Limit = 20
 	}
 	if s == nil || s.store == nil {
 		return ProjectCopyPage{}, workspacesource.ErrProjectDependencyUnavailable

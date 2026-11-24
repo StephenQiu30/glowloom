@@ -38,7 +38,7 @@ func TestListModelsQueryAllowsCurrentAdminAndProducerAndBoundsPage(t *testing.T)
 			})
 			if err != nil || !store.called || store.actor != caller || store.input.ProjectID != projectID ||
 				store.input.Capability != "video.generate" || store.input.Mode != "image2video" ||
-				store.input.Limit != 50 || page.Models == nil {
+				store.input.Limit != 20 || page.Models == nil {
 				t.Fatalf("model page %+v, store %+v: %v", page, store, err)
 			}
 		})

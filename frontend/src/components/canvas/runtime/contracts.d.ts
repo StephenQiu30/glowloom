@@ -1948,6 +1948,7 @@ declare namespace CanvasContract {
   };
 
   type getAssetZipImportParams = {
+    pageSize?: number;
     jobId?: string;
     commandId?: string;
     current?: number | string;
@@ -2113,6 +2114,7 @@ declare namespace CanvasContract {
   };
 
   type listFileTransfersParams = {
+    limit?: number;
     beforeId?: number | string;
   };
 

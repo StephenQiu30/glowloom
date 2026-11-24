@@ -65,7 +65,7 @@ func sourceError(c *gin.Context, err error) {
 // @Param favorite_only query bool false "仅收藏"
 // @Param quality query string false "upscaled；仅真实超清处理结果"
 // @Param page query int false "默认1"
-// @Param page_size query int false "默认12；最大120"
+// @Param page_size query int false "默认20；最大120"
 // @Success 200 {object} media.SubjectSourcePage
 // @Failure 422 {object} httpapi.Problem
 // @Failure 403 {object} httpapi.Problem
@@ -79,7 +79,7 @@ func (h *SourceHandler) List(c *gin.Context) {
 			return
 		}
 	}
-	input := media.SubjectCatalogueQuery{Kind: query.Get("kind"), Search: query.Get("search"), Quality: query.Get("quality"), Page: 1, PageSize: 12}
+	input := media.SubjectCatalogueQuery{Kind: query.Get("kind"), Search: query.Get("search"), Quality: query.Get("quality"), Page: 1, PageSize: 20}
 	for key, destination := range map[string]*int{"page": &input.Page, "page_size": &input.PageSize} {
 		if query.Has(key) {
 			value, err := strconv.Atoi(query.Get(key))

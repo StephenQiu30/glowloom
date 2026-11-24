@@ -1,4 +1,6 @@
 "use client";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { PageSizeSelect } from "@/components/ui/page-size-select";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { ContentState } from "@/components/layout/content-state";
 import { readErrorMessage } from "@/lib/read-error";
@@ -94,6 +96,7 @@ export function Settings({
   const [blockErrors, setBlockErrors] = useState<
     Partial<Record<"profile" | "preferences" | "sessions" | "events", string>>
   >({});
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [events, setEvents] = useState<API.SecurityEventPageView | null>(null);
   const [impact, setImpact] = useState<API.DeletionImpactView | null>(null);
   const [password, setPassword] = useState("");
@@ -150,16 +153,30 @@ export function Settings({
     load("sessions", getMySessions({ signal: controller.signal }), (devices) =>
       setSessions(devices.items),
     );
-    load(
-      "events",
-      getMySecurityEvents({ limit: 20 }, { signal: controller.signal }),
-      setEvents,
-    );
     return () => {
       controller.abort();
       flight.current?.abort();
     };
   }, [session.actor.id, reload, publishPreferences]);
+  useEffect(() => {
+    const controller = new AbortController();
+    void getMySecurityEvents({ limit: pageSize }, { signal: controller.signal })
+      .then((page) => {
+        if (!controller.signal.aborted) setEvents(page);
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted)
+          setBlockErrors((previous) => ({
+            ...previous,
+            events: readErrorMessage(error),
+          }));
+      })
+      .finally(() => {
+        if (!controller.signal.aborted)
+          setLoadingBlocks((previous) => ({ ...previous, events: false }));
+      });
+    return () => controller.abort();
+  }, [session.actor.id, reload, pageSize]);
   async function run(action: (signal: AbortSignal) => Promise<void>) {
     if (locked.current) return;
     locked.current = true;
@@ -792,6 +809,20 @@ export function Settings({
                 </p>
               ))
             )}
+            <PageSizeSelect
+              value={pageSize}
+              label="安全活动每页数量"
+              onChange={(size) => {
+                setEvents(null);
+                setLoadingBlocks((previous) => ({ ...previous, events: true }));
+                setBlockErrors((previous) => ({
+                  ...previous,
+                  events: undefined,
+                }));
+                setPageSize(size);
+              }}
+              disabled={pending || loadingBlocks.events}
+            />
             {!loadingBlocks.events &&
             !blockErrors.events &&
             events?.next_cursor ? (
@@ -801,7 +832,7 @@ export function Settings({
                 onClick={() =>
                   void run(async (signal) => {
                     const next = await getMySecurityEvents(
-                      { cursor: events.next_cursor!, limit: 20 },
+                      { cursor: events.next_cursor!, limit: pageSize },
                       { signal },
                     );
                     if (!signal.aborted)

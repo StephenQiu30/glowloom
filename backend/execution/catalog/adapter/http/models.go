@@ -104,7 +104,7 @@ type modelCursor struct {
 // @Param project_id query string true "项目UUID"
 // @Param capability query string false "能力"
 // @Param mode query string false "生成模式"
-// @Param limit query integer false "1..200，默认50"
+// @Param limit query integer false "1..200，默认20"
 // @Param cursor query string false "绑定项目与筛选的不透明游标"
 // @Success 200 {object} ModelPage
 // @Failure 403 {object} httpapi.Problem
@@ -118,7 +118,7 @@ func (h *Handler) ListModels(c *gin.Context) {
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 		return
 	}
-	input := application.ListModelsInput{ProjectID: project, Capability: c.Query("capability"), Mode: c.Query("mode"), Limit: 50}
+	input := application.ListModelsInput{ProjectID: project, Capability: c.Query("capability"), Mode: c.Query("mode"), Limit: 20}
 	if raw := c.Query("limit"); raw != "" {
 		input.Limit, err = strconv.Atoi(raw)
 		if err != nil || input.Limit < 1 || input.Limit > 200 {

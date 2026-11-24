@@ -1,5 +1,7 @@
 "use client";
 
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { PageSizeSelect } from "@/components/ui/page-size-select";
 import { useEffect, useRef, useState } from "react";
 import { ListChecks } from "lucide-react";
 import { useBatchToolbarFocus } from "./use-batch-toolbar-focus";
@@ -103,6 +105,7 @@ export function PersonalHistoryList({
   const [page, setPage] = useState<ReturnType<
     typeof requirePersonalHistory
   > | null>(null);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [cursor, setCursor] = useState<string>();
   const [pending, setPending] = useState(true);
   const [error, setError] = useState("");
@@ -143,7 +146,7 @@ export function PersonalHistoryList({
   useEffect(() => {
     const controller = new AbortController();
     listPersonalOperationHistory(
-      { kind, ...historyFilterParams(filters), limit: 24, cursor },
+      { kind, ...historyFilterParams(filters), limit: pageSize, cursor },
       { signal: controller.signal },
     )
       .then(requirePersonalHistory)
@@ -180,7 +183,7 @@ export function PersonalHistoryList({
         if (!controller.signal.aborted) setPending(false);
       });
     return () => controller.abort();
-  }, [kind, filters, cursor, retry]);
+  }, [kind, filters, cursor, retry, pageSize]);
   const cards = historyCardTargets(page?.items ?? [], kind);
   const selected = cards.filter((card) => chosen.includes(card.key));
   const selectionLimit = kind === "image" || kind === "document" ? 200 : 50;
@@ -657,6 +660,15 @@ export function PersonalHistoryList({
           />
         ))}
       </div>
+      <PageSizeSelect
+        label="个人生成记录每页数量"
+        value={pageSize}
+        disabled={false}
+        onChange={(size) => {
+          setCursor(undefined);
+          setPageSize(size);
+        }}
+      />
       {page?.next_cursor && (
         <Button
           className="justify-self-center"

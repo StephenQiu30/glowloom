@@ -36,7 +36,7 @@ func (h *Handler) Register(group *gin.RouterGroup) {
 // @Param pid path string true "项目UUID"
 // @Param kind query string false "image/video/audio/model/document；默认仅可渲染媒体"
 // @Param cursor query string false "不透明游标"
-// @Param limit query integer false "1..200，默认50"
+// @Param limit query integer false "1..200，默认20"
 // @Success 200 {object} application.AssetPage
 // @Failure 403 {object} httpapi.Problem
 // @Failure 404 {object} httpapi.Problem
@@ -53,7 +53,7 @@ func (h *Handler) List(c *gin.Context) {
 	if !ok {
 		return
 	}
-	limit := 50
+	limit := 20
 	if raw := c.Query("limit"); raw != "" {
 		var err error
 		limit, err = strconv.Atoi(raw)

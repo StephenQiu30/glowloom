@@ -29,6 +29,7 @@ import {
 export function ConversationHistoryItem({
   item,
   projectID,
+  independent,
   active,
   writable,
   onNavigate,
@@ -36,6 +37,7 @@ export function ConversationHistoryItem({
 }: {
   item: API.SessionView;
   projectID: string;
+  independent: boolean;
   active: boolean;
   writable: boolean;
   onNavigate: () => void;
@@ -89,7 +91,9 @@ export function ConversationHistoryItem({
     input.focus();
     input.select();
   }
-  const href = `/conversations/${item.id}?projectId=${projectID}`;
+  const href = independent
+    ? `/conversations/${item.id}`
+    : `/conversations/${item.id}?projectId=${projectID}`;
   const title = rename?.trim();
   return (
     <>

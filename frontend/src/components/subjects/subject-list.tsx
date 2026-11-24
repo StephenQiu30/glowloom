@@ -1,4 +1,5 @@
 "use client";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { ContentState } from "@/components/layout/content-state";
 import { readErrorMessage } from "@/lib/read-error";
 import {
@@ -73,7 +74,7 @@ export function SubjectList({
     [selected, setSelected] = useState<Subject | null>(null),
     [deleted, setDeleted] = useState(false);
   const pageRequest = useRef<AbortController | null>(null);
-  const [pageSize, setPageSize] = useState<PageSize>(12);
+  const [pageSize, setPageSize] = useState<PageSize>(DEFAULT_PAGE_SIZE);
   const [cursorHistory, setCursorHistory] = useState<(string | undefined)[]>([
     undefined,
   ]);

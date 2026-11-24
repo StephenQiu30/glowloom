@@ -434,7 +434,7 @@ func (s *Service) List(ctx context.Context, actor Actor, input ListInput) (Page,
 		return Page{}, domain.ErrInvalidContent
 	}
 	if input.Limit == 0 {
-		input.Limit = 50
+		input.Limit = 20
 	}
 	return s.store.List(ctx, actor, input)
 }
@@ -462,7 +462,7 @@ func (s *Service) Voices(ctx context.Context, actor Actor, project uuid.UUID, li
 		return VoicePage{}, domain.ErrInvalidContent
 	}
 	if limit == 0 {
-		limit = 50
+		limit = 20
 	}
 	return s.store.Voices(ctx, actor, project, limit, after)
 }

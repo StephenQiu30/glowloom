@@ -20,7 +20,7 @@ type CanvasUsageFactory func(*gorm.DB) application.CanvasUsageReader
 func (s *Store) WithCanvasUsage(factory CanvasUsageFactory) *Store { s.usage = factory; return s }
 
 // Information reads document metadata and charges from one repeatable-read snapshot.
-func (s *Store) Information(ctx context.Context, a identity.Principal, id uuid.UUID, page int) (application.CanvasInformation, error) {
+func (s *Store) Information(ctx context.Context, a identity.Principal, id uuid.UUID, page, size int) (application.CanvasInformation, error) {
 	var result application.CanvasInformation
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		project, err := documentProject(tx, id)
@@ -50,7 +50,7 @@ func (s *Store) Information(ctx context.Context, a identity.Principal, id uuid.U
 		if s.usage == nil || s.usage(tx) == nil {
 			return fmt.Errorf("canvas usage reader unavailable")
 		}
-		result.Usage, err = s.usage(tx).ReadCanvasUsage(ctx, a, project, id, page)
+		result.Usage, err = s.usage(tx).ReadCanvasUsage(ctx, a, project, id, page, size)
 		return err
 	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	return result, err

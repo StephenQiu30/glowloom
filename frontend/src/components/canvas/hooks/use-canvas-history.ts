@@ -1,4 +1,5 @@
 "use client";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { useEffect, useRef, useState } from "react";
 import useLiveQuery, {
   matchesProjection,
@@ -22,6 +23,7 @@ export function useCanvasHistory({
   identity: string;
   document: CanvasContract.CanvasVO;
 }) {
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [browse, setBrowse] = useState({
     page: 1,
     cursors: [null] as (string | null)[],
@@ -89,25 +91,38 @@ export function useCanvasHistory({
           page,
           browse.epoch,
           browse.cursors[page - 1],
+          pageSize,
         ]
       : null,
     async (key, options = {}) => {
       if (!key) throw new Error("版本历史范围不可用");
-      const [, , readScope, readCanvas, , , readPage, readEpoch, cursor] = key;
+      const [
+        ,
+        ,
+        readScope,
+        readCanvas,
+        ,
+        ,
+        readPage,
+        readEpoch,
+        cursor,
+        numberPerPage,
+      ] = key;
       if (readScope === "LOCAL") {
         const local = unwrap(
           await api.localListCanvasCheckpoints(
             {
               canvasId: String(readCanvas),
               current: Number(readPage),
-              pageSize: 10,
+              pageSize: Number(numberPerPage),
             },
             options,
           ),
         );
         return {
           ...local,
-          hasMore: Number(readPage) * 10 < Number(local.total),
+          hasMore:
+            Number(readPage) * Number(numberPerPage) < Number(local.total),
           nextCursor: undefined as string | undefined,
         };
       }
@@ -120,7 +135,7 @@ export function useCanvasHistory({
             ? { cursor: start }
             : {
                 canvasId: String(readCanvas),
-                pageSize: 10,
+                pageSize: Number(numberPerPage),
                 includeTotal: false,
               },
           options,
@@ -153,6 +168,11 @@ export function useCanvasHistory({
   );
   return {
     history,
+    pageSize,
+    changePageSize: (size: number) => {
+      restart();
+      setPageSize(size);
+    },
     page,
     restart,
     previous: () =>

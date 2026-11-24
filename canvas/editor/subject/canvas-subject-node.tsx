@@ -1,4 +1,6 @@
 "use client";
+import { DEFAULT_PAGE_SIZE } from "@glowloom/canvas-host/lib/pagination";
+import { PageSizeSelect } from "@glowloom/canvas-host/components/ui/page-size-select";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "@glowloom/canvas-host/components/feedback/notification";
 import { FeedbackToast } from "@glowloom/canvas-host/components/feedback/feedback-toast";
@@ -560,6 +562,7 @@ function SubjectImport({
 }) {
   const [query, setQuery] = useState("");
   const [favorite, setFavorite] = useState(false);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<UnifiedSubject[]>([]);
   const [listing, setListing] = useState<{
@@ -572,7 +575,7 @@ function SubjectImport({
   const [error, setError] = useState("");
   const flight = useRef<AbortController | null>(null);
   const [applied, setApplied] = useState(false);
-  const key = `${actorID}/${scopeID}/${query}/${favorite}/${page}`;
+  const key = `${actorID}/${scopeID}/${query}/${favorite}/${pageSize}/${page}`;
   useEffect(() => {
     const controller = new AbortController();
     const timer = setTimeout(() => {
@@ -581,7 +584,7 @@ function SubjectImport({
           q: query.trim() || undefined,
           favorite: favorite || undefined,
           page,
-          page_size: 24,
+          page_size: pageSize,
           order: "updated_desc",
         },
         { signal: controller.signal },
@@ -599,7 +602,7 @@ function SubjectImport({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [actorID, scopeID, query, favorite, page, key]);
+  }, [actorID, scopeID, query, favorite, page, key, pageSize]);
   useEffect(() => () => flight.current?.abort(), []);
   const current = listing?.key === key ? listing : null;
   const close = () => {
@@ -764,6 +767,15 @@ function SubjectImport({
           <span className="mr-auto text-sm text-muted-foreground">
             已选择 {selected.length} 个主体
           </span>
+          <PageSizeSelect
+            label="主体每页数量"
+            value={pageSize}
+            disabled={busy}
+            onChange={(size) => {
+              setPageSize(size);
+              setPage(1);
+            }}
+          />
           <Button
             variant="ghost"
             disabled={busy || page <= 1}
@@ -773,7 +785,9 @@ function SubjectImport({
           </Button>
           <Button
             variant="ghost"
-            disabled={busy || !current?.page || page * 24 >= current.page.total}
+            disabled={
+              busy || !current?.page || page * pageSize >= current.page.total
+            }
             onClick={() => setPage((value) => value + 1)}
           >
             下一页

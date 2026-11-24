@@ -1,4 +1,5 @@
 "use client";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import dynamic from "next/dynamic";
 import { cn } from "cn";
@@ -193,6 +194,7 @@ export function ReferenceControls({
   authorized = false,
   compact = false,
   canvasLayout = false,
+  inline = false,
   expanded = false,
   home = false,
   assistant = false,
@@ -211,6 +213,7 @@ export function ReferenceControls({
   authorized?: boolean;
   compact?: boolean;
   canvasLayout?: boolean;
+  inline?: boolean;
   expanded?: boolean;
   home?: boolean;
   assistant?: boolean;
@@ -328,7 +331,12 @@ export function ReferenceControls({
     const controller = new AbortController();
     const key = subjectCatalogKey;
     void listSubjects(
-      { q: search || undefined, page: 1, page_size: 24, order: "updated_desc" },
+      {
+        q: search || undefined,
+        page: 1,
+        page_size: DEFAULT_PAGE_SIZE,
+        order: "updated_desc",
+      },
       { signal: controller.signal },
     )
       .then((result) => {
@@ -1492,7 +1500,10 @@ export function ReferenceControls({
           className={cn(
             "flex w-full min-w-0 flex-col gap-3",
             compact && "gap-0",
-            compact && home && !assistant && "w-16",
+            compact &&
+              home &&
+              !assistant &&
+              (inline ? "w-auto shrink-0" : "w-16"),
             assistant && "canvas-assistant-reference",
           )}
         >
@@ -1521,6 +1532,7 @@ export function ReferenceControls({
                 <div ref={referenceStackAnchor}>
                   <ReferenceStack
                     addButtonRef={referenceStackAdd}
+                    inline={inline}
                     disabled={disabled}
                     entries={draft.references.map((ref) => {
                       const subject = unifiedReferencePreview(ref);

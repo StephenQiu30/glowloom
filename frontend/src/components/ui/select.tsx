@@ -53,7 +53,7 @@ function SelectTrigger({
       data-size={size}
       data-variant={variant}
       className={cn(
-        "flex w-fit max-w-full min-w-0 items-center justify-between gap-1.5 rounded-sm border border-transparent py-1 pr-2.5 pl-2.5 text-sm whitespace-nowrap transition-colors outline-none select-none focus-visible:ring-1 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:bg-destructive/5 aria-invalid:ring-1 aria-invalid:ring-destructive/20 data-placeholder:text-muted-foreground max-md:min-h-11 dark:aria-invalid:ring-destructive/40 pointer-coarse:min-h-11 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "flex w-fit max-w-full min-w-0 items-center justify-between gap-1.5 rounded-sm border py-1 pr-2.5 pl-2.5 text-sm whitespace-nowrap transition-colors outline-none select-none focus-visible:ring-1 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:bg-destructive/5 aria-invalid:ring-1 aria-invalid:ring-destructive/20 data-placeholder:text-muted-foreground max-md:min-h-11 dark:aria-invalid:ring-destructive/40 pointer-coarse:min-h-11 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         size === "toolbar"
           ? "h-(--toolbar-control-size) text-xs"
           : size === "sm"
@@ -61,8 +61,8 @@ function SelectTrigger({
             : "h-9",
         "[&>[data-slot=select-value]]:min-w-0 [&>[data-slot=select-value]]:flex-1 [&>[data-slot=select-value]]:truncate [&>[data-slot=select-value]]:text-left",
         variant === "quiet"
-          ? "bg-transparent text-foreground hover:bg-accent"
-          : "bg-muted disabled:bg-input/50",
+          ? "border-transparent bg-transparent text-foreground hover:bg-accent"
+          : "border-input bg-muted disabled:bg-input/50",
         className,
       )}
       {...props}

@@ -370,7 +370,7 @@ type taskCursor struct {
 // @Param canvas_id query string false "冻结来源画布UUID"
 // @Param node_id query string false "冻结来源节点UUID，需canvas_id"
 // @Param row_id query string false "冻结来源行UUID，需node_id"
-// @Param limit query integer false "1..200，默认50"
+// @Param limit query integer false "1..200，默认20"
 // @Param cursor query string false "项目与筛选绑定游标"
 // @Success 200 {object} TaskPageResponse
 // @Failure 403 {object} httpapi.Problem
@@ -383,7 +383,7 @@ func (h *Handler) List(c *gin.Context) {
 	if !ok {
 		return
 	}
-	input := application.ListTasksInput{ProjectID: project, Status: c.Query("status"), Capability: c.Query("capability"), ModelKey: c.Query("model_key"), Origin: c.Query("origin"), Limit: 50}
+	input := application.ListTasksInput{ProjectID: project, Status: c.Query("status"), Capability: c.Query("capability"), ModelKey: c.Query("model_key"), Origin: c.Query("origin"), Limit: 20}
 	for _, field := range []struct {
 		name  string
 		value **uuid.UUID

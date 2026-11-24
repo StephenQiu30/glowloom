@@ -1,4 +1,6 @@
 "use client";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { PageSizeSelect } from "@/components/ui/page-size-select";
 import { readErrorMessage } from "@/lib/read-error";
 import { ContentState } from "@/components/layout/content-state";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
@@ -31,6 +33,7 @@ export function InvitationsPage() {
   const space = useSpace();
   const [token, setToken] = useState("");
   const [preview, setPreview] = useState<API.InvitationPreview | null>(null);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [proposals, setProposals] = useState<API.ProposalListPage | null>(null);
   const [error, setError] = useState("");
   const [previewError, setPreviewError] = useState("");
@@ -48,7 +51,7 @@ export function InvitationsPage() {
     setRetry((n) => n + 1);
   }
   const parsed = useRef(false);
-  const read = useReadBoundary(`${session?.actor.id}:${retry}`);
+  const read = useReadBoundary(`${session?.actor.id}:${retry}:${pageSize}`);
   useEffect(() => {
     if (!parsed.current) {
       parsed.current = true;
@@ -76,7 +79,7 @@ export function InvitationsPage() {
   useEffect(() => {
     const c = new AbortController();
     if (session?.actor.id) {
-      myProposals({ limit: 50 }, { signal: c.signal })
+      myProposals({ limit: pageSize }, { signal: c.signal })
         .then((p) => {
           if (!c.signal.aborted) setProposals(p);
         })
@@ -88,7 +91,7 @@ export function InvitationsPage() {
         });
     }
     return () => c.abort();
-  }, [session?.actor.id, retry]);
+  }, [session?.actor.id, retry, pageSize]);
   return (
     <div className="mx-auto grid w-full max-w-3xl gap-6 p-4">
       <h1 className="text-2xl">邀请与授权</h1>
@@ -267,6 +270,15 @@ export function InvitationsPage() {
                 ) : null}
               </article>
             ))}
+          <PageSizeSelect
+            label="待处理授权每页数量"
+            value={pageSize}
+            disabled={proposalsPending}
+            onChange={(size) => {
+              setProposals(null);
+              setPageSize(size);
+            }}
+          />
           {!proposalsPending && !proposalsError && proposals?.next_cursor ? (
             <Button
               variant="outline"
@@ -276,7 +288,7 @@ export function InvitationsPage() {
                     (signal) =>
                       myProposals(
                         {
-                          limit: 50,
+                          limit: pageSize,
                           cursor: proposals.next_cursor,
                         },
                         { signal },

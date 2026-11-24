@@ -16,6 +16,7 @@ import {
   ArrowUp,
   AtSign,
   ChevronDown,
+  Plus,
   SlidersHorizontal,
   Sparkles,
 } from "lucide-react";
@@ -25,10 +26,10 @@ import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { UnavailableDialog } from "@/components/availability/unavailable";
 import { RecentCanvases } from "@/components/layout/recent-canvases";
 import { useSpace } from "@/components/spaces/space-context";
-import { useProjectCreation } from "@/components/projects/project-creation";
+import { NewCanvasButton } from "@/components/projects/new-canvas-button";
 import { ProjectPicker } from "@/components/projects/project-picker";
-import { requireProject, type Project } from "@/components/projects/project";
-import { ensureIndependentCreation } from "@/api/projects";
+import { type Project } from "@/components/projects/project";
+import { useConversationScope } from "@/components/conversations/use-conversation-scope";
 import type { GenerationSeed } from "@/components/generation/generation-dialog";
 import { ComposerToolbar } from "@/components/generation/composer-toolbar";
 import { ModelPicker } from "@/components/generation/model-picker";
@@ -78,6 +79,8 @@ import {
 import { CreationTypeSelect } from "@/components/generation/creation-type-select";
 import { CreationTypeFields } from "@/components/generation/creation-type-fields";
 
+type CreationMode = "generate" | "canvas";
+
 type Workspace = {
   project: Project;
   type: Exclude<CreationType, "agent">;
@@ -103,17 +106,19 @@ export function HomeCreation({
 
 function ScopedHomeCreation({ initialType }: { initialType: CreationType }) {
   const session = useOptionalSession();
-  const canvasCreation = useProjectCreation();
   const login = useLoginDialog();
   const router = useRouter();
   const conversationMemory = useConversationContext();
   const { selected: space } = useSpace();
-  const [mode, setMode] = useState("generate");
-  const [type, setType] = useState<CreationType>(initialType);
+  const [mode, setMode] = useState<CreationMode>("generate");
+  const [generationType, setGenerationType] = useState(initialType);
+  const type = mode === "canvas" ? "agent" : generationType;
   const [project, setProject] = useState<Project | null>(null);
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
-  const [independent, setIndependent] = useState<Project | null>(null);
-  const [contextAttempt, retryContext] = useState(0);
+  const independentType =
+    type === "image" || type === "video" || type === "agent";
+  const scope = useConversationScope(undefined, independentType);
+  const independent = scope.data ?? null;
   const [projectOpen, setProjectOpen] = useState(false);
   const [locked, setLocked] = useState(false);
   const [switching, setSwitching] = useState(false);
@@ -128,7 +133,7 @@ function ScopedHomeCreation({ initialType }: { initialType: CreationType }) {
     session: ComposerSession;
   } | null>(null);
   const [inputs, setInputs] = useState<
-    Partial<Record<CreationType | "canvas", PromptDraft>>
+    Partial<Record<CreationType, PromptDraft>>
   >(() => {
     const pending = conversationMemory?.readDraft("/new");
     return pending ? { agent: pending } : {};
@@ -136,17 +141,7 @@ function ScopedHomeCreation({ initialType }: { initialType: CreationType }) {
   const [empty] = useState(emptyPromptDraft);
   const inputKey = `${subjectScope}/home-input:${type}`;
   const homeDraft = inputs[type] ?? empty;
-  const canvasDraft = inputs.canvas ?? empty;
   const prompt = homeDraft.document.content
-    .map((p) =>
-      (p.content ?? [])
-        .map((n) =>
-          n.type === "text" ? n.text : n.type === "hardBreak" ? "\n" : "",
-        )
-        .join(""),
-    )
-    .join("\n");
-  const canvasPrompt = canvasDraft.document.content
     .map((p) =>
       (p.content ?? [])
         .map((n) =>
@@ -159,35 +154,19 @@ function ScopedHomeCreation({ initialType }: { initialType: CreationType }) {
   const inputRecovery = useHomeDraftRecovery(
     canRecover ? inputKey : null,
     (draft) => setInputs((current) => ({ ...current, [type]: draft })),
-  );
-  const canvasRecovery = useHomeDraftRecovery(
-    canRecover ? `${subjectScope}/home-input:canvas` : null,
-    (draft) => setInputs((current) => ({ ...current, canvas: draft })),
+    mode === "canvas",
   );
   const currentEditor =
     homeEditor?.key === inputKey ? homeEditor.session : null;
   const activeType = creationTypes.find((item) => item.id === type)!;
   const supported = true;
-  const independentType = type === "image" || type === "video";
   const openIndependent = useEffectEvent((context: Project) => {
-    setIndependent(context);
-    if (type === "image" || type === "video") {
+    if ((type === "image" || type === "video") && workspace?.type !== type)
       void select(type, project, context);
-    }
   });
   useEffect(() => {
-    if (!canRecover || !independentType || independent) return;
-    const controller = new AbortController();
-    void ensureIndependentCreation({ signal: controller.signal })
-      .then((value) => requireProject(value))
-      .then((context) => {
-        if (!controller.signal.aborted) openIndependent(context);
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setError("创作空间暂不可用，请重试。");
-      });
-    return () => controller.abort();
-  }, [canRecover, independentType, independent, contextAttempt]);
+    if (canRecover && independent) openIndependent(independent);
+  }, [canRecover, independent, type]);
   const acceptsReferences =
     type === "image" ||
     type === "video" ||
@@ -204,6 +183,7 @@ function ScopedHomeCreation({ initialType }: { initialType: CreationType }) {
     nextType: CreationType,
     nextProject = project,
     context = independent,
+    nextMode = mode,
   ) {
     const execution =
       nextType === "image" || nextType === "video" ? context : nextProject;
@@ -216,24 +196,9 @@ function ScopedHomeCreation({ initialType }: { initialType: CreationType }) {
         return;
       }
       setError("");
-      if (type === "agent")
-        conversationMemory?.saveDraft(`${project?.id ?? ""}/new`, homeDraft);
-      if (
-        nextType === "agent" &&
-        (type !== "agent" || project?.id !== nextProject?.id)
-      ) {
-        const nextKey = `${nextProject?.id ?? ""}/new`;
-        const nextDraft =
-          !project && type === "agent"
-            ? homeDraft
-            : (conversationMemory?.readDraft(nextKey) ??
-              (project?.id === nextProject?.id ? inputs.agent : undefined) ??
-              emptyPromptDraft());
-        setInputs((current) => ({ ...current, agent: nextDraft }));
-        if (!project && nextProject)
-          conversationMemory?.saveDraft("/new", emptyPromptDraft());
-      }
-      setType(nextType);
+      if (type === "agent") conversationMemory?.saveDraft("/new", homeDraft);
+      if (nextMode === "generate") setGenerationType(nextType);
+      setMode(nextMode);
       setProject(nextProject);
       setWorkspace(
         execution && executableCreationType(nextType)
@@ -270,7 +235,7 @@ function ScopedHomeCreation({ initialType }: { initialType: CreationType }) {
     if (independentType) {
       setError("");
       if (independent) void select(type);
-      else retryContext((attempt) => attempt + 1);
+      else void scope.mutate();
       return;
     }
     setProjectOpen(true);
@@ -284,7 +249,6 @@ function ScopedHomeCreation({ initialType }: { initialType: CreationType }) {
         open={projectOpen}
         onOpenChange={setProjectOpen}
         onChange={(next) => {
-          conversationMemory?.selectProject(next);
           void select(type, next);
         }}
       />
@@ -318,17 +282,13 @@ function ScopedHomeCreation({ initialType }: { initialType: CreationType }) {
       onChange={(value) => void select(value)}
     />
   );
-  function startCanvas() {
-    if (!canvasCreation.disabled) {
-      void canvasCreation.start(canvasPrompt.trim());
-    }
-  }
-
   return (
     <section className="creation-hero" data-mode={mode} aria-label="开始创作">
       <h1>你好，今天想要创作什么？</h1>
-      {mode === "canvas" ? canvasRecovery.notice : inputRecovery.notice}
-      {error ? <FeedbackToast message={error} /> : null}
+      {inputRecovery.notice}
+      {error || scope.error ? (
+        <FeedbackToast message={error || "创作空间暂不可用，请重试。"} />
+      ) : null}
       <ToggleGroup
         type="single"
         variant="pill"
@@ -336,7 +296,13 @@ function ScopedHomeCreation({ initialType }: { initialType: CreationType }) {
         value={mode}
         disabled={locked || switching}
         onValueChange={(value) => {
-          if (value) setMode(value);
+          if (value === "canvas" || value === "generate")
+            void select(
+              value === "canvas" ? "agent" : generationType,
+              project,
+              independent,
+              value,
+            );
         }}
         className="creation-toggle"
         aria-label="创作模式"
@@ -345,26 +311,46 @@ function ScopedHomeCreation({ initialType }: { initialType: CreationType }) {
         <ToggleGroupItem value="canvas">画布</ToggleGroupItem>
       </ToggleGroup>
       <div className="creation-stage" data-testid="creation-stage">
-        <div hidden={mode !== "generate"} className="creation-panel">
+        {mode === "canvas" && (
+          <div className="home-canvas-launch">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold">最近画布</h2>
+              <Button asChild size="sm" variant="ghost" className="max-md:h-11">
+                <Link href="/assets?view=canvas" aria-label="全部画布">
+                  全部
+                </Link>
+              </Button>
+            </div>
+            {session && space ? (
+              <RecentCanvases key={subjectScope} presentation="cards">
+                <NewCanvasTile />
+              </RecentCanvases>
+            ) : (
+              <div className="home-canvas-list">
+                <NewCanvasTile />
+              </div>
+            )}
+          </div>
+        )}
+        <div className="creation-panel">
           <div className="creation-tabs">
             {/* One active panel, owned by the selected type; switching first flushes its saved draft. */}
             <div>
               {type === "agent" ? (
                 <ConversationWorkspace
-                  key={`${subjectScope}/${project?.id ?? "unscoped"}`}
+                  key={`${subjectScope}/${independent?.id ?? "unscoped"}`}
                   ownerKey={subjectScope}
-                  projectID={project?.id ?? ""}
-                  enabled={!!session && !!space?.writable && !!project}
+                  projectID={independent?.id ?? ""}
+                  enabled={!!session && !!space?.writable && !!independent}
+                  independent
                   initialDraft={homeDraft}
                   onDraftChange={inputRecovery.change}
                   embedded
+                  compactEntry={mode === "canvas"}
+                  homeGeneration={mode === "generate"}
                   onChooseProject={prepare}
-                  onAccepted={(sid) =>
-                    router.push(
-                      `/conversations/${sid}?projectId=${project!.id}`,
-                    )
-                  }
-                  headerActions={typeControl}
+                  onAccepted={(sid) => router.push(`/conversations/${sid}`)}
+                  headerActions={mode === "generate" ? typeControl : undefined}
                   projectControl={projectControl}
                   onLock={setLocked}
                 />
@@ -454,12 +440,10 @@ function ScopedHomeCreation({ initialType }: { initialType: CreationType }) {
                               draft={homeDraft}
                               onChange={inputRecovery.change}
                               placeholder={
-                                type === "image"
-                                  ? "描述创作想法，或添加参考"
-                                  : type === "audio" &&
-                                      homeDraft.mode === "omni_audio"
-                                    ? "描述角色、台词、音效与时间段，@ 引用音频。"
-                                    : activeType.placeholder
+                                type === "audio" &&
+                                homeDraft.mode === "omni_audio"
+                                  ? "描述角色、台词、音效与时间段，@ 引用音频。"
+                                  : activeType.placeholder
                               }
                               onReady={(value) =>
                                 setHomeEditor({
@@ -568,50 +552,17 @@ function ScopedHomeCreation({ initialType }: { initialType: CreationType }) {
             </div>
           </div>
         </div>
-        <div
-          hidden={mode !== "canvas"}
-          className="creation-panel home-canvas-launch"
-        >
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              startCanvas();
-            }}
-          >
-            <InputGroup variant="composer" className="canvas-idea">
-              <p className="canvas-idea-label">画布创作想法</p>
-              <CreationEntryPrompt
-                label="画布创作想法"
-                contextKey={`${subjectScope}/home-input:canvas`}
-                draft={canvasDraft}
-                onChange={canvasRecovery.change}
-                placeholder="描述想法，在画布中继续编辑"
-                onSubmit={() => {
-                  if (canvasPrompt.trim()) startCanvas();
-                }}
-              />
-              <InputGroupAddon
-                align="block-end"
-                className="canvas-idea-actions"
-              >
-                <Button asChild variant="secondary">
-                  <Link href="/assets?view=canvas">全部画布</Link>
-                </Button>
-                <Button type="submit" disabled={canvasCreation.disabled}>
-                  新建画布
-                </Button>
-              </InputGroupAddon>
-            </InputGroup>
-          </form>
-          {mode === "canvas" && session && space ? (
-            <RecentCanvases
-              key={`${session.actor.id}/${space.id}`}
-              presentation="cards"
-            />
-          ) : null}
-        </div>
       </div>
       <UnavailableDialog feature={feature} onClose={() => setFeature(null)} />
     </section>
+  );
+}
+
+function NewCanvasTile() {
+  return (
+    <NewCanvasButton variant="tile" className="home-canvas-card" type="button">
+      <Plus aria-hidden="true" data-icon="inline-start" />
+      <span className="home-canvas-card-title">新建画布</span>
+    </NewCanvasButton>
   );
 }

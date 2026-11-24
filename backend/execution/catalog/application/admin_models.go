@@ -156,7 +156,7 @@ func (q *AdminModelsQuery) List(ctx context.Context, actor identityapp.Principal
 		return AdminModelPage{}, ErrInvalidAdminModels
 	}
 	if input.Limit == 0 {
-		input.Limit = 50
+		input.Limit = 20
 	}
 	result, err := q.store.ListAdminModels(ctx, actor, input)
 	if err != nil {

@@ -1,10 +1,4 @@
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-} from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ConversationThread } from "@/components/conversations/conversation-thread";
 import type { ConversationController } from "@/components/conversations/use-conversation";
@@ -74,7 +68,7 @@ function controller() {
 }
 it("keeps the original attempt and uses only the submitted plain text", () => {
   const c = controller();
-  render(<ConversationThread conversation={c} projectID="project" />);
+  render(<ConversationThread conversation={c} projectID="project" writable />);
   expect(screen.getByText("原来的回复")).toBeTruthy();
   expect(screen.queryByText("不得显示的派生指令")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "重新生成" }));
@@ -90,41 +84,27 @@ it("shows pending Stop separately from execution completion", () => {
   expect(screen.queryByText("已停止")).toBeNull();
 });
 
-it("follows late result-card resizing only while reading the newest messages", () => {
-  let resized: (() => void) | undefined;
-  const disconnect = vi.fn();
-  vi.stubGlobal(
-    "ResizeObserver",
-    class {
-      constructor(callback: () => void) {
-        resized = callback;
-      }
-      observe() {}
-      disconnect = disconnect;
-    },
-  );
-  const { unmount } = render(
+it("anchors each user turn and keeps assistant actions with their reply", () => {
+  render(
     <ConversationThread conversation={controller()} projectID="project" />,
   );
-  const scroller = screen.getByLabelText("对话消息");
-  Object.defineProperties(scroller, {
-    clientHeight: { configurable: true, value: 400 },
-    scrollHeight: { configurable: true, value: 900 },
-  });
-  act(() => resized?.());
-  expect(scroller.scrollTop).toBe(900);
-  Object.defineProperty(scroller, "scrollHeight", { value: 1100 });
-  fireEvent.scroll(scroller);
-  act(() => resized?.());
-  expect(scroller.scrollTop).toBe(1100);
-  scroller.scrollTop = 100;
-  fireEvent.scroll(scroller);
-  Object.defineProperty(scroller, "scrollHeight", { value: 1200 });
-  act(() => resized?.());
-  expect(scroller.scrollTop).toBe(100);
-  expect(screen.getByRole("button", { name: "回到底部" })).toBeTruthy();
-  unmount();
-  expect(disconnect).toHaveBeenCalledOnce();
+  const viewport = screen.getByLabelText("对话消息");
+  const turns = viewport.querySelectorAll(
+    '[data-slot="message-scroller-item"]',
+  );
+  expect(turns).toHaveLength(2);
+  expect(
+    turns[0]?.querySelector(
+      '[data-slot="message"][data-align="end"] [data-slot="bubble-content"]',
+    )?.textContent,
+  ).toContain("参考创作");
+  expect(
+    turns[1]?.querySelector('[data-slot="message"][data-align="start"]')
+      ?.textContent,
+  ).toContain("原来的回复");
+  expect(
+    turns[1]?.querySelector('[data-slot="message-footer"]')?.textContent,
+  ).toContain("引用");
 });
 
 it("places the expandable public activity before the completed reply", () => {

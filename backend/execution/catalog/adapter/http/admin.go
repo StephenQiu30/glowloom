@@ -97,7 +97,7 @@ type adminCursor struct {
 }
 
 func adminPage(c *gin.Context, kind string, filterKeys ...string) (int, *adminCursor, string, bool) {
-	limit := 50
+	limit := 20
 	if raw := c.Query("limit"); raw != "" {
 		value, err := strconv.Atoi(raw)
 		if err != nil || value < 1 || value > 200 {

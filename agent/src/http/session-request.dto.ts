@@ -106,7 +106,7 @@ export class MessageQuery extends IdentityQuery {
     format: 'int64',
     minimum: 1,
     maximum: 100,
-    default: 50,
+    default: 20,
   })
   @ValidateIf(whenPresent)
   @Transform(({ value }: TransformFnParams) => queryInteger(value))

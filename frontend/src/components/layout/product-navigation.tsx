@@ -43,6 +43,7 @@ export function ProductNavigation({
               Boolean(adminSection) ||
               [
                 "billing",
+                "conversations",
                 "assets",
                 "explore",
                 "ai-tools",

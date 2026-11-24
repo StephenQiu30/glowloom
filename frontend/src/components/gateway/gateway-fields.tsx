@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { GatewayAction } from "./gateway-action";
 
+import { arkEmbedding, type GatewayPrice } from "@/lib/ai-gateway-admin";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Collapsible,
@@ -220,4 +221,13 @@ export function money(value: number, currency = "CNY") {
     .formatToParts(whole)
     .map((part) => (part.type === "fraction" ? fraction : part.value))
     .join("");
+}
+
+export function priceSummary(price: GatewayPrice, protocol: string) {
+  if (price.explicit_free === true) return "免费";
+  if (protocol === arkEmbedding.protocol)
+    return `输入 ${money(price.input, price.currency)} / 百万 token`;
+  return protocol === "media"
+    ? `${money(price.request, price.currency)} / 次`
+    : `输入 ${money(price.input, price.currency)} · 输出 ${money(price.output, price.currency)} / 百万 token`;
 }

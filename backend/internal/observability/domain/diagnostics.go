@@ -29,7 +29,7 @@ type Filter struct {
 
 // ParseFilter accepts only explicit, unique, bounded whitelist fields.
 func ParseFilter(raw string, now time.Time) (Filter, error) {
-	f := Filter{From: now.UTC().Add(-24 * time.Hour), To: now.UTC(), Limit: 50}
+	f := Filter{From: now.UTC().Add(-24 * time.Hour), To: now.UTC(), Limit: 20}
 	if len(raw) > 4096 {
 		return f, ErrInvalidFilter
 	}

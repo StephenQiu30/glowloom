@@ -1,5 +1,6 @@
 "use client";
 
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { useDeferredValue, useState } from "react";
 import useSWR from "@/components/canvas/runtime/lib/use-live-query";
 import { FileImage, Music2, Video } from "lucide-react";
@@ -51,7 +52,7 @@ export function PublicAssetBrowser({
   const query = useDeferredValue(keyword.trim());
   const [kind, setKind] = useState(kinds?.[0] ?? "all");
   const [page, setPage] = useState(1);
-  const [size, setSize] = useState(12);
+  const [size, setSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [selected, setSelected] = useState<CanvasContract.PublicAssetVO>();
   const [busy, setBusy] = useState(false);
   const list = useSWR(

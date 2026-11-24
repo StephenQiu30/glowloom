@@ -1,4 +1,6 @@
 "use client";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { PageSizeSelect } from "@/components/ui/page-size-select";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { useOptionalSession } from "@/components/auth/session";
 import { useSpace } from "@/components/spaces/space-context";
@@ -604,6 +606,7 @@ function MaterialList({
   onSelectPage: (assets: ProjectPickerAsset[]) => void;
 }) {
   const [items, setItems] = useState<ProjectPickerAsset[]>([]);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [pageIndex, setPageIndex] = useState(1);
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
@@ -615,13 +618,14 @@ function MaterialList({
   async function read(index: number, controller: AbortController) {
     return requireProjectPickerPage(
       await listMediaLibrary(
-        projectPickerQuery(projectID, kind, query, index, filter),
+        projectPickerQuery(projectID, kind, query, index, filter, pageSize),
         { signal: controller.signal },
       ),
       projectID,
       kind,
       index,
       actorID,
+      pageSize,
     );
   }
   useEffect(() => {
@@ -659,7 +663,7 @@ function MaterialList({
       controller.abort();
       request.current?.abort();
     };
-  }, [projectID, actorID, kind, retry, query, filter]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [projectID, actorID, kind, retry, query, filter, pageSize]); // eslint-disable-line react-hooks/exhaustive-deps
   async function more() {
     if (busy.current || loading || !hasMore) return;
     busy.current = true;
@@ -816,6 +820,17 @@ function MaterialList({
             }
           />
         )}
+        <PageSizeSelect
+          value={pageSize}
+          label="项目素材每页数量"
+          onChange={(size) => {
+            setLoading(true);
+            setHasMore(false);
+            setItems([]);
+            setPageSize(size);
+          }}
+          disabled={loading}
+        />
         {hasMore && (
           <Button
             variant="ghost"

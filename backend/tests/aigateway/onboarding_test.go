@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -505,4 +506,35 @@ func TestRouteDeletionIsAtomicAndPreservesAdmittedAttempts(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEqual(t, active, next.Route.ID)
 	require.NoError(t, store.DeleteRoutes(ctx, []uuid.UUID{next.Route.ID}))
+}
+
+func TestOnboardingConfigurationShowsActualProviderMetadata(t *testing.T) {
+	_, store, model, actor := fixture(t)
+	ctx := t.Context()
+	in := application.Onboarding{
+		Route: domain.Route{
+			ID: uuid.New(), ModelID: model.ID, Supplier: uuid.New(),
+			Group: uuid.NewString(), Protocol: "chat",
+			BaseURL: "https://api.deepseek.com/v1", UpstreamModel: "display-only",
+			Purchase: model.Price,
+		},
+		Scope: actor.ScopeID, Concurrency: 2, RPM: 10000,
+	}
+	require.NoError(t, store.PrepareOnboarding(ctx, in))
+	configuration, err := store.Configuration(ctx)
+	require.NoError(t, err)
+	data, err := json.Marshal(configuration)
+	require.NoError(t, err)
+	type listing struct {
+		ID          uuid.UUID `json:"id"`
+		ProviderKey string    `json:"provider_key"`
+		Upstream    string    `json:"upstream_model"`
+	}
+	var result struct {
+		Onboarding []listing `json:"onboarding"`
+	}
+	require.NoError(t, json.Unmarshal(data, &result))
+	require.True(t, slices.ContainsFunc(result.Onboarding, func(row listing) bool {
+		return row.ID == in.Route.ID && row.ProviderKey == "deepseek" && row.Upstream == in.Route.UpstreamModel
+	}))
 }

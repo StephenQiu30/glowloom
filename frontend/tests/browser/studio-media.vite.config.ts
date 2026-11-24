@@ -425,7 +425,7 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
         (!query.get("resolutions") || i.kind === "image"),
     );
     const page = Number(query.get("page") ?? 1),
-      size = Number(query.get("page_size") ?? 24);
+      size = Number(query.get("page_size") ?? 20);
     return reply({
       current_actor_id: actorID,
       current_org_id: orgID,

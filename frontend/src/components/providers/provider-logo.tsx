@@ -5,7 +5,7 @@ import useSWR from "swr";
 import { getProviderLogo } from "@/api/media";
 import { useOptionalSession } from "@/components/auth/session";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Globe } from "lucide-react";
+import { Globe, Server } from "lucide-react";
 import { cn } from "cn";
 
 const logos: Record<string, string> = {
@@ -35,20 +35,21 @@ function BuiltinProviderLogo({
   const logoKey = metadata?.logo_key ?? adapterKey;
   const source =
     logoKey && Object.hasOwn(logos, logoKey) ? logos[logoKey] : undefined;
-  if (!source)
+  if (!source) {
+    const Icon = adapterKey === "local" ? Server : Globe;
     return (
       <span className="inline-flex min-w-0 items-center gap-1">
-        <Globe
-          aria-hidden="true"
-          className={cn("size-5 shrink-0", className)}
-        />
+        <Icon aria-hidden="true" className={cn("size-5 shrink-0", className)} />
         {!iconOnly && (
           <span className="truncate">
-            {metadata?.display_name ?? adapterKey ?? "其他服务"}
+            {metadata?.display_name ??
+              (adapterKey === "local" ? "本地服务" : adapterKey) ??
+              "其他服务"}
           </span>
         )}
       </span>
     );
+  }
 
   if (
     logoKey === "openrouter" ||

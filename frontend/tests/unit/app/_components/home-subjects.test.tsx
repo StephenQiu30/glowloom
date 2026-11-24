@@ -7,6 +7,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { SWRConfig } from "swr";
 import { HomeCreation } from "@/app/_components/home-creation";
 import type { GenerationSeed } from "@/components/generation/generation-dialog";
 
@@ -48,7 +49,11 @@ vi.mock("next/dynamic", () => ({
         ),
 }));
 function Page() {
-  return <HomeCreation />;
+  return (
+    <SWRConfig value={{ provider: () => new Map() }}>
+      <HomeCreation />
+    </SWRConfig>
+  );
 }
 const subject = {
   id: "33333333-3333-4333-8333-333333333333",

@@ -21,7 +21,7 @@ func TestCanvasInformationScopedLedgerPaginationAndMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := service.Information(t.Context(), actor, doc.ID, 1)
+	got, err := service.Information(t.Context(), actor, doc.ID, 1, 20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,14 +52,20 @@ func TestCanvasInformationScopedLedgerPaginationAndMetadata(t *testing.T) {
 	}
 	seed(doc.ID, false, 999999999)
 	seed(uuid.New(), true, 999999999)
-	got, err = service.Information(t.Context(), actor, doc.ID, 1)
+	got, err = service.Information(t.Context(), actor, doc.ID, 1, 20)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got.Usage.SettledMicros != "21000021" || got.Usage.TaskCount != "21" || len(got.Usage.Entries) != 20 || got.Usage.NextPage == nil || *got.Usage.NextPage != 2 {
 		t.Fatalf("scoped charges: %+v", got.Usage)
 	}
-	last, err := service.Information(t.Context(), actor, doc.ID, 2)
+	for _, size := range []int{10, 50} {
+		sized, sizeErr := service.Information(t.Context(), actor, doc.ID, 1, size)
+		if sizeErr != nil || len(sized.Usage.Entries) != min(size, 21) || (sized.Usage.NextPage != nil) != (size < 21) {
+			t.Fatalf("page size %d: %+v, %v", size, sized.Usage, sizeErr)
+		}
+	}
+	last, err := service.Information(t.Context(), actor, doc.ID, 2, 20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,19 +78,19 @@ func TestCanvasInformationScopedLedgerPaginationAndMetadata(t *testing.T) {
 		}
 	}
 	stranger, _ := seedCanvasActor(t, owner)
-	if _, err = service.Information(t.Context(), stranger, doc.ID, 1); err == nil {
+	if _, err = service.Information(t.Context(), stranger, doc.ID, 1, 20); err == nil {
 		t.Fatal("cross-scope read allowed")
 	}
-	if _, err = service.Information(t.Context(), actor, doc.ID, 0); err == nil {
+	if _, err = service.Information(t.Context(), actor, doc.ID, 0, 20); err == nil {
 		t.Fatal("invalid page accepted")
 	}
-	if _, err = service.Information(t.Context(), actor, uuid.New(), 1); err == nil {
+	if _, err = service.Information(t.Context(), actor, uuid.New(), 1, 20); err == nil {
 		t.Fatal("missing canvas read allowed")
 	}
 	if err = owner.Exec(`UPDATE canvas.document SET is_delete=true WHERE id=?`, doc.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err = service.Information(t.Context(), actor, doc.ID, 1); err == nil {
+	if _, err = service.Information(t.Context(), actor, doc.ID, 1, 20); err == nil {
 		t.Fatal("deleted canvas read allowed")
 	}
 }

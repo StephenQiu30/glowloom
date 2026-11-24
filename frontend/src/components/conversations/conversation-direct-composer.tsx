@@ -52,7 +52,7 @@ export function ConversationDirectComposer({
   onCloseGuard: (guard: (() => Promise<boolean>) | null) => void;
   onChooseProject: () => void;
   typeControl: ReactNode;
-  projectSetting: ReactNode;
+  projectSetting?: ReactNode;
 }) {
   const [empty] = useState(() => {
     const value = emptyPromptDraft();

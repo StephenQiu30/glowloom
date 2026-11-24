@@ -63,6 +63,7 @@ export function CanvasToolbar({
   onUpload,
   onBrowseAssets,
   onOpenAssistant,
+  assistantOpen,
   onDelete,
   onClear,
   onBackgroundModeChange,
@@ -83,6 +84,7 @@ export function CanvasToolbar({
   onUpload: () => void;
   onBrowseAssets: () => void;
   onOpenAssistant?: () => void;
+  assistantOpen?: boolean;
   onDelete: () => void;
   onClear: () => void;
   onCanvasToolChange: (tool: "select" | "pan") => void;
@@ -438,7 +440,13 @@ export function CanvasToolbar({
             </Popover>
           )}
         </div>
-        <Toolbar className="canvas-assistant-action">
+        <Toolbar
+          className={
+            assistantOpen
+              ? "canvas-assistant-action invisible"
+              : "canvas-assistant-action"
+          }
+        >
           <Tooltip>
             <TooltipTrigger asChild>
               <span
@@ -449,6 +457,10 @@ export function CanvasToolbar({
                   variant="secondary"
                   size="toolbar"
                   aria-label="与 AI 对话"
+                  aria-expanded={assistantOpen}
+                  aria-controls={
+                    assistantOpen ? "canvas-storyboard-assistant" : undefined
+                  }
                   onClick={onOpenAssistant}
                   disabled={!onOpenAssistant}
                   className="rounded-full"
@@ -458,9 +470,11 @@ export function CanvasToolbar({
                 </Button>
               </span>
             </TooltipTrigger>
-            <TooltipContent side="top">
-              {onOpenAssistant ? "与 AI 对话" : "AI 对话暂不可用"}
-            </TooltipContent>
+            {!assistantOpen && (
+              <TooltipContent side="top">
+                {onOpenAssistant ? "与 AI 对话" : "AI 对话暂不可用"}
+              </TooltipContent>
+            )}
           </Tooltip>
         </Toolbar>
       </footer>

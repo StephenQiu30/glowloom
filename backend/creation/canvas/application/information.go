@@ -30,7 +30,7 @@ type CanvasUsage struct {
 
 // CanvasUsageReader binds the billing owner to the authorized document transaction.
 type CanvasUsageReader interface {
-	ReadCanvasUsage(context.Context, identity.Principal, uuid.UUID, uuid.UUID, int) (CanvasUsage, error)
+	ReadCanvasUsage(context.Context, identity.Principal, uuid.UUID, uuid.UUID, int, int) (CanvasUsage, error)
 }
 
 // CanvasInformation exposes authoritative metadata separately from the live graph.
@@ -46,17 +46,17 @@ type CanvasInformation struct {
 
 // InformationStore supports scoped metadata and accounting without expanding the document write port.
 type InformationStore interface {
-	Information(context.Context, identity.Principal, uuid.UUID, int) (CanvasInformation, error)
+	Information(context.Context, identity.Principal, uuid.UUID, int, int) (CanvasInformation, error)
 }
 
 // Information validates paging before the authorized consistent read.
-func (s *Service) Information(ctx context.Context, a identity.Principal, id uuid.UUID, page int) (CanvasInformation, error) {
-	if id == uuid.Nil || page < 1 || page > 10000 {
+func (s *Service) Information(ctx context.Context, a identity.Principal, id uuid.UUID, page, size int) (CanvasInformation, error) {
+	if id == uuid.Nil || page < 1 || page > 10000 || size < 1 || size > 100 {
 		return CanvasInformation{}, domain.ErrInvalidCommand
 	}
 	store, ok := s.store.(InformationStore)
 	if !ok {
 		return CanvasInformation{}, ErrNotFound
 	}
-	return store.Information(ctx, a, id, page)
+	return store.Information(ctx, a, id, page, size)
 }

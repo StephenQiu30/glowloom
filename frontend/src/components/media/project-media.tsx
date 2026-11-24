@@ -7,6 +7,7 @@ import { DownloadButton } from "./download-button";
 import { RequestError } from "@/lib/request";
 import { developmentMediaURL } from "@/lib/development-transport";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import dynamic from "next/dynamic";
 type PreviewProps = {
   projectID: string;
@@ -15,6 +16,7 @@ type PreviewProps = {
   large?: boolean;
   fit?: "contain" | "cover";
   interactive?: boolean;
+  playOnOpen?: boolean;
   compact?: boolean;
 };
 export function ProjectMediaPreview(props: PreviewProps) {
@@ -33,10 +35,12 @@ function MediaPreview({
   fit = large ? "contain" : "cover",
   interactive = large,
   compact = false,
+  playOnOpen = false,
 }: PreviewProps) {
   const [url, setURL] = useState(""),
     [failed, setFailed] = useState(false),
-    [retry, setRetry] = useState(0);
+    [retry, setRetry] = useState(0),
+    [decoded, setDecoded] = useState(false);
   useEffect(() => {
     if (kind === "document") return;
     const c = new AbortController();
@@ -88,6 +92,8 @@ function MediaPreview({
           <Button
             variant="ghost"
             onClick={() => {
+              setURL("");
+              setDecoded(false);
               setFailed(false);
               setRetry((n) => n + 1);
             }}
@@ -100,15 +106,9 @@ function MediaPreview({
     );
   if (!url)
     return (
-      <span
-        className="media-unavailable flex h-full items-center justify-center"
-        role="status"
-      >
-        {compact ? (
-          <ImageIcon className="size-4 animate-pulse text-muted-foreground" />
-        ) : null}
-        <span className={compact ? "sr-only" : undefined}>正在读取预览…</span>
-      </span>
+      <Skeleton className="size-full" role="status">
+        <span className="sr-only">正在读取预览…</span>
+      </Skeleton>
     );
   if (kind === "video")
     return (
@@ -116,8 +116,9 @@ function MediaPreview({
         src={url}
         aria-label="视频素材"
         controls={interactive}
+        autoPlay={playOnOpen}
         playsInline
-        preload="metadata"
+        preload={playOnOpen ? "none" : "metadata"}
         className={
           compact && fit === "cover"
             ? "size-full object-cover"
@@ -143,15 +144,19 @@ function MediaPreview({
       />
     );
   return (
-    <Image
-      src={url}
-      alt="素材预览"
-      fill
-      sizes={large ? "80vw" : "280px"}
-      unoptimized
-      className={fit === "contain" ? "object-contain" : "object-cover"}
-      onError={() => setFailed(true)}
-    />
+    <>
+      {!decoded && <Skeleton className="absolute inset-0" aria-hidden />}
+      <Image
+        src={url}
+        onLoad={() => setDecoded(true)}
+        alt="素材预览"
+        fill
+        sizes={large ? "80vw" : "280px"}
+        unoptimized
+        className={fit === "contain" ? "object-contain" : "object-cover"}
+        onError={() => setFailed(true)}
+      />
+    </>
   );
 }
 const AssetDialog = dynamic(() =>

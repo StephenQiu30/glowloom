@@ -53,7 +53,7 @@ installDevelopmentTransport({
             ? { kind: "personal" }
             : { kind: "project", project_id: projectID },
         page: Number(params.page) || 1,
-        page_size: params.scope === "personal" ? 24 : 40,
+        page_size: params.page_size ?? 20,
         total: 12,
         folders: [],
         items: Array.from({ length: 12 }, (_, index) => ({

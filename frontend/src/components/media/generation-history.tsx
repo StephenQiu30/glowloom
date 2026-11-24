@@ -1,4 +1,6 @@
 "use client";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { PageSizeSelect } from "@/components/ui/page-size-select";
 import {
   useCallback,
   useEffect,
@@ -12,7 +14,10 @@ import { useOptionalSession } from "@/components/auth/session";
 import { useSpace } from "@/components/spaces/space-context";
 import { ProjectPicker } from "@/components/projects/project-picker";
 import type { Project } from "@/components/projects/project";
-import { requireTask, generationStatusLabel } from "@/components/generation/contracts";
+import {
+  requireTask,
+  generationStatusLabel,
+} from "@/components/generation/contracts";
 import { TaskDetail } from "@/components/generation/generation-dialog";
 import { Button } from "@/components/ui/button";
 import { ContentState } from "@/components/layout/content-state";
@@ -61,6 +66,7 @@ function HistoryList({
   picker: ReactNode;
 }) {
   const [items, setItems] = useState<API.TaskSummary[]>([]);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [cursor, setCursor] = useState<string>();
   const [pending, setPending] = useState(true);
   const [error, setError] = useState("");
@@ -77,7 +83,7 @@ function HistoryList({
       setError("");
       try {
         const result = await listProjectOperations(
-          { pid: projectID, limit: 30, cursor: next },
+          { pid: projectID, limit: pageSize, cursor: next },
           { signal: controller.signal },
         );
         if (
@@ -99,7 +105,7 @@ function HistoryList({
         if (!controller.signal.aborted) setPending(false);
       }
     },
-    [projectID],
+    [projectID, pageSize],
   );
   useEffect(() => {
     // Start after mount; abort prevents an old project response entering the new scope.
@@ -166,6 +172,12 @@ function HistoryList({
           </Button>
         ))}
       </div>
+      <PageSizeSelect
+        value={pageSize}
+        label="生成记录每页数量"
+        onChange={setPageSize}
+        disabled={pending}
+      />
       {cursor && (
         <Button
           variant="secondary"

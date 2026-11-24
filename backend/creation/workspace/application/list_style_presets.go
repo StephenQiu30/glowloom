@@ -71,7 +71,7 @@ func (q *ListStylePresetsQuery) Execute(ctx context.Context, actor identityapp.P
 		return StylePresetPage{}, ErrInvalidStylePresetList
 	}
 	if input.Limit == 0 {
-		input.Limit = 50
+		input.Limit = 20
 	}
 	page, err := q.store.ListStylePresetSummaries(ctx, actor, input)
 	if err != nil {

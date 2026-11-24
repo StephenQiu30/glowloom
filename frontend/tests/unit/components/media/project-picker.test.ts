@@ -13,7 +13,7 @@ const response = {
   revision: 1,
   scope: { kind: "project", project_id: id },
   page: 1,
-  page_size: 40,
+  page_size: 20,
   total: 45,
   items: [
     {
@@ -40,7 +40,7 @@ describe("project picker formal query", () => {
         project_id: id,
         kind: "image",
         page: 2,
-        page_size: 40,
+        page_size: 20,
         search: "海边",
         origin: "upload",
         resolutions: "1K,2K",

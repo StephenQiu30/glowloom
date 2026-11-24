@@ -1,3 +1,4 @@
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { isProjectID } from "@/components/projects/project";
 import { RequestError } from "@/lib/request";
 export type ProjectPickerAsset = API.AssetSummary & {
@@ -27,10 +28,11 @@ export function projectPickerFilterForKind(
 }
 export function projectPickerQuery(
   projectID: string,
-  kind: string,
+  kind: string | undefined,
   search: string,
   page: number,
   filter: ProjectPickerFilter,
+  pageSize: number = DEFAULT_PAGE_SIZE,
 ): API.listMediaLibraryParams {
   const from = filter.from ? pickerDate(filter.from) : undefined;
   const before = filter.through ? pickerDate(filter.through) : undefined;
@@ -47,7 +49,7 @@ export function projectPickerQuery(
     kind,
     search: search.trim() || undefined,
     page,
-    page_size: 40,
+    page_size: pageSize,
     catalog_state: "active",
     order: "updated_desc",
     created_from: from?.toISOString(),
@@ -76,9 +78,10 @@ const integer = (value: unknown, min = 0) =>
 export function requireProjectPickerPage(
   value: unknown,
   projectID: string,
-  kind: string,
+  kind: string | undefined,
   index: number,
   actorID?: string,
+  pageSize: number = DEFAULT_PAGE_SIZE,
 ) {
   const page = value as API.LibraryPage | null;
   if (
@@ -91,10 +94,10 @@ export function requireProjectPickerPage(
     page.scope?.kind !== "project" ||
     page.scope.project_id !== projectID ||
     page.page !== index ||
-    page.page_size !== 40 ||
+    page.page_size !== pageSize ||
     !integer(page.total) ||
     !Array.isArray(page.items) ||
-    page.items.length > 40 ||
+    page.items.length > pageSize ||
     page.items.length > page.total! ||
     new Set(page.items.map((item) => item.asset_id)).size !==
       page.items.length ||
@@ -103,8 +106,9 @@ export function requireProjectPickerPage(
         !isProjectID(item.id) ||
         !isProjectID(item.asset_id) ||
         item.asset_id !== item.media?.id ||
-        item.kind !== kind ||
-        item.media?.kind !== kind ||
+        (kind !== undefined && item.kind !== kind) ||
+        !item.kind ||
+        item.media?.kind !== item.kind ||
         item.catalog_state !== "active" ||
         !integer(item.media?.revision, 1),
     )
@@ -123,6 +127,6 @@ export function requireProjectPickerPage(
     ),
     total: page.total!,
     page: index,
-    hasMore: page.items.length > 0 && index * 40 < page.total!,
+    hasMore: page.items.length > 0 && index * pageSize < page.total!,
   };
 }

@@ -53,5 +53,43 @@ export function shotReference(
   shot: CanvasStoryboardShot,
   ordinal: number,
 ) {
-  return `参考第 ${ordinal} 镜（board_id=${boardID}, shot_id=${shot.id}, shot_revision=${shot.revision}）「${shot.title}」。动作：${shot.action}。计划时长：${shot.duration_ms / 1000} 秒。`;
+  return `参考第 ${ordinal} 镜（board_id=${boardID}, shot_id=${shot.id}, shot_revision=${shot.revision}）「${shot.title.replace(/\s+/g, " ")}」。动作：${shot.action.replace(/\s+/g, " ")}。计划时长：${shot.duration_ms / 1000} 秒。`;
+}
+
+export function storyboardReferenceLabel(text: string) {
+  const match =
+    /^参考第 (\d{1,2}) 镜（board_id=([0-9a-f-]{36}), shot_id=([0-9a-f-]{36}), shot_revision=\d+）/i.exec(
+      text,
+    );
+  return match
+    ? { key: `${match[2]}/${match[3]}`, label: `第 ${match[1]} 镜` }
+    : undefined;
+}
+
+export type StoryboardActionProposal = {
+  target: API.StoryboardTargetDto;
+  action: string;
+};
+
+export function storyboardActionProposal(
+  text: string,
+  input?: API.AuthorizedInput,
+): StoryboardActionProposal | undefined {
+  const [target, extra] = input?.storyboard_targets ?? [];
+  const [proposal, another] = text.matchAll(/^动作建议：[ \t]*([^\r\n]+)$/gm);
+  const action = proposal?.[1]?.trim();
+  if (!target || extra || another || !action || [...action].length > 2000)
+    return;
+  return { target, action };
+}
+
+export function storyboardDirections(text: string) {
+  return [
+    ...new Set(
+      Array.from(
+        text.matchAll(/^(?:#{2,4} )?方向：[ \t]*([^\r\n]{1,60})$/gm),
+        (match) => match[1]!.trim(),
+      ).filter(Boolean),
+    ),
+  ].slice(0, 4);
 }

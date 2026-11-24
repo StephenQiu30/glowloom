@@ -53,7 +53,7 @@ function library(items: API.AssetSummary[], page = 1, total = items.length) {
     revision: 1,
     scope: { kind: "project", project_id: items[0]?.project_id ?? pid },
     page,
-    page_size: 40,
+    page_size: 20,
     total,
     items: items.map((asset) => ({
       id: asset.id,
@@ -206,7 +206,7 @@ it("多选、搜索与分页保留已选资源身份，确认前不写入画布"
     project_id: pid,
     kind: "image",
     page: 2,
-    page_size: 40,
+    page_size: 20,
   });
 });
 it("跨项目回执不进入可选素材，重新读取可恢复", async () => {

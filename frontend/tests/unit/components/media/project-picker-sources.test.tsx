@@ -42,7 +42,7 @@ it("画布来源查询完整服务端收藏/搜索分页，仅浏览不伪造添
   expect(list.mock.lastCall![0]).toMatchObject({
     kind: "canvas",
     collection: "current",
-    limit: 30,
+    limit: 20,
     cursor: "next",
   });
   fireEvent.click(screen.getByRole("checkbox", { name: "仅收藏" }));

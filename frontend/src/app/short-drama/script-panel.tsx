@@ -1,4 +1,6 @@
 "use client";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { PageSizeSelect } from "@/components/ui/page-size-select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { FieldError } from "@/components/ui/field";
 
@@ -83,6 +85,7 @@ export function ScriptPanel({
   const [title, setTitle] = useState("");
   const [rights, setRights] = useState(false);
   const [selected, setSelected] = useState<string>();
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [sourcePage, setSourcePage] = useState(0);
   const write = useScriptWrite();
   const fileInput = useRef<HTMLInputElement>(null);
@@ -94,8 +97,15 @@ export function ScriptPanel({
   const revision = head.revision ?? 0;
   const sourceParams = { pid: projectID, version_id: version };
   const sources = useSWR(
-    version ? [owner, projectID, "script-sources", version, sourcePage] : null,
-    () => listScriptSources({ ...sourceParams, after: sourcePage, limit: 50 }),
+    version
+      ? [owner, projectID, "script-sources", version, sourcePage, pageSize]
+      : null,
+    () =>
+      listScriptSources({
+        ...sourceParams,
+        after: sourcePage,
+        limit: pageSize,
+      }),
   );
   const detail = useSWR(
     version && selected
@@ -105,7 +115,7 @@ export function ScriptPanel({
   );
   const imports = useSWR(
     [owner, projectID, "script-imports"],
-    () => listScriptFileImports({ pid: projectID, limit: 25 }),
+    () => listScriptFileImports({ pid: projectID, limit: DEFAULT_PAGE_SIZE }),
     {
       refreshInterval: (value) => (value?.items?.some(working) ? 2000 : 0),
       onSuccess(value) {
@@ -383,6 +393,15 @@ export function ScriptPanel({
               </Button>
             ),
         )}
+        <PageSizeSelect
+          value={pageSize}
+          label="剧本来源每页数量"
+          onChange={(size) => {
+            setSourcePage(0);
+            setPageSize(size);
+          }}
+          disabled={sources.isLoading}
+        />
         {sourcePage > 0 && (
           <Button variant="ghost" onClick={() => setSourcePage(0)}>
             返回首批来源

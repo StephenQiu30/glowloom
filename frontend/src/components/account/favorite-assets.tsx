@@ -1,5 +1,6 @@
 "use client";
 
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { useEffect, useState } from "react";
 import { listMediaLibrary, downloadLibraryMediaAsset } from "@/api/media";
 import { useSession } from "@/components/auth/session";
@@ -22,7 +23,7 @@ import { Heart } from "lucide-react";
 export function FavoriteAssets() {
   const { actor } = useSession();
   const [page, setPage] = useState(1);
-  const [size, setSize] = useState<PageSize>(12);
+  const [size, setSize] = useState<PageSize>(DEFAULT_PAGE_SIZE);
   const [result, setResult] = useState<{
     key: string;
     data: LibraryPage;

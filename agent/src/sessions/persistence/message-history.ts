@@ -52,7 +52,7 @@ export async function readMessagePage(
         .orderBy('commit_seq', 'desc')
         .orderBy('event_ordinal', 'desc')
         .orderBy('part_index', 'desc')
-        .limit((query.limit ?? 50) + 1);
+        .limit((query.limit ?? 20) + 1);
     })
     .with('bounded', (qb) =>
       qb
@@ -82,7 +82,7 @@ export async function readMessagePage(
     .orderBy('event_ordinal', 'desc')
     .orderBy('part_index', 'desc')
     .execute();
-  const page = rows.slice(0, query.limit ?? 50),
+  const page = rows.slice(0, query.limit ?? 20),
     last = page.at(-1);
   const more = last && Number(last.candidate_count) > page.length;
   return {

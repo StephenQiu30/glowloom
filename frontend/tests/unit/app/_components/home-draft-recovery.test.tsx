@@ -67,12 +67,18 @@ function Harness({
   contextKey,
   onChange,
   draft = textDraft("当前新输入"),
+  recoverCanvasDraft = false,
 }: {
   contextKey: string | null;
   onChange: (draft: PromptDraft) => void;
   draft?: PromptDraft;
+  recoverCanvasDraft?: boolean;
 }) {
-  const recovery = useHomeDraftRecovery(contextKey, onChange);
+  const recovery = useHomeDraftRecovery(
+    contextKey,
+    onChange,
+    recoverCanvasDraft,
+  );
   return (
     <>
       {recovery.notice}
@@ -101,6 +107,28 @@ describe("首页文字恢复的类型与作用域", () => {
       expect(mocks.list).not.toHaveBeenCalledWith(legacyKey);
     },
   );
+
+  it("首页画布模式可以恢复原画布输入，并保存到当前对话草稿", async () => {
+    const canvasKey = "actor/space-a/home-input:canvas";
+    const saved = branch(canvasKey, textDraft("原画布输入"));
+    const onChange = vi.fn();
+    mocks.list.mockImplementation(async (key) =>
+      key === canvasKey ? [saved] : [],
+    );
+    render(
+      <Harness contextKey={agentKey} onChange={onChange} recoverCanvasDraft />,
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "恢复上次文字" }),
+    );
+    await waitFor(() => expect(mocks.remove).toHaveBeenCalledWith(saved));
+    expect(onChange).toHaveBeenCalledWith(textDraft("原画布输入"));
+    expect(mocks.list.mock.calls.slice(0, 2)).toEqual([
+      [agentKey],
+      [canvasKey],
+    ]);
+    expect(mocks.write.mock.calls[0]?.[0].contextKey).toBe(agentKey);
+  });
 
   it("只有图片读取旧 home-input，并优先恢复图片自己的分支", async () => {
     const typed = branch(imageKey, textDraft("图片分支"));

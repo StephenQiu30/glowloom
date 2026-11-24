@@ -297,7 +297,7 @@ func (h *ProjectCopyHandler) Get(c *gin.Context) {
 // @ID listProjectCopies
 // @Produce json
 // @Param pid path string true "源项目UUID"
-// @Param limit query int false "1至100，默认50"
+// @Param limit query int false "1至100，默认20"
 // @Param cursor query string false "上一页next_cursor"
 // @Success 200 {object} ProjectCopyListResponse
 // @Failure 403 {object} httpapi.Problem

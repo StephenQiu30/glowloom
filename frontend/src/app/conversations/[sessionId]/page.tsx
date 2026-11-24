@@ -13,7 +13,11 @@ export default async function Page({
     params,
     searchParams,
   ]);
-  if (!isProjectID(sessionId) || !isProjectID(projectId)) notFound();
+  if (
+    !isProjectID(sessionId) ||
+    (projectId !== undefined && !isProjectID(projectId))
+  )
+    notFound();
   return (
     <PageLayout screen="conversations" fullBleed>
       <ConversationPage sessionID={sessionId} projectID={projectId} />

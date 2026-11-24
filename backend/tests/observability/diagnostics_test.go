@@ -130,7 +130,7 @@ func TestBufferConcurrentCaptureBounded(t *testing.T) {
 	now := time.Now().UTC()
 	b := memory.NewBuffer(30, time.Hour, func() time.Time { return now })
 	actor := uuid.New()
-	f, _ := domain.ParseFilter("", now.Add(time.Second))
+	f, _ := domain.ParseFilter("limit=50", now.Add(time.Second))
 	var wg sync.WaitGroup
 	for range 10 {
 		wg.Go(func() {

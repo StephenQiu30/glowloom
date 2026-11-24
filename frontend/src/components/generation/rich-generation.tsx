@@ -4,6 +4,7 @@ import { QuoteCostDetail } from "./quote-cost-detail";
 import { GenerationCredits, useGenerationCredits } from "./generation-credits";
 import dynamic from "next/dynamic";
 import { modelsForCreation, creationModeLabel } from "./creation-contract";
+import { creationTypes } from "./creation-types";
 import { ComposerSurface } from "./composer-surface";
 import { ContentState } from "@/components/layout/content-state";
 import { readErrorMessage } from "@/lib/read-error";
@@ -23,7 +24,6 @@ import {
   LoaderCircle,
   Maximize2,
   Minimize2,
-  MoreHorizontal,
   RefreshCw,
 } from "lucide-react";
 import { InputGroup, InputGroupAddon } from "@/components/ui/input-group";
@@ -45,13 +45,6 @@ import {
   type ReactNode,
 } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -729,13 +722,13 @@ function EditorWorkspace({
     model && !current.submission ? (
       <GenerationCredits preview={creditPreview} />
     ) : null;
-  const canvasCanGenerate =
+  const canQuote =
     !!session &&
     !frozen &&
     !issues.length &&
     !pendingMode &&
     sourceReady &&
-    creditPreview.status !== "unavailable";
+    (presentation !== "canvas" || creditPreview.status !== "unavailable");
   const updateStatus = useCallback(() => {
     const s = saver.current;
     if (!s || !alive.current) return;
@@ -991,7 +984,8 @@ function EditorWorkspace({
       );
       return;
     }
-    if (presentation === "canvas" && !canvasCanGenerate) return;
+    if ((presentation === "canvas" || presentation === "home") && !canQuote)
+      return;
     if (compact) setQuoteReviewOpen(presentation !== "canvas");
     await run(() => prepareQuote(presentation === "canvas"));
   }
@@ -1379,9 +1373,14 @@ function EditorWorkspace({
                   ? "输入需要朗读的文字。"
                   : presentation === "assistant"
                     ? "描述任务，@ 引用素材"
-                    : compact
-                      ? "描述创意，@ 引用素材"
-                      : undefined
+                    : presentation === "home"
+                      ? creationTypes.find(
+                          (item) =>
+                            item.id === (seed.creationType ?? seed.capability),
+                        )?.placeholder
+                      : compact
+                        ? "描述创意，@ 引用素材"
+                        : undefined
         }
         resolveGeneration={compact ? resolveReferenceGeneration : undefined}
         contextKey={contextKey}
@@ -1818,6 +1817,11 @@ function EditorWorkspace({
       disabled={!session || frozen}
       params={draft.params}
       maxOutputs={Number(model?.current_version?.limits?.max_outputs ?? 1)}
+      outputUnit={
+        presentation === "home" && seed.capability === "image"
+          ? "张"
+          : undefined
+      }
       duration={durationField}
       onChange={(params) => session?.updateParams(params)}
     >
@@ -1835,6 +1839,18 @@ function EditorWorkspace({
           : textOnlyAudio
             ? "音频创作编辑器"
             : "多参考创作编辑器";
+  const result = task &&
+    presentation !== "canvas" &&
+    presentation !== "assistant" && (
+      <TaskDetail
+        projectID={projectID}
+        id={task}
+        presentation={compact ? "inline" : "default"}
+        onAdopt={onAdopt}
+        adoptLabel={adoptLabel}
+        onAdoptText={onAdoptText}
+      />
+    );
   return (
     <ComposerSurface
       expanded={full}
@@ -1855,18 +1871,21 @@ function EditorWorkspace({
           full && (compact ? "flex-1" : "max-h-full overflow-y-auto p-4"),
         )}
       >
+        {presentation === "home" && result}
         {canvasToolbar}
-        {!compact && (
+        {(!compact || (presentation === "home" && full)) && (
           <div className="flex flex-wrap items-center gap-2">
             <span role="status" className="text-sm text-muted-foreground">
               {canvas ? "随画布保存" : saveState} · r{revision}
             </span>
-            <Button variant="ghost" onClick={() => setFull((v) => !v)}>
-              {full ? "收起编辑器" : "展开编辑器"}
-            </Button>
+            {!compact && (
+              <Button variant="ghost" onClick={() => setFull((v) => !v)}>
+                {full ? "收起编辑器" : "展开编辑器"}
+              </Button>
+            )}
             <Button
               variant="outline"
-              disabled={pending}
+              disabled={pending || (presentation === "home" && frozen)}
               onClick={() =>
                 void run(async () => {
                   await flush();
@@ -1886,7 +1905,7 @@ function EditorWorkspace({
             )}
           </div>
         )}
-        {draftsLoaded && (
+        {draftsLoaded && (presentation !== "home" || full) && (
           <div className="rounded border p-3" aria-label="服务端草稿">
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm text-muted-foreground">
@@ -2078,6 +2097,17 @@ function EditorWorkspace({
                       "flex min-h-0 flex-1 flex-col"),
               )}
             >
+              {presentation === "home" && (
+                <ComposerToolbarButton
+                  aria-label={full ? "收起编辑器" : "展开编辑器"}
+                  title={full ? "收起编辑器" : "展开编辑器"}
+                  size="toolbar-icon"
+                  className="creation-expand"
+                  onClick={() => setFull((value) => !value)}
+                >
+                  {full ? <Minimize2 /> : <Maximize2 />}
+                </ComposerToolbarButton>
+              )}
               <InputGroupAddon
                 align="block-start"
                 className={
@@ -2123,44 +2153,6 @@ function EditorWorkspace({
                   : "flex-wrap gap-1 px-3 pt-1 pb-3"
               }
             >
-              {presentation === "home" && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <ComposerToolbarButton
-                      aria-label="更多工具"
-                      size="toolbar-icon"
-                      disabled={pending || frozen}
-                    >
-                      <MoreHorizontal />
-                    </ComposerToolbarButton>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" sideOffset={8}>
-                    <DropdownMenuGroup>
-                      <DropdownMenuItem
-                        onSelect={() =>
-                          void run(async () => {
-                            await flush();
-                          })
-                        }
-                      >
-                        保存草稿
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => void loadDrafts()}>
-                        找回草稿
-                      </DropdownMenuItem>
-                    </DropdownMenuGroup>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-              {presentation === "home" && (
-                <ComposerToolbarButton
-                  aria-label={full ? "收起编辑器" : "展开编辑器"}
-                  size="toolbar-icon"
-                  onClick={() => setFull((value) => !value)}
-                >
-                  {full ? <Minimize2 /> : <Maximize2 />}
-                </ComposerToolbarButton>
-              )}
               <div
                 className={
                   presentation === "home" ? "creation-option-tools" : "contents"
@@ -2263,12 +2255,17 @@ function EditorWorkspace({
                     variant="default"
                     aria-label={presentation === "canvas" ? "生成" : "检查费用"}
                     title={
-                      presentation === "canvas" ? "生成" : "检查费用并继续"
+                      presentation === "canvas"
+                        ? "生成"
+                        : presentation === "home" && !canQuote
+                          ? (issues[0] ?? "请等待素材及费用可用")
+                          : "检查费用并继续"
                     }
                     disabled={
                       pending ||
                       confirmUnknown ||
-                      (presentation === "canvas" && !canvasCanGenerate)
+                      ((presentation === "canvas" || presentation === "home") &&
+                        !canQuote)
                     }
                     onClick={() => void getQuote()}
                   >
@@ -2621,16 +2618,7 @@ function EditorWorkspace({
             </Button>
           </div>
         )}
-        {task && presentation !== "canvas" && presentation !== "assistant" && (
-          <TaskDetail
-            projectID={projectID}
-            id={task}
-            presentation={compact ? "inline" : "default"}
-            onAdopt={onAdopt}
-            adoptLabel={adoptLabel}
-            onAdoptText={onAdoptText}
-          />
-        )}
+        {presentation !== "home" && result}
       </div>
     </ComposerSurface>
   );

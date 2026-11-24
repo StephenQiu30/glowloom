@@ -1,4 +1,6 @@
 "use client";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { PageSizeSelect } from "@/components/ui/page-size-select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useEffect, useRef, useState, type SetStateAction } from "react";
 import dynamic from "next/dynamic";
@@ -91,9 +93,10 @@ export function UnifiedSubjectLibrary({
   query?: string;
   onSelect?: (value: UnifiedSubject) => void;
 }) {
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [filter, setFilter] = useState<SubjectFilter>(defaultSubjectFilter);
   const { page, error, loading, hasMore, loadMore, retry, refresh } =
-    useSubjectList(actorID, scopeID, query, filter);
+    useSubjectList(actorID, scopeID, query, filter, pageSize);
   const tail = useRef<HTMLDivElement>(null);
   const [batch, setBatch] = useState(false);
   const [batchQuery, setBatchQuery] = useState(query);
@@ -613,6 +616,12 @@ export function UnifiedSubjectLibrary({
               }
             />
           ) : null}
+          <PageSizeSelect
+            value={pageSize}
+            label="主体每页数量"
+            onChange={setPageSize}
+            disabled={locked}
+          />
           {loading ? (
             <div
               role="status"

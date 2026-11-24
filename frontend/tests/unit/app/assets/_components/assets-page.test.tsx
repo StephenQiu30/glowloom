@@ -52,7 +52,7 @@ const emptyPage = {
   scope: { kind: "personal" },
   revision: 1,
   page: 1,
-  page_size: 12,
+  page_size: 20,
   total: 0,
   items: [],
   folders: [],
@@ -157,7 +157,7 @@ it("请求成功后才显示真实空库，最近30天参数发送到生成的�
         scope: "personal",
         kind: "image",
         page: 1,
-        page_size: 12,
+        page_size: 20,
         order: "updated_desc",
       }),
     }),
@@ -260,11 +260,11 @@ it("跨页读取清空本页批量选择，不把上一页素材带入下一次�
     return {
       ...emptyPage,
       page: index,
-      total: 13,
+      total: 21,
       items:
         index === 1
-          ? Array.from({ length: 12 }, (_, n) => item(n + 1))
-          : [item(13)],
+          ? Array.from({ length: 20 }, (_, n) => item(n + 1))
+          : [item(21)],
     };
   });
   render(<AssetsPage />);
@@ -275,9 +275,9 @@ it("跨页读取清空本页批量选择，不把上一页素材带入下一次�
   expect(screen.getByText("已选择 1 项")).toBeTruthy();
   expect(screen.queryByRole("dialog")).toBeNull();
   fireEvent.click(screen.getByRole("checkbox", { name: "选择本页全部素材" }));
-  expect(screen.getByText("已选择 12 项")).toBeTruthy();
+  expect(screen.getByText("已选择 20 项")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "下一页" }));
-  await screen.findByRole("button", { name: "选择 素材 13" });
+  await screen.findByRole("button", { name: "选择 素材 21" });
   expect(screen.queryByRole("button", { name: "选择 素材 1" })).toBeNull();
   expect(screen.getByText("已选择 0 项")).toBeTruthy();
   expect(screen.getByRole("button", { name: "移入回收站" })).toHaveProperty(
@@ -287,10 +287,10 @@ it("跨页读取清空本页批量选择，不把上一页素材带入下一次�
   expect(request).toHaveBeenCalledWith(
     "/api/media/library",
     expect.objectContaining({
-      params: expect.objectContaining({ page: 2, page_size: 12 }),
+      params: expect.objectContaining({ page: 2, page_size: 20 }),
     }),
   );
-  fireEvent.click(screen.getByRole("button", { name: "选择 素材 13" }));
+  fireEvent.click(screen.getByRole("button", { name: "选择 素材 21" }));
   fireEvent.click(screen.getByRole("button", { name: "移入回收站" }));
   expect(screen.getByRole("alertdialog")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: /^取消$/ }));
@@ -309,12 +309,12 @@ it("每页数量选择发送真实分页参数，调整筛选时保留数量", a
     screen.getByRole("combobox", { name: "素材分页每页数量" }),
     { key: "ArrowDown" },
   );
-  fireEvent.click(await screen.findByRole("option", { name: "24" }));
+  fireEvent.click(await screen.findByRole("option", { name: "50" }));
   await waitFor(() =>
     expect(request).toHaveBeenLastCalledWith(
       "/api/media/library",
       expect.objectContaining({
-        params: expect.objectContaining({ page: 1, page_size: 24 }),
+        params: expect.objectContaining({ page: 1, page_size: 50 }),
       }),
     ),
   );
@@ -325,7 +325,7 @@ it("每页数量选择发送真实分页参数，调整筛选时保留数量", a
       expect.objectContaining({
         params: expect.objectContaining({
           page: 1,
-          page_size: 24,
+          page_size: 50,
           recent_only: true,
         }),
       }),

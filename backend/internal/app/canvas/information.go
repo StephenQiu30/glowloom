@@ -22,8 +22,8 @@ func (a informationBillingAccess) AuthorizeBilling(ctx context.Context, p identi
 
 // NewInformationUsage maps the billing-owned read model to the canvas query contract.
 func NewInformationUsage(tx *gorm.DB) canvasapp.CanvasUsageReader { return informationUsage{tx: tx} }
-func (r informationUsage) ReadCanvasUsage(ctx context.Context, a identity.Principal, p, c uuid.UUID, page int) (canvasapp.CanvasUsage, error) {
-	facts, err := billingpg.NewScopedStore(r.tx, func(tx *gorm.DB) billingapp.ProjectAccess { return informationBillingAccess{tx: tx} }).ReadCanvasUsage(ctx, a, p, c, page)
+func (r informationUsage) ReadCanvasUsage(ctx context.Context, a identity.Principal, p, c uuid.UUID, page, size int) (canvasapp.CanvasUsage, error) {
+	facts, err := billingpg.NewScopedStore(r.tx, func(tx *gorm.DB) billingapp.ProjectAccess { return informationBillingAccess{tx: tx} }).ReadCanvasUsage(ctx, a, p, c, page, size)
 	if err != nil {
 		return canvasapp.CanvasUsage{}, err
 	}

@@ -16,6 +16,7 @@ export function GenerationToolbarParameters({
   disabled,
   params,
   maxOutputs,
+  outputUnit = "个",
   duration,
   children,
   onChange,
@@ -24,6 +25,7 @@ export function GenerationToolbarParameters({
   disabled: boolean;
   params: PromptDraft["params"];
   maxOutputs: number;
+  outputUnit?: "个" | "张";
   duration?: ParamField;
   children?: ReactNode;
   onChange: (params: PromptDraft["params"]) => void;
@@ -50,7 +52,7 @@ export function GenerationToolbarParameters({
       {enabled && (
         <ComposerToolbarPopover
           label="生成数量"
-          value={`${params.output_count ?? 1}个`}
+          value={`${params.output_count ?? 1}${outputUnit}`}
           disabled={disabled}
           width="quantity"
           chevron={false}

@@ -78,7 +78,7 @@ func (q *ListProvidersQuery) Execute(ctx context.Context, actor identityapp.Prin
 		return ProviderListPage{}, ErrInvalidProviderList
 	}
 	if input.Limit == 0 {
-		input.Limit = 50
+		input.Limit = 20
 	}
 	page, err := q.store.ListProvidersForAdmin(ctx, actor, input)
 	if err != nil {

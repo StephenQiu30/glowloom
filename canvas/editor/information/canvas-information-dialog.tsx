@@ -1,4 +1,6 @@
 "use client";
+import { DEFAULT_PAGE_SIZE } from "@glowloom/canvas-host/lib/pagination";
+import { PageSizeSelect } from "@glowloom/canvas-host/components/ui/page-size-select";
 import {
   Alert,
   AlertDescription,
@@ -85,11 +87,12 @@ export function CanvasInformationDialog({
   nodes: CanvasNodeData[];
   onClose: () => void;
 }) {
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [tab, setTab] = useState("basic"),
     [page, setPage] = useState(1),
     [retry, setRetry] = useState(0),
     [details, setDetails] = useState(false);
-  const requestKey = `${canvasID}:${projectID}:${page}:${retry}`;
+  const requestKey = `${canvasID}:${projectID}:${page}:${pageSize}:${retry}`;
   const [completion, setCompletion] = useState<{
     key: string;
     data?: Information;
@@ -104,7 +107,10 @@ export function CanvasInformationDialog({
       scope = getScopeGeneration(),
       session = getSessionGeneration();
     let active = true;
-    getCanvasInformation({ id: canvasID, page }, { signal: controller.signal })
+    getCanvasInformation(
+      { id: canvasID, page, page_size: pageSize },
+      { signal: controller.signal },
+    )
       .then((value) => {
         if (
           !active ||
@@ -132,7 +138,7 @@ export function CanvasInformationDialog({
       active = false;
       controller.abort();
     };
-  }, [canvasID, projectID, page, requestKey]);
+  }, [canvasID, projectID, page, requestKey, pageSize]);
   const all = canvasNodeStatistics(nodes);
   const distribution = [
     ...all.slice(0, 6),
@@ -274,7 +280,15 @@ export function CanvasInformationDialog({
                           </li>
                         ))}
                       </ul>
-                      <div className="mt-3 flex items-center justify-between">
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                        <PageSizeSelect
+                          label="费用明细每页数量"
+                          value={pageSize}
+                          onChange={(size) => {
+                            setPageSize(size);
+                            setPage(1);
+                          }}
+                        />
                         <Button
                           variant="ghost"
                           disabled={page === 1}

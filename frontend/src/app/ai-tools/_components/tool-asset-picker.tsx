@@ -1,4 +1,6 @@
 "use client";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { ListPagination } from "@/components/canvas/runtime/components/layout/workspace/list-pagination";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 
 import { useEffect, useRef, useState } from "react";
@@ -23,7 +25,6 @@ import { getScopeGeneration, getSessionGeneration } from "@/lib/request";
 import type { MediaKind } from "./catalog";
 
 const titles = { image: "图片", video: "视频" };
-const pageSize = 12;
 
 export function ToolAssetPicker({
   media,
@@ -38,6 +39,7 @@ export function ToolAssetPicker({
   const [search, setSearch] = useState("");
   const [recent, setRecent] = useState(false);
   const [favorite, setFavorite] = useState(false);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [page, setPage] = useState(1);
   const [retry, setRetry] = useState(0);
   const [items, setItems] = useState<LibraryItem[]>([]);
@@ -99,7 +101,7 @@ export function ToolAssetPicker({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [actorID, kind, search, recent, favorite, page, retry]);
+  }, [actorID, kind, search, recent, favorite, page, pageSize, retry]);
 
   function reset(nextPage = 1) {
     setSelected(null);
@@ -249,25 +251,19 @@ export function ToolAssetPicker({
           title={search.trim() ? "没有匹配的素材" : `暂无${titles[kind]}素材`}
         />
       )}
-      {total > pageSize && !loading && !error && (
-        <div className="flex justify-end gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={confirming || page === 1}
-            onClick={() => reset(page - 1)}
-          >
-            上一页
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={confirming || page * pageSize >= total}
-            onClick={() => reset(page + 1)}
-          >
-            下一页
-          </Button>
-        </div>
+      {!error && (
+        <ListPagination
+          label="工具素材分页"
+          current={page}
+          total={total}
+          pageSize={pageSize}
+          pending={loading || confirming}
+          onPageChange={reset}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            reset(1);
+          }}
+        />
       )}
       {confirmError && <FeedbackToast message={confirmError} />}
       <div className="flex items-center justify-between gap-2">

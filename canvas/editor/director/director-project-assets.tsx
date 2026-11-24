@@ -1,4 +1,6 @@
 "use client";
+import { DEFAULT_PAGE_SIZE } from "@glowloom/canvas-host/lib/pagination";
+import { PageSizeSelect } from "@glowloom/canvas-host/components/ui/page-size-select";
 import {
   Alert,
   AlertDescription,
@@ -50,6 +52,7 @@ function ProjectAssets({
   guard,
   onSelect,
 }: DirectorProjectAssetsProps) {
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [items, setItems] = useState<API.AssetSummary[]>([]),
     [page, setPage] = useState(0),
     [hasMore, setHasMore] = useState(false),
@@ -76,12 +79,14 @@ function ProjectAssets({
   async function load(index: number, controller: AbortController) {
     const result = requireDirectorProjectPage(
       await listMediaLibrary(
-        directorProjectQuery(projectID, kind, search, index),
+        directorProjectQuery(projectID, kind, search, index, pageSize),
         { signal: controller.signal },
       ),
       projectID,
       kind,
       index,
+      undefined,
+      pageSize,
     );
     if (controller.signal.aborted || !current()) return;
     setItems((previous) =>
@@ -128,7 +133,7 @@ function ProjectAssets({
     };
     // A keyed instance owns one project/kind/query; retry restarts that same scope.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [retry]);
+  }, [retry, pageSize]);
   async function more() {
     if (busy.current || !current()) return;
     busy.current = true;
@@ -237,6 +242,17 @@ function ProjectAssets({
           </AlertDescription>
         </Alert>
       )}
+      <PageSizeSelect
+        label="导演台素材每页数量"
+        value={pageSize}
+        disabled={disabled || selecting || loading}
+        onChange={(size) => {
+          setPageSize(size);
+          setLoading(true);
+          setHasMore(false);
+          setItems([]);
+        }}
+      />
       {hasMore && !error && (
         <Button
           size="sm"

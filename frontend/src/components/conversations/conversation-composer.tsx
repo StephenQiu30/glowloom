@@ -4,6 +4,7 @@ import {
   useEffect,
   useId,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -24,7 +25,10 @@ import {
 } from "lucide-react";
 import { cn } from "cn";
 import { PromptEditor } from "@/components/generation/prompt-editor";
-import type { ReferenceBinding } from "@/components/generation/prompt-document";
+import type {
+  PromptDocument,
+  ReferenceBinding,
+} from "@/components/generation/prompt-document";
 import type { ComposerSession } from "@/components/generation/composer-session";
 import { canonical } from "@/components/generation/draft-save";
 import { ReferenceControls } from "@/components/generation/reference-controls";
@@ -49,6 +53,19 @@ import {
   selectSkillVersion,
 } from "./conversation-state";
 
+export type DraftTextReference = (
+  text: string,
+) => { key: string; label: string } | undefined;
+
+export function paragraphTextReference(
+  paragraph: PromptDocument["content"][number],
+  reference?: DraftTextReference,
+) {
+  const inline = paragraph.content?.[0];
+  if (paragraph.content?.length === 1 && inline?.type === "text")
+    return reference?.(inline.text);
+}
+
 export type ConversationComposerHandle = {
   focusPrompt: () => void;
   attachReference: (reference: ReferenceBinding) => boolean;
@@ -65,6 +82,9 @@ export function ConversationComposer({
   projectControl,
   projectSetting,
   welcome = false,
+  compactEntry = false,
+  homeGeneration = false,
+  textReference,
 }: {
   ref?: Ref<ConversationComposerHandle>;
   conversation: ConversationController;
@@ -76,6 +96,9 @@ export function ConversationComposer({
   projectControl?: ReactNode;
   projectSetting?: ReactNode;
   welcome?: boolean;
+  compactEntry?: boolean;
+  homeGeneration?: boolean;
+  textReference?: DraftTextReference;
 }) {
   const [session, setSession] = useState<ComposerSession | null>(null),
     [expanded, setExpanded] = useState(false);
@@ -91,7 +114,31 @@ export function ConversationComposer({
       skill.description?.toLowerCase().includes(skillQuery),
   );
   const [replicaID] = useState(() => crypto.randomUUID());
-  const [initial] = useState(() => structuredClone(c.draft));
+  const { editorDraft, textReferences } = useMemo(() => {
+    const textReferences: {
+      paragraph: PromptDocument["content"][number];
+      key: string;
+      label: string;
+    }[] = [];
+    if (!textReference) return { editorDraft: c.draft, textReferences };
+    const content = c.draft.document.content.filter((paragraph) => {
+      const entry = paragraphTextReference(paragraph, textReference);
+      if (!entry) return true;
+      textReferences.push({ ...entry, paragraph });
+      return false;
+    });
+    return {
+      editorDraft: {
+        ...c.draft,
+        document: {
+          ...c.draft.document,
+          content: content.length ? content : [{ type: "paragraph" as const }],
+        },
+      },
+      textReferences,
+    };
+  }, [c.draft, textReference]);
+  const [initial] = useState(() => structuredClone(editorDraft));
   const last = useRef(canonical(initial));
   const budgetID = useId(),
     hintID = useId();
@@ -112,12 +159,12 @@ export function ConversationComposer({
     if (
       !session ||
       session.editor.isDestroyed ||
-      canonical(session.snapshot().draft) === canonical(c.draft)
+      canonical(session.snapshot().draft) === canonical(editorDraft)
     )
       return;
-    last.current = canonical(c.draft);
-    session.adoptDraft(c.draft);
-  }, [session, c.draft]);
+    last.current = canonical(editorDraft);
+    session.adoptDraft(editorDraft);
+  }, [session, editorDraft]);
   const unknown = c.phase === "unknown",
     submitting = c.phase === "submitting";
   const hasInput = !!draftText(c.draft).trim() || c.draft.references.length > 0;
@@ -147,10 +194,65 @@ export function ConversationComposer({
       : authorized
         ? !c.canSend
         : !hasInput;
+  const inlineReferences = compactEntry || !!textReference;
+  const expandButton = !welcome && !inlineReferences && (
+    <ComposerToolbarButton
+      aria-label={expanded ? "收起输入" : "展开输入"}
+      title={expanded ? "收起输入" : "展开输入"}
+      size="toolbar-icon"
+      className={homeGeneration ? "creation-expand" : undefined}
+      onClick={() => setExpanded((value) => !value)}
+    >
+      {expanded ? <Minimize2 /> : <Maximize2 />}
+    </ComposerToolbarButton>
+  );
+  const modelPicker = (
+    <ModelPicker
+      compact
+      label={textReference && !compactEntry ? "创意模型" : "对话模型"}
+      triggerClassName={compactEntry ? "conversation-model-trigger" : undefined}
+      unavailableLabel={compactEntry ? "不可用" : undefined}
+      models={c.models}
+      value={c.model?.current_version?.id}
+      disabled={c.denied}
+      onChooseProject={authorized ? undefined : onChooseProject}
+      onSelect={(model) =>
+        c.changeSettings({ ...c.settings, modelKey: model.key })
+      }
+    />
+  );
+  const referenceControls = session ? (
+    <ReferenceControls
+      session={session}
+      draft={c.draft}
+      projectID={projectID}
+      model={c.model}
+      compact
+      home
+      inline={inlineReferences}
+      allowDocuments
+      authorized={authorized && !c.denied}
+      onChooseProject={authorized ? undefined : onChooseProject}
+    />
+  ) : (
+    <ReferenceStack
+      entries={[]}
+      inline={inlineReferences}
+      onAdd={onChooseProject}
+      onSelect={() => {}}
+      onRemove={() => {}}
+    />
+  );
   return (
     <div
-      className="conversation-composer creation-input-surface relative w-full p-4 text-left"
+      className={cn(
+        "conversation-composer creation-input-surface relative w-full p-4 text-left",
+        textReference && "p-3",
+      )}
       data-welcome={welcome}
+      data-storyboard-input={!!textReference || undefined}
+      data-compact-entry={compactEntry || undefined}
+      data-home-generation={homeGeneration || undefined}
       role="group"
       aria-label="创作输入"
       onKeyDown={(event) => {
@@ -162,6 +264,7 @@ export function ConversationComposer({
           setExpanded(false);
       }}
     >
+      {homeGeneration && expandButton}
       {c.quote ? (
         <div className="mb-3 flex items-start gap-2 rounded-lg border-l-2 bg-muted/60 px-3 py-2 text-sm">
           <div className="min-w-0 flex-1">
@@ -181,38 +284,51 @@ export function ConversationComposer({
           </Button>
         </div>
       ) : null}
+      {textReferences.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-2" aria-label="镜头引用">
+          {textReferences.map(({ key, label, paragraph }) => (
+            <Button
+              key={key}
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="max-lg:h-11"
+              aria-label={`移除 ${label}`}
+              onClick={() => {
+                const content = c.draft.document.content.filter(
+                  (item) => item !== paragraph,
+                );
+                c.changeDraft({
+                  ...c.draft,
+                  document: {
+                    ...c.draft.document,
+                    content: content.length ? content : [{ type: "paragraph" }],
+                  },
+                });
+                session?.editor.commands.focus();
+              }}
+            >
+              {label}
+              <X data-icon="inline-end" />
+            </Button>
+          ))}
+        </div>
+      )}
       <div
         data-slot="conversation-reference-input"
         data-expanded={expanded}
         className="flex min-w-0 items-start gap-3"
       >
-        {session ? (
-          <ReferenceControls
-            session={session}
-            draft={c.draft}
-            projectID={projectID}
-            model={c.model}
-            compact
-            home
-            allowDocuments
-            authorized={authorized && !c.denied}
-            onChooseProject={authorized ? undefined : onChooseProject}
-          />
-        ) : (
-          <ReferenceStack
-            entries={[]}
-            onAdd={onChooseProject}
-            onSelect={() => {}}
-            onRemove={() => {}}
-          />
-        )}
+        {!inlineReferences && referenceControls}
         <div
           data-slot="conversation-prompt"
           className={cn(
             "min-w-0 flex-1 overflow-y-auto",
             expanded
               ? "h-[50dvh]"
-              : "max-h-80 min-h-(--creation-prompt-min-height)",
+              : textReference
+                ? "max-h-60 min-h-12"
+                : "max-h-80 min-h-(--creation-prompt-min-height)",
           )}
           onKeyDownCapture={(event) => {
             const selection = session?.editor.state.selection;
@@ -236,41 +352,71 @@ export function ConversationComposer({
             contextKey={contextKey}
             replicaId={replicaID}
             draft={initial}
-            placeholder="输入想法、剧本或上传参考，支持 / 使用技能，@ 添加主体，和 Agent 一起创作"
-            placeholderContent={
-              <>
-                输入想法、剧本或上传参考，支持{" "}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="使用技能快捷入口"
-                  onClick={openSkillShortcut}
-                >
-                  /
-                </Button>{" "}
-                使用技能，{" "}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="添加主体快捷入口"
-                  disabled={!session}
-                  onClick={mention}
-                >
-                  @
-                </Button>{" "}
-                添加主体，和 Agent 一起创作
-              </>
+            placeholder={
+              textReference
+                ? "输入想法，或用 @ 引用素材"
+                : compactEntry
+                  ? "输入想法、剧本或上传参考"
+                  : homeGeneration
+                    ? "输入想法、剧本或参考，用 / 选技能，@ 引用素材"
+                    : "输入想法、剧本或上传参考，支持 / 使用技能，@ 添加主体，和 Agent 一起创作"
             }
-            className="prompt-editor min-h-(--creation-prompt-min-height)"
+            placeholderContent={
+              inlineReferences ? undefined : (
+                <>
+                  {homeGeneration
+                    ? "输入想法、剧本或参考，用 "
+                    : "输入想法、剧本或上传参考，支持 "}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="使用技能快捷入口"
+                    onClick={openSkillShortcut}
+                  >
+                    /
+                  </Button>{" "}
+                  {homeGeneration ? "选技能， " : "使用技能， "}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="添加主体快捷入口"
+                    disabled={!session}
+                    onClick={mention}
+                  >
+                    @
+                  </Button>{" "}
+                  {homeGeneration ? "引用素材" : "添加主体，和 Agent 一起创作"}
+                </>
+              )
+            }
+            className={cn(
+              "prompt-editor",
+              textReference
+                ? "min-h-12"
+                : "min-h-(--creation-prompt-min-height)",
+            )}
             inputGroup
             onReady={setSession}
             onChange={(snapshot) => {
               const value = canonical(snapshot.draft);
               if (last.current === value) return;
               last.current = value;
-              c.changeDraft(snapshot.draft);
+              c.changeDraft(
+                textReferences.length
+                  ? {
+                      ...snapshot.draft,
+                      document: {
+                        ...snapshot.draft.document,
+                        content: [
+                          ...textReferences.map((item) => item.paragraph),
+                          ...snapshot.draft.document.content,
+                        ],
+                      },
+                    }
+                  : snapshot.draft,
+              );
             }}
             onRequestSubmit={() => {
               if (c.canSend) void c.send();
@@ -283,6 +429,8 @@ export function ConversationComposer({
         aria-label="对话创作工具"
         role="group"
       >
+        {inlineReferences && referenceControls}
+        {inlineReferences && modelPicker}
         {headerActions ?? (
           <span
             className="flex h-(--toolbar-control-size) items-center gap-1.5 px-2 text-sm data-[welcome=true]:text-[var(--navigation-accent)]"
@@ -292,7 +440,7 @@ export function ConversationComposer({
             Agent 模式
           </span>
         )}
-        {projectControl}
+        {!homeGeneration && projectControl}
         <Popover>
           <PopoverTrigger asChild>
             <ComposerToolbarButton
@@ -302,7 +450,11 @@ export function ConversationComposer({
               aria-label="创作设置"
             >
               <SlidersHorizontal className="size-4" />
-              <span className="max-sm:sr-only">创作设置</span>
+              <span
+                className={cn("max-sm:sr-only", textReference && "sr-only")}
+              >
+                创作设置
+              </span>
             </ComposerToolbarButton>
           </PopoverTrigger>
           <ComposerPopoverContent
@@ -313,7 +465,7 @@ export function ConversationComposer({
           >
             <PopoverTitle>创作设置</PopoverTitle>
             {projectSetting}
-            {welcome && (
+            {(welcome || inlineReferences) && (
               <Button
                 type="button"
                 variant="ghost"
@@ -450,48 +602,27 @@ export function ConversationComposer({
             ) : null}
           </ComposerPopoverContent>
         </Popover>
-        <ComposerToolbarButton
-          type="button"
-          variant="ghost"
-          size="toolbar-icon"
-          aria-label="添加主体或素材引用"
-          disabled={!session}
-          onClick={mention}
-        >
-          <AtSign className="size-4" />
-        </ComposerToolbarButton>
-        {!welcome && (
+        {!inlineReferences && (
           <ComposerToolbarButton
             type="button"
             variant="ghost"
             size="toolbar-icon"
-            aria-label={expanded ? "收起输入" : "展开输入"}
-            onClick={() => setExpanded((value) => !value)}
+            aria-label="添加主体或素材引用"
+            disabled={!session}
+            onClick={mention}
           >
-            {expanded ? (
-              <Minimize2 className="size-4" />
-            ) : (
-              <Maximize2 className="size-4" />
-            )}
+            <AtSign className="size-4" />
           </ComposerToolbarButton>
         )}
+        {homeGeneration && projectControl}
+        {!homeGeneration && expandButton}
         <ComposerToolbarActions
           appearance="plain"
           aria-label="模型与发送"
           className="ml-auto max-w-full"
         >
           <span className="sr-only">对话模型</span>
-          <ModelPicker
-            compact
-            label="对话模型"
-            models={c.models}
-            value={c.model?.current_version?.id}
-            disabled={c.denied}
-            onChooseProject={authorized ? undefined : onChooseProject}
-            onSelect={(model) =>
-              c.changeSettings({ ...c.settings, modelKey: model.key })
-            }
-          />
+          {!inlineReferences && modelPicker}
           <ComposerToolbarButton
             type="button"
             variant="default"

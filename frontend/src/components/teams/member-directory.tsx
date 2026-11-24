@@ -1,4 +1,6 @@
 "use client";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { PageSizeSelect } from "@/components/ui/page-size-select";
 import { ContentState } from "@/components/layout/content-state";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { DirectoryTools } from "@/components/directory/directory-tools";
@@ -36,6 +38,7 @@ export function MemberDirectory({
   reload: number;
   onAction: (a: ConfirmAction) => void;
 }) {
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [page, setPage] = useState<API.TeamMemberPageView | null>(null);
   const [search, setSearch] = useState("");
   const [role, setRole] = useState("");
@@ -51,7 +54,7 @@ export function MemberDirectory({
   const [pending, setPending] = useState(true);
   const [error, setError] = useState("");
   const read = useReadBoundary(
-    `${team.id}:${reload}:${JSON.stringify(filter)}`,
+    `${team.id}:${reload}:${JSON.stringify(filter)}:${pageSize}`,
   );
   const actor = useOptionalSession();
   const admin = team.capabilities.includes("members:manage");
@@ -60,7 +63,7 @@ export function MemberDirectory({
     listTeamMembers(
       {
         id: team.id,
-        limit: 50,
+        limit: pageSize,
         ...Object.fromEntries(Object.entries(filter).filter(([, v]) => v)),
       },
       { signal: c.signal },
@@ -81,7 +84,7 @@ export function MemberDirectory({
         if (!c.signal.aborted) setPending(false);
       });
     return () => c.abort();
-  }, [team.id, filter, reload]);
+  }, [team.id, filter, reload, pageSize]);
   function mutation(
     member: API.TeamMemberView,
     kind: "suspend" | "restore" | "remove" | "role" | "transfer",
@@ -339,6 +342,15 @@ export function MemberDirectory({
           ) : null}
         </article>
       ))}
+      <PageSizeSelect
+        label="成员每页数量"
+        value={pageSize}
+        disabled={pending}
+        onChange={(size) => {
+          setPage(null);
+          setPageSize(size);
+        }}
+      />
       {page?.next_cursor ? (
         <Button
           disabled={pending}
@@ -355,7 +367,7 @@ export function MemberDirectory({
                         Object.entries(filter).filter(([, v]) => v),
                       ),
                       cursor: page.next_cursor,
-                      limit: 50,
+                      limit: pageSize,
                     },
                     { signal },
                   ),

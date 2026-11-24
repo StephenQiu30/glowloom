@@ -54,10 +54,7 @@ func libraryScope(query url.Values) (domain.LibraryScope, error) {
 }
 
 func libraryPageQuery(query url.Values, scope domain.LibraryScope) (application.LibraryQuery, error) {
-	page := application.LibraryQuery{Page: 1, PageSize: 40, Kind: query.Get("kind"), Category: query.Get("category"), State: domain.LibraryItemStateActive, Search: query.Get("search"), Order: "updated_desc"}
-	if scope.Kind == domain.LibraryProject {
-		page.PageSize = 20
-	}
+	page := application.LibraryQuery{Page: 1, PageSize: 20, Kind: query.Get("kind"), Category: query.Get("category"), State: domain.LibraryItemStateActive, Search: query.Get("search"), Order: "updated_desc"}
 	for key, destination := range map[string]*int{"page": &page.Page, "page_size": &page.PageSize} {
 		if query.Has(key) {
 			value, err := strconv.Atoi(query.Get(key))
@@ -103,7 +100,7 @@ func libraryPageQuery(query url.Values, scope domain.LibraryScope) (application.
 // @Param scope query string false "personal/project；默认personal"
 // @Param project_id query string false "project scope必要UUID"
 // @Param page query int false "页码1..100000；默认1"
-// @Param page_size query int false "每页1..120；个人默认40/项目默认20"
+// @Param page_size query int false "每页1..120；默认20"
 // @Param kind query string false "text/image/video/audio/document/model"
 // @Param category query string false "character/environment/prop/material/other"
 // @Param folder_id query string false "当前库目录UUID"

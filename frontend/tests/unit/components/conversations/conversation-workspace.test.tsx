@@ -116,6 +116,49 @@ it("selects the exact enabled skill version without changing the draft or sendin
   expect(c.send).not.toHaveBeenCalled();
 });
 
+it("首页 Agent 只显示当前项目可用的版本化技能，点击只选择技能", () => {
+  const c = setup({
+    skills: [
+      featured,
+      { ...featured, skill_id: "disabled", name: "停用技能", enabled: false },
+      {
+        ...featured,
+        skill_id: "missing",
+        name: "未绑定技能",
+        resource_hash: undefined,
+      },
+    ],
+  });
+  const view = render(
+    <ConversationWorkspace {...props} embedded homeGeneration />,
+  );
+  expect(screen.getByRole("group", { name: "推荐技能" })).toBeTruthy();
+  expect(screen.queryByText("停用技能")).toBeNull();
+  expect(screen.queryByText("未绑定技能")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: featured.name }));
+  expect(c.changeSettings).toHaveBeenCalledWith({
+    budget: "1",
+    skills: [
+      existing,
+      {
+        skill_id: featured.skill_id,
+        version: featured.version,
+        resource_hash: featured.resource_hash,
+      },
+    ],
+  });
+  expect(c.send).not.toHaveBeenCalled();
+  view.rerender(
+    <ConversationWorkspace
+      {...props}
+      enabled={false}
+      embedded
+      homeGeneration
+    />,
+  );
+  expect(screen.queryByRole("group", { name: "推荐技能" })).toBeNull();
+});
+
 it("shows all three starters without a project and fills a real prompt without selecting a skill or sending", () => {
   const c = setup();
   render(<ConversationWorkspace {...props} enabled={false} />);

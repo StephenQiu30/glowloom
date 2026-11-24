@@ -19,7 +19,7 @@ func listInput(query url.Values) (application.ListInput, error) {
 			return application.ListInput{}, domain.ErrInvalid
 		}
 	}
-	in := application.ListInput{Type: query.Get("type"), Query: query.Get("q"), TimeField: "updated", Order: "updated_desc", Page: 1, PageSize: 40}
+	in := application.ListInput{Type: query.Get("type"), Query: query.Get("q"), TimeField: "updated", Order: "updated_desc", Page: 1, PageSize: 20}
 	if query.Has("favorite") {
 		value := query.Get("favorite")
 		if value != "true" && value != "false" {

@@ -7111,6 +7111,7 @@ function InfiniteCanvasPage({
           backgroundMode={backgroundMode}
           showImageInfo={showImageInfo}
           onOpenAssistant={documentIntegration?.onOpenAssistant}
+          assistantOpen={documentIntegration?.assistantOpen}
           onCreateNode={createNode}
           onUndo={undoCanvas}
           onRedo={redoCanvas}

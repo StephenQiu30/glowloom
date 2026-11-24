@@ -91,7 +91,7 @@ installDevelopmentTransport({
         revision: 1,
         total: 0,
         page: 1,
-        page_size: 12,
+        page_size: 20,
         items: [],
         folders: [],
       };

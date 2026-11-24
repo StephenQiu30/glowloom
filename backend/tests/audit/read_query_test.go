@@ -39,7 +39,7 @@ func TestReadQueryValidatesScopeAndPreservesStoreErrors(t *testing.T) {
 	now := time.Now()
 
 	page, err := query.List(t.Context(), identityapp.Principal{ID: actorID}, orgID, domain.Filter{})
-	if err != nil || len(page.Items) != 1 || store.listActor != actorID || store.listOrg != orgID || store.filter.Limit != 50 {
+	if err != nil || len(page.Items) != 1 || store.listActor != actorID || store.listOrg != orgID || store.filter.Limit != 20 {
 		t.Fatalf("bounded list = %+v, filter = %+v, error = %v", page, store.filter, err)
 	}
 	for _, ids := range [][2]uuid.UUID{{uuid.Nil, orgID}, {actorID, uuid.Nil}} {

@@ -43,7 +43,7 @@ func (q *ReadQuery) List(ctx context.Context, actor identityapp.Principal, orgID
 		return domain.Page{}, ErrInvalidRead
 	}
 	if filter.Limit == 0 {
-		filter.Limit = 50
+		filter.Limit = 20
 	}
 	page, err := q.store.ListForAdmin(ctx, actor, orgID, filter)
 	if err != nil {

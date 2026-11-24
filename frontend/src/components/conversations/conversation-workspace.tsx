@@ -10,9 +10,15 @@ import {
 import {
   ConversationComposer,
   type ConversationComposerHandle,
+  type DraftTextReference,
+  paragraphTextReference,
 } from "./conversation-composer";
 import { ConversationWelcome } from "./conversation-welcome";
-import { isSameSkillVersion, selectSkillVersion } from "./conversation-state";
+import {
+  isSameSkillVersion,
+  isVersionedSkill,
+  selectSkillVersion,
+} from "./conversation-state";
 import { cn } from "cn";
 import { ConversationThread } from "./conversation-thread";
 import { useConversation, type ConversationOptions } from "./use-conversation";
@@ -35,9 +41,15 @@ export function ConversationWorkspace({
   alternateComposer,
   onLock,
   onUseReply,
+  replyAction,
+  textReference,
   useReplyLabel,
   embedded = false,
   panel = false,
+  panelEmptyMessage,
+  compactEntry = false,
+  homeGeneration = false,
+  independent = false,
   ...options
 }: ConversationOptions & {
   ref?: Ref<ConversationWorkspaceHandle>;
@@ -48,11 +60,16 @@ export function ConversationWorkspace({
   alternateComposer?: ReactNode;
   onLock?: (locked: boolean) => void;
   onUseReply?: (text: string) => void;
+  replyAction?: (text: string, input?: API.AuthorizedInput) => ReactNode;
+  textReference?: DraftTextReference;
   useReplyLabel?: string;
   embedded?: boolean;
   panel?: boolean;
+  panelEmptyMessage?: string;
+  compactEntry?: boolean;
+  homeGeneration?: boolean;
 }) {
-  const c = useConversation(options);
+  const c = useConversation({ ...options, independent });
   useEffect(() => {
     onLock?.(c.phase !== "idle");
     return () => onLock?.(false);
@@ -61,6 +78,13 @@ export function ConversationWorkspace({
   const hasMessages = c.summaries.length > 0;
   const welcome = !embedded && !panel && !options.sessionID && !hasMessages;
   const authorized = options.enabled && options.writable !== false && !c.denied;
+  const suggestedSkills =
+    homeGeneration && authorized && !c.loading
+      ? c.skills
+          .filter(isVersionedSkill)
+          .filter((skill) => skill.enabled)
+          .slice(0, 4)
+      : [];
   const [memory, setMemory] = useState<{
     project: string;
     statement: string;
@@ -68,8 +92,14 @@ export function ConversationWorkspace({
   const openMemory = (statement: string) =>
     setMemory({ project: options.projectID, statement });
   const memoryAction =
-    authorized && options.projectID ? (
-      <Button variant="ghost" size="sm" onClick={() => openMemory("")}>
+    authorized && options.projectID && !independent ? (
+      <Button
+        variant="ghost"
+        size="sm"
+        aria-label="项目记忆"
+        title="项目记忆"
+        onClick={() => openMemory("")}
+      >
         项目记忆
       </Button>
     ) : null;
@@ -80,7 +110,14 @@ export function ConversationWorkspace({
       authorized && (composer.current?.attachReference(reference) ?? false),
     appendText: (text) => {
       if (!authorized || !text.trim()) return false;
-      const content = c.draft.document.content;
+      const entry = textReference?.(text);
+      const content = entry
+        ? c.draft.document.content.filter(
+            (paragraph) =>
+              paragraphTextReference(paragraph, textReference)?.key !==
+              entry.key,
+          )
+        : c.draft.document.content;
       if (
         !content.some(
           (paragraph) =>
@@ -123,6 +160,16 @@ export function ConversationWorkspace({
           writable={authorized}
           projectID={options.projectID}
           onUseReply={onUseReply}
+          replyAction={authorized ? replyAction : undefined}
+          displayInput={
+            textReference
+              ? (text) =>
+                  text
+                    .split("\n")
+                    .map((line) => textReference(line)?.label ?? line)
+                    .join("\n")
+              : undefined
+          }
           onDraftProjectMemory={memoryAction ? openMemory : undefined}
           useReplyLabel={useReplyLabel}
         />
@@ -176,7 +223,18 @@ export function ConversationWorkspace({
       ) : c.loading ? (
         <ConversationMessageSkeleton className="mx-auto w-full max-w-[800px] flex-1 px-4 py-6" />
       ) : !embedded ? (
-        panel && authorized ? (
+        panel && authorized && panelEmptyMessage ? (
+          <p className="flex-1 text-sm text-muted-foreground">
+            {panelEmptyMessage}
+          </p>
+        ) : panel && authorized && textReference ? (
+          <div className="flex-1 space-y-1 overflow-y-auto py-2">
+            <h3 className="text-base font-medium">想拍什么？</h3>
+            <p className="text-sm text-muted-foreground">
+              说说创意，或引用镜头和素材。
+            </p>
+          </div>
+        ) : panel && authorized ? (
           <div className="flex flex-1 items-center justify-center px-4 text-center text-muted-foreground">
             聊聊你想拍什么，或直接请 AI 写分镜。
           </div>
@@ -233,12 +291,12 @@ export function ConversationWorkspace({
         className={cn(
           "mx-auto w-full shrink-0",
           alternateComposer && "conversation-direct-surface",
-          welcome ? "max-w-[800px]" : "max-w-[960px]",
+          welcome ? "max-w-[800px]" : "max-w-[1014px]",
         )}
       >
         {options.writable === false ? (
           <p className="px-4 pb-4 text-sm text-muted-foreground">
-            当前画布为只读。
+            {panel ? "当前画布为只读。" : "当前空间为只读。"}
           </p>
         ) : (
           (alternateComposer ?? (
@@ -253,14 +311,65 @@ export function ConversationWorkspace({
               headerActions={
                 <>
                   {headerActions}
-                  {memoryAction}
+                  {!textReference &&
+                    !compactEntry &&
+                    !homeGeneration &&
+                    memoryAction}
                 </>
               }
               projectControl={projectControl}
-              projectSetting={projectSetting}
+              projectSetting={
+                textReference || compactEntry || homeGeneration ? (
+                  <>
+                    {projectSetting}
+                    {memoryAction}
+                  </>
+                ) : (
+                  projectSetting
+                )
+              }
               welcome={welcome}
+              compactEntry={compactEntry}
+              homeGeneration={homeGeneration || (!panel && !embedded)}
+              textReference={textReference}
             />
           ))
+        )}
+        {suggestedSkills.length > 0 && (
+          <div
+            role="group"
+            aria-label="推荐技能"
+            className="mt-3 flex flex-wrap gap-2"
+          >
+            {suggestedSkills.map((skill) => {
+              const selected = c.settings.skills.some((pin) =>
+                isSameSkillVersion(pin, skill),
+              );
+              return (
+                <Button
+                  key={`${skill.skill_id}/${skill.version}`}
+                  variant="outline"
+                  size="skill"
+                  className="max-md:min-h-11"
+                  aria-pressed={selected}
+                  disabled={c.active || c.phase !== "idle"}
+                  onClick={() => {
+                    c.changeSettings({
+                      ...c.settings,
+                      skills: selected
+                        ? c.settings.skills.filter(
+                            (pin) => !isSameSkillVersion(pin, skill),
+                          )
+                        : selectSkillVersion(c.settings.skills, skill),
+                    });
+                    composer.current?.focusPrompt();
+                  }}
+                >
+                  {skill.name || "创作技能"}
+                </Button>
+              );
+            })}
+          </div>
         )}
         {alternateComposer && memoryAction}
       </div>

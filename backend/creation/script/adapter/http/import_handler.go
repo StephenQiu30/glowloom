@@ -91,7 +91,7 @@ func (h *ImportHandler) Create(c *gin.Context) {
 // @Produce json
 // @Param pid path string true "Project UUID"
 // @Param after query integer false "Offset" default(0)
-// @Param limit query integer false "Page size" default(50)
+// @Param limit query integer false "Page size" default(20)
 // @Success 200 {object} application.ImportPage
 // @Failure 403,404,422,503 {object} httpapi.Problem
 // @Router /api/projects/{pid}/script-file-imports [get]
@@ -112,7 +112,7 @@ func (h *ImportHandler) List(c *gin.Context) {
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 		return
 	}
-	limit, err := strconv.Atoi(c.DefaultQuery("limit", "50"))
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	if err != nil {
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 		return

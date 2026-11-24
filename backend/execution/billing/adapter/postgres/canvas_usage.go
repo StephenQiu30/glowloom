@@ -11,9 +11,9 @@ import (
 
 // ReadCanvasUsage joins immutable operation origin to the owning ledger after project authorization.
 // The caller holds a repeatable-read transaction; no reservations or overage are user charges.
-func (s *Store) ReadCanvasUsage(ctx context.Context, actor identity.Principal, project, canvas uuid.UUID, page int) (application.CanvasUsage, error) {
+func (s *Store) ReadCanvasUsage(ctx context.Context, actor identity.Principal, project, canvas uuid.UUID, page, size int) (application.CanvasUsage, error) {
 	result := application.CanvasUsage{Entries: []application.CanvasCharge{}}
-	if page < 1 || page > 10000 {
+	if page < 1 || page > 10000 || size < 1 || size > 100 {
 		return result, identity.ErrForbidden
 	}
 	tx := s.db.WithContext(ctx)
@@ -30,14 +30,14 @@ func (s *Store) ReadCanvasUsage(ctx context.Context, actor identity.Principal, p
 	if err := tx.Raw(`SELECT COALESCE(sum(l.amount_micros),0)::text AS settled_micros `+charges, project, project, canvas.String()).Scan(&totals).Error; err != nil {
 		return result, err
 	}
-	if err := tx.Raw(`SELECT l.id,l.operation_id,l.amount_micros::text AS amount_micros,l.create_time AS created_at,COALESCE(l.model_key,'') AS model_key `+charges+` ORDER BY l.create_time DESC,l.id DESC LIMIT 21 OFFSET ?`, project, project, canvas.String(), (page-1)*20).Scan(&result.Entries).Error; err != nil {
+	if err := tx.Raw(`SELECT l.id,l.operation_id,l.amount_micros::text AS amount_micros,l.create_time AS created_at,COALESCE(l.model_key,'') AS model_key `+charges+` ORDER BY l.create_time DESC,l.id DESC LIMIT ? OFFSET ?`, project, project, canvas.String(), size+1, (page-1)*size).Scan(&result.Entries).Error; err != nil {
 		return result, err
 	}
 	result.SettledMicros = totals.SettledMicros
-	if len(result.Entries) > 20 {
+	if len(result.Entries) > size {
 		next := page + 1
 		result.NextPage = &next
-		result.Entries = result.Entries[:20]
+		result.Entries = result.Entries[:size]
 	}
 	return result, nil
 }

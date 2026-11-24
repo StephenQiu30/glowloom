@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ConversationResults } from "@/components/conversations/conversation-result";
 import { emptyPromptDraft } from "@/components/generation/prompt-document";
@@ -61,4 +67,33 @@ it("uses formal operation identities once and only returns a draft for explicit 
   expect(reuse).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button"));
   expect(reuse).toHaveBeenCalledWith(taskDraft());
+});
+
+it("defers offscreen operation reads until the result approaches the viewport", async () => {
+  let intersect!: IntersectionObserverCallback;
+  const disconnect = vi.fn();
+  vi.stubGlobal(
+    "IntersectionObserver",
+    class {
+      constructor(callback: IntersectionObserverCallback) {
+        intersect = callback;
+      }
+      observe() {}
+      disconnect = disconnect;
+    },
+  );
+  try {
+    const id = "11111111-1111-4111-8111-111111111111";
+    render(<ConversationResults projectID="project" operationID={id} />);
+    expect(screen.queryByText(id)).toBeNull();
+    await act(async () =>
+      intersect(
+        [{ isIntersecting: true } as IntersectionObserverEntry],
+        {} as IntersectionObserver,
+      ),
+    );
+    expect(screen.getByText(id)).toBeTruthy();
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });

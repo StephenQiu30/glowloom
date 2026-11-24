@@ -28,12 +28,12 @@ function item(index: number) {
     },
   };
 }
-function batch(page: number, items = [item(page)], total = 61) {
+function batch(page: number, items = [item(page)], total = 41) {
   return {
     current_actor_id: actor,
     current_scope_id: scope,
     page,
-    page_size: 30,
+    page_size: 20,
     items,
     total,
     capabilities: { upscaled_filter: false },

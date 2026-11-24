@@ -53,6 +53,7 @@ export interface ConversationOptions {
   sessionID?: string;
   enabled: boolean;
   writable?: boolean;
+  independent?: boolean;
   initialDraft?: PromptDraft;
   goalContract?: API.GoalContract;
   onDraftChange?: (draft: PromptDraft) => void;
@@ -164,14 +165,15 @@ export function useConversation({
   sessionID,
   enabled,
   writable = true,
+  independent,
   initialDraft,
   goalContract,
   onDraftChange,
   onAccepted,
 }: ConversationOptions) {
   const memory = useConversationContext();
-  const draftKey = `${projectID}/${sessionID ?? (canvasID ? `canvas/${canvasID}/new` : "new")}`;
-  const identity = `${ownerKey}/${draftKey}`;
+  const draftKey = `${independent ? "" : projectID}/${sessionID ?? (canvasID ? `canvas/${canvasID}/new` : "new")}`;
+  const identity = `${ownerKey}/${projectID}/${draftKey}`;
   const [view, setView] = useState(() => initialView(identity, sessionID));
   const state =
     view.identity === identity ? view : initialView(identity, sessionID);
@@ -569,7 +571,10 @@ export function useConversation({
       canonical(latestDraft.current) === canonical(command.draft)
         ? emptyPromptDraft()
         : latestDraft.current;
-    memory?.saveDraft(`${projectID}/${command.sessionID!}`, remaining);
+    memory?.saveDraft(
+      `${independent ? "" : projectID}/${command.sessionID!}`,
+      remaining,
+    );
     if (onAccepted && draftKey.endsWith("/new"))
       memory?.saveDraft(draftKey, emptyPromptDraft());
     memory?.changed();

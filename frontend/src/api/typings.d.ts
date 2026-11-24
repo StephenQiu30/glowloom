@@ -2144,8 +2144,10 @@ declare namespace API {
   type getCanvasInformationParams = {
     /** 画布UUID */
     id: string;
-    /** 明细页，从1开始，每页20条 */
+    /** 明细页，从1开始 */
     page?: number;
+    /** 每页数量，默认20 */
+    page_size?: number;
   };
 
   type getCanvasParams = {
@@ -2174,6 +2176,8 @@ declare namespace API {
   };
 
   type getCreditWalletParams = {
+    /** 每页数量，默认20 */
+    limit?: number;
     /** 上一页的游标 */
     cursor?: string;
   };
@@ -3014,7 +3018,7 @@ declare namespace API {
     sid: string;
     /** 运行UUID */
     rid: string;
-    /** 页大小，默认50，最大100 */
+    /** 页大小，默认20，最大100 */
     limit?: number;
     /** 消息游标 */
     before?: string;
@@ -3064,7 +3068,7 @@ declare namespace API {
     created_from?: string;
     /** 创建时间上界，RFC3339，不包含 */
     created_before?: string;
-    /** 每页1..200，默认30 */
+    /** 每页1..200，默认20 */
     limit?: number;
     /** 绑定身份、空间和全部筛选的游标 */
     cursor?: string;
@@ -3155,7 +3159,7 @@ declare namespace API {
     kind?: string;
     /** 不透明游标 */
     cursor?: string;
-    /** 1..200，默认50 */
+    /** 1..200，默认20 */
     limit?: number;
   };
 
@@ -3203,7 +3207,7 @@ declare namespace API {
     project_id?: string;
     /** 页码1..100000；默认1 */
     page?: number;
-    /** 每页1..120；个人默认40/项目默认20 */
+    /** 每页1..120；默认20 */
     page_size?: number;
     /** text/image/video/audio/document/model */
     kind?: string;
@@ -3308,7 +3312,7 @@ declare namespace API {
     created_before?: string;
     /** desc/asc，默认desc */
     order?: string;
-    /** 1..200，默认40 */
+    /** 1..200，默认20 */
     limit?: number;
     /** 身份、空间与全部条件绑定的游标 */
     cursor?: string;
@@ -3366,7 +3370,7 @@ declare namespace API {
   type listProjectCopiesParams = {
     /** 源项目UUID */
     pid: string;
-    /** 1至100，默认50 */
+    /** 1至100，默认20 */
     limit?: number;
     /** 上一页next_cursor */
     cursor?: string;
@@ -3404,7 +3408,7 @@ declare namespace API {
     capability?: string;
     /** 生成模式 */
     mode?: string;
-    /** 1..200，默认50 */
+    /** 1..200，默认20 */
     limit?: number;
     /** 绑定项目与筛选的不透明游标 */
     cursor?: string;
@@ -3427,7 +3431,7 @@ declare namespace API {
     node_id?: string;
     /** 冻结来源行UUID，需node_id */
     row_id?: string;
-    /** 1..200，默认50 */
+    /** 1..200，默认20 */
     limit?: number;
     /** 项目与筛选绑定游标 */
     cursor?: string;
@@ -3551,7 +3555,7 @@ declare namespace API {
     category?: "realistic" | "2d" | "3d";
     /** true仅本人，false仅官方，省略全部可见 */
     mine?: boolean;
-    /** 默认24，最多100 */
+    /** 默认20，最多100 */
     limit?: number;
     /** 绑定身份、归属和筛选的游标 */
     cursor?: string;
@@ -3562,7 +3566,7 @@ declare namespace API {
     style_type?: "realistic" | "stylized";
     /** 子风格 */
     style_subtype?: "anime_jp" | "guofeng_xianxia" | "cartoon_3d" | "manhwa";
-    /** 每页数量（1～200，未传或0默认50） */
+    /** 每页数量（1～200，未传或0默认20） */
     limit?: number;
     /** 与账号、组织及筛选绑定的游标 */
     cursor?: string;
@@ -3579,7 +3583,7 @@ declare namespace API {
     quality?: string;
     /** 默认1 */
     page?: number;
-    /** 默认12；最大120 */
+    /** 默认20；最大120 */
     page_size?: number;
   };
 
@@ -5913,6 +5917,7 @@ declare namespace API {
   };
 
   type StoryboardCommand = {
+    append?: StoryboardDraft;
     board_id?: string;
     edit?: StoryboardEdit;
     expected_revision?: number;

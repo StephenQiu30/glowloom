@@ -1,5 +1,7 @@
 "use client";
 
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { PageSizeSelect } from "@/components/ui/page-size-select";
 import { useDeferredValue, useEffect, useState } from "react";
 import useSWR from "swr";
 import { Check, ChevronsUpDown } from "lucide-react";
@@ -56,6 +58,7 @@ export function AssetLibrarySelect({
 }) {
   const { account } = useAccount();
   const [open, setOpen] = useState(false);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [query, setQuery] = useState({ search: "", page: 1 });
   const deferredQuery = useDeferredValue(query);
   const keyword = deferredQuery.search.trim();
@@ -65,12 +68,19 @@ export function AssetLibrarySelect({
   );
   const list = useSWR(
     open && account
-      ? ["asset-libraries", String(account.id), keyword, page, enabledOnly]
+      ? [
+          "asset-libraries",
+          String(account.id),
+          keyword,
+          page,
+          pageSize,
+          enabledOnly,
+        ]
       : null,
     () =>
       listAssetLibraries({
         current: String(page),
-        pageSize: "20",
+        pageSize: String(pageSize),
         keyword,
         enabledOnly,
       }).then(unwrap),
@@ -81,7 +91,7 @@ export function AssetLibrarySelect({
   }, [list.error]);
   const loading = query !== deferredQuery || list.isLoading;
   const total = Number(list.data?.total ?? 0);
-  const pages = Math.max(1, Math.ceil(total / 20));
+  const pages = Math.max(1, Math.ceil(total / pageSize));
   const title =
     value === "ALL"
       ? "全部素材"
@@ -228,6 +238,15 @@ export function AssetLibrarySelect({
                 ? "读取失败"
                 : `共${total}个项目 · ${page > pages ? `第${page}页` : `${page}/${pages}`}`}
           </span>
+          <PageSizeSelect
+            value={pageSize}
+            label="参考素材目录每页数量"
+            onChange={(size) => {
+              setQuery((old) => ({ ...old, page: 1 }));
+              setPageSize(size);
+            }}
+            disabled={loading}
+          />
           <div className="flex shrink-0 items-center gap-1">
             <Button
               type="button"

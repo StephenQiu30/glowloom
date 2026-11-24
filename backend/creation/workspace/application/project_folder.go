@@ -141,7 +141,7 @@ func (s *ProjectFolders) List(ctx context.Context, actor identityapp.Principal, 
 		return FolderListPage{}, identityapp.ErrForbidden
 	}
 	if in.Limit == 0 {
-		in.Limit = 50
+		in.Limit = 20
 	}
 	if in.Limit < 1 || in.Limit > 200 || in.After != nil && (in.After.ID == uuid.Nil || in.After.UpdateTime.IsZero()) {
 		return FolderListPage{}, domain.ErrInvalidProjectFolder

@@ -57,6 +57,7 @@ export function PageLayout({
       data-full-bleed={fullBleed}
       className={cn(
         "product-page",
+        screen === "conversations" && "h-full",
         !fullBleed && !resolveAdminSection(screen) && "workspace-page",
       )}
     >

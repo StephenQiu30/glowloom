@@ -78,6 +78,25 @@ func TestIndependentCreationScopeAndCanvasListing(t *testing.T) {
 	require.Zero(t, credits)
 }
 
+func TestIndependentCreationReadOnlyTeam(t *testing.T) {
+	ctx, db := workspaceMigrationDB(t)
+	owner := workspaceTeamActor(t, db, insertWorkspaceActor(ctx, t, db, insertWorkspaceOrganization(ctx, t, db)))
+	store := workspaceStore(db)
+	setStatus := func(status string) {
+		lifecycleFixtureSQL(t, db, `UPDATE workspace.team SET status=? WHERE id=(SELECT team_id FROM workspace.creation_scope WHERE id=?)`, status, owner.ScopeID)
+	}
+	setStatus("archived")
+	_, err := store.EnsureIndependentCreation(ctx, owner)
+	require.Error(t, err)
+	setStatus("active")
+	created, err := store.EnsureIndependentCreation(ctx, owner)
+	require.NoError(t, err)
+	setStatus("archived")
+	existing, err := store.EnsureIndependentCreation(ctx, owner)
+	require.NoError(t, err)
+	require.Equal(t, created.ID, existing.ID)
+}
+
 func TestIndependentCreationReturnsNavigableContext(t *testing.T) {
 	createdAt := time.Date(2026, time.November, 6, 0, 0, 0, 0, time.UTC)
 	project := domain.Project{

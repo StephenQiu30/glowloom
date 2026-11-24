@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { GatewayAdmin } from "@/components/gateway/gateway-admin";
@@ -722,4 +723,108 @@ it("prepares an input-priced Ark embedding release and enforces its fixed suppli
     protocol: arkEmbedding.protocol,
     upstream_model: arkEmbedding.model,
   });
+});
+
+it("uses actual supplier logos for published and pending models and filters by capability, route and availability", async () => {
+  const draftID = "88888888-8888-4888-8888-888888888888";
+  const videoID = "55555555-5555-4555-8555-555555555555";
+  const routeID = "66666666-6666-4666-8666-666666666666";
+  const disabledCredential = "77777777-7777-4777-8777-777777777777";
+  send.mockResolvedValueOnce({
+    models: [
+      {
+        model: {
+          ...model,
+          name: "Image model",
+          protocol: "media",
+          capability: "image.generate",
+        },
+        enabled: true,
+      },
+      {
+        model: {
+          ...model,
+          id: videoID,
+          name: "Video model",
+          protocol: "media",
+          capability: "video.generate",
+        },
+        enabled: true,
+      },
+      {
+        model: {
+          ...model,
+          id: draftID,
+          name: "Pending model",
+          protocol: "media",
+          capability: "image.generate",
+        },
+        enabled: false,
+        draft: true,
+      },
+    ],
+    routes: [
+      {
+        route: { ...mediaRoute, id: routeID },
+        enabled: true,
+        provider_key: "volcengine_ark",
+      },
+      {
+        route: {
+          ...mediaRoute,
+          id: verificationID,
+          model_id: videoID,
+          credential: disabledCredential,
+          upstream_model: "video-upstream",
+        },
+        enabled: true,
+      },
+    ],
+    credentials: [
+      { id: credential, supplier_id: supplier, state: "active" },
+      { id: disabledCredential, supplier_id: supplier, state: "draining" },
+    ],
+    onboarding: [{ ...review, model_id: draftID, provider_key: "byteplus" }],
+    quotas: [],
+    unknown: [],
+  });
+  render(<GatewayAdmin />);
+  const table = await screen.findByRole("table", { name: "销售模型" });
+  const imageRow = within(table).getByRole("row", { name: /Image model/ });
+  expect(within(imageRow).getByText("可用")).toBeTruthy();
+  expect(within(table).getAllByText("不可用")).toHaveLength(2);
+  expect(
+    within(imageRow)
+      .getByRole("link", { name: mediaRoute.upstream_model })
+      .getAttribute("href"),
+  ).toBe(`/providers/${routeID}`);
+  fireEvent.click(
+    within(imageRow).getByRole("checkbox", { name: "选择 Image model" }),
+  );
+  const logo = (name: string) =>
+    within(table).getByRole("cell", { name }).querySelector("img");
+  expect(logo("Image model")?.getAttribute("src")).toBe(
+    "/brand/providers/volcengine.svg",
+  );
+  expect(logo("Pending model")?.getAttribute("src")).toBe(
+    "/brand/providers/byteplus.svg",
+  );
+  expect(screen.queryByRole("heading", { name: "模型管理" })).toBeNull();
+  expect(screen.queryByRole("radio", { name: "网格视图" })).toBeNull();
+  const videoTab = screen.getByRole("tab", { name: "视频" });
+  fireEvent.mouseDown(videoTab, { button: 0, ctrlKey: false });
+  expect(within(table).queryByText("Image model")).toBeNull();
+  expect(within(table).getByText("Video model")).toBeTruthy();
+  expect(screen.queryByText("已选 1 项")).toBeNull();
+  const input = screen.getByRole("textbox", {
+    name: "搜索模型、上游型号或渠道",
+  });
+  fireEvent.change(input, { target: { value: " VIDEO-UPSTREAM " } });
+  fireEvent.click(screen.getByRole("button", { name: "搜索模型" }));
+  expect(within(table).getByText("Video model")).toBeTruthy();
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "模型可用状态" }), {
+    key: "ArrowDown",
+  });
+  fireEvent.click(await screen.findByRole("option", { name: "可用" }));
+  expect(await screen.findByText("没有符合条件的模型")).toBeTruthy();
 });

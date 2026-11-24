@@ -1,5 +1,7 @@
 "use client";
 
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { PageSizeSelect } from "@/components/ui/page-size-select";
 import { useEffect, useRef, useState } from "react";
 import { ListChecks } from "lucide-react";
 import { useBatchToolbarFocus } from "./use-batch-toolbar-focus";
@@ -80,6 +82,7 @@ export function AssetCanvasList({
   const [page, setPage] = useState<ReturnType<
     typeof requireAssetCanvases
   > | null>(null);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [cursor, setCursor] = useState<string>();
   const [pending, setPending] = useState(true);
   const [error, setError] = useState("");
@@ -134,7 +137,7 @@ export function AssetCanvasList({
         ...assetDateRange(filters.from, filters.through),
         sort: filters.sort,
         order: filters.order,
-        limit: recent ? 2 : 24,
+        limit: recent ? 2 : pageSize,
         cursor,
       },
       { signal: controller.signal },
@@ -172,7 +175,7 @@ export function AssetCanvasList({
         if (!controller.signal.aborted) setPending(false);
       });
     return () => controller.abort();
-  }, [kind, collection, filters, cursor, retry, recent]);
+  }, [kind, collection, filters, cursor, retry, recent, pageSize]);
   function reload() {
     setPending(true);
     setCursor(undefined);
@@ -636,6 +639,17 @@ export function AssetCanvasList({
             />
           )}
       </div>
+      {!recent && (
+        <PageSizeSelect
+          value={pageSize}
+          label="画布每页数量"
+          onChange={(size) => {
+            setPageSize(size);
+            setCursor(undefined);
+          }}
+          disabled={false}
+        />
+      )}
       {!recent && page?.next_cursor && (
         <Button
           variant="ghost"

@@ -10,7 +10,6 @@ import {
 } from "react";
 import { useOptionalSession } from "@/components/auth/session";
 import { useSpace } from "@/components/spaces/space-context";
-import type { Project } from "@/components/projects/project";
 import {
   emptyPromptDraft,
   type PromptDraft,
@@ -28,8 +27,6 @@ export interface ConversationSettings {
 }
 interface ConversationContextValue {
   ownerKey: string;
-  project: Project | null;
-  selectProject: (project: Project) => void;
   listRevision: number;
   changed: () => void;
   readDraft: (key: string) => PromptDraft | undefined;
@@ -53,10 +50,6 @@ export function ConversationProvider({ children }: { children: ReactNode }) {
   const session = useOptionalSession(),
     space = useSpace();
   const ownerKey = `${session?.actor.id ?? "guest"}/${space.selected?.id ?? "none"}`;
-  const [selected, setSelected] = useState<{
-    owner: string;
-    project: Project;
-  } | null>(null);
   const [revision, setRevision] = useState(0);
   const memory = useRef({
     owner: ownerKey,
@@ -75,13 +68,10 @@ export function ConversationProvider({ children }: { children: ReactNode }) {
       : new Map<string, PromptDraft>();
     memory.current = { owner: ownerKey, drafts, settings: new Map() };
   }, [ownerKey]);
-  const project = selected?.owner === ownerKey ? selected.project : null;
   const value = useMemo<ConversationContextValue>(
     () => ({
       ownerKey,
-      project,
       listRevision: revision,
-      selectProject: (project) => setSelected({ owner: ownerKey, project }),
       changed: () => setRevision((n) => n + 1),
       readDraft: (key) => {
         const draft = memory.current.drafts.get(key);
@@ -102,7 +92,7 @@ export function ConversationProvider({ children }: { children: ReactNode }) {
           memory.current.settings.set(key, structuredClone(settings));
       },
     }),
-    [ownerKey, project, revision],
+    [ownerKey, revision],
   );
   return <Context value={value}>{children}</Context>;
 }

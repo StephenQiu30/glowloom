@@ -1,5 +1,6 @@
 "use client";
 
+import { ResultMediaPreview } from "./result-media-preview";
 import { useState } from "react";
 import { downloadDocumentAsset, downloadMediaOriginal } from "@/api/media";
 import { DownloadButton } from "@/components/media/download-button";
@@ -31,7 +32,17 @@ export function ResultMediaActions({
       {previewable ? (
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button variant="outline">预览结果</Button>
+            <Button
+              variant="outline"
+              onClick={(event) => {
+                event.currentTarget
+                  .closest("[data-generation-output]")
+                  ?.querySelector("video")
+                  ?.pause();
+              }}
+            >
+              预览结果
+            </Button>
           </DialogTrigger>
           <DialogContent
             aria-describedby={undefined}
@@ -40,13 +51,22 @@ export function ResultMediaActions({
             <DialogTitle>结果预览</DialogTitle>
 
             <div className="relative flex h-[65dvh] min-h-40 min-w-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
-              <ProjectMediaPreview
-                projectID={projectID}
-                id={assetID}
-                kind={kind}
-                large
-                fit="contain"
-              />
+              {kind === "image" || kind === "video" ? (
+                <ResultMediaPreview
+                  key={assetID}
+                  kind={kind}
+                  assetID={assetID}
+                  projectID={projectID}
+                />
+              ) : (
+                <ProjectMediaPreview
+                  projectID={projectID}
+                  id={assetID}
+                  kind={kind}
+                  large
+                  fit="contain"
+                />
+              )}
             </div>
           </DialogContent>
         </Dialog>

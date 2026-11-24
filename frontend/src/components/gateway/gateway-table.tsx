@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type SetStateAction,
 } from "react";
 import { createPortal } from "react-dom";
 import { Filters, type FilterField } from "@/components/insights/shared";
@@ -46,12 +47,14 @@ export function GatewayTable({
   rows,
   empty,
   onDelete,
+  externalFilterKey,
 }: {
   label: string;
   columns: string[];
   rows: GatewayTableRow[];
   empty: string;
   onDelete?: (ids: string[]) => Promise<void>;
+  externalFilterKey?: string;
 }) {
   const filterSlot = useContext(GatewayFilterSlot);
   const [filter, setFilter] = useState<Record<string, string>>({});
@@ -84,8 +87,15 @@ export function GatewayTable({
   const [current, setCurrent] = useState(1);
   const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [filterKey, setFilterKey] = useState(externalFilterKey);
+  const filterChanged = filterKey !== externalFilterKey;
+  if (filterChanged) {
+    setFilterKey(externalFilterKey);
+    setCurrent(1);
+    setSelectedIds(new Set());
+  }
   const selected = rows.filter((row) => selectedIds.has(row.id));
-  if (selected.length !== selectedIds.size) {
+  if (!filterChanged && selected.length !== selectedIds.size) {
     setSelectedIds(new Set(selected.map((row) => row.id)));
   }
   const { page, start, end } = paginationRange(
@@ -93,8 +103,20 @@ export function GatewayTable({
     current,
     pageSize,
   );
-  if (page !== current) setCurrent(page);
+  if (!filterChanged && page !== current) setCurrent(page);
   const visible = matching.slice(Math.max(0, start - 1), end);
+
+  function updateSelection(update: SetStateAction<GatewayTableRow[]>) {
+    setSelectedIds((previous) => {
+      const pageSelection = visible.filter((row) => previous.has(row.id));
+      const nextPage =
+        typeof update === "function" ? update(pageSelection) : update;
+      const next = new Set(previous);
+      visible.forEach((row) => next.delete(row.id));
+      nextPage.forEach((row) => next.add(row.id));
+      return next;
+    });
+  }
 
   async function copySelected() {
     try {
@@ -170,6 +192,7 @@ export function GatewayTable({
   return (
     <div className="flex min-w-0 flex-col gap-3">
       {filterSlot &&
+        externalFilterKey === undefined &&
         createPortal(
           <Filters
             fields={fields}
@@ -216,18 +239,7 @@ export function GatewayTable({
           selected,
           pageLabel: `全选本页${label}`,
           getLabel: (row) => row.label,
-          onChange: (update) =>
-            setSelectedIds((previous) => {
-              const pageSelection = visible.filter((row) =>
-                previous.has(row.id),
-              );
-              const nextPage =
-                typeof update === "function" ? update(pageSelection) : update;
-              const next = new Set(previous);
-              visible.forEach((row) => next.delete(row.id));
-              nextPage.forEach((row) => next.add(row.id));
-              return next;
-            }),
+          onChange: updateSelection,
         }}
       />
       {targets.length > 0 && (

@@ -64,7 +64,7 @@ func TestPersonalHistoryValidatesIdentityAndFiltersBeforeStorage(t *testing.T) {
 func TestPersonalHistoryNormalizesInputsAndKeepsErrorChain(t *testing.T) {
 	s := &personalHistoryReader{}
 	page, err := operationapp.NewPersonalHistoryQuery(s).List(t.Context(), historyActor(), operationapp.PersonalHistoryInput{Search: "  晨光  ", Capability: "image.generate"})
-	if err != nil || page.Items == nil || s.input.Search != "晨光" || s.input.Order != "desc" || s.input.Limit != 40 {
+	if err != nil || page.Items == nil || s.input.Search != "晨光" || s.input.Order != "desc" || s.input.Limit != 20 {
 		t.Fatalf("page=%+v input=%+v err=%v", page, s.input, err)
 	}
 	sentinel := errors.New("database unavailable")

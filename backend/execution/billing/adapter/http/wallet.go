@@ -19,7 +19,7 @@ import (
 )
 
 // WalletReader reads only the payer selected by the authenticated scope.
-type WalletReader func(context.Context, identityapp.Principal, *uuid.UUID) (application.WalletView, error)
+type WalletReader func(context.Context, identityapp.Principal, *uuid.UUID, int) (application.WalletView, error)
 
 // WalletReadLimiter controls authenticated balance and history reads.
 type WalletReadLimiter interface {
@@ -49,10 +49,16 @@ func (h *WalletHandler) Register(group *gin.RouterGroup) { group.GET("/billing/w
 // @ID getCreditWallet
 // @Tags billing
 // @Produce json
+// @Param limit query int false "每页数量，默认20" minimum(1) maximum(100)
 // @Param cursor query string false "上一页的游标"
 // @Success 200 {object} application.WalletView
 // @Router /api/billing/wallet [get]
 func (h *WalletHandler) Read(c *gin.Context) {
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	if err != nil || limit < 1 || limit > 100 {
+		httpapi.WriteProblem(c, http.StatusUnprocessableEntity, "invalid_request", nil)
+		return
+	}
 	var cursor *uuid.UUID
 	if raw := c.Query("cursor"); raw != "" {
 		id, err := uuid.Parse(raw)
@@ -80,7 +86,7 @@ func (h *WalletHandler) Read(c *gin.Context) {
 			return
 		}
 	}
-	result, err := h.read(c.Request.Context(), actor, cursor)
+	result, err := h.read(c.Request.Context(), actor, cursor, limit)
 	switch {
 	case errors.Is(err, identityapp.ErrForbidden):
 		httpapi.WriteProblem(c, 404, "not_found", nil)

@@ -1,4 +1,6 @@
 "use client";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { PageSizeSelect } from "@/components/ui/page-size-select";
 import { ContentState } from "@/components/layout/content-state";
 import { uploadGrantedPart } from "@/components/canvas/runtime/lib/media/granted-transfer";
 import { uploadTarget } from "../lib/asset-upload-target";
@@ -200,6 +202,7 @@ function TransferContent({
   const [busy, setBusy] = useState(false);
   const [transferring, setTransferring] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [cursors, setCursors] = useState<Array<string | undefined>>([
     undefined,
   ]);
@@ -208,10 +211,13 @@ function TransferContent({
   const selection = useRef<CanvasContract.FileTransferVO | null>(null);
   const mounted = useRef(true);
   const files = useSWR(
-    showRecords ? ["file-transfers", ownerId, cursors.at(-1)] : null,
+    showRecords ? ["file-transfers", ownerId, cursors.at(-1), pageSize] : null,
     async (_key, options) =>
       unwrap(
-        await api.listFileTransfers({ beforeId: cursors.at(-1) }, options),
+        await api.listFileTransfers(
+          { beforeId: cursors.at(-1), limit: pageSize },
+          options,
+        ),
       ),
     {
       shouldRetryOnError: false,
@@ -837,6 +843,16 @@ function TransferContent({
               aria-label="上传记录分页"
               className="workspace-pagination flex"
             >
+              <PageSizeSelect
+                value={pageSize}
+                label="上传记录每页数量"
+                onChange={(size) => {
+                  setPageSize(size);
+                  setCursors([undefined]);
+                }}
+                disabled={busy || files.isValidating}
+              />
+
               <Button
                 variant="outline"
                 disabled={busy || files.isValidating || cursors.length === 1}
@@ -845,12 +861,12 @@ function TransferContent({
                 较新文件
               </Button>
               <span className="text-sm text-muted-foreground">
-                第 {cursors.length} 页，每页最多 50 条
+                第 {cursors.length} 页
               </span>
               <Button
                 variant="outline"
                 disabled={
-                  busy || files.isValidating || files.data?.length !== 50
+                  busy || files.isValidating || files.data?.length !== pageSize
                 }
                 onClick={() => {
                   const last = files.data?.at(-1)?.registrationId;

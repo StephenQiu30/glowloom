@@ -107,7 +107,7 @@ func personalHistoryBinding(actor identityapp.Principal, input application.Perso
 // @Param created_from query string false "RFC3339创建时间起点，包含"
 // @Param created_before query string false "RFC3339创建时间终点，不包含"
 // @Param order query string false "desc/asc，默认desc"
-// @Param limit query integer false "1..200，默认40"
+// @Param limit query integer false "1..200，默认20"
 // @Param cursor query string false "身份、空间与全部条件绑定的游标"
 // @Success 200 {object} PersonalHistoryPageResponse
 // @Failure 401 {object} httpapi.Problem

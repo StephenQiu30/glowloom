@@ -30,7 +30,7 @@ func TestListProvidersQueryBoundsPageAndChecksPrincipal(t *testing.T) {
 	actor := adminPrincipal()
 	store := &listProvidersStore{}
 	page, err := catalogapp.NewListProvidersQuery(store).Execute(t.Context(), actor, catalogapp.ListProvidersInput{})
-	if err != nil || !store.called || store.limit != 50 || page.Providers == nil {
+	if err != nil || !store.called || store.limit != 20 || page.Providers == nil {
 		t.Fatalf("default provider page %+v, limit %d: %v", page, store.limit, err)
 	}
 	store.called = false

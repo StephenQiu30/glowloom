@@ -1,4 +1,5 @@
 "use client";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { useCallback, useEffect, useRef, useState } from "react";
 import useSWR from "@/components/canvas/runtime/lib/use-live-query";
 import { assetLibraryTarget } from "../library/asset-library-select";
@@ -16,7 +17,7 @@ const changedEvent = "glowloom:asset-search:changed";
 /** All entry points share authorization, visibility feedback and event-driven invalidation. */
 export function useLibraryAssets(
   current = 1,
-  pageSize = 12,
+  pageSize = DEFAULT_PAGE_SIZE,
   keyword = "",
   kind = "all",
   onSuccess?: (data: CanvasContract.AssetPageVO) => void,

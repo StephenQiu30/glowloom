@@ -201,7 +201,7 @@ func packageQuery(c *gin.Context, paging bool) (domain.LibraryScope, int, int, e
 	if err != nil {
 		return scope, 0, 0, err
 	}
-	page, size := 1, 40
+	page, size := 1, 20
 	for key, destination := range map[string]*int{"page": &page, "page_size": &size} {
 		if q.Has(key) {
 			value, err := strconv.Atoi(q.Get(key))

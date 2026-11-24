@@ -37,7 +37,7 @@ function page(items = [asset], index = 1, total = items.length) {
     revision: 1,
     scope: { kind: "project", project_id: projectID },
     page: index,
-    page_size: 40,
+    page_size: 20,
     total,
     items: items.map((media) => ({
       id: media.id,
@@ -81,7 +81,7 @@ it("loads project-scoped media and verifies the current receipt before handing o
     project_id: projectID,
     kind: "model",
     page: 1,
-    page_size: 40,
+    page_size: 20,
   });
 });
 it("shows empty and failed states and retries without inventing local assets", async () => {

@@ -1,24 +1,15 @@
 "use client";
 
-import { useId } from "react";
+import { PAGE_SIZE_OPTIONS as pageSizes } from "@/lib/pagination";
+import { PageSizeSelect } from "@/components/ui/page-size-select";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Field, FieldLabel } from "@/components/ui/field";
 import {
   Pagination,
   PaginationContent,
   PaginationItem,
 } from "@/components/ui/pagination";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-
-export const pageSizes = [12, 24, 48] as const;
+export { pageSizes };
 export type PageSize = (typeof pageSizes)[number];
 
 /** Offset APIs show totals; cursor APIs expose only the known page and next-page availability. */
@@ -41,42 +32,17 @@ export function DataPagination({
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: PageSize) => void;
 }) {
-  const id = useId();
   const pages = total === undefined ? undefined : Math.ceil(total / pageSize);
   const current =
     pages === 0 ? 0 : pages === undefined ? page : Math.min(page, pages);
   return (
     <Pagination aria-label={label} className="data-pagination">
-      <Field orientation="horizontal" className="w-auto gap-2">
-        <FieldLabel htmlFor={id} className="max-sm:sr-only">
-          每页
-        </FieldLabel>
-        <Select
-          value={String(pageSize)}
-          disabled={disabled}
-          onValueChange={(value) => {
-            const size = pageSizes.find((size) => String(size) === value);
-            if (size) onPageSizeChange(size);
-          }}
-        >
-          <SelectTrigger
-            id={id}
-            aria-label={`${label}每页数量`}
-            className="w-20 text-sm data-[size=default]:h-9 max-md:data-[size=default]:h-11"
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent align="end">
-            <SelectGroup>
-              {pageSizes.map((size) => (
-                <SelectItem key={size} value={String(size)}>
-                  {size}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-      </Field>
+      <PageSizeSelect
+        label={`${label}每页数量`}
+        value={pageSize}
+        disabled={disabled}
+        onChange={onPageSizeChange}
+      />
       <span className="data-pagination-status" role="status">
         <span aria-hidden="true">
           {pages === 0

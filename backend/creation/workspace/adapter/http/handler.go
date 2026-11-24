@@ -99,7 +99,7 @@ func (h *Handler) Register(group *gin.RouterGroup) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/projects [get]
 func (h *Handler) List(c *gin.Context) {
-	input := application.ListProjectsInput{Query: strings.TrimSpace(c.Query("q")), Status: c.Query("status"), Order: c.Query("order"), Limit: 50}
+	input := application.ListProjectsInput{Query: strings.TrimSpace(c.Query("q")), Status: c.Query("status"), Order: c.Query("order"), Limit: 20}
 	if values, present := c.Request.URL.Query()["include_independent_canvases"]; present {
 		if len(values) != 1 || values[0] != "true" {
 			httpapi.WriteProblem(c, 422, "invalid_request", nil)
@@ -148,7 +148,7 @@ func (h *Handler) List(c *gin.Context) {
 		input.IncludeExpired = value
 	}
 	if input.Limit == 0 {
-		input.Limit = 50
+		input.Limit = 20
 	}
 	actor := identityhttp.Principal(c)
 	binding := cursorBinding(actor, "projects", struct {

@@ -1,4 +1,5 @@
 "use client";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { Toolbar } from "@/components/ui/toolbar";
 import { ContentState } from "@/components/layout/content-state";
 import { readErrorMessage } from "@/lib/read-error";
@@ -84,7 +85,7 @@ export function ProjectList({
   const [loading, setLoading] = useState(true);
   const [retry, setRetry] = useState(0);
   const active = useRef<AbortController | null>(null);
-  const [pageSize, setPageSize] = useState<PageSize>(12);
+  const [pageSize, setPageSize] = useState<PageSize>(DEFAULT_PAGE_SIZE);
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const cursor = cursors.at(-1);
   function reload() {

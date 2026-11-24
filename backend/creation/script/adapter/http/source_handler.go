@@ -262,7 +262,7 @@ func (h *SourceHandler) List(c *gin.Context) {
 	if !ok {
 		return
 	}
-	after, limit := 0, 50
+	after, limit := 0, 20
 	if raw := c.Query("after"); raw != "" {
 		after, err = strconv.Atoi(raw)
 		if err != nil {

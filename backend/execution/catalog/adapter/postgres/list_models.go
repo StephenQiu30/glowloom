@@ -30,7 +30,7 @@ func (s *Store) ListModelsForProject(ctx context.Context, actor identityapp.Prin
 		return application.ModelCatalogPage{}, identityapp.ErrForbidden
 	}
 	if input.Limit == 0 {
-		input.Limit = 50
+		input.Limit = 20
 	}
 	page := application.ModelCatalogPage{Models: []application.ModelCatalogItem{}}
 	err := platformdb.ReadSnapshot(ctx, s.db, func(tx *gorm.DB) error {

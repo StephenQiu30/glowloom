@@ -158,7 +158,7 @@ it("使用紧凑类型菜单，游客切换输入不丢失且没有推荐技能�
   expect(state.opened).toEqual([]);
 });
 
-it("Agent 入口先登录和选择项目，不再显示暂未开放", async () => {
+it("访客发送 Agent 对话时打开登录", async () => {
   render(<Page />);
   await tab("Agent 模式");
   expect(screen.queryByText(/暂未开放/)).toBeNull();
@@ -210,17 +210,26 @@ it("切换画布后保留输入，再切回生成仍可编辑且不提交请求"
   });
   fireEvent.click(screen.getByRole("radio", { name: "画布" }));
   await waitFor(() =>
-    expect(screen.getByLabelText("画布创作想法").textContent).toBe(""),
+    expect(screen.getByLabelText("对话创作输入").textContent).toBe(""),
   );
-  fireEvent.paste(screen.getByLabelText("画布创作想法"), {
+  expect(screen.getByRole("button", { name: "新建画布" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "发送" })).toHaveProperty(
+    "disabled",
+    true,
+  );
+  fireEvent.paste(screen.getByLabelText("对话创作输入"), {
     clipboardData: { files: [], getData: () => "，傍晚" },
   });
-  expect(screen.getByLabelText("画布创作想法").textContent).toBe("，傍晚");
+  expect(screen.getByLabelText("对话创作输入").textContent).toBe("，傍晚");
   fireEvent.click(screen.getByRole("radio", { name: "生成" }));
   await waitFor(() =>
     expect(screen.getByLabelText("创作提示词").textContent).toBe(
       "一片安静的海",
     ),
+  );
+  fireEvent.click(screen.getByRole("radio", { name: "画布" }));
+  expect((await screen.findByLabelText("对话创作输入")).textContent).toBe(
+    "，傍晚",
   );
   expect(state.login).not.toHaveBeenCalled();
   expect(state.opened).toEqual([]);
@@ -367,7 +376,7 @@ it("项目音频草稿页面内复用，重新打开不复用本机指针", asyn
   expect(state.opened.at(-1)?.draftID).toBeUndefined();
 });
 
-it("keeps a guest Agent draft through login and first project selection", async () => {
+it("keeps a guest Agent draft through login without a project selection", async () => {
   const view = render(
     <ConversationProvider>
       <Page />
@@ -388,13 +397,10 @@ it("keeps a guest Agent draft through login and first project selection", async 
   expect((await screen.findByLabelText("对话创作输入")).textContent).toBe(
     "访客尚未发送的正文",
   );
-  fireEvent.click(await screen.findByRole("button", { name: "选择验证项目" }));
-  expect((await screen.findByLabelText("对话创作输入")).textContent).toBe(
-    "访客尚未发送的正文",
-  );
+  expect(screen.queryByRole("button", { name: "选择验证项目" })).toBeNull();
 });
 
-it("keeps Agent drafts separate when switching projects", async () => {
+it("keeps independent Agent input when a different tool selects a business project", async () => {
   state.session = { actor: { id: "draft-owner" } };
   render(
     <ConversationProvider>
@@ -403,21 +409,16 @@ it("keeps Agent drafts separate when switching projects", async () => {
   );
   await screen.findByText("image 富文本编辑器");
   await tab("Agent 模式");
-  fireEvent.click(await screen.findByRole("button", { name: "选择验证项目" }));
   fireEvent.paste(await screen.findByLabelText("对话创作输入"), {
-    clipboardData: { files: [], getData: () => "项目A草稿" },
+    clipboardData: { files: [], getData: () => "独立对话草稿" },
   });
-  state.projectID = "second-project";
+  await tab("音频生成");
   fireEvent.click(await screen.findByRole("button", { name: "选择验证项目" }));
-  await waitFor(() =>
-    expect(screen.getByLabelText("对话创作输入").textContent).toBe(""),
-  );
-  fireEvent.paste(screen.getByLabelText("对话创作输入"), {
-    clipboardData: { files: [], getData: () => "项目B草稿" },
-  });
-  state.projectID = "test-project";
-  fireEvent.click(await screen.findByRole("button", { name: "选择验证项目" }));
-  await waitFor(() =>
-    expect(screen.getByLabelText("对话创作输入").textContent).toBe("项目A草稿"),
+  await screen.findByText("audio 富文本编辑器");
+  await tab("Agent 模式");
+  await screen.findByLabelText("对话创作输入");
+  expect(screen.queryByRole("button", { name: "选择验证项目" })).toBeNull();
+  expect((await screen.findByLabelText("对话创作输入")).textContent).toBe(
+    "独立对话草稿",
   );
 });

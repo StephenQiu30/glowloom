@@ -36,7 +36,7 @@ type SourceControlRequest struct {
 
 func pageQuery(c *gin.Context, cursor string) (int64, int, bool) {
 	before, err := strconv.ParseInt(c.DefaultQuery(cursor, "0"), 10, 64)
-	limit, limitErr := strconv.Atoi(c.DefaultQuery("limit", "50"))
+	limit, limitErr := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	if err != nil || limitErr != nil || before < 0 || limit < 1 || limit > 100 {
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 		return 0, 0, false

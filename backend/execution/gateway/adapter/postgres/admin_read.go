@@ -3,6 +3,8 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"net/url"
+	"strings"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -34,9 +36,26 @@ func (s *Store) Configuration(ctx context.Context) (map[string]any, error) {
 			products = append(products, map[string]any{"model": model, "enabled": row.Enabled, "draft": row.Draft})
 		}
 		out["models"] = products
-		candidates := []OnboardingSummary{}
-		if err := tx.Raw(`SELECT id,model_id,state,document->'route'->>'upstream_model' AS upstream FROM ai.onboarding WHERE deleted_at IS NULL ORDER BY created_at DESC,id LIMIT 100`).Scan(&candidates).Error; err != nil {
+		var candidateRows []struct {
+			OnboardingSummary
+			RouteDocument []byte
+		}
+		if err := tx.Raw(`SELECT id,model_id,state,document->'route'->>'upstream_model' AS upstream,
+ document->'route' AS route_document FROM ai.onboarding WHERE deleted_at IS NULL
+ ORDER BY created_at DESC,id LIMIT 100`).Scan(&candidateRows).Error; err != nil {
 			return err
+		}
+		type candidateListing struct {
+			OnboardingSummary
+			ProviderKey string `json:"provider_key,omitempty"`
+		}
+		candidates := make([]candidateListing, 0, len(candidateRows))
+		for _, row := range candidateRows {
+			var route domain.Route
+			if json.Unmarshal(row.RouteDocument, &route) != nil {
+				return domain.ErrInvalid
+			}
+			candidates = append(candidates, candidateListing{row.OnboardingSummary, routeProviderKey(route)})
 		}
 		out["onboarding"] = candidates
 		var routes []struct {
@@ -52,7 +71,7 @@ func (s *Store) Configuration(ctx context.Context) (map[string]any, error) {
 			if json.Unmarshal(row.Document, &route) != nil {
 				return domain.ErrInvalid
 			}
-			supplies = append(supplies, map[string]any{"route": route, "enabled": row.Enabled})
+			supplies = append(supplies, map[string]any{"route": route, "enabled": row.Enabled, "provider_key": routeProviderKey(route)})
 		}
 		out["routes"] = supplies
 		var credentials []struct {
@@ -92,6 +111,47 @@ func (s *Store) Configuration(ctx context.Context) (map[string]any, error) {
 		return nil
 	})
 	return out, err
+}
+
+// routeProviderKey identifies a display logo from the route's actual adapter or direct endpoint.
+func routeProviderKey(route domain.Route) string {
+	if route.Protocol == "local" {
+		return "local"
+	}
+	endpoint, err := url.Parse(route.BaseURL)
+	if err != nil || endpoint.Scheme != "https" || (endpoint.Port() != "" && endpoint.Port() != "443") {
+		return ""
+	}
+	host := strings.ToLower(endpoint.Hostname())
+	if len(route.DriverConfig) > 0 {
+		var driver struct {
+			AdapterKey string `json:"adapter_key"`
+		}
+		if json.Unmarshal(route.DriverConfig, &driver) != nil {
+			return ""
+		}
+		// The OpenAI adapter also accepts self-hosted compatible endpoints.
+		if driver.AdapterKey == "openai" && host != "api.openai.com" {
+			return ""
+		}
+		return driver.AdapterKey
+	}
+	switch host {
+	case "api.openai.com":
+		return "openai"
+	case "openrouter.ai":
+		return "openrouter"
+	case "ark.cn-beijing.volces.com":
+		return "volcengine_ark"
+	case "ark.ap-southeast.bytepluses.com":
+		return "byteplus"
+	case "api.deepseek.com":
+		return "deepseek"
+	case "ai-gateway.vercel.sh":
+		return "vercel"
+	default:
+		return ""
+	}
 }
 
 // SetBudget changes a project spending limit only when it still covers authoritative commitments.

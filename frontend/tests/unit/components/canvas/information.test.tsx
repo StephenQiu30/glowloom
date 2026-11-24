@@ -107,7 +107,7 @@ it("reads owner and dates and opens actual fee details without inventing points"
   );
   await screen.findByText("项目所有者");
   expect(query).toHaveBeenCalledWith(
-    { id, page: 1 },
+    { id, page: 1, page_size: 20 },
     expect.objectContaining({ signal: expect.any(AbortSignal) }),
   );
   fireEvent.click(screen.getByRole("button", { name: "查看积分明细" }));
@@ -179,5 +179,7 @@ it("paginates through authoritative ledger entries", async () => {
   fireEvent.click(screen.getByRole("button", { name: "查看积分明细" }));
   fireEvent.click(screen.getByRole("button", { name: "下一页" }));
   await screen.findByText("第二页模型");
-  await waitFor(() => expect(query.mock.calls[1][0]).toEqual({ id, page: 2 }));
+  await waitFor(() =>
+    expect(query.mock.calls[1][0]).toEqual({ id, page: 2, page_size: 20 }),
+  );
 });

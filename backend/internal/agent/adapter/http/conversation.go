@@ -149,7 +149,7 @@ func (h *PublicHandler) CurrentSubmission(c *gin.Context) {
 // @Param pid path string true "项目UUID"
 // @Param sid path string true "会话UUID"
 // @Param rid path string true "运行UUID"
-// @Param limit query int false "页大小，默认50，最大100"
+// @Param limit query int false "页大小，默认20，最大100"
 // @Param before query string false "消息游标"
 // @Param through query string true "快照截止游标"
 // @Success 200 {object} runtimeclient.MessagePage

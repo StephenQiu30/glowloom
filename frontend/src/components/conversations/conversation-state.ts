@@ -121,7 +121,7 @@ export function canSubmitConversation({
   active,
 }: SubmitCheck): { allowed: boolean; reason?: string } {
   const blocked = (reason: string) => ({ allowed: false, reason });
-  if (!authorized) return blocked("登录并选择有权限的项目后发送");
+  if (!authorized) return blocked("需要当前创作空间的发送权限");
   if (busy) return blocked("正在核对本次提交");
   if (active) return blocked("请先完成或停止当前创作");
   if (

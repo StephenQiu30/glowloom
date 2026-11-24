@@ -9,7 +9,7 @@ export const creationTypes = [
   {
     id: "image",
     label: "图片生成",
-    placeholder: "描述你的想法，或添加参考素材。",
+    placeholder: "描述画面、风格或参考图。",
   },
   {
     id: "video",

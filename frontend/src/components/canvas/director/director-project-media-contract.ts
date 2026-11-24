@@ -1,3 +1,4 @@
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { isProjectID } from "@/components/projects/project";
 import { RequestError } from "@/lib/request";
 export function directorProjectQuery(
@@ -5,6 +6,7 @@ export function directorProjectQuery(
   kind: string,
   search: string,
   page: number,
+  pageSize: number = DEFAULT_PAGE_SIZE,
 ): API.listMediaLibraryParams {
   return {
     scope: "project",
@@ -12,7 +14,7 @@ export function directorProjectQuery(
     kind,
     search: search.trim() || undefined,
     page,
-    page_size: 40,
+    page_size: pageSize,
     catalog_state: "active",
     order: "updated_desc",
   };
@@ -25,6 +27,7 @@ export function requireDirectorProjectPage(
   kind: string,
   index: number,
   actorID?: string,
+  pageSize: number = DEFAULT_PAGE_SIZE,
 ) {
   const page = value as API.LibraryPage | null;
   if (
@@ -37,10 +40,10 @@ export function requireDirectorProjectPage(
     page.scope?.kind !== "project" ||
     page.scope.project_id !== projectID ||
     page.page !== index ||
-    page.page_size !== 40 ||
+    page.page_size !== pageSize ||
     !integer(page.total) ||
     !Array.isArray(page.items) ||
-    page.items.length > 40 ||
+    page.items.length > pageSize ||
     page.items.length > page.total! ||
     new Set(page.items.map((item) => item.asset_id)).size !==
       page.items.length ||
@@ -62,6 +65,6 @@ export function requireDirectorProjectPage(
     ),
     total: page.total!,
     page: index,
-    hasMore: page.items.length > 0 && index * 40 < page.total!,
+    hasMore: page.items.length > 0 && index * pageSize < page.total!,
   };
 }

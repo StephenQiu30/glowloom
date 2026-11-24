@@ -81,7 +81,7 @@ it("rejects a changed asset version and can retry the same selection", async () 
     scope: { kind: "personal" },
     revision: 1,
     page: 1,
-    page_size: 12,
+    page_size: 20,
     total: 1,
     folders: [],
     items: [

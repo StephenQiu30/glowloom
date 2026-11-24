@@ -22,6 +22,14 @@ import { ModelPicker } from "@/components/generation/model-picker";
 import { QuoteCostDetail } from "@/components/generation/quote-cost-detail";
 import { ProjectMediaPreview } from "@/components/media/project-media";
 import { isProjectID } from "@/components/projects/project";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { readErrorMessage } from "@/lib/read-error";
 import { RequestError } from "@/lib/request";
@@ -92,7 +100,10 @@ export function CanvasStoryboardDelivery({
   const [candidates, setCandidates] = useState<API.TaskSummary[]>();
   const [candidateError, setCandidateError] = useState("");
   const [candidateRefresh, setCandidateRefresh] = useState(0);
-  const [selectedTask, setSelectedTask] = useState("");
+  const [selectedTask, setSelectedTask] = useState(
+    shot.adopted?.operation_id ?? "",
+  );
+  const quoteTrigger = useRef<HTMLButtonElement>(null);
   const [preview, setPreview] = useState<Task>();
   const [previewError, setPreviewError] = useState("");
   const [quote, setQuote] = useState<QuoteDisplay>();
@@ -407,6 +418,12 @@ export function CanvasStoryboardDelivery({
 
   const task = preview?.id === selectedTask ? preview : undefined;
   const oldCandidate = task?.source?.shot_revision !== shot.revision;
+  const quotedParams = quote?.quote.editor_draft?.params;
+  const quotedSpecification = [
+    quotedParams?.resolution,
+    quotedParams?.aspect_ratio ?? quotedParams?.ratio,
+    currentQuote ? `${shot.duration_ms / 1000} 秒` : undefined,
+  ].filter((value) => typeof value === "string" && value);
   const outputs = task?.outputs?.filter(
     (output) =>
       output.kind === "video" &&
@@ -454,8 +471,10 @@ export function CanvasStoryboardDelivery({
               onSelect={(model) => setModelKey(model.key ?? "")}
             />
             <Button
+              ref={quoteTrigger}
               variant="outline"
               size="sm"
+              className="max-lg:h-11"
               disabled={!!busy || confirmUnknown || tasksActive}
               onClick={requestQuote}
             >
@@ -466,49 +485,113 @@ export function CanvasStoryboardDelivery({
           <p className="text-muted-foreground">当前没有可用的视频模型。</p>
         )
       ) : null}
-      {quote ? (
-        <div className="space-y-2 rounded-md border bg-muted/40 p-3">
-          <p className="text-muted-foreground">
-            {models?.find((item) => item.key === quote.intent.modelKey)
-              ?.display_name ?? "视频模型"}{" "}
-            · 文生视频{currentQuote ? ` · ${shot.duration_ms / 1000} 秒` : ""}
-          </p>
-          <QuoteCostDetail
-            amount={quote.quote.quote_micros}
-            detail={quote.quote.quote_detail}
-          />
-          {confirmUnknown ? (
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" disabled={!!busy} onClick={checkConfirmation}>
-                查询原任务
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!!busy || !writable}
-                onClick={confirm}
-              >
-                重试原确认
-              </Button>
-            </div>
-          ) : (
-            <Button
-              size="sm"
-              disabled={
-                !writable ||
-                !!busy ||
-                !currentQuote ||
-                !quote.quote.confirmable ||
-                !quote.quote.confirm_key
+      {quote && active && (
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open && !busy) {
+              if (confirmUnknown) return;
+              setQuote(undefined);
+            }
+          }}
+        >
+          <DialogContent
+            className="border sm:max-w-[468px]"
+            showCloseButton={!confirmUnknown && !busy}
+            onCloseAutoFocus={(event) => {
+              if (quoteTrigger.current) {
+                event.preventDefault();
+                quoteTrigger.current.focus();
               }
-              onClick={confirm}
-            >
-              确认制作此镜
-            </Button>
-          )}
-        </div>
-      ) : null}
-      {feedback ? (
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle className="text-xl">制作样片</DialogTitle>
+              <DialogDescription>{shot.title}</DialogDescription>
+            </DialogHeader>
+            <dl className="space-y-3 border-y py-4 text-sm">
+              <div className="flex items-start justify-between gap-4">
+                <dt className="text-muted-foreground">视频模型</dt>
+                <dd className="text-right">
+                  {models?.find((item) => item.key === quote.intent.modelKey)
+                    ?.display_name || quote.intent.modelKey}
+                </dd>
+              </div>
+              {quotedSpecification.length > 0 && (
+                <div className="flex justify-between gap-4">
+                  <dt className="text-muted-foreground">规格</dt>
+                  <dd className="text-right">
+                    {quotedSpecification.join(" · ")}
+                  </dd>
+                </div>
+              )}
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">媒体参考</dt>
+                <dd>
+                  {quote.quote.reference_mapping?.length
+                    ? `${quote.quote.reference_mapping.length} 项`
+                    : "无"}
+                </dd>
+              </div>
+            </dl>
+            <QuoteCostDetail
+              amount={quote.quote.quote_micros}
+              detail={quote.quote.quote_detail}
+            />
+            {(!currentQuote || !quote.quote.confirmable) && (
+              <FeedbackAlert
+                tone="info"
+                title="当前报价无法确认，请返回重新报价。"
+              />
+            )}
+            {feedback && (
+              <FeedbackAlert
+                tone={confirmUnknown ? "info" : "error"}
+                title={feedback}
+              />
+            )}
+            <DialogFooter>
+              {confirmUnknown ? (
+                <>
+                  <Button
+                    variant="outline"
+                    disabled={!!busy}
+                    onClick={checkConfirmation}
+                  >
+                    查询原任务
+                  </Button>
+                  <Button disabled={!!busy || !writable} onClick={confirm}>
+                    重试原确认
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    variant="outline"
+                    disabled={!!busy}
+                    onClick={() => setQuote(undefined)}
+                  >
+                    返回修改
+                  </Button>
+                  <Button
+                    disabled={
+                      !writable ||
+                      !!busy ||
+                      !currentQuote ||
+                      !quote.quote.confirmable ||
+                      !quote.quote.confirm_key
+                    }
+                    onClick={confirm}
+                  >
+                    确认制作
+                  </Button>
+                </>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+      {feedback && !quote ? (
         <FeedbackAlert
           title={feedback}
           tone={
@@ -558,7 +641,7 @@ export function CanvasStoryboardDelivery({
       ) : null}
       {task ? (
         <div className="space-y-2">
-          <p className="text-muted-foreground">
+          <p role="status" className="text-muted-foreground">
             {generationStatusLabel(task) || "正在同步任务"}
           </p>
           {outputs?.map((output) => {
@@ -566,7 +649,10 @@ export function CanvasStoryboardDelivery({
               shot.adopted?.operation_id === task.id &&
               shot.adopted.output_id === output.id;
             return (
-              <div key={output.id} className="space-y-2">
+              <div
+                key={output.id}
+                className="grid items-start gap-3 rounded-lg border bg-muted/20 p-3 sm:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]"
+              >
                 <div className="relative aspect-video max-h-60 overflow-hidden rounded-md bg-muted">
                   <ProjectMediaPreview
                     projectID={projectID}
@@ -576,32 +662,38 @@ export function CanvasStoryboardDelivery({
                     fit="contain"
                   />
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={
-                    !writable ||
-                    !!busy ||
-                    adopted ||
-                    oldCandidate ||
-                    !!adoptPending
-                  }
-                  onClick={() =>
-                    adopt({
-                      key: crypto.randomUUID(),
-                      revision,
-                      shotRevision: shot.revision,
-                      operationID: task.id,
-                      outputID: output.id!,
-                    })
-                  }
-                >
-                  {adopted
-                    ? "已采用"
-                    : oldCandidate
-                      ? "候选来自旧稿"
-                      : "采用此视频"}
-                </Button>
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium">
+                    {adopted ? "已采用的样片" : "候选样片"}
+                  </h4>
+                  <Button
+                    variant={adopted ? "secondary" : "default"}
+                    size="sm"
+                    className="max-lg:h-11"
+                    disabled={
+                      !writable ||
+                      !!busy ||
+                      adopted ||
+                      oldCandidate ||
+                      !!adoptPending
+                    }
+                    onClick={() =>
+                      adopt({
+                        key: crypto.randomUUID(),
+                        revision,
+                        shotRevision: shot.revision,
+                        operationID: task.id,
+                        outputID: output.id!,
+                      })
+                    }
+                  >
+                    {adopted
+                      ? "已采用"
+                      : oldCandidate
+                        ? "候选来自旧稿"
+                        : "采用到此镜"}
+                  </Button>
+                </div>
               </div>
             );
           })}

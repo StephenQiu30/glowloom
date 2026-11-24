@@ -70,7 +70,7 @@ export type CredentialState = "active" | "draining" | "revoked";
 export type GatewayConfiguration = {
   models: { model: GatewayModel; enabled: boolean; draft?: boolean }[];
   onboarding: OnboardingSummary[];
-  routes: { route: GatewayRoute; enabled: boolean }[];
+  routes: { route: GatewayRoute; enabled: boolean; provider_key?: string }[];
   credentials: { id: string; supplier_id: string; state: CredentialState }[];
   quotas: { name: string; concurrency: number; rpm: number }[];
   media_drivers: MediaDriverOption[];
@@ -88,6 +88,7 @@ export type OnboardingSummary = {
   state:
     "prepared" | "verifying" | "active" | "failed" | "stale" | "rolled_back";
   upstream_model: string;
+  provider_key?: string;
 };
 
 export type OnboardingReview = OnboardingSummary & {

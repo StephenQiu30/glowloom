@@ -57,7 +57,7 @@ func (c Catalog) ListModelsForProject(ctx context.Context, a identity.Principal,
 		}
 		limit := in.Limit
 		if limit < 1 {
-			limit = 50
+			limit = 20
 		}
 		query += " ORDER BY name,id LIMIT ?"
 		args = append(args, limit+1)

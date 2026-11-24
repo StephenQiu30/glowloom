@@ -52,7 +52,7 @@ type assetCursor struct {
 // @Param order query string false "顺序，默认desc" Enums(asc,desc)
 // @Param created_from query string false "创建时间下界，RFC3339，包含"
 // @Param created_before query string false "创建时间上界，RFC3339，不包含"
-// @Param limit query integer false "每页1..200，默认30"
+// @Param limit query integer false "每页1..200，默认20"
 // @Param cursor query string false "绑定身份、空间和全部筛选的游标"
 // @Success 200 {object} AssetListResponse
 // @Failure 401 {object} httpapi.Problem

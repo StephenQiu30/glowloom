@@ -1,3 +1,4 @@
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { RequestError } from "@/lib/request";
 import {
   createStyleLibraryItem,
@@ -112,7 +113,7 @@ export async function listStyles(
   if (
     !page ||
     !Array.isArray(page.items) ||
-    page.items.length > (query.limit ?? 24) ||
+    page.items.length > (query.limit ?? DEFAULT_PAGE_SIZE) ||
     (page.next_cursor !== null &&
       (typeof page.next_cursor !== "string" || !page.next_cursor))
   )

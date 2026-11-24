@@ -75,3 +75,34 @@ func TestStoryboardCopyAllocatesNewShotIdentityAndClearsSourceAdoption(t *testin
 	require.Equal(t, 1, copied.ClearedOperationBindings)
 	require.NotNil(t, shot.Adopted)
 }
+
+func TestStoryboardAppendKeepsExistingShotsAndRevision(t *testing.T) {
+	doc := domain.Document{ID: uuid.New(), ProjectID: uuid.New(), Kind: "canvas", Revision: 1, Writable: true}
+	first, err := domain.PrepareStoryboardOperation(doc, uuid.New(), domain.StoryboardCommand{
+		ExpectedRevision: 1, Shots: []domain.StoryboardDraft{{Title: "码头", Action: "渡轮靠岸", DurationMS: 3000}},
+	})
+	require.NoError(t, err)
+	doc.Nodes, doc.Revision = []domain.Node{*first.Node}, 2
+	boardID := first.Node.ID
+	command := domain.StoryboardCommand{ExpectedRevision: 2, BoardID: &boardID,
+		Append: &domain.StoryboardDraft{Title: "乘客", Action: "握住栏杆", DurationMS: 4000}}
+	key := uuid.New()
+	next, err := domain.PrepareStoryboardOperation(doc, key, command)
+	require.NoError(t, err)
+	repeated, err := domain.PrepareStoryboardOperation(doc, key, command)
+	require.NoError(t, err)
+	require.Equal(t, next, repeated)
+	result, err := domain.ApplyOperations(doc, []domain.Operation{next})
+	require.NoError(t, err)
+	shots := result.Document.Nodes[0].Config.Storyboard.Shots
+	require.Len(t, shots, 2)
+	require.Equal(t, first.Node.Config.Storyboard.Shots[0], shots[0])
+	require.Equal(t, *command.Append, shots[1].StoryboardDraft)
+	require.EqualValues(t, 1, shots[1].Revision)
+	result.Document.Revision++
+	_, err = domain.PrepareStoryboardOperation(result.Document, key, command)
+	require.ErrorIs(t, err, domain.ErrStoryboardConflict)
+	command.Edit = &domain.StoryboardEdit{}
+	_, err = domain.PrepareStoryboardOperation(doc, uuid.New(), command)
+	require.ErrorIs(t, err, domain.ErrInvalidCommand)
+}

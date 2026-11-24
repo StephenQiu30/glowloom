@@ -25,6 +25,7 @@ export function ReferenceStack({
   addButtonRef,
   addLabel = "添加参考",
   renderAdd,
+  inline = false,
 }: {
   entries: ReferenceStackEntry[];
   disabled?: boolean;
@@ -34,6 +35,7 @@ export function ReferenceStack({
   addButtonRef?: Ref<HTMLButtonElement>;
   addLabel?: string;
   renderAdd?: (trigger: ReactElement) => ReactNode;
+  inline?: boolean;
 }) {
   const [open, setOpen] = useState(false),
     [hovered, setHovered] = useState(false);
@@ -54,34 +56,51 @@ export function ReferenceStack({
       type="button"
       variant="ghost"
       disabled={disabled}
-      className="relative h-[84px] w-16 rounded-none bg-transparent p-0 hover:bg-transparent"
+      className={
+        inline
+          ? "gap-1.5 max-lg:min-h-11"
+          : "relative h-[84px] w-16 rounded-none bg-transparent p-0 hover:bg-transparent"
+      }
       aria-label={
         entries.length ? `展开参考，已添加${entries.length}项` : addLabel
       }
       aria-expanded={entries.length ? expanded : undefined}
       onClick={() => (entries.length ? setOpen((value) => !value) : onAdd())}
     >
-      <ReferenceThumbnail
-        className={cn(
-          card,
-          "-rotate-[8deg]",
-          !entries.length &&
-            "reference-stack-empty border-0 bg-foreground/8 group-hover/reference:bg-foreground/12",
-        )}
-      >
-        {entries[0]?.preview ??
-          (entries.length ? (
-            <ImageIcon className="m-auto mt-5 size-4" />
-          ) : (
-            <Plus className="size-4" />
-          ))}
-      </ReferenceThumbnail>
+      {inline ? (
+        <>
+          {!entries.length && <Plus data-icon="inline-start" />}
+          <span data-reference-label>
+            {entries.length ? `参考 ${entries.length}` : "引用"}
+          </span>
+        </>
+      ) : (
+        <ReferenceThumbnail
+          className={cn(
+            card,
+            "-rotate-[8deg]",
+            !entries.length &&
+              "reference-stack-empty border-0 bg-foreground/8 group-hover/reference:bg-foreground/12",
+          )}
+        >
+          {entries[0]?.preview ??
+            (entries.length ? (
+              <ImageIcon className="m-auto mt-5 size-4" />
+            ) : (
+              <Plus className="size-4" />
+            ))}
+        </ReferenceThumbnail>
+      )}
     </Button>
   );
   return (
     <div
       ref={root}
-      className="reference-stack group/reference relative h-[84px] w-16 shrink-0"
+      className={cn(
+        "reference-stack group/reference relative shrink-0",
+        inline ? "flex items-center" : "h-[84px] w-16",
+      )}
+      data-inline={inline || undefined}
       data-reference-count={entries.length}
       onPointerEnter={(event) => {
         if (event.pointerType !== "touch" && entries.length > 1)
@@ -100,7 +119,7 @@ export function ReferenceStack({
         }
       }}
     >
-      {entries.length > 1 ? (
+      {!inline && entries.length > 1 ? (
         <ReferenceThumbnail
           className={cn(card, "translate-x-1.5 rotate-[6deg]")}
         >
@@ -108,7 +127,7 @@ export function ReferenceStack({
         </ReferenceThumbnail>
       ) : null}
       {renderAdd && !entries.length ? renderAdd(trigger) : trigger}
-      {entries.length > 0 ? (
+      {!inline && entries.length > 0 ? (
         <Button
           ref={addButtonRef}
           type="button"
@@ -116,12 +135,16 @@ export function ReferenceStack({
           disabled={disabled}
           aria-label="继续添加参考"
           onClick={onAdd}
-          className="absolute right-0 bottom-1 z-10 size-7 rounded-full p-0 max-md:size-11"
+          className={
+            inline
+              ? "size-6 p-0 max-lg:size-11"
+              : "absolute right-0 bottom-1 z-10 size-7 rounded-full p-0 max-md:size-11"
+          }
         >
           <Plus className="size-4" />
         </Button>
       ) : null}
-      {!expanded && entries.length === 1 ? (
+      {!inline && !expanded && entries.length === 1 ? (
         <Button
           type="button"
           variant="secondary"
@@ -139,6 +162,19 @@ export function ReferenceStack({
           aria-label="已添加的参考"
           className="absolute bottom-full left-0 z-40 mb-1 grid max-h-72 w-36 grid-cols-2 gap-1 overflow-y-auto rounded-lg border bg-popover p-1 text-popover-foreground shadow-sm"
         >
+          {inline && (
+            <Button
+              type="button"
+              ref={addButtonRef}
+              variant="ghost"
+              size="sm"
+              className="col-span-2 max-lg:h-11"
+              disabled={disabled}
+              onClick={onAdd}
+            >
+              <Plus data-icon="inline-start" /> 添加参考
+            </Button>
+          )}
           {entries.map((entry) => (
             <div key={entry.id} className="relative w-16">
               <Button

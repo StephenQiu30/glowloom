@@ -1,4 +1,9 @@
 "use client";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import {
+  DataPagination,
+  type PageSize,
+} from "@/components/media/data-pagination";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import Link from "next/link";
@@ -37,6 +42,9 @@ export function ProductionAssets({
   canvas: string;
   onLock: (locked: boolean) => void;
 }) {
+  const [pageSize, setPageSize] = useState<PageSize>(DEFAULT_PAGE_SIZE);
+  const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
+  const cursor = cursors.at(-1);
   const [tab, setTab] = useState<Kind | "media">("media");
   const [upload, setUpload] = useState(false);
   const [preview, setPreview] = useState<string>();
@@ -47,8 +55,10 @@ export function ProductionAssets({
     return () => onLock(false);
   }, [onLock, write.locked]);
   const media = useSWR(
-    tab === "media" ? [owner, projectID, "production-media"] : null,
-    () => listMediaAssets({ pid: projectID, limit: 24 }),
+    tab === "media"
+      ? [owner, projectID, "production-media", pageSize, cursor]
+      : null,
+    () => listMediaAssets({ pid: projectID, limit: pageSize, cursor }),
   );
   const entities = useSWR(
     tab !== "media" ? [owner, projectID, "production-assets", tab] : null,
@@ -161,6 +171,22 @@ export function ProductionAssets({
                 ),
             )}
           </div>
+          <DataPagination
+            label="项目素材分页"
+            page={cursors.length}
+            pageSize={pageSize}
+            hasNext={Boolean(media.data?.next_cursor)}
+            disabled={media.isLoading}
+            onPageChange={(next) => {
+              if (next < cursors.length) setCursors(cursors.slice(0, -1));
+              else if (media.data?.next_cursor)
+                setCursors([...cursors, media.data.next_cursor]);
+            }}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setCursors([undefined]);
+            }}
+          />
         </TabsContent>
         {kinds.map(({ id, label }) => (
           <TabsContent key={id} value={id}>

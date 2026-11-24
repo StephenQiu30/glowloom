@@ -96,7 +96,7 @@ func NormalizeAssetListInput(input AssetListInput) (AssetListInput, error) {
 		input.Order = "desc"
 	}
 	if input.Limit == 0 {
-		input.Limit = 30
+		input.Limit = 20
 	}
 	if input.Limit < 1 || input.Limit > 200 || !utf8.ValidString(input.Search) || utf8.RuneCountInString(input.Search) > 256 ||
 		(input.Sort != "updated" && input.Sort != "created") || (input.Order != "asc" && input.Order != "desc") ||

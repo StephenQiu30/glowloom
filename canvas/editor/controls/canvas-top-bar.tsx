@@ -49,6 +49,7 @@ export function CanvasTopBar({
   saveControl,
   workflowControl,
   participantsControl,
+  accountControl,
   onFocusNode,
   onCreatePersonalProject,
   onProjectCanvases,
@@ -79,6 +80,7 @@ export function CanvasTopBar({
   saveControl?: React.ReactNode;
   workflowControl?: React.ReactNode;
   participantsControl?: React.ReactNode;
+  accountControl?: React.ReactNode;
   onCreatePersonalProject?: () => void;
   onProjectCanvases?: () => void;
   canSwitchCanvas?: boolean;
@@ -161,21 +163,23 @@ export function CanvasTopBar({
           <TooltipContent>复制画布链接，保留现有访问权限</TooltipContent>
         </Tooltip>
       </div>
-      <Button
-        variant="ghost"
-        size={isMobile ? "toolbar-icon" : "icon"}
-        aria-label="账号设置"
-        disabled={!canSwitchCanvas}
-        asChild={canSwitchCanvas}
-      >
-        {canSwitchCanvas ? (
-          <Link href="/account">
+      {!accountControl && (
+        <Button
+          variant="ghost"
+          size={isMobile ? "toolbar-icon" : "icon"}
+          aria-label="账号设置"
+          disabled={!canSwitchCanvas}
+          asChild={canSwitchCanvas}
+        >
+          {canSwitchCanvas ? (
+            <Link href="/account">
+              <UserRound />
+            </Link>
+          ) : (
             <UserRound />
-          </Link>
-        ) : (
-          <UserRound />
-        )}
-      </Button>
+          )}
+        </Button>
+      )}
     </>
   );
   return (
@@ -300,7 +304,7 @@ export function CanvasTopBar({
           </DropdownMenu>
           <div className="canvas-status-panel flex items-center gap-1">
             {!isMobile && nodeSummary}
-            {workflowControl}
+            {!isMobile && workflowControl}
             {saveControl === undefined ? (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -321,7 +325,8 @@ export function CanvasTopBar({
             )}
           </div>
         </div>
-        <div className="canvas-header-actions pointer-events-auto flex items-center gap-1">
+        <div className="canvas-header-actions pointer-events-auto flex shrink-0 items-center gap-1">
+          {isMobile && workflowControl}
           {!isMobile && participantsControl}
           {isMobile ? (
             search
@@ -359,6 +364,7 @@ export function CanvasTopBar({
           ) : (
             secondaryActions
           )}
+          {accountControl}
         </div>
       </Toolbar>
     </TooltipProvider>

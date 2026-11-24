@@ -346,6 +346,7 @@ html:has(.canvas-controls-layout) {
       max-width: none;
     }
     .canvas-project-trigger {
+      flex-shrink: 1;
       max-width: 100%;
     }
     .canvas-status-panel {

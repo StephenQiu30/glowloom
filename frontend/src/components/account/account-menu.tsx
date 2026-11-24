@@ -66,9 +66,11 @@ function MenuLinks({ links }: { links: typeof accountLinks }) {
 export function AccountMenu({
   actor,
   onLogout,
+  disabled = false,
 }: {
   actor: API.EmailSessionView["actor"];
   onLogout: () => void;
+  disabled?: boolean;
 }) {
   const isMobile = useIsMobile();
   const themeSelection = useThemeMenuSelection();
@@ -152,6 +154,7 @@ export function AccountMenu({
           variant="ghost"
           size="toolbar-icon"
           aria-label="账号菜单"
+          disabled={disabled}
           title={name}
         >
           <AccountAvatar />

@@ -173,7 +173,7 @@ func (r *ProjectFolderCreateRequest) UnmarshalJSON(raw []byte) error {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/project-folders [get]
 func (h *ProjectFolderHandler) List(c *gin.Context) {
-	in := application.FolderListInput{Limit: 50}
+	in := application.FolderListInput{Limit: 20}
 	if raw := c.Query("limit"); raw != "" {
 		limit, err := strconv.Atoi(raw)
 		if err != nil {

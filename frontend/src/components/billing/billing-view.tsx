@@ -44,6 +44,7 @@ export function BillingView({
   walletError,
   onNext,
   onPrevious,
+  sizeControl,
   onRetry,
 }: {
   section?: BillingSection;
@@ -51,6 +52,7 @@ export function BillingView({
   walletLoading?: boolean;
   walletError?: boolean;
   onNext?: () => void;
+  sizeControl?: React.ReactNode;
   onPrevious?: () => void;
   onRetry?: () => void;
 }) {
@@ -144,8 +146,9 @@ export function BillingView({
               ) : (
                 <ContentState title="暂无积分流水" />
               )}
-              {(onPrevious || onNext) && (
+              {(sizeControl || onPrevious || onNext) && (
                 <div className="flex gap-2">
+                  {sizeControl}
                   {onPrevious && (
                     <Button
                       size="workspace"

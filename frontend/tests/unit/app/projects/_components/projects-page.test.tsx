@@ -285,7 +285,7 @@ it("列表加载失败不显示示例项目，名称搜索与真实最近修改�
   await screen.findByText("真实项目");
   expect(api.list.mock.calls.at(-1)?.[0]).toEqual({
     q: "真实",
-    limit: 12,
+    limit: 20,
     include_independent_canvases: true,
     order: "recent_content",
     status: "active",
@@ -295,7 +295,7 @@ it("列表加载失败不显示示例项目，名称搜索与真实最近修改�
   ).toBe(`/canvas?project_id=${project.id}&canvas_id=${project.canvas_id}`);
 });
 
-it("画布按12项游标翻页，返回上一页不累计旧卡片", async () => {
+it("画布按20项游标翻页，返回上一页不累计旧卡片", async () => {
   const second = {
     ...project,
     id: "00000000-0000-4000-8000-000000000003",
@@ -312,7 +312,7 @@ it("画布按12项游标翻页，返回上一页不累计旧卡片", async () =>
   await screen.findByText("第二页画布");
   expect(screen.queryByText("真实项目")).toBeNull();
   expect(api.list.mock.calls.at(-1)?.[0]).toMatchObject({
-    limit: 12,
+    limit: 20,
     cursor: "next-canvas-page",
   });
   fireEvent.click(screen.getByRole("button", { name: "上一页" }));
@@ -652,7 +652,7 @@ it("修改画布搜索保留项目更新排序且可从URL恢复", async () => {
     expect(new URLSearchParams(navigation.search).get("sort")).toBe("metadata");
     expect(api.list.mock.calls.at(-1)?.[0]).toEqual({
       q: "原画布",
-      limit: 12,
+      limit: 20,
       include_independent_canvases: true,
       status: "active",
     });

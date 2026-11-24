@@ -1,4 +1,6 @@
 "use client";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { PageSizeSelect } from "@/components/ui/page-size-select";
 import { useEffect, useState } from "react";
 import { listAssetCanvases } from "@/api/canvases";
 import { Button } from "@/components/ui/button";
@@ -35,6 +37,7 @@ export function ProjectPickerSubjects({
   selected?: string;
   onSelect: (subject: UnifiedSubject) => void;
 }) {
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState(defaultSubjectFilter);
   const { page, error, loading, hasMore, loadMore, retry } = useSubjectList(
@@ -42,6 +45,7 @@ export function ProjectPickerSubjects({
     scopeID,
     query,
     filter,
+    pageSize,
   );
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -102,6 +106,12 @@ export function ProjectPickerSubjects({
             description="可更换关键词或筛选条件。"
           />
         )}
+        <PageSizeSelect
+          value={pageSize}
+          label="主体每页数量"
+          onChange={setPageSize}
+          disabled={loading}
+        />
         {hasMore && (
           <Button variant="ghost" disabled={loading} onClick={loadMore}>
             加载更多主体
@@ -199,6 +209,7 @@ function CanvasResults({
   from: string;
   through: string;
 }) {
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [cursor, setCursor] = useState<string>();
   const [retry, setRetry] = useState(0);
   const [result, setResult] = useState<{
@@ -207,7 +218,7 @@ function CanvasResults({
     error?: string;
     loaded?: string;
   }>({ items: [] });
-  const requestKey = `${cursor ?? ""}/${retry}`;
+  const requestKey = `${pageSize}/${cursor ?? ""}/${retry}`;
   const loading = result.loaded !== requestKey;
   useEffect(() => {
     const controller = new AbortController();
@@ -228,7 +239,7 @@ function CanvasResults({
             favorite_only: favorite || undefined,
             created_from: range.created_from,
             created_before: range.created_before,
-            limit: 30,
+            limit: pageSize,
             cursor,
           },
           { signal: controller.signal },
@@ -272,7 +283,7 @@ function CanvasResults({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [query, favorite, from, through, cursor, retry, requestKey]);
+  }, [query, favorite, from, through, cursor, retry, requestKey, pageSize]);
   return (
     <div className="min-h-0 overflow-auto" data-canvas-wheel-scroll>
       {result.items.map((canvas) => (
@@ -294,6 +305,15 @@ function CanvasResults({
       {!loading && !result.error && !result.items.length && (
         <CanvasListEmptyState kind="filtered" className="min-h-40" />
       )}
+      <PageSizeSelect
+        value={pageSize}
+        label="画布每页数量"
+        onChange={(size) => {
+          setPageSize(size);
+          setCursor(undefined);
+        }}
+        disabled={loading}
+      />
       {result.next && (
         <Button
           disabled={loading}

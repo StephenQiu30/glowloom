@@ -69,7 +69,7 @@ type StyleLibraryDeleteRequest struct {
 // @Param q query string false "名称搜索，最多100字"
 // @Param category query string false "分类" Enums(realistic,2d,3d)
 // @Param mine query boolean false "true仅本人，false仅官方，省略全部可见"
-// @Param limit query integer false "默认24，最多100"
+// @Param limit query integer false "默认20，最多100"
 // @Param cursor query string false "绑定身份、归属和筛选的游标"
 // @Success 200 {object} StyleLibraryListResponse
 // @Failure 401 {object} httpapi.Problem
@@ -78,7 +78,7 @@ type StyleLibraryDeleteRequest struct {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/style-library [get]
 func (h *StyleLibraryHandler) List(c *gin.Context) {
-	in := app.StyleLibraryFilter{Query: c.Query("q"), Category: c.Query("category"), Limit: 24}
+	in := app.StyleLibraryFilter{Query: c.Query("q"), Category: c.Query("category"), Limit: 20}
 	if raw := c.Query("limit"); raw != "" {
 		v, err := strconv.Atoi(raw)
 		if err != nil {
@@ -88,7 +88,7 @@ func (h *StyleLibraryHandler) List(c *gin.Context) {
 		in.Limit = v
 	}
 	if in.Limit == 0 {
-		in.Limit = 24
+		in.Limit = 20
 	}
 	if raw := c.Query("mine"); raw != "" {
 		v, err := strconv.ParseBool(raw)

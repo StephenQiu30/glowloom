@@ -10,7 +10,7 @@ it("游标接口只播报当前页，不虚构总页数", () => {
     <DataPagination
       label="画布分页"
       page={2}
-      pageSize={12}
+      pageSize={20}
       hasNext
       onPageChange={next}
       onPageSizeChange={vi.fn()}
@@ -27,7 +27,7 @@ it("空列表保留数量选择器，同时禁止前后翻页", () => {
     <DataPagination
       label="素材分页"
       page={1}
-      pageSize={12}
+      pageSize={20}
       total={0}
       onPageChange={vi.fn()}
       onPageSizeChange={vi.fn()}
@@ -52,8 +52,8 @@ it("根据总数处理最后一页，并在未决操作期间禁用所有分页�
   const props = {
     label: "素材分页",
     page: 2,
-    pageSize: 12 as const,
-    total: 13,
+    pageSize: 20 as const,
+    total: 21,
     onPageChange: change,
     onPageSizeChange: vi.fn(),
   };

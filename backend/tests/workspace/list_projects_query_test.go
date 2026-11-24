@@ -43,7 +43,7 @@ func TestListProjectsQueryScopesAndBoundsPage(t *testing.T) {
 				Status: "active", Query: "  逆光  ",
 			})
 			if err != nil || !store.called || store.actor != actor || store.input.Status != "active" ||
-				store.input.Query != "逆光" || store.input.Limit != 50 || page.Projects == nil {
+				store.input.Query != "逆光" || store.input.Limit != 20 || page.Projects == nil {
 				t.Fatalf("default project page=%+v store=%+v err=%v", page, store, err)
 			}
 		})

@@ -46,11 +46,12 @@ type StoryboardTake struct {
 	ShotRevision int64     `json:"shot_revision"`
 }
 
-// StoryboardCommand describes a single atomic create, field edit, or reorder.
+// StoryboardCommand describes one atomic creation, append, field edit, or reorder.
 type StoryboardCommand struct {
 	ExpectedRevision int64             `json:"expected_revision"`
 	BoardID          *uuid.UUID        `json:"board_id,omitempty"`
 	Shots            []StoryboardDraft `json:"shots,omitempty"`
+	Append           *StoryboardDraft  `json:"append,omitempty"`
 	Edit             *StoryboardEdit   `json:"edit,omitempty"`
 	Move             *StoryboardMove   `json:"move,omitempty"`
 }
@@ -110,7 +111,7 @@ func PrepareStoryboardOperation(doc Document, commandID uuid.UUID, c StoryboardC
 		if found {
 			return Operation{}, ErrStoryboardConflict
 		}
-		if c.Edit != nil || c.Move != nil || len(c.Shots) < 1 || len(c.Shots) > 64 {
+		if c.Append != nil || c.Edit != nil || c.Move != nil || len(c.Shots) < 1 || len(c.Shots) > 64 {
 			return Operation{}, ErrInvalidCommand
 		}
 		boardID := uuid.NewSHA1(commandID, []byte("storyboard:"+doc.ID.String()))
@@ -130,10 +131,24 @@ func PrepareStoryboardOperation(doc Document, commandID uuid.UUID, c StoryboardC
 	if !found || board.ID != *c.BoardID {
 		return Operation{}, ErrStoryboardConflict
 	}
-	if c.Shots != nil || (c.Edit == nil) == (c.Move == nil) {
+	if c.Shots != nil {
 		return Operation{}, ErrInvalidCommand
 	}
 	shots := slices.Clone(board.Config.Storyboard.Shots)
+	if c.Append != nil {
+		if c.Edit != nil || c.Move != nil || len(shots) >= 64 || !validStoryboardDraft(*c.Append) {
+			return Operation{}, ErrInvalidCommand
+		}
+		id := uuid.NewSHA1(commandID, []byte("storyboard-shot:"+board.ID.String()))
+		if storyboardShotIndex(shots, id) >= 0 {
+			return Operation{}, ErrStoryboardConflict
+		}
+		shots = append(shots, StoryboardShot{StoryboardDraft: *c.Append, ID: id, Revision: 1})
+		return storyboardReplacement(board, shots), nil
+	}
+	if (c.Edit == nil) == (c.Move == nil) {
+		return Operation{}, ErrInvalidCommand
+	}
 	if c.Edit != nil {
 		index := storyboardShotIndex(shots, c.Edit.ShotID)
 		if index < 0 || shots[index].Revision != c.Edit.ExpectedRevision || shots[index].Revision == math.MaxInt64 {

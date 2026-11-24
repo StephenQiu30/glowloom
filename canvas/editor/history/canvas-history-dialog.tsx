@@ -1,5 +1,7 @@
 "use client";
 
+import { DEFAULT_PAGE_SIZE } from "@glowloom/canvas-host/lib/pagination";
+import { PageSizeSelect } from "@glowloom/canvas-host/components/ui/page-size-select";
 import { useContext, useState, type ReactNode } from "react";
 import useSWRInfinite from "swr/infinite";
 import { ChevronDown } from "lucide-react";
@@ -127,6 +129,7 @@ function HistoryList({
   category: Category;
   onLocate?: Locate;
 }) {
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const query = useSWRInfinite<API.TaskPageResponse>(
     (index, previous) =>
       index && !previous?.next_cursor
@@ -137,20 +140,22 @@ function HistoryList({
             canvasID,
             category,
             previous?.next_cursor ?? "",
+            pageSize,
           ],
-    async ([, project, canvas, kind, cursor]: [
+    async ([, project, canvas, kind, cursor, limit]: [
       string,
       string,
       string,
       Category,
       string,
+      number,
     ]) => {
       const page = await listProjectOperations({
         pid: project,
         canvas_id: canvas,
         capability: kind === "all" ? undefined : kind + ".generate",
         cursor: cursor || undefined,
-        limit: 30,
+        limit,
       });
       if (
         !Array.isArray(page.items) ||
@@ -212,6 +217,12 @@ function HistoryList({
           </li>
         ))}
       </ul>
+      <PageSizeSelect
+        label="画布生成历史每页数量"
+        value={pageSize}
+        disabled={query.isValidating}
+        onChange={setPageSize}
+      />
       {query.data?.at(-1)?.next_cursor && (
         <Button
           variant="ghost"

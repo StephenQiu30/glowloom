@@ -66,7 +66,7 @@ func TestAssetCanvasQueryRejectsInvalidFiltersBeforeStore(t *testing.T) {
 func TestAssetCanvasQueryNormalizesDefaultsAndSearch(t *testing.T) {
 	store := &assetQueryRecorder{}
 	_, err := application.NewAssetQuery(store).List(t.Context(), identity.Principal{}, application.AssetListInput{Search: "  画布  "})
-	if err != nil || store.calls != 1 || store.input.Kind != "canvas" || store.input.Sort != "updated" || store.input.Order != "desc" || store.input.Limit != 30 || store.input.Search != "画布" {
+	if err != nil || store.calls != 1 || store.input.Kind != "canvas" || store.input.Sort != "updated" || store.input.Order != "desc" || store.input.Limit != 20 || store.input.Search != "画布" {
 		t.Fatal(store, err)
 	}
 }

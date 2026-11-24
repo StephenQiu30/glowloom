@@ -1,4 +1,6 @@
 "use client";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { PageSizeSelect } from "@/components/ui/page-size-select";
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import dynamic from "next/dynamic";
 import {
@@ -80,6 +82,7 @@ function ScopedStyleLibrary({
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState("official");
   const [search, setSearch] = useState("");
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const [index, setIndex] = useState(0);
   const [reload, setReload] = useState(0);
@@ -107,7 +110,7 @@ function ScopedStyleLibrary({
       setPage(null);
       setError("");
       const query: StyleQuery = {
-        limit: 24,
+        limit: pageSize,
         ...(search.trim() ? { q: search.trim() } : {}),
         ...(cursor ? { cursor } : {}),
         ...(tab === "official"
@@ -131,7 +134,7 @@ function ScopedStyleLibrary({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [open, disabled, tab, search, cursor, reload]);
+  }, [open, disabled, tab, search, cursor, reload, pageSize]);
   function filter(nextTab: string, nextSearch: string) {
     if (deletion) return;
     setTab(nextTab);
@@ -424,6 +427,15 @@ function ScopedStyleLibrary({
               role="navigation"
               aria-label="风格分页"
             >
+              <PageSizeSelect
+                label="风格每页数量"
+                value={pageSize}
+                disabled={!!deletion}
+                onChange={(size) => {
+                  setPageSize(size);
+                  filter(tab, search);
+                }}
+              />
               <Button
                 variant="outline"
                 size="icon"

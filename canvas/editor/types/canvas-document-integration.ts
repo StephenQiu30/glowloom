@@ -12,6 +12,7 @@ export type CanvasPreparedDocument = CanvasContract.CanvasVO & {
 export type CanvasDocumentIntegration = {
   presenceOverlay?: ReactNode;
   onOpenAssistant?: () => void;
+  assistantOpen?: boolean;
   onTransferSelection?: (
     selection: import("../lib/canvas-clipboard.ts").CanvasClipboard,
   ) => void;

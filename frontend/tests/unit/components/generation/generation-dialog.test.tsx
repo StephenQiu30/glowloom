@@ -281,24 +281,23 @@ it("首页内联富文本保存正文并保留草稿找回入口，不触发报�
       getData: (type: string) => (type === "text/plain" ? "首页补充正文" : ""),
     },
   });
-  fireEvent.pointerDown(screen.getByRole("button", { name: "更多工具" }), {
-    button: 0,
-    ctrlKey: false,
-  });
-  fireEvent.click(await screen.findByRole("menuitem", { name: "保存草稿" }));
+  expect(screen.queryByRole("button", { name: "更多工具" })).toBeNull();
+  const expand = screen.getByRole("button", { name: "展开编辑器" });
+  const toolbar = screen.getByRole("group", { name: "生成工具" });
+  expect(toolbar.contains(expand)).toBe(false);
+  fireEvent.click(expand);
+  fireEvent.click(await screen.findByRole("button", { name: "保存草稿" }));
   await waitFor(() =>
     expect(
       JSON.stringify(api.save.mock.calls.at(-1)?.[1].draft.document),
     ).toContain("首页补充正文"),
   );
-  fireEvent.pointerDown(screen.getByRole("button", { name: "更多工具" }), {
-    button: 0,
-    ctrlKey: false,
-  });
-  fireEvent.click(await screen.findByRole("menuitem", { name: "找回草稿" }));
+  fireEvent.click(await screen.findByRole("button", { name: "找回草稿" }));
   expect(await screen.findByText("暂无保存草稿")).toBeTruthy();
   expect(api.drafts).toHaveBeenCalledWith({ pid: project.id });
   expect(screen.getByRole("textbox", { name: "创作提示词" })).toBe(editor);
+  fireEvent.click(screen.getByRole("button", { name: "收起编辑器" }));
+  expect(screen.queryByText("暂无保存草稿")).toBeNull();
   expect(api.quote).not.toHaveBeenCalled();
   expect(api.confirm).not.toHaveBeenCalled();
 });

@@ -1,4 +1,5 @@
 "use client";
+import { PageSizeSelect } from "@glowloom/canvas-host/components/ui/page-size-select";
 import { ContentState } from "@glowloom/canvas-host/components/layout/content-state";
 import { useState } from "react";
 import useSWR from "swr";
@@ -75,13 +76,14 @@ function CanvasVersionHistorySession({
     snapshotId: string,
   ) => Promise<CanvasContract.CanvasCommandResultVO | null>;
 }) {
-  const { history, page, restart, previous, next } = useCanvasHistory({
-    open,
-    enabled,
-    scope,
-    identity,
-    document,
-  });
+  const { history, page, pageSize, changePageSize, restart, previous, next } =
+    useCanvasHistory({
+      open,
+      enabled,
+      scope,
+      identity,
+      document,
+    });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [confirm, setConfirm] = useState(false);
   const canvasId = String(document.canvasId);
@@ -172,7 +174,16 @@ function CanvasVersionHistorySession({
                     description="下次修改会自动保留当前内容。"
                   />
                 )}
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
+                <PageSizeSelect
+                  label="版本历史每页数量"
+                  value={pageSize}
+                  disabled={history.isLoading}
+                  onChange={(size) => {
+                    setSelectedId(null);
+                    changePageSize(size);
+                  }}
+                />
                 <Button
                   variant="outline"
                   size="sm"

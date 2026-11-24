@@ -119,7 +119,7 @@ func (s *StyleLibrary) List(ctx context.Context, a identity.Principal, in StyleL
 		return StyleLibraryPage{}, ErrInvalidStyleLibrary
 	}
 	if in.Limit == 0 {
-		in.Limit = 24
+		in.Limit = 20
 	}
 	page, err := s.store.ListStyleLibrary(ctx, a, in)
 	if err != nil {

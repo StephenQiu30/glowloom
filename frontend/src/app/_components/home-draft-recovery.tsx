@@ -32,6 +32,7 @@ function hasText(branch: LocalBranch) {
 export function useHomeDraftRecovery(
   contextKey: string | null,
   onChange: (draft: PromptDraft) => void,
+  recoverCanvasDraft = false,
 ) {
   const [replicaId] = useState(() => crypto.randomUUID());
   const revision = useRef(0);
@@ -50,12 +51,26 @@ export function useHomeDraftRecovery(
       // A legacy shared entry must never appear under several creation types.
       if (contextKey.endsWith("/home-input:image"))
         keys.push(contextKey.replace(/:image$/, ""));
+      const recover = (branches: LocalBranch[]) =>
+        branches.find(
+          (branch) => branch.replicaId !== replicaId && hasText(branch),
+        );
       void Promise.all(keys.map((key) => branchJournal.list(key)))
-        .then((groups) => {
+        .then(async (groups) => {
           if (owner.current !== token || edited.current.has(contextKey)) return;
-          const candidate = groups
-            .flat()
-            .filter((b) => b.replicaId !== replicaId && hasText(b))[0];
+          let candidate = recover(groups.flat());
+          if (
+            !candidate &&
+            recoverCanvasDraft &&
+            contextKey.endsWith("/home-input:agent")
+          ) {
+            candidate = recover(
+              await branchJournal.list(
+                contextKey.replace(/:agent$/, ":canvas"),
+              ),
+            );
+          }
+          if (owner.current !== token || edited.current.has(contextKey)) return;
           setRecovery(
             candidate ? { key: contextKey, branch: candidate } : null,
           );
@@ -67,7 +82,7 @@ export function useHomeDraftRecovery(
     return () => {
       owner.current = null;
     };
-  }, [contextKey, replicaId]);
+  }, [contextKey, replicaId, recoverCanvasDraft]);
 
   async function persist(draft: PromptDraft) {
     if (!contextKey || getCreationScope() !== contextKey.split("/")[1])

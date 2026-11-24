@@ -14,7 +14,7 @@ import (
 )
 
 // Wallet projects the one new account and event log into the existing workbench display contract.
-func (r *Runtime) Wallet(ctx context.Context, a identity.Principal, cursor *uuid.UUID) (billing.WalletView, error) {
+func (r *Runtime) Wallet(ctx context.Context, a identity.Principal, cursor *uuid.UUID, limit int) (billing.WalletView, error) {
 	out := billing.WalletView{Enabled: true, RestrictedCredits: "0", Entries: []billing.WalletEntry{}}
 	err := r.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := Authority(ctx, tx, a, a.ScopeID, uuid.Nil, false); err != nil {
@@ -60,14 +60,15 @@ func (r *Runtime) Wallet(ctx context.Context, a identity.Principal, cursor *uuid
 			query += " AND (e.created_at,e.id)<(SELECT created_at,id FROM ai.money_event WHERE id=? AND scope_id=?)"
 			args = append(args, *cursor, a.ScopeID)
 		}
-		query += " ORDER BY e.created_at DESC,e.id DESC LIMIT 51"
+		query += " ORDER BY e.created_at DESC,e.id DESC LIMIT ?"
+		args = append(args, limit+1)
 		if err := tx.Raw(query, args...).Scan(&rows).Error; err != nil {
 			return err
 		}
-		if len(rows) > 50 {
-			next := rows[49].ID
+		if len(rows) > limit {
+			next := rows[limit-1].ID
 			out.NextCursor = &next
-			rows = rows[:50]
+			rows = rows[:limit]
 		}
 		for _, e := range rows {
 			amount := e.AvailableDelta

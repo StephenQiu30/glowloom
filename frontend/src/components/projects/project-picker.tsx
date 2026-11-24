@@ -1,4 +1,6 @@
 "use client";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { PageSizeSelect } from "@/components/ui/page-size-select";
 import { ContentState } from "@/components/layout/content-state";
 import { readErrorMessage } from "@/lib/read-error";
 import { useEffect, useState, useId } from "react";
@@ -41,6 +43,7 @@ export function ProjectPicker({
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const fieldID = useId();
   const [localOpen, setLocalOpen] = useState(false);
   const open = controlledOpen ?? localOpen;
@@ -57,7 +60,7 @@ export function ProjectPicker({
     [retry, setRetry] = useState(0);
   useEffect(() => {
     const c = new AbortController();
-    listProjects({ q: query, limit: 50 }, { signal: c.signal })
+    listProjects({ q: query, limit: pageSize }, { signal: c.signal })
       .then(requireProjectList)
       .then((p) => {
         if (!c.signal.aborted) {
@@ -73,13 +76,13 @@ export function ProjectPicker({
         if (!c.signal.aborted) setLoading(false);
       });
     return () => c.abort();
-  }, [query, retry]);
+  }, [query, retry, pageSize]);
   async function more() {
     if (!cursor || loading) return;
     setLoading(true);
     try {
       const p = requireProjectList(
-        await listProjects({ q: query, limit: 50, cursor }),
+        await listProjects({ q: query, limit: pageSize, cursor }),
       );
       setItems((i) => [
         ...i,
@@ -158,6 +161,16 @@ export function ProjectPicker({
           </InputGroup>
         </form>
       </Field>
+      <PageSizeSelect
+        value={pageSize}
+        label="项目每页数量"
+        onChange={(size) => {
+          setLoading(true);
+          setCursor(null);
+          setPageSize(size);
+        }}
+        disabled={loading}
+      />
       {cursor && (
         <Button
           variant="ghost"

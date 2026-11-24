@@ -118,7 +118,7 @@ func (h *TranscriptionHandler) List(c *gin.Context) {
 	if !ok {
 		return
 	}
-	input := application.ListInput{ProjectID: project, Limit: 50}
+	input := application.ListInput{ProjectID: project, Limit: 20}
 	for _, f := range []struct {
 		name string
 		dest *uuid.UUID

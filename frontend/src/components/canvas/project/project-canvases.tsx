@@ -1,5 +1,7 @@
 "use client";
 
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { ListPagination } from "@/components/canvas/runtime/components/layout/workspace/list-pagination";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
@@ -62,6 +64,7 @@ export function ProjectCanvasDialog({
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [sourceId, setSourceId] = useState("");
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [page, setPage] = useState(1);
   const [busy, setBusy] = useState(false);
   const active = useRef(true);
@@ -83,10 +86,10 @@ export function ProjectCanvasDialog({
   const kind = mode;
   const available = useSWR(
     open && mode === "attach"
-      ? ["project-canvas-sources", identity, page]
+      ? ["project-canvas-sources", identity, page, pageSize]
       : null,
     async () =>
-      unwrap(await canvases.listCanvases({ current: page, pageSize: 10 })),
+      unwrap(await canvases.listCanvases({ current: page, pageSize })),
     { shouldRetryOnError: false },
   );
   useErrorNotification(available.error, "独立画布读取失败");
@@ -302,30 +305,21 @@ export function ProjectCanvasDialog({
                     </Button>
                   )}
                   {available.data && (
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={page === 1}
-                        onClick={() => {
-                          setPage(page - 1);
-                          setSourceId("");
-                        }}
-                      >
-                        上一页
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={page * 10 >= Number(available.data.total)}
-                        onClick={() => {
-                          setPage(page + 1);
-                          setSourceId("");
-                        }}
-                      >
-                        下一页
-                      </Button>
-                    </div>
+                    <ListPagination
+                      label="可归入画布分页"
+                      current={page}
+                      total={Number(available.data.total)}
+                      pageSize={pageSize}
+                      onPageChange={(next) => {
+                        setPage(next);
+                        setSourceId("");
+                      }}
+                      onPageSizeChange={(size) => {
+                        setPageSize(size);
+                        setPage(1);
+                        setSourceId("");
+                      }}
+                    />
                   )}
                 </Field>
               )}

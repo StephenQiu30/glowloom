@@ -45,7 +45,7 @@ const page = {
   current_actor_id: actor,
   current_scope_id: team,
   page: 1,
-  page_size: 30,
+  page_size: 20,
   total: 1,
   items: [entry],
   capabilities: {
@@ -109,7 +109,7 @@ it("团队目标空间通过专用来源读取本人资产，确认使用正式a
   expect(api.list.mock.calls[0][0]).toMatchObject({
     kind: "image",
     page: 1,
-    page_size: 30,
+    page_size: 20,
   });
   expect(api.list.mock.calls[0][0]).not.toHaveProperty("scope");
   expect(api.get).toHaveBeenCalledWith({ item_id: asset }, expect.any(Object));
@@ -284,7 +284,7 @@ it("素材选择器没有搜索或页码，超清无能力时仍可进入真实�
   await screen.findByText("暂未找到相关内容");
   expect(api.list.mock.calls.at(-1)![0]).toMatchObject({
     quality: "upscaled",
-    page_size: 30,
+    page_size: 20,
   });
 });
 it("图片跨分组保留多选并逐项核验后一次采纳，切换类型清空", async () => {
@@ -316,7 +316,7 @@ it("图片跨分组保留多选并逐项核验后一次采纳，切换类型清�
   expect(onSelect).not.toHaveBeenCalled();
   tab("视频");
   await screen.findByText(/已选 0 个视频/);
-  expect(api.list.mock.calls.at(-1)![0]).toMatchObject({ page_size: 50 });
+  expect(api.list.mock.calls.at(-1)![0]).toMatchObject({ page_size: 20 });
   tab("图片");
   await screen.findByText(/已选 0 张图片/);
 });
@@ -424,7 +424,7 @@ it.each(["video", "audio"] as const)(
     const other = { ...second, kind, media: { ...media, id: item } };
     api.list.mockResolvedValue({
       ...page,
-      page_size: kind === "video" ? 50 : 30,
+      page_size: 20,
       total: 2,
       items: [first, other],
     });

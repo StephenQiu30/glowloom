@@ -168,8 +168,8 @@ export async function listAssetLibraries(
       params: {
         // current has a default value: 1
         current: "1",
-        // pageSize has a default value: 50
-        pageSize: "50",
+        // pageSize has a default value: 20
+        pageSize: "20",
 
         // enabledOnly has a default value: true
         enabledOnly: "true",
@@ -191,8 +191,8 @@ export async function listMyAssets(
     params: {
       // current has a default value: 1
       current: "1",
-      // pageSize has a default value: 12
-      pageSize: "12",
+      // pageSize has a default value: 20
+      pageSize: "20",
 
       // kind has a default value: all
       kind: "all",

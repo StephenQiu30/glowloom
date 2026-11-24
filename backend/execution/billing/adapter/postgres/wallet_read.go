@@ -53,7 +53,7 @@ func (s *Store) ReadWalletWithBalance(ctx context.Context, scope uuid.UUID, hist
 	if !view.Enabled || !history {
 		return view, balance, nil
 	}
-	const pageSize = 25
+	const pageSize = 20
 	result := tx.Raw(`SELECT e.id,e.kind,trim_scale(e.amount_micros::numeric*0.00001)::text AS credits,
 		l.source_kind AS source,coalesce(attribution.model_key,l.model_key) AS model_key,l.expires_at,e.created_at,r.operation_id
 		FROM billing.wallet_entry e JOIN billing.wallet_lot l ON l.id=e.lot_id

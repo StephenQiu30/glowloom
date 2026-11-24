@@ -69,7 +69,7 @@ it("主体页复用真实游标前后翻页，调整数量回到首屏", async (
   await screen.findByText("另一角色");
   expect(screen.queryByText("角色")).toBeNull();
   expect(api.list.mock.calls.at(-1)?.[0]).toMatchObject({
-    limit: 12,
+    limit: 20,
     cursor: "next-subject-page",
   });
   fireEvent.click(screen.getByRole("button", { name: "上一页" }));
@@ -78,10 +78,10 @@ it("主体页复用真实游标前后翻页，调整数量回到首屏", async (
     screen.getByRole("combobox", { name: "主体分页每页数量" }),
     { key: "ArrowDown" },
   );
-  fireEvent.click(await screen.findByRole("option", { name: "24" }));
+  fireEvent.click(await screen.findByRole("option", { name: "50" }));
   await waitFor(() =>
     expect(api.list.mock.calls.at(-1)?.[0]).toMatchObject({
-      limit: 24,
+      limit: 50,
       cursor: undefined,
     }),
   );

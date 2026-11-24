@@ -1077,8 +1077,8 @@ export function AuthView({
               </CardFooter>
             ) : null}
           </Card>
-          <ProductFooter />
         </div>
+        <ProductFooter />
       </main>
     );
   return (

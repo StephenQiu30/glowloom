@@ -1,4 +1,5 @@
 "use client";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { toast } from "@/components/feedback/notification";
 import {
   AlertDialog,
@@ -253,7 +254,11 @@ function Library({
       if (!asset?.id || !actorID) throw new RequestError("invalid_receipt");
       if (!uploadPlacement.current) {
         const [value, item] = await Promise.all([
-          listMediaLibrary({ scope: "personal", page: 1, page_size: 12 }),
+          listMediaLibrary({
+            scope: "personal",
+            page: 1,
+            page_size: DEFAULT_PAGE_SIZE,
+          }),
           getMediaLibraryItem({ scope: "personal", item_id: asset.id }),
         ]);
         const base = requireLibraryPage(value, actorID);
@@ -908,7 +913,7 @@ export function ReferenceAssetsPage({
   onBack?: () => void;
   initialFilter?: Filter;
 }) {
-  const [pageSize, setPageSize] = useState<PageSize>(12);
+  const [pageSize, setPageSize] = useState<PageSize>(DEFAULT_PAGE_SIZE);
   const [filter, setFilter] = useState<Filter>(
     initialFilter ?? {
       kind: "image",

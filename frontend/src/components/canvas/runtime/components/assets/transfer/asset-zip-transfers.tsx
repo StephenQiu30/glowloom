@@ -1,5 +1,7 @@
 "use client";
 
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { PageSizeSelect } from "@/components/ui/page-size-select";
 import {
   useEffect,
   useEffectEvent,
@@ -109,6 +111,7 @@ export function AssetZipTransfers({
   const [uploadBusy, setUploadBusy] = useState(false);
   const [sourceName, setSourceName] = useState("");
   const [job, setJob] = useState<CanvasContract.AssetZipImportVO>();
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [page, setPage] = useState(1);
   const [pending, setPending] = useState<Pending>();
   const [unknown, setUnknown] = useState(false);
@@ -155,12 +158,12 @@ export function AssetZipTransfers({
   );
   const detail = useSWR(
     account && open && job?.jobId && !unknown
-      ? ["asset-import", scope, job.jobId, page]
+      ? ["asset-import", scope, job.jobId, page, pageSize]
       : null,
     (_key, options) =>
       api
         .getAssetZipImport(
-          { jobId: job?.jobId, current: String(page) },
+          { jobId: job?.jobId, current: String(page), pageSize },
           {
             ...options,
             signal: AbortSignal.any([
@@ -262,7 +265,7 @@ export function AssetZipTransfers({
       const result = unwrap(
         await api.getAssetZipImport(
           job?.jobId
-            ? { jobId: job.jobId, current: String(page) }
+            ? { jobId: job.jobId, current: String(page), pageSize }
             : { commandId: pending?.body.commandId },
           { signal: abort.signal },
         ),
@@ -290,7 +293,6 @@ export function AssetZipTransfers({
   const saved = Number(current?.saved ?? 0);
   const failed = Number(current?.failed ?? 0);
   const skipped = Number(current?.skipped ?? 0);
-  const pageSize = Number(current?.pageSize ?? 50);
   const pages = Math.max(1, Math.ceil(total / pageSize));
   const mayStart =
     !unknown &&
@@ -493,11 +495,21 @@ export function AssetZipTransfers({
                   </TableBody>
                 </Table>
               </div>
-              {pages > 1 && (
+              {current && (
                 <nav
                   className="flex shrink-0 flex-wrap items-center justify-end gap-2"
                   aria-label="导入条目分页"
                 >
+                  <PageSizeSelect
+                    value={pageSize}
+                    label="导入条目每页数量"
+                    onChange={(size) => {
+                      setPageSize(size);
+                      setPage(1);
+                    }}
+                    disabled={busy || unknown}
+                  />
+
                   <Button
                     variant="outline"
                     disabled={busy || unknown || page <= 1}

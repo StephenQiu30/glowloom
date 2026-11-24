@@ -193,7 +193,7 @@ func (q *PublicQuery) List(ctx context.Context, actor identityapp.Principal, inp
 		return TaskPage{}, ErrInvalidPublicQuery
 	}
 	if input.Limit == 0 {
-		input.Limit = 50
+		input.Limit = 20
 	}
 	page, err := q.store.ListPublicTasks(ctx, actor, input)
 	if err != nil {

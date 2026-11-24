@@ -67,7 +67,7 @@ func (i *PersonalHistoryInput) Normalize() error {
 		i.Order = "desc"
 	}
 	if i.Limit == 0 {
-		i.Limit = 40
+		i.Limit = 20
 	}
 	switch i.Kind {
 	case "", "image", "video", "audio", "document":

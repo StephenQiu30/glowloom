@@ -1,6 +1,7 @@
 "use client";
 
 import { GatewayAction } from "./gateway-action";
+import { GatewayModelList } from "./gateway-model-list";
 import { deleteAiRoutes } from "@/api/aiGateway";
 import {
   GatewayTable,
@@ -62,11 +63,14 @@ import {
   setCredentialState,
   type CredentialState,
   type GatewayConfiguration,
-  arkEmbedding,
-  type GatewayPrice,
   type OnboardingReview,
 } from "@/lib/ai-gateway-admin";
-import { SelectField, money, type RunMutation } from "./gateway-fields";
+import {
+  SelectField,
+  money,
+  priceSummary,
+  type RunMutation,
+} from "./gateway-fields";
 import {
   CreditsForm,
   ModelForm,
@@ -526,7 +530,7 @@ function GatewayConfigurationPage({
                           })}
                       />
                     ) : tab === "models" ? (
-                      <ModelList
+                      <GatewayModelList
                         configuration={configuration}
                         startRoute={startRoute}
                       />
@@ -693,62 +697,6 @@ function ListEmpty({
         <EmptyDescription>{description}</EmptyDescription>
       </EmptyHeader>
     </Empty>
-  );
-}
-
-function priceSummary(price: GatewayPrice, protocol: string) {
-  if (price.explicit_free === true) return "免费";
-  if (protocol === arkEmbedding.protocol)
-    return `输入 ${money(price.input, price.currency)} / 百万 token`;
-  return protocol === "media"
-    ? `${money(price.request, price.currency)} / 次`
-    : `输入 ${money(price.input, price.currency)} · 输出 ${money(price.output, price.currency)} / 百万 token`;
-}
-
-function ModelList({
-  configuration,
-  startRoute,
-}: {
-  configuration: GatewayConfiguration;
-  startRoute: (id: string) => void;
-}) {
-  return (
-    <GatewayTable
-      label="销售模型"
-      columns={["模型", "协议", "销售价", "状态", "操作"]}
-      empty="暂无模型"
-      rows={configuration.models.map(({ model, enabled, draft }) => ({
-        id: model.id,
-        label: model.name,
-        terms: [
-          model.protocol,
-          protocolLabels[model.protocol] ?? model.protocol,
-        ],
-        status: enabled ? "已启用" : draft ? "待验证" : "历史版本",
-        cells: [
-          model.name,
-          protocolLabels[model.protocol] ?? model.protocol,
-          priceSummary(model.price, model.protocol),
-          <Badge key="status" variant="secondary">
-            {enabled ? "已启用" : draft ? "待验证" : "历史版本"}
-          </Badge>,
-          <>
-            <GatewayAction
-              label="查看版本"
-              icon={Eye}
-              href={`/models/${model.id}`}
-            />
-            {(enabled || draft) && model.protocol !== "local" && (
-              <GatewayAction
-                onClick={() => startRoute(model.id)}
-                label="准备采购"
-                icon={Route}
-              />
-            )}
-          </>,
-        ],
-      }))}
-    />
   );
 }
 

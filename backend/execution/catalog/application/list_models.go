@@ -113,7 +113,7 @@ func (q *ListModelsQuery) Execute(ctx context.Context, actor identityapp.Princip
 		return ModelCatalogPage{}, ErrInvalidModelCatalog
 	}
 	if input.Limit == 0 {
-		input.Limit = 50
+		input.Limit = 20
 	}
 	page, err := q.store.ListModelsForProject(ctx, actor, input)
 	if err != nil {

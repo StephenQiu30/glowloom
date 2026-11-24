@@ -19,7 +19,7 @@ func (s *Store) EnsureIndependentCreation(ctx context.Context, actor identity.Pr
 	}
 	var project domain.Project
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := s.requireScope(ctx, tx, actor, true); err != nil {
+		if err := s.requireScope(ctx, tx, actor, false); err != nil {
 			return err
 		}
 		if err := tx.Exec("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", "independent-creation/"+actor.ScopeID.String()).Error; err != nil {
@@ -32,6 +32,9 @@ func (s *Store) EnsureIndependentCreation(ctx context.Context, actor identity.Pr
 			return fmt.Errorf("read independent creation: %w", read.Error)
 		}
 		if read.RowsAffected == 0 {
+			if err := s.requireScope(ctx, tx, actor, true); err != nil {
+				return err
+			}
 			row.ID = uuid.New()
 			defaults := domain.Project{
 				ID: row.ID, OrgID: actor.OrgID, OwnerID: actor.ID,

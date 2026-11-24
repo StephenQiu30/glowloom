@@ -182,8 +182,8 @@ export async function listScriptFileImports(
     {
       method: "GET",
       params: {
-        // limit has a default value: 50
-        limit: "50",
+        // limit has a default value: 20
+        limit: "20",
         ...queryParams,
       },
       ...(options || {}),

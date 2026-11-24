@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { InputGroup, InputGroupInput } from "@/components/ui/input-group";
 import type { PageSearch } from "./product-search";
 
 /** Page-owned results, inline input in the existing common header search slot. */
@@ -68,19 +68,19 @@ export function ProductInlineSearch({ search }: { search: PageSearch }) {
       </Button>
     );
   return (
-    <div
+    <InputGroup
       role="search"
       data-inline-page-search
       aria-label={search.label}
-      className="flex h-(--toolbar-control-size) w-[min(240px,45vw)] min-w-0 items-center gap-1 rounded-md bg-secondary px-2 max-[360px]:w-[calc(100vw-180px)] min-[361px]:max-md:w-[min(240px,calc(100vw-224px))]"
+      className="h-(--toolbar-control-size) w-[min(240px,45vw)] gap-1 px-2 max-[360px]:w-[calc(100vw-180px)] min-[361px]:max-md:w-[min(240px,calc(100vw-224px))]"
     >
       <Search
         className="size-4 shrink-0 text-muted-foreground"
         aria-hidden="true"
       />
-      <Input
+      <InputGroupInput
         ref={input}
-        className="h-full min-w-0 border-0 bg-transparent px-1 shadow-none focus-visible:ring-0"
+        className="h-full px-1"
         aria-label={search.label}
         placeholder={search.placeholder ?? "搜索"}
         value={search.value}
@@ -131,6 +131,6 @@ export function ProductInlineSearch({ search }: { search: PageSearch }) {
           <X />
         </Button>
       ) : null}
-    </div>
+    </InputGroup>
   );
 }

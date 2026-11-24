@@ -44,7 +44,11 @@ import { CanvasMediaContext } from "@glowloom/canvas/editor/lib/canvas-media-con
 import { canvasViewKey } from "@glowloom/canvas/editor/view-state.ts";
 import { canvasSubjectSources } from "./lib/canvas-subject-source";
 import { getCSRFToken } from "@/lib/request";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { ensureSessionFresh } from "@/components/auth/session-renewal";
+import { useOptionalSession } from "@/components/auth/session";
+import { AccountMenu } from "@/components/account/account-menu";
+import { AccountLogoutDialog } from "@/components/account/account-logout-dialog";
 import { Button } from "@/components/ui/button";
 import { CanvasLocalDrafts } from "@glowloom/canvas/editor/controls/canvas-local-drafts.tsx";
 import { Input } from "@/components/ui/input";
@@ -258,17 +262,19 @@ function CollaborativeEditor({
       scopeID,
     ],
   );
+  const isMobile = useIsMobile();
   const [legacyOpen, setLegacyOpen] = useState(false);
   const [workbench, setWorkbench] = useState<{
     open: boolean;
     tab: CanvasStoryboardTab;
+    assistantOnly?: boolean;
   }>();
   const workbenchTrigger = useRef<HTMLElement | null>(null);
-  function openWorkbench(tab: CanvasStoryboardTab) {
+  function openWorkbench(tab: CanvasStoryboardTab, assistantOnly = false) {
     if (document.activeElement instanceof HTMLElement)
       workbenchTrigger.current = document.activeElement;
     setLegacyOpen(false);
-    setWorkbench({ open: true, tab });
+    setWorkbench({ open: true, tab, assistantOnly });
   }
   function closeWorkbench() {
     setWorkbench((previous) => previous && { ...previous, open: false });
@@ -337,6 +343,7 @@ function CollaborativeEditor({
       />
     );
   const ordinaryCanvas = view.dto.kind !== "short_drama";
+  const conversationOpen = workbench?.open && workbench.assistantOnly;
   return (
     <CanvasMediaContext.Provider
       value={{
@@ -364,165 +371,198 @@ function CollaborativeEditor({
             onClose={() => setTransfer(null)}
           />
         )}
-        <CanvasPage
-          documentIntegration={{
-            projectId: projectID,
-            getDocumentEpoch: client.getDocumentEpoch,
-            initialState: view.document,
-            viewStateKey: canvasViewKey(actorID, scopeID, projectID, canvasID),
-            mediaContext: {
-              canvasId: canvasID,
+        <div
+          className="size-full"
+          inert={
+            (workbench?.open && (!conversationOpen || isMobile)) || undefined
+          }
+        >
+          <CanvasPage
+            documentIntegration={{
               projectId: projectID,
-              bindingRevision: view.dto.revision!,
-            },
-            mediaEnabled: true,
-            onOpenAssistant: ordinaryCanvas
-              ? () => openWorkbench("conversation")
-              : () => setLegacyOpen(true),
-            onTransferSelection: setTransfer,
-            canNavigate: !view.unsafeToLeave,
-            frozen: !view.writable || view.migration,
-            admit: client.canAccept,
-            admitConnectionGraph: client.canAcceptConnectionGraph,
-            resolveConnectionMedia: client.connectionMediaNode,
-            connectDomain: domainConnector.connect,
-            audioConnections,
-            onChange: client.change,
-            textBinding: client.textBinding,
-            renderToolNode: (nodeID, type) =>
-              type === "storyboard" ? (
-                <StoryboardNodePreview
-                  projectID={projectID}
-                  storyboard={
-                    view.document?.nodes.find((node) => node.id === nodeID)
-                      ?.serviceData?.config?.storyboard
-                  }
-                  onOpen={() => openWorkbench("shots")}
-                />
-              ) : type === "timeline" ? (
-                <CanvasTimelineWorkspace
-                  client={client}
-                  nodeID={nodeID}
-                  canvasID={canvasID}
-                  projectID={projectID}
-                  compact
-                />
-              ) : type === "director" ? (
-                <CanvasDirectorWorkspace
-                  client={client}
-                  nodeID={nodeID}
-                  canvasID={canvasID}
-                  projectID={projectID}
-                  compact
-                />
-              ) : type === "cinema_studio" ? (
-                <CanvasCinemaKitNode client={client} nodeID={nodeID} />
-              ) : type === "subject" ? (
-                <CanvasSubjectNode
-                  projectID={projectID}
-                  client={client}
-                  nodeID={nodeID}
-                  actorID={actorID}
-                  scopeID={scopeID}
-                />
-              ) : operations.tasks[nodeID] &&
-                ["text", "image", "video", "audio"].includes(type) ? (
-                <CanvasOperationStatus
-                  projectID={projectID}
-                  canvasID={canvasID}
-                  nodeID={nodeID}
-                  operationID={operations.tasks[nodeID]}
-                  identity={`${actorID}/${scopeID}`}
-                  frozen={!view.writable || view.migration}
-                  onStopped={operations.refresh}
-                  onCompleted={completeOperation}
-                />
-              ) : null,
-            renderGenerationPanel: (nodeID, onSubmitted) => (
-              <CanvasGenerationPanel
-                client={client}
-                nodeID={nodeID}
-                canvasID={canvasID}
-                projectID={projectID}
-                onOperationReady={registerOperation}
-                onSubmitted={onSubmitted}
-              />
-            ),
-            onCursor: client.setCursor,
-            presenceOverlay: <YjsPresence client={client} cursors />,
-            undo: {
-              canUndo: view.canUndo,
-              canRedo: view.canRedo,
-              undo: () => client.history("undo"),
-              redo: () => client.history("redo"),
-            },
-            toolbar: (controls) => (
-              <CanvasTopBar
-                {...controls}
-                canvasID={canvasID}
-                projectID={projectID}
-                title={view.dto!.name ?? "画布"}
-                canDeleteCanvas={false}
-                canRenameCanvas={view.writable && !view.dirty}
-                canSwitchCanvas={!view.unsafeToLeave}
-                onDeleteProject={() => {}}
-                onRenameProject={() => void openRename()}
-                workflowControl={
-                  ordinaryCanvas ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="max-sm:size-9"
-                      aria-label="打开故事板"
-                      title="故事板"
-                      onClick={() => openWorkbench("shots")}
-                    >
-                      <Film data-icon="inline-start" />
-                      <span className="max-sm:sr-only">故事板</span>
-                    </Button>
-                  ) : undefined
-                }
-                participantsControl={
-                  <CanvasParticipants
+              getDocumentEpoch: client.getDocumentEpoch,
+              initialState: view.document,
+              viewStateKey: canvasViewKey(
+                actorID,
+                scopeID,
+                projectID,
+                canvasID,
+              ),
+              mediaContext: {
+                canvasId: canvasID,
+                projectId: projectID,
+                bindingRevision: view.dto.revision!,
+              },
+              mediaEnabled: true,
+              assistantOpen: ordinaryCanvas ? !!conversationOpen : undefined,
+              onOpenAssistant: ordinaryCanvas
+                ? () => openWorkbench("conversation", true)
+                : () => setLegacyOpen(true),
+              onTransferSelection: setTransfer,
+              canNavigate: !view.unsafeToLeave,
+              frozen: !view.writable || view.migration,
+              admit: client.canAccept,
+              admitConnectionGraph: client.canAcceptConnectionGraph,
+              resolveConnectionMedia: client.connectionMediaNode,
+              connectDomain: domainConnector.connect,
+              audioConnections,
+              onChange: client.change,
+              textBinding: client.textBinding,
+              renderToolNode: (nodeID, type) =>
+                type === "storyboard" ? (
+                  <StoryboardNodePreview
+                    projectID={projectID}
+                    storyboard={
+                      view.document?.nodes.find((node) => node.id === nodeID)
+                        ?.serviceData?.config?.storyboard
+                    }
+                    onOpen={() => openWorkbench("shots")}
+                  />
+                ) : type === "timeline" ? (
+                  <CanvasTimelineWorkspace
                     client={client}
+                    nodeID={nodeID}
+                    canvasID={canvasID}
+                    projectID={projectID}
+                    compact
+                  />
+                ) : type === "director" ? (
+                  <CanvasDirectorWorkspace
+                    client={client}
+                    nodeID={nodeID}
+                    canvasID={canvasID}
+                    projectID={projectID}
+                    compact
+                  />
+                ) : type === "cinema_studio" ? (
+                  <CanvasCinemaKitNode client={client} nodeID={nodeID} />
+                ) : type === "subject" ? (
+                  <CanvasSubjectNode
+                    projectID={projectID}
+                    client={client}
+                    nodeID={nodeID}
                     actorID={actorID}
                     scopeID={scopeID}
-                    connected={view.connected}
                   />
-                }
-                saveControl={
-                  <div className="flex items-center gap-2">
-                    <span role="status" className="text-xs">
-                      {view.phase}
-                    </span>
-                    {view.migration && (
-                      <FeedbackToast
-                        message="等待具有编辑权限的成员初始化画布"
-                        tone="info"
-                      />
-                    )}
-                    {(view.recovery.length > 0 ||
-                      view.recoveryRemaining > 0) && (
-                      <CanvasLocalDrafts
-                        sources={view.recovery}
-                        otherSessions={view.recoveryRemaining}
-                        writable={
-                          view.writable && view.connected && !view.dirty
-                        }
-                        commitSeq={client.commitSeq}
-                        apply={(id, fields, seq) =>
-                          client.applyRecovery(id, fields, seq)
-                        }
-                        discard={client.discardRecovery}
-                      />
-                    )}
-                  </div>
-                }
-              />
-            ),
-          }}
-        />
+                ) : operations.tasks[nodeID] &&
+                  ["text", "image", "video", "audio"].includes(type) ? (
+                  <CanvasOperationStatus
+                    projectID={projectID}
+                    canvasID={canvasID}
+                    nodeID={nodeID}
+                    operationID={operations.tasks[nodeID]}
+                    identity={`${actorID}/${scopeID}`}
+                    frozen={!view.writable || view.migration}
+                    onStopped={operations.refresh}
+                    onCompleted={completeOperation}
+                  />
+                ) : null,
+              renderGenerationPanel: (nodeID, onSubmitted) => (
+                <CanvasGenerationPanel
+                  client={client}
+                  nodeID={nodeID}
+                  canvasID={canvasID}
+                  projectID={projectID}
+                  onOperationReady={registerOperation}
+                  onSubmitted={onSubmitted}
+                />
+              ),
+              onCursor: client.setCursor,
+              presenceOverlay: <YjsPresence client={client} cursors />,
+              undo: {
+                canUndo: view.canUndo,
+                canRedo: view.canRedo,
+                undo: () => client.history("undo"),
+                redo: () => client.history("redo"),
+              },
+              toolbar: (controls) => (
+                <CanvasTopBar
+                  {...controls}
+                  canvasID={canvasID}
+                  projectID={projectID}
+                  title={view.dto!.name ?? "画布"}
+                  canDeleteCanvas={false}
+                  canRenameCanvas={view.writable && !view.dirty}
+                  canSwitchCanvas={!view.unsafeToLeave}
+                  accountControl={
+                    ordinaryCanvas ? (
+                      <CanvasAccountMenu disabled={view.unsafeToLeave} />
+                    ) : undefined
+                  }
+                  onDeleteProject={() => {}}
+                  onRenameProject={() => void openRename()}
+                  workflowControl={
+                    ordinaryCanvas ? (
+                      <div
+                        role="group"
+                        aria-label="画布视图"
+                        className="flex shrink-0 items-center gap-1"
+                      >
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          className="hidden sm:inline-flex"
+                          aria-current="page"
+                        >
+                          工作流
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="max-sm:size-11"
+                          aria-label="打开故事板"
+                          title="故事板"
+                          onClick={() => openWorkbench("shots")}
+                        >
+                          <Film data-icon="inline-start" />
+                          <span className="max-sm:sr-only">故事板</span>
+                        </Button>
+                      </div>
+                    ) : undefined
+                  }
+                  participantsControl={
+                    <CanvasParticipants
+                      client={client}
+                      actorID={actorID}
+                      scopeID={scopeID}
+                      connected={view.connected}
+                    />
+                  }
+                  saveControl={
+                    <div className="flex items-center gap-2">
+                      <span role="status" className="text-xs max-sm:sr-only">
+                        {view.phase}
+                      </span>
+                      {view.migration && (
+                        <FeedbackToast
+                          message="等待具有编辑权限的成员初始化画布"
+                          tone="info"
+                        />
+                      )}
+                      {(view.recovery.length > 0 ||
+                        view.recoveryRemaining > 0) && (
+                        <CanvasLocalDrafts
+                          sources={view.recovery}
+                          otherSessions={view.recoveryRemaining}
+                          writable={
+                            view.writable && view.connected && !view.dirty
+                          }
+                          commitSeq={client.commitSeq}
+                          apply={(id, fields, seq) =>
+                            client.applyRecovery(id, fields, seq)
+                          }
+                          discard={client.discardRecovery}
+                        />
+                      )}
+                    </div>
+                  }
+                />
+              ),
+            }}
+          />
+        </div>
         {workbench && (
           <CanvasStoryboardWorkspace
             canvasID={canvasID}
@@ -532,9 +572,20 @@ function CollaborativeEditor({
             commitSeq={client.commitSeq}
             writable={view.writable && !view.migration}
             boardWritable={view.writable && view.connected && !view.migration}
+            title={view.dto.name ?? "画布"}
+            saveStatus={view.phase}
+            canNavigate={!view.unsafeToLeave}
             open={workbench.open}
             tab={workbench.tab}
-            onTabChange={(tab) => setWorkbench({ open: true, tab })}
+            assistantOnly={workbench.assistantOnly}
+            onTabChange={(tab) =>
+              setWorkbench((previous) => ({
+                open: true,
+                tab,
+                assistantOnly:
+                  tab === "conversation" && previous?.assistantOnly,
+              }))
+            }
             onClose={closeWorkbench}
             onOpenLegacy={() => {
               setWorkbench(
@@ -673,5 +724,27 @@ function StoryboardNodePreview({
         {shots.length} 个镜头 · 打开故事板
       </Button>
     </div>
+  );
+}
+
+function CanvasAccountMenu({ disabled }: { disabled: boolean }) {
+  const session = useOptionalSession();
+  const [logout, setLogout] = useState(false);
+
+  if (!session) return null;
+
+  return (
+    <>
+      <AccountMenu
+        actor={session.actor}
+        disabled={disabled}
+        onLogout={() => setLogout(true)}
+      />
+      <AccountLogoutDialog
+        open={logout}
+        onOpenChange={setLogout}
+        disabled={disabled}
+      />
+    </>
   );
 }

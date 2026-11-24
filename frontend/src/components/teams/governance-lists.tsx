@@ -1,4 +1,6 @@
 "use client";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { PageSizeSelect } from "@/components/ui/page-size-select";
 import { ContentState } from "@/components/layout/content-state";
 import { readErrorMessage } from "@/lib/read-error";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
@@ -34,6 +36,7 @@ export function GovernanceLists({
   reload: number;
   onAction: (a: ConfirmAction) => void;
 }) {
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [invites, setInvites] = useState<API.InvitationListPage | null>(null);
   const [proposals, setProposals] = useState<API.ProposalListPage | null>(null);
   const [error, setError] = useState("");
@@ -53,13 +56,13 @@ export function GovernanceLists({
   const [proposalStatus, setProposalStatus] = useState("");
   const [pending, setPending] = useState(false);
   const read = useReadBoundary(
-    `${teamID}:${reload}:${status}:${proposalStatus}:${retry}`,
+    `${teamID}:${reload}:${status}:${proposalStatus}:${retry}:${pageSize}`,
   );
   useEffect(() => {
     const c = new AbortController();
-    const filter = { limit: 50, ...(status ? { status } : {}) };
+    const filter = { limit: pageSize, ...(status ? { status } : {}) };
     const proposalFilter = {
-      limit: 50,
+      limit: pageSize,
       ...(proposalStatus ? { status: proposalStatus } : {}),
     };
     const opts = { signal: c.signal };
@@ -84,7 +87,7 @@ export function GovernanceLists({
       }
     });
     return () => c.abort();
-  }, [teamID, reload, status, proposalStatus, retry]);
+  }, [teamID, reload, status, proposalStatus, retry, pageSize]);
   return (
     <section className="grid gap-4">
       <h2>{"团队邀请与转交"}</h2>
@@ -214,6 +217,16 @@ export function GovernanceLists({
           ) : null}
         </article>
       ))}
+      <PageSizeSelect
+        label="团队邀请与转交每页数量"
+        value={pageSize}
+        disabled={pending}
+        onChange={(size) => {
+          setInvites(null);
+          setProposals(null);
+          setPageSize(size);
+        }}
+      />
       {invites?.next_cursor ? (
         <Button
           disabled={pending}
@@ -222,7 +235,7 @@ export function GovernanceLists({
             setPending(true);
             try {
               const f = {
-                limit: 50,
+                limit: pageSize,
                 cursor: invites.next_cursor,
                 ...(status ? { status } : {}),
               };
@@ -323,7 +336,7 @@ export function GovernanceLists({
             setPending(true);
             try {
               const f = {
-                limit: 50,
+                limit: pageSize,
                 cursor: proposals.next_cursor,
                 ...(proposalStatus ? { status: proposalStatus } : {}),
               };

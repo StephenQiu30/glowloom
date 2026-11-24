@@ -111,7 +111,7 @@ func (q *ListProjectsQuery) Execute(ctx context.Context, actor identityapp.Princ
 		}
 	}
 	if input.Limit == 0 {
-		input.Limit = 50
+		input.Limit = 20
 	}
 	page, err := q.store.ListProjectsForActor(ctx, actor, input)
 	if err != nil {
