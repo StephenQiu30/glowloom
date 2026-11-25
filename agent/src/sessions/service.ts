@@ -7,7 +7,7 @@ import {
 import type { AgentTeam } from '../mastra/runtime.js';
 import {
   filterToolsByAllowlist,
-  type DeclarativeSkill,
+  type SkillRegistry,
 } from '../skills/loader.js';
 import type { RunEventBus } from './event-bus.js';
 import type { SessionStore } from './store.js';
@@ -29,7 +29,7 @@ export interface SessionServiceOptions {
   eventBus: RunEventBus;
   agentTeam: AgentTeam;
   mcpConfig: BusinessMcpConfig;
-  skills: DeclarativeSkill[];
+  skills: SkillRegistry;
   logger: Logger;
   leaseMs: number;
   recoveryPollMs: number;
@@ -312,18 +312,22 @@ export class SessionService implements AgentApplication {
         }
       }
 
+      const selectedSkillNames = Array.isArray(input.manifest.skills)
+        ? input.manifest.skills.filter(
+            (s): s is string => typeof s === 'string',
+          )
+        : [];
+      const skillInstructions =
+        selectedSkillNames.length > 0
+          ? this.options.skills.composeInstructions(selectedSkillNames)
+          : undefined;
+
       let toolsets: Record<string, unknown> = {};
       try {
         const rawTools = await mcpClient.listTools();
-        const selectedSkillNames = Array.isArray(input.manifest.skills)
-          ? input.manifest.skills.filter(
-              (s): s is string => typeof s === 'string',
-            )
-          : [];
         if (selectedSkillNames.length > 0) {
-          const allowlist = this.options.skills
-            .filter((skill) => selectedSkillNames.includes(skill.name))
-            .flatMap((skill) => skill.allowedTools);
+          const allowlist =
+            this.options.skills.resolveAllowedTools(selectedSkillNames);
           toolsets = filterToolsByAllowlist(rawTools, allowlist);
         } else {
           toolsets = rawTools;
@@ -352,6 +356,7 @@ export class SessionService implements AgentApplication {
           ...(input.traceparent ? { traceparent: input.traceparent } : {}),
         },
         modelKey,
+        skillInstructions,
       );
 
       const response = await producer.generate(input.goal, {

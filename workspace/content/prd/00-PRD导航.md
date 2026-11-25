@@ -1,5 +1,7 @@
 # 需求与验收 PRD 导航
 
+- [PRD35 AI短剧制作多Agent编排](35-AI短剧制作多Agent编排.md) · 唯一来源 [设计49](../design/49-AI短剧制作三层Agent与六阶段Workflow设计.md) · [Plan44](../plan/44-AI短剧制作多Agent编排执行计划.md)；覆盖三层 5 角色、六阶段短剧 HITL Workflow、6 套短剧 Skill、短剧专项 Scorers 与 Go 5 组短剧 MCP 工具验收。
+
 - [PRD34 Agent服务架构重构与技术选型](34-Agent服务架构重构与技术选型.md) · 唯一来源 [设计48](../design/48-Agent服务Mastra架构与技术选型设计.md) · [Plan43](../plan/43-Agent服务Mastra架构重构执行计划.md)；覆盖 Mastra 全量原地重构、强类型 gRPC + Go 内部 MCP、Go 统一渠道网关、静态 Schema + Kysely、混合编排与双轨 Evals 验收。
 
 - [PRD20 统一AI网关增补](20-模型与供应商接入扩展.md#ai-gateway)：唯一来源设计33；全入口、三协议、框架、号池、计量与账单CASE-GW-01～08；本轮为文档合同，未实施。

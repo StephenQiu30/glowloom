@@ -18,6 +18,7 @@ COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=proto --chown=node:node glowloom/agent/runtime.proto ./proto/runtime.proto
 COPY --chown=node:node prompts ./prompts
 COPY --chown=node:node skills ./skills
+COPY --chown=node:node pipelines ./pipelines
 USER node
 EXPOSE 4401 4402
 CMD ["node", "--enable-source-maps", "dist/src/server.js"]

@@ -4,49 +4,118 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 )
 
-const mcpProtocolVersion = "2025-03-26"
+type mcpIdentityKey struct{}
 
-type mcpRequest struct {
-	JSONRPC string          `json:"jsonrpc"`
-	ID      json.RawMessage `json:"id,omitempty"`
-	Method  string          `json:"method"`
-	Params  json.RawMessage `json:"params,omitempty"`
+type mcpCallerIdentity struct {
+	scope domain.Scope
+	runID uuid.UUID
+	valid bool
 }
 
-type mcpError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
+func boolPtr(v bool) *bool { return &v }
+
+func annotationsForTool(desc app.ToolDescriptor) *mcp.ToolAnnotations {
+	readOnly := desc.Effect == "read"
+	destructive := desc.Effect == "billable"
+	openWorld := desc.Effect == "billable"
+	return &mcp.ToolAnnotations{
+		ReadOnlyHint:    readOnly,
+		DestructiveHint: boolPtr(destructive),
+		IdempotentHint:  desc.Replay == "idempotent",
+		OpenWorldHint:   boolPtr(openWorld),
+	}
 }
 
-type mcpResponse struct {
-	JSONRPC string          `json:"jsonrpc"`
-	ID      json.RawMessage `json:"id,omitempty"`
-	Result  any             `json:"result,omitempty"`
-	Error   *mcpError       `json:"error,omitempty"`
+func (h *BusinessHandler) newOfficialMCPServer() *mcp.Server {
+	server := mcp.NewServer(&mcp.Implementation{
+		Name:    "glowloom-business-mcp",
+		Version: "1.0.0",
+	}, nil)
+
+	for _, t := range h.capabilities.Tools {
+		tool := t
+		schema := tool.Descriptor.Parameters
+		if len(schema) == 0 {
+			schema = json.RawMessage(`{"type":"object","properties":{}}`)
+		}
+		mcpTool := &mcp.Tool{
+			Name:        tool.Descriptor.Name,
+			Description: tool.Descriptor.Description,
+			InputSchema: schema,
+			Annotations: annotationsForTool(tool.Descriptor),
+			Meta: mcp.Meta{
+				"effect":                 tool.Descriptor.Effect,
+				"roles":                  tool.Descriptor.Roles,
+				"billable":               tool.Descriptor.Effect == "billable",
+				"requiresOptimisticLock": tool.Descriptor.Effect == "write",
+			},
+		}
+		server.AddTool(mcpTool, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			caller, _ := ctx.Value(mcpIdentityKey{}).(mcpCallerIdentity)
+			if !caller.valid {
+				return &mcp.CallToolResult{
+					IsError: true,
+					Content: []mcp.Content{
+						&mcp.TextContent{Text: "missing or invalid glowloom identity headers"},
+					},
+				}, nil
+			}
+			if tool.Execute == nil {
+				return nil, errors.New("tool executor unavailable")
+			}
+			args := req.Params.Arguments
+			if len(args) == 0 {
+				args = json.RawMessage(`{}`)
+			}
+			callID := uuid.New()
+			if caller.runID != uuid.Nil {
+				callID = caller.runID
+			}
+			result, execErr := tool.Execute(ctx, caller.scope, callID, args)
+			if execErr != nil {
+				return &mcp.CallToolResult{
+					IsError: true,
+					Content: []mcp.Content{
+						&mcp.TextContent{Text: execErr.Error()},
+					},
+				}, nil
+			}
+			payload, _ := json.Marshal(result)
+			return &mcp.CallToolResult{
+				IsError: result.Status != domain.CallStatusCompleted,
+				Content: []mcp.Content{
+					&mcp.TextContent{Text: string(payload)},
+				},
+			}, nil
+		})
+	}
+	return server
 }
 
-type mcpToolSpec struct {
-	Name        string          `json:"name"`
-	Description string          `json:"description,omitempty"`
-	InputSchema json.RawMessage `json:"inputSchema"`
-}
-
-type mcpCallParams struct {
-	Name      string          `json:"name"`
-	Arguments json.RawMessage `json:"arguments"`
-}
-
-// registerMCP mounts the authenticated internal MCP Streamable HTTP endpoint for @mastra/mcp.
+// registerMCP mounts the official MCP Streamable HTTP endpoint (POST/GET/DELETE) for @mastra/mcp.
 func (h *BusinessHandler) registerMCP(router *gin.Engine) {
-	router.POST("/internal/agent-mcp", func(c *gin.Context) {
+	server := h.newOfficialMCPServer()
+	streamableHandler := mcp.NewStreamableHTTPHandler(
+		func(_ *http.Request) *mcp.Server { return server },
+		&mcp.StreamableHTTPOptions{
+			Stateless:                  true,
+			JSONResponse:               true,
+			DisableLocalhostProtection: true,
+		},
+	)
+
+	handle := func(c *gin.Context) {
 		if len(h.token) < 32 ||
 			subtle.ConstantTimeCompare([]byte(c.GetHeader("Authorization")), []byte("Bearer "+h.token)) != 1 ||
 			c.GetHeader("X-Agent-Audience") != "agent-business" {
@@ -61,154 +130,23 @@ func (h *BusinessHandler) registerMCP(router *gin.Engine) {
 			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"code": "agent_busy"})
 			return
 		}
-		h.handleMCP(c)
-	})
+
+		actorID, errA := uuid.Parse(c.GetHeader("X-Glowloom-Actor-Id"))
+		orgID, errO := uuid.Parse(c.GetHeader("X-Glowloom-Org-Id"))
+		scopeID, errS := uuid.Parse(c.GetHeader("X-Glowloom-Scope-Id"))
+		projectID, errP := uuid.Parse(c.GetHeader("X-Glowloom-Project-Id"))
+		runID, _ := uuid.Parse(c.GetHeader("X-Glowloom-Run-Id"))
+
+		caller := mcpCallerIdentity{
+			scope: domain.Scope{ActorID: actorID, OrgID: orgID, ScopeID: scopeID, ProjectID: projectID},
+			runID: runID,
+			valid: errA == nil && errO == nil && errS == nil && errP == nil,
+		}
+		reqWithCtx := c.Request.WithContext(context.WithValue(c.Request.Context(), mcpIdentityKey{}, caller))
+		streamableHandler.ServeHTTP(c.Writer, reqWithCtx)
+	}
+
+	router.POST("/internal/agent-mcp", handle)
+	router.GET("/internal/agent-mcp", handle)
+	router.DELETE("/internal/agent-mcp", handle)
 }
-
-func (h *BusinessHandler) handleMCP(c *gin.Context) {
-	var req mcpRequest
-	if err := c.ShouldBindJSON(&req); err != nil || req.JSONRPC != "2.0" || req.Method == "" {
-		c.JSON(http.StatusBadRequest, mcpResponse{
-			JSONRPC: "2.0",
-			Error:   &mcpError{Code: -32600, Message: "invalid json-rpc request"},
-		})
-		return
-	}
-
-	switch req.Method {
-	case "initialize":
-		c.JSON(http.StatusOK, mcpResponse{
-			JSONRPC: "2.0",
-			ID:      req.ID,
-			Result: map[string]any{
-				"protocolVersion": mcpProtocolVersion,
-				"capabilities": map[string]any{
-					"tools": map[string]any{"listChanged": false},
-				},
-				"serverInfo": map[string]any{
-					"name":    "glowloom-business-mcp",
-					"version": "1.0.0",
-				},
-			},
-		})
-	case "notifications/initialized":
-		c.Status(http.StatusAccepted)
-	case "ping":
-		c.JSON(http.StatusOK, mcpResponse{
-			JSONRPC: "2.0",
-			ID:      req.ID,
-			Result:  map[string]any{},
-		})
-	case "tools/list":
-		tools := make([]mcpToolSpec, 0, len(h.capabilities.Tools))
-		for _, t := range h.capabilities.Tools {
-			schema := t.Descriptor.Parameters
-			if len(schema) == 0 {
-				schema = json.RawMessage(`{"type":"object","properties":{}}`)
-			}
-			tools = append(tools, mcpToolSpec{
-				Name:        t.Descriptor.Name,
-				Description: t.Descriptor.Description,
-				InputSchema: schema,
-			})
-		}
-		c.JSON(http.StatusOK, mcpResponse{
-			JSONRPC: "2.0",
-			ID:      req.ID,
-			Result:  map[string]any{"tools": tools},
-		})
-	case "tools/call":
-		h.handleMCPToolCall(c, req)
-	default:
-		c.JSON(http.StatusOK, mcpResponse{
-			JSONRPC: "2.0",
-			ID:      req.ID,
-			Error:   &mcpError{Code: -32601, Message: "method not found"},
-		})
-	}
-}
-
-func (h *BusinessHandler) handleMCPToolCall(c *gin.Context, req mcpRequest) {
-	var params mcpCallParams
-	if err := json.Unmarshal(req.Params, &params); err != nil || params.Name == "" {
-		c.JSON(http.StatusOK, mcpResponse{
-			JSONRPC: "2.0",
-			ID:      req.ID,
-			Error:   &mcpError{Code: -32602, Message: "invalid tools/call params"},
-		})
-		return
-	}
-
-	actorID, errA := uuid.Parse(c.GetHeader("X-Glowloom-Actor-Id"))
-	orgID, errO := uuid.Parse(c.GetHeader("X-Glowloom-Org-Id"))
-	scopeID, errS := uuid.Parse(c.GetHeader("X-Glowloom-Scope-Id"))
-	projectID, errP := uuid.Parse(c.GetHeader("X-Glowloom-Project-Id"))
-	if errA != nil || errO != nil || errS != nil || errP != nil {
-		c.JSON(http.StatusOK, mcpResponse{
-			JSONRPC: "2.0",
-			ID:      req.ID,
-			Error:   &mcpError{Code: -32602, Message: "missing or invalid glowloom identity headers"},
-		})
-		return
-	}
-	scope := domain.Scope{ActorID: actorID, OrgID: orgID, ScopeID: scopeID, ProjectID: projectID}
-	runID, _ := uuid.Parse(c.GetHeader("X-Glowloom-Run-Id"))
-
-	args := params.Arguments
-	if len(args) == 0 {
-		args = json.RawMessage(`{}`)
-	}
-
-	for _, tool := range h.capabilities.Tools {
-		if tool.Descriptor.Name != params.Name {
-			continue
-		}
-		if tool.Execute == nil {
-			c.JSON(http.StatusOK, mcpResponse{
-				JSONRPC: "2.0",
-				ID:      req.ID,
-				Error:   &mcpError{Code: -32000, Message: "tool executor unavailable"},
-			})
-			return
-		}
-		callID := uuid.New()
-		if runID != uuid.Nil {
-			callID = runID
-		}
-		result, execErr := tool.Execute(c.Request.Context(), scope, callID, args)
-		if execErr != nil {
-			c.JSON(http.StatusOK, mcpResponse{
-				JSONRPC: "2.0",
-				ID:      req.ID,
-				Result: map[string]any{
-					"isError": true,
-					"content": []map[string]any{
-						{"type": "text", "text": execErr.Error()},
-					},
-				},
-			})
-			return
-		}
-		payload, _ := json.Marshal(result)
-		c.JSON(http.StatusOK, mcpResponse{
-			JSONRPC: "2.0",
-			ID:      req.ID,
-			Result: map[string]any{
-				"isError": result.Status != domain.CallStatusCompleted,
-				"content": []map[string]any{
-					{"type": "text", "text": string(payload)},
-				},
-			},
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, mcpResponse{
-		JSONRPC: "2.0",
-		ID:      req.ID,
-		Error:   &mcpError{Code: -32602, Message: "unknown tool: " + params.Name},
-	})
-}
-
-// Unused import guard for context if needed by future extensions.
-var _ context.Context

@@ -1,12 +1,13 @@
 import { loadConfig } from './config.js';
 import { createDatabaseBundle } from './database/connection.js';
+import { PipelineRegistry } from './mastra/pipeline-engine.js';
 import { createMastraRuntime } from './mastra/runtime.js';
 import { PromptRegistry } from './observability/langfuse.js';
 import { createAgentLogger } from './observability/logger.js';
 import { createEventBus } from './sessions/event-bus.js';
 import { SessionService } from './sessions/service.js';
 import { SessionStore } from './sessions/store.js';
-import { loadDeclarativeSkills } from './skills/loader.js';
+import { SkillRegistry } from './skills/loader.js';
 import {
   startAgentGrpcServer,
   type AgentGrpcServer,
@@ -21,7 +22,10 @@ const logger = createAgentLogger(config.logLevel);
 const dbBundle = createDatabaseBundle(config.dbDsn, config.poolMax);
 const eventBus = createEventBus(config.redisUrl, logger);
 const prompts = new PromptRegistry(config.langfuse, logger);
-const skills = await loadDeclarativeSkills();
+const skills = new SkillRegistry();
+await skills.reload();
+const pipelines = new PipelineRegistry();
+await pipelines.reload();
 
 const agentTeam = await createMastraRuntime({
   storage: dbBundle.mastraStore,
@@ -31,6 +35,8 @@ const agentTeam = await createMastraRuntime({
     defaultModel: config.defaultModel,
   },
   prompts,
+  skills,
+  pipelines,
   logger,
 });
 
@@ -104,7 +110,8 @@ try {
     {
       http: healthServer.address,
       grpc: grpcServer.address,
-      skills: skills.map((s) => s.name),
+      skills: skills.list().map((s) => s.name),
+      pipelines: pipelines.list().map((p) => p.id),
       langfuseEnabled: Boolean(config.langfuse),
       redisEnabled: Boolean(config.redisUrl),
     },

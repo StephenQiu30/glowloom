@@ -52,13 +52,15 @@ func TestInternalMCPAndGatewayEndpoints(t *testing.T) {
 		t.Fatalf("expected 401 for unauthenticated MCP, got %d", unauthRec.Code)
 	}
 
-	// 2. MCP tools/list succeeds with valid identity.
+	// 2. MCP tools/list succeeds with valid identity and standard Streamable HTTP Accept header.
 	listReq := httptest.NewRequest(stdhttp.MethodPost, "/internal/agent-mcp", bytes.NewBufferString(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
 	listReq.Header.Set("Authorization", "Bearer "+token)
 	listReq.Header.Set("X-Agent-Audience", "agent-business")
+	listReq.Header.Set("Content-Type", "application/json")
+	listReq.Header.Set("Accept", "application/json, text/event-stream")
 	listRec := httptest.NewRecorder()
 	router.ServeHTTP(listRec, listReq)
-	if listRec.Code != stdhttp.StatusOK || !strings.Contains(listRec.Body.String(), "read_project_script") {
+	if listRec.Code != stdhttp.StatusOK || !strings.Contains(listRec.Body.String(), "read_project_script") || !strings.Contains(listRec.Body.String(), `"readOnlyHint":true`) {
 		t.Fatalf("unexpected MCP tools/list response: %d %s", listRec.Code, listRec.Body.String())
 	}
 
@@ -67,6 +69,8 @@ func TestInternalMCPAndGatewayEndpoints(t *testing.T) {
 	callReq := httptest.NewRequest(stdhttp.MethodPost, "/internal/agent-mcp", bytes.NewBufferString(`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"read_project_script","arguments":{"episode":1}}}`))
 	callReq.Header.Set("Authorization", "Bearer "+token)
 	callReq.Header.Set("X-Agent-Audience", "agent-business")
+	callReq.Header.Set("Content-Type", "application/json")
+	callReq.Header.Set("Accept", "application/json, text/event-stream")
 	callReq.Header.Set("X-Glowloom-Actor-Id", actorID.String())
 	callReq.Header.Set("X-Glowloom-Org-Id", orgID.String())
 	callReq.Header.Set("X-Glowloom-Scope-Id", scopeID.String())

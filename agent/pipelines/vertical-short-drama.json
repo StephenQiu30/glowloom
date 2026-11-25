@@ -1,0 +1,66 @@
+{
+  "id": "vertical-short-drama",
+  "version": "1.0.0",
+  "description": "9:16 vertical AI anime/comic short-drama declarative pipeline (Toonflow 3-tier + BeefTV 2x2 grid consistency)",
+  "defaultAspectRatio": "9:16",
+  "stages": [
+    {
+      "id": "extract-event-graph",
+      "name": "Chapter Event Graph Extraction",
+      "role": "scriptwriter",
+      "skill": "novel-to-event-graph"
+    },
+    {
+      "id": "write-and-review-script",
+      "name": "Vertical Episode Script & Continuity Review",
+      "role": "scriptwriter",
+      "skill": "vertical-short-drama-script",
+      "reviewer": "continuity_reviewer",
+      "maxReviewRounds": 2
+    },
+    {
+      "id": "lock-character-assets",
+      "name": "Character Turnaround Sheets & Subject/Voice Lock",
+      "role": "asset_director",
+      "skill": "character-turnaround-sheet",
+      "approvalGate": {
+        "required": true,
+        "stageKey": "assets_turnaround",
+        "quoteTool": "media_estimate_quote",
+        "summary": "Approve quote to generate character turnaround sheets and lock subject_id/voice_id"
+      }
+    },
+    {
+      "id": "generate-storyboard-grid",
+      "name": "2x2 Grid Storyboard & Canvas Split",
+      "role": "production",
+      "skill": "grid-2x2-storyboard",
+      "reviewer": "continuity_reviewer",
+      "maxReviewRounds": 2,
+      "approvalGate": {
+        "required": true,
+        "stageKey": "storyboard_grid_2x2",
+        "quoteTool": "media_estimate_quote",
+        "summary": "Approve quote to generate 2x2 grid storyboard and split/upscale to infinite canvas"
+      }
+    },
+    {
+      "id": "render-video-and-audio",
+      "name": "I2V Motion, Character TTS & Selective Close-Up LipSync",
+      "role": "production",
+      "skill": "i2v-motion-prompting",
+      "approvalGate": {
+        "required": true,
+        "stageKey": "video_i2v_audio",
+        "quoteTool": "media_estimate_quote",
+        "summary": "Approve quote to render I2V shots, character voice_id TTS, and selective close-up LipSync"
+      }
+    },
+    {
+      "id": "assemble-timeline-export",
+      "name": "Assemble Adopted Takes & Timeline Export",
+      "role": "production",
+      "skill": "i2v-motion-prompting"
+    }
+  ]
+}
