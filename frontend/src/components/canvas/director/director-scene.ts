@@ -2,17 +2,17 @@ import {
   directorViewLayout,
   directorViewPoint,
   type DirectorViewRect,
-} from "@glowloom/canvas/editor/director/director-view-layout.ts";
-import { directorGroundPosition } from "@glowloom/canvas/editor/director/director-ground.ts";
+} from "@/components/canvas-editor/director/director-view-layout.ts";
+import { directorGroundPosition } from "@/components/canvas-editor/director/director-ground.ts";
 import {
   directorNameLabel,
   directorPathHelpers,
   directorHeightReference,
-} from "@glowloom/canvas/editor/director/director-view-helpers.ts";
+} from "@/components/canvas-editor/director/director-view-helpers.ts";
 import {
   encodeDirectorVideo,
   type DirectorVideoOptions,
-} from "@glowloom/canvas/editor/director/director-video-output.ts";
+} from "@/components/canvas-editor/director/director-video-output.ts";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
@@ -21,11 +21,11 @@ import {
   DirectorModelMotion,
   directorModelInfo,
   type DirectorModelInfo,
-} from "@glowloom/canvas/editor/director/director-motion.ts";
+} from "@/components/canvas-editor/director/director-motion.ts";
 import {
   sampleDirectorTransform,
   sampleDirectorCamera,
-} from "@glowloom/canvas/editor/director/director-animation.ts";
+} from "@/components/canvas-editor/director/director-animation.ts";
 import {
   directorEntity,
   directorKey,
@@ -33,12 +33,12 @@ import {
   type DirectorObject,
   type DirectorSelection,
   type DirectorTransform,
-} from "@glowloom/canvas/editor/director/director-model.ts";
+} from "@/components/canvas-editor/director/director-model.ts";
 import {
   createDirectorTransaction,
   installDirectorTerminalListeners,
   type DirectorTransaction,
-} from "@glowloom/canvas/editor/director/director-gesture.ts";
+} from "@/components/canvas-editor/director/director-gesture.ts";
 export type DirectorTool = "select" | "translate" | "rotate" | "scale";
 const tuple = (v: number[]) => v as [number, number, number];
 export function applyDirectorTransform(

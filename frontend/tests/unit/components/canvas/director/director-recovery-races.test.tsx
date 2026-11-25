@@ -3,7 +3,7 @@ import { webcrypto } from "node:crypto";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { CanvasYjsLiveSession } from "@/components/canvas/yjs-live-session";
-import { emptyDirectorConfig } from "@glowloom/canvas/editor/director/director-model.ts";
+import { emptyDirectorConfig } from "@/components/canvas-editor/director/director-model.ts";
 import { useDirectorRecovery } from "@/components/canvas/director/director-recovery";
 const api = vi.hoisted(() => ({
   read: vi.fn(),

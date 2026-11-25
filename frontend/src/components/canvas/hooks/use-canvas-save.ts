@@ -8,7 +8,7 @@ import {
 } from "../lib/canvas-collaboration-controller";
 import type { CanvasScope } from "./use-canvas-document";
 import type { RecoveryField } from "@glowloom/canvas/recovery";
-import { useCanvasLeaveGuard } from "@glowloom/canvas/editor/hooks/use-canvas-leave-guard.ts";
+import { useCanvasLeaveGuard } from "@/components/canvas-editor/hooks/use-canvas-leave-guard.ts";
 
 /** React subscribes to one Yjs session; it never owns another graph save queue. */
 export function useCanvasSave(options: {

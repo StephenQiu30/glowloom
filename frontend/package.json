@@ -79,8 +79,6 @@
     "api:schema": "go -C ../backend run github.com/swaggo/swag/cmd/swag@v1.16.6 init -g internal/app/public_api.go --parseInternal --parseDependency --tags '!business' -ot json -o ../frontend/node_modules/.cache/openapi",
     "api:generate": "pnpm run api:schema && openapi2ts && prettier --write src/api",
     "api:check": "vitest run tests/unit/api-generation.test.ts",
-    "canvas:typecheck": "tsc -p ../canvas/tsconfig.editor.json --noEmit",
-    "canvas:browser": "vite --config tests/browser/canvas.vite.config.ts",
-    "canvas:lint": "cd .. && eslint --config frontend/eslint.config.mjs canvas/editor"
+    "canvas:browser": "vite --config tests/browser/canvas.vite.config.ts"
   }
 }

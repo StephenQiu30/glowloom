@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createServer } from "vite";
 import { expect, it } from "vitest";
-import { canvasHostAliases } from "../../canvas-host";
+import { canvasHostAliases } from "../browser/canvas-host";
 
 const fixtures = path.resolve(import.meta.dirname, "../browser");
 
@@ -24,17 +24,12 @@ it("所有浏览器夹具都能解析同一宿主组件和编辑器公共元数�
     });
     try {
       const plugins = server.environments.client.pluginContainer;
-      const toolbar = await plugins.resolveId(
-        "@glowloom/canvas-host/components/ui/toolbar",
-      );
+      const toolbar = await plugins.resolveId("@/components/ui/toolbar");
       expect(toolbar?.id, config).toBe(
-        path.join(
-          canvasHostAliases["@glowloom/canvas-host"],
-          "components/ui/toolbar.tsx",
-        ),
+        path.join(canvasHostAliases["@"], "components/ui/toolbar.tsx"),
       );
       const metadata = await plugins.resolveId(
-        "@glowloom/canvas-host-public/director/catalog/manifest.json",
+        "@public/director/catalog/manifest.json",
       );
       expect(metadata?.id, config).toMatch(/^\0canvas-host-public-json:/);
       const loaded = await plugins.load(metadata!.id);

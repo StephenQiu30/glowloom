@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, it } from "vitest";
-import assets from "@glowloom/canvas/editor/cinema-kit/preview-assets.json";
-import { cinemaCatalog } from "@glowloom/canvas/editor/cinema-kit/cinema-kit-model.ts";
+import assets from "@/components/canvas-editor/cinema-kit/preview-assets.json";
+import { cinemaCatalog } from "@/components/canvas-editor/cinema-kit/cinema-kit-model.ts";
 
 it("ships a complete, nonempty local preset library with matching content hashes", () => {
   for (const [kind, names] of [

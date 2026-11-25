@@ -3,11 +3,11 @@ import { afterEach, expect, it, vi } from "vitest";
 import {
   DirectorAssetLibrary,
   type DirectorAssetLibraryProps,
-} from "@glowloom/canvas/editor/director/director-asset-library.tsx";
-vi.mock("@glowloom/canvas/editor/director/director-project-assets.tsx", () => ({
+} from "@/components/canvas-editor/director/director-asset-library.tsx";
+vi.mock("@/components/canvas-editor/director/director-project-assets.tsx", () => ({
   DirectorProjectAssets: () => <p>项目素材列表</p>,
 }));
-vi.mock("@glowloom/canvas/editor/director/director-asset-preview.tsx", () => ({
+vi.mock("@/components/canvas-editor/director/director-asset-preview.tsx", () => ({
   DirectorAssetPreview: ({ name }: { name: string }) => (
     <span role="img" aria-label={name} />
   ),

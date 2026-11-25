@@ -1,5 +1,5 @@
 import { createPreviewStorage } from "./preview-storage";
-import { canvasId as nanoid } from "@glowloom/canvas/editor/lib/canvas-id.ts";
+import { canvasId as nanoid } from "@/components/canvas-editor/lib/canvas-id.ts";
 
 export type UploadedFile = {
   url: string;

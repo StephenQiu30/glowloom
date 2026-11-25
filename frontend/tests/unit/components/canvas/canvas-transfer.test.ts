@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from "vitest";
-import { createCanvasNode } from "@glowloom/canvas/editor/lib/canvas-node-factory.ts";
+import { createCanvasNode } from "@/components/canvas-editor/lib/canvas-node-factory.ts";
 import {
   beginCanvasTransfer,
   clearCanvasTransfer,

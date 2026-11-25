@@ -1,9 +1,9 @@
 import type { AiConfig } from "@/components/canvas/runtime/store/use-config-store";
-import type { ReferenceImage } from "@glowloom/canvas/editor/runtime/types/image.ts";
+import type { ReferenceImage } from "@/components/canvas-editor/runtime/types/image.ts";
 import type {
   ReferenceAudio,
   ReferenceVideo,
-} from "@glowloom/canvas/editor/runtime/types/media.ts";
+} from "@/components/canvas-editor/runtime/types/media.ts";
 import {
   uploadMediaFile,
   type UploadedFile,

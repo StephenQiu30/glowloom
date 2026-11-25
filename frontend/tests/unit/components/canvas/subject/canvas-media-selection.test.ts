@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
-import { isCanvasMediaCandidate } from "@glowloom/canvas/editor/lib/canvas-media-selection.ts";
-import type { CanvasNodeData } from "@glowloom/canvas/editor/types/canvas.ts";
+import { isCanvasMediaCandidate } from "@/components/canvas-editor/lib/canvas-media-selection.ts";
+import type { CanvasNodeData } from "@/components/canvas-editor/types/canvas.ts";
 const node = {
   id: "image-node",
   type: "image",

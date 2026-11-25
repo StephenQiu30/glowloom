@@ -3,7 +3,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import {
   CanvasConnectionState,
   canvasConnectionMessage,
-} from "@glowloom/canvas/editor/connection-state.tsx";
+} from "@/components/canvas-editor/connection-state.tsx";
 
 const notice = vi.hoisted(() => ({ error: vi.fn(), dismiss: vi.fn() }));
 vi.mock("@/components/feedback/notification", () => ({ toast: notice }));

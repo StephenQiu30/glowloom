@@ -1,12 +1,12 @@
 import { expect, it } from "vitest";
-import { createDirectorActor } from "@glowloom/canvas/editor/director/director-assets.ts";
+import { createDirectorActor } from "@/components/canvas-editor/director/director-assets.ts";
 import {
   actorPathFrames,
   customCameraPathFrames,
   cameraMotionFrames,
   mergeDirectorPath,
-} from "@glowloom/canvas/editor/director/director-paths.ts";
-import { emptyDirectorConfig } from "@glowloom/canvas/editor/director/director-model.ts";
+} from "@/components/canvas-editor/director/director-paths.ts";
+import { emptyDirectorConfig } from "@/components/canvas-editor/director/director-model.ts";
 it("starts a drawn path at the actor and distributes time by traveled distance", () => {
   const actor = createDirectorActor("male_standard");
   actor.transform.position = [3, 0, 5];

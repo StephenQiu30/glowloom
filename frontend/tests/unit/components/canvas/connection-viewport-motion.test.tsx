@@ -1,7 +1,7 @@
 import { createRef } from "react";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { InfiniteCanvas } from "@glowloom/canvas/editor/editor/infinite-canvas.tsx";
+import { InfiniteCanvas } from "@/components/canvas-editor/editor/infinite-canvas.tsx";
 vi.mock("@/components/canvas/runtime/store/use-theme-store", () => ({
   useThemeStore: (select: (state: { theme: string }) => unknown) =>
     select({ theme: "dark" }),

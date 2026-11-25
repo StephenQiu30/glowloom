@@ -3,12 +3,12 @@ import {
   sampleDirectorTransform,
   sampleDirectorCamera,
   keyDirectorCamera,
-} from "@glowloom/canvas/editor/director/director-animation.ts";
+} from "@/components/canvas-editor/director/director-animation.ts";
 import {
   directorTransform,
   emptyDirectorConfig,
   editDirector,
-} from "@glowloom/canvas/editor/director/director-model.ts";
+} from "@/components/canvas-editor/director/director-model.ts";
 it("does not let rotation keys pause or overwrite a position track", () => {
   const base = directorTransform();
   const frames = [

@@ -9,7 +9,7 @@ import { Slider } from "@/components/ui/slider";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ArrowLeftRight } from "lucide-react";
 
-import { type CanvasTheme } from "@glowloom/canvas/editor/runtime/lib/theme.ts";
+import { type CanvasTheme } from "@/components/canvas-editor/runtime/lib/theme.ts";
 import {
   clampVideoSeconds,
   computeVideoSize,

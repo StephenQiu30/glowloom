@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Keyboard, Moon, Puzzle, Sun } from "lucide-react";
 import type { CSSProperties } from "react";
 
-import { canvasThemes } from "@glowloom/canvas/editor/runtime/lib/theme.ts";
+import { canvasThemes } from "@/components/canvas-editor/runtime/lib/theme.ts";
 import { useThemeStore } from "@/components/canvas/runtime/store/use-theme-store";
 
 type AppToolbarActionsProps = {

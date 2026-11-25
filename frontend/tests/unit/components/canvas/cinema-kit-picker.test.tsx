@@ -2,11 +2,11 @@ import { within } from "@testing-library/react";
 import { render, findFeedback } from "../../../feedback";
 import { afterEach, it, expect, vi } from "vitest";
 import { cleanup, screen, fireEvent, waitFor } from "@testing-library/react";
-import { CinemaKitPicker } from "@glowloom/canvas/editor/cinema-kit/cinema-kit-picker.tsx";
-import { ConnectionCreateMenu } from "@glowloom/canvas/editor/controls/canvas-create-menus.tsx";
-import { makeCinemaNode } from "@glowloom/canvas/editor/cinema-kit/cinema-kit-graph.ts";
-import { cameraDefault } from "@glowloom/canvas/editor/cinema-kit/cinema-kit-model.ts";
-import { registerBuiltinNodes } from "@glowloom/canvas/editor/nodes/builtin-nodes.tsx";
+import { CinemaKitPicker } from "@/components/canvas-editor/cinema-kit/cinema-kit-picker.tsx";
+import { ConnectionCreateMenu } from "@/components/canvas-editor/controls/canvas-create-menus.tsx";
+import { makeCinemaNode } from "@/components/canvas-editor/cinema-kit/cinema-kit-graph.ts";
+import { cameraDefault } from "@/components/canvas-editor/cinema-kit/cinema-kit-model.ts";
+import { registerBuiltinNodes } from "@/components/canvas-editor/nodes/builtin-nodes.tsx";
 registerBuiltinNodes();
 afterEach(async () => {
   cleanup();

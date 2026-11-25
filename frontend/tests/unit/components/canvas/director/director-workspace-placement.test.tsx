@@ -9,15 +9,15 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ComponentProps } from "react";
-import { CanvasDirectorWorkspace } from "@glowloom/canvas/editor/director/canvas-director-workspace.tsx";
-import { emptyDirectorConfig } from "@glowloom/canvas/editor/director/director-model.ts";
+import { CanvasDirectorWorkspace } from "@/components/canvas-editor/director/canvas-director-workspace.tsx";
+import { emptyDirectorConfig } from "@/components/canvas-editor/director/director-model.ts";
 import {
   activeDirectorScene,
   migrateDirectorDocument,
   switchDirectorWorkspace,
-} from "@glowloom/canvas/editor/director/director-workspaces.ts";
-import type { DirectorImportDialogProps } from "@glowloom/canvas/editor/director/director-import-dialog.tsx";
-import type { DirectorViewport } from "@glowloom/canvas/editor/director/director-viewport.tsx";
+} from "@/components/canvas-editor/director/director-workspaces.ts";
+import type { DirectorImportDialogProps } from "@/components/canvas-editor/director/director-import-dialog.tsx";
+import type { DirectorViewport } from "@/components/canvas-editor/director/director-viewport.tsx";
 import type { ProjectAssetDialog } from "@/components/media/project-asset-dialog";
 
 const captured = vi.hoisted(() => ({
@@ -32,7 +32,7 @@ vi.mock("@/api/canvases", () => ({
   saveDirectorRecovery: vi.fn().mockResolvedValue({ revision: 1 }),
   deleteDirectorRecovery: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock("@glowloom/canvas/editor/director/director-project-assets.tsx", () => ({
+vi.mock("@/components/canvas-editor/director/director-project-assets.tsx", () => ({
   DirectorProjectAssets: () => null,
 }));
 vi.mock("next/dynamic", () => ({
@@ -41,24 +41,24 @@ vi.mock("next/dynamic", () => ({
     return <div data-testid="asset-picker" />;
   },
 }));
-vi.mock("@glowloom/canvas/editor/director/director-viewport.tsx", () => ({
+vi.mock("@/components/canvas-editor/director/director-viewport.tsx", () => ({
   DirectorViewport: (props: ComponentProps<typeof DirectorViewport>) => {
     captured.viewport = props;
     return null;
   },
 }));
-vi.mock("@glowloom/canvas/editor/director/director-import-dialog.tsx", () => ({
+vi.mock("@/components/canvas-editor/director/director-import-dialog.tsx", () => ({
   DirectorImportDialog: (props: DirectorImportDialogProps) => {
     captured.importer = props;
     return <div data-testid="local-import" />;
   },
 }));
-vi.mock("@glowloom/canvas/editor/director/director-capture.tsx", () => ({
+vi.mock("@/components/canvas-editor/director/director-capture.tsx", () => ({
   DirectorCapture: () => null,
   DirectorGallery: () => null,
 }));
 vi.mock(
-  "@glowloom/canvas/editor/director/director-view-preferences.ts",
+  "@/components/canvas-editor/director/director-view-preferences.ts",
   () => ({
     directorHelpSeen: () => true,
     markDirectorHelpSeen: () => {},

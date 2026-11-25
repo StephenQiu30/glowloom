@@ -10,8 +10,8 @@ const root = resolve(import.meta.dirname, "../../..");
 
 describe("Canvas 编辑器源码包", () => {
   it("前端从 Canvas 包解析唯一编辑器与样式", () => {
-    const editor = require.resolve("@glowloom/canvas/editor");
-    const css = require.resolve("@glowloom/canvas/editor/canvas.css");
+    const editor = require.resolve("@/components/canvas-editor/editor/canvas-editor.tsx");
+    const css = require.resolve("@/components/canvas-editor/canvas.css");
     expect(readFileSync(editor, "utf8")).toContain("function CanvasPage");
     expect(readFileSync(css, "utf8")).toContain("canvas-controls-layout");
     expect(
@@ -39,7 +39,7 @@ describe("Canvas 编辑器源码包", () => {
 
   it("编辑器与宿主复用 React、Tiptap、ProseMirror 和 Yjs 实例", () => {
     const editorRequire = createRequire(
-      require.resolve("@glowloom/canvas/editor"),
+      require.resolve("@/components/canvas-editor/editor/canvas-editor.tsx"),
     );
     for (const dependency of [
       "react",
@@ -56,7 +56,7 @@ describe("Canvas 编辑器源码包", () => {
 
   it("浏览器源码只通过宿主边界接入应用，不能导入页面或服务端入口", () => {
     const editorRoot = resolve(
-      dirname(require.resolve("@glowloom/canvas/editor")),
+      dirname(require.resolve("@/components/canvas-editor/editor/canvas-editor.tsx")),
       "..",
     );
     const manifest = JSON.parse(
@@ -114,14 +114,14 @@ describe("Canvas 编辑器源码包", () => {
             );
             expect(path.startsWith("..") || isAbsolute(path), file).toBe(false);
           }
-          if (specifier.startsWith("@glowloom/canvas-host/")) {
+          if (specifier.startsWith("@/")) {
             expect(specifier, file).not.toMatch(
               /canvas-host\/(?:app|server)\//,
             );
           }
           if (
             specifier.startsWith("@glowloom/canvas/") &&
-            !specifier.startsWith("@glowloom/canvas/editor/")
+            !specifier.startsWith("@/components/canvas-editor/")
           ) {
             expect(specifier, file).toMatch(
               /\/(?:model|rich-text|service-document|session|wire|journal|recovery)$/,

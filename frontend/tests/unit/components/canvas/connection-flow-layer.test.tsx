@@ -5,7 +5,7 @@ import {
   ConnectionFlowLayer,
   ConnectionFlowProvider,
   useConnectionFlow,
-} from "@glowloom/canvas/editor/connections/connection-flow-layer.tsx";
+} from "@/components/canvas-editor/connections/connection-flow-layer.tsx";
 
 const surface = vi.hoisted(() => ({
   upload: vi.fn(),
@@ -14,7 +14,7 @@ const surface = vi.hoisted(() => ({
   dispose: vi.fn(),
 }));
 vi.mock(
-  "@glowloom/canvas/editor/connections/connection-flow-surface.ts",
+  "@/components/canvas-editor/connections/connection-flow-surface.ts",
   () => ({
     createConnectionFlowSurface: () => surface,
   }),

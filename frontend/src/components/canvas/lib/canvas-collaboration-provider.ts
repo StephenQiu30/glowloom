@@ -15,7 +15,7 @@ import {
   createCanvasDocument,
   readCanvasDocument,
 } from "@glowloom/canvas/model";
-import { canvasConnectionContract as contract } from "@glowloom/canvas/editor/constants/canvas-connection.ts";
+import { canvasConnectionContract as contract } from "@/components/canvas-editor/constants/canvas-connection.ts";
 
 export type CollaborationConnectionStatus =
   | "connecting"

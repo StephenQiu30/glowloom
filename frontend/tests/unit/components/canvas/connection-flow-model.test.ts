@@ -3,7 +3,7 @@ import {
   connectionFlowMesh,
   connectionFlowTexture,
   connectionFlowWindow,
-} from "@glowloom/canvas/editor/connections/connection-flow-model.ts";
+} from "@/components/canvas-editor/connections/connection-flow-model.ts";
 
 it("uses a shared 2600 ms phase and a length-dependent sweep with an exit gap", () => {
   const middle = connectionFlowWindow(400, 1300);

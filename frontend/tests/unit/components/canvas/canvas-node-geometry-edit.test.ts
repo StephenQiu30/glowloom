@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resizeCanvasNode } from "@glowloom/canvas/editor/lib/canvas-node-resize.ts";
+import { resizeCanvasNode } from "@/components/canvas-editor/lib/canvas-node-resize.ts";
 
 const rect = { x: 40, y: 60, width: 320, height: 200 };
 describe("节点八方向调整", () => {

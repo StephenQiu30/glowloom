@@ -3,15 +3,15 @@ import {
   DirectorScene,
   loadDirectorGLB,
 } from "../../src/components/canvas/director/director-scene";
-import { emptyDirectorConfig } from "@glowloom/canvas/editor/director/director-model.ts";
+import { emptyDirectorConfig } from "@/components/canvas-editor/director/director-model.ts";
 import {
   createDirectorActor,
   DIRECTOR_ACTORS,
-} from "@glowloom/canvas/editor/director/director-assets.ts";
-import { reshapeDirectorQuaterniusActor } from "@glowloom/canvas/editor/director/director-actor-body.ts";
-import { actorPathFrames } from "@glowloom/canvas/editor/director/director-paths.ts";
-import { freezeDirectorScene } from "@glowloom/canvas/editor/director/director-workspaces.ts";
-import type { DirectorVideoOptions } from "@glowloom/canvas/editor/director/director-video-output.ts";
+} from "@/components/canvas-editor/director/director-assets.ts";
+import { reshapeDirectorQuaterniusActor } from "@/components/canvas-editor/director/director-actor-body.ts";
+import { actorPathFrames } from "@/components/canvas-editor/director/director-paths.ts";
+import { freezeDirectorScene } from "@/components/canvas-editor/director/director-workspaces.ts";
+import type { DirectorVideoOptions } from "@/components/canvas-editor/director/director-video-output.ts";
 const host = document.createElement("div");
 host.style.cssText = "position:fixed;inset:0;background:#171717";
 document.body.append(host);

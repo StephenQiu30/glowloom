@@ -2,7 +2,7 @@ import { render } from "../../../../feedback";
 import {
   activeDirectorScene,
   migrateDirectorDocument,
-} from "@glowloom/canvas/editor/director/director-workspaces.ts";
+} from "@/components/canvas-editor/director/director-workspaces.ts";
 import { createElement, type ImgHTMLAttributes } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
@@ -10,11 +10,11 @@ import {
   DirectorCapture,
   DirectorGallery,
   bindDirectorCapture,
-} from "@glowloom/canvas/editor/director/director-capture.tsx";
+} from "@/components/canvas-editor/director/director-capture.tsx";
 import {
   emptyDirectorConfig,
   type Director,
-} from "@glowloom/canvas/editor/director/director-model.ts";
+} from "@/components/canvas-editor/director/director-model.ts";
 import type { CanvasYjsLiveSession } from "@/components/canvas/yjs-live-session";
 const api = vi.hoisted(() => ({
   downloadMediaOriginal: vi.fn(),

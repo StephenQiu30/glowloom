@@ -8,10 +8,10 @@ import {
 } from "@testing-library/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "next-themes";
-import { CanvasToolbar } from "@glowloom/canvas/editor/controls/canvas-toolbar.tsx";
-import { CanvasZoomControls } from "@glowloom/canvas/editor/controls/canvas-zoom-controls.tsx";
+import { CanvasToolbar } from "@/components/canvas-editor/controls/canvas-toolbar.tsx";
+import { CanvasZoomControls } from "@/components/canvas-editor/controls/canvas-zoom-controls.tsx";
 
-vi.mock("@glowloom/canvas/editor/lib/node-registry.ts", () => ({
+vi.mock("@/components/canvas-editor/lib/node-registry.ts", () => ({
   useNodeRegistryVersion: () => 0,
   listNodeDefinitions: () => [
     { type: "text", title: "文本" },

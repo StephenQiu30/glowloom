@@ -19,7 +19,7 @@ import {
   type WorkspaceResourceTarget,
   resourceTarget,
   resourceKey,
-} from "@glowloom/canvas/editor/lib/workspace-resources.ts";
+} from "@/components/canvas-editor/lib/workspace-resources.ts";
 import { WorkspaceCardSkeleton } from "@/components/canvas/runtime/components/feedback/workspace-card-skeleton";
 import { ListPagination } from "@/components/canvas/runtime/components/layout/workspace/list-pagination";
 import { Tabs, TabsTrigger, TabsContent } from "@/components/ui/tabs";

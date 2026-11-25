@@ -1,37 +1,33 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { Alias } from "vite";
-import { canvasHostAliases } from "../../canvas-host";
 
-export { canvasHostAliases };
+const frontendRoot = path.resolve(import.meta.dirname, "../..");
+const srcRoot = path.join(frontendRoot, "src");
+const publicRoot = path.join(frontendRoot, "public");
+
+export const canvasHostAliases = {
+  "@": srcRoot,
+  "@public": publicRoot,
+};
 
 export function canvasFixtureCache(name: string) {
   return path.resolve(
-    import.meta.dirname,
-    "../../node_modules/.cache/browser-fixtures",
+    frontendRoot,
+    "node_modules/.cache/browser-fixtures",
     name,
   );
 }
 
-/** Apply fixture overrides to both application and editor host imports. */
+/** Apply fixture overrides to frontend application and canvas editor imports. */
 export function canvasFixtureAliases(aliases: Alias[]) {
   return [
-    ...aliases.flatMap((alias) =>
-      typeof alias.find === "string" && alias.find.startsWith("@/")
-        ? [
-            { ...alias, find: "@glowloom/canvas-host/" + alias.find.slice(2) },
-            alias,
-          ]
-        : [alias],
-    ),
-    ...Object.entries(canvasHostAliases).map(([find, replacement]) => ({
-      find,
-      replacement,
-    })),
+    ...aliases,
+    { find: "@public", replacement: publicRoot },
+    { find: "@", replacement: srcRoot },
   ];
 }
 
-// Linked browser sources must use Vite's CJS conversion for the Redux bridge.
 export const canvasFixtureOptimizeDeps = {
   exclude: [
     "@glowloom/canvas",
@@ -45,10 +41,10 @@ export const canvasFixtureOptimizeDeps = {
   ],
   include: [
     "react-redux",
-    "@glowloom/canvas > swr",
+    "swr",
     "swr/infinite",
-    "@glowloom/canvas > file-saver",
-    "@glowloom/canvas > cn",
+    "file-saver",
+    "cn",
     "@tiptap/react > use-sync-external-store/shim/index.js",
     "@tiptap/react > use-sync-external-store/shim/with-selector.js",
   ],
@@ -56,17 +52,13 @@ export const canvasFixtureOptimizeDeps = {
 
 /** Keep public JSON metadata in its existing single source, as Next.js does. */
 export function canvasHostPublicJson() {
-  const publicRoot = canvasHostAliases["@glowloom/canvas-host-public"];
   const prefix = "\0canvas-host-public-json:";
   return {
     name: "canvas-host-public-json",
     enforce: "pre" as const,
     resolveId(source: string) {
-      const file = source.startsWith("@glowloom/canvas-host-public/")
-        ? path.resolve(
-            publicRoot,
-            source.slice("@glowloom/canvas-host-public/".length),
-          )
+      const file = source.startsWith("@public/")
+        ? path.resolve(publicRoot, source.slice("@public/".length))
         : source;
       if (!path.isAbsolute(file) || !file.endsWith(".json")) return;
       const relative = path.relative(publicRoot, file);

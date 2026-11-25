@@ -34,14 +34,14 @@ import {
   type CollaborationBinding,
   type CollaborationConnectionStatus,
 } from "./canvas-collaboration-provider";
-import { claimCanvasJournal } from "@glowloom/canvas/editor/lib/canvas-journal-lease.ts";
-import { fromCanvasGraph } from "@glowloom/canvas/editor/lib/canvas-document-adapter.ts";
-import { canvasGraphFingerprint } from "@glowloom/canvas/editor/lib/canvas-json.ts";
+import { claimCanvasJournal } from "@/components/canvas-editor/lib/canvas-journal-lease.ts";
+import { fromCanvasGraph } from "@/components/canvas-editor/lib/canvas-document-adapter.ts";
+import { canvasGraphFingerprint } from "@/components/canvas-editor/lib/canvas-json.ts";
 import type { CanvasScope } from "../hooks/use-canvas-document";
 import type {
   CanvasPendingForms,
   CanvasLocalPersistence,
-} from "@glowloom/canvas/editor/types/canvas-recovery.ts";
+} from "@/components/canvas-editor/types/canvas-recovery.ts";
 
 type Graph = CanvasContract.CanvasDocumentGraphDTO;
 export type CanvasYjsRecovery = RecoveryRecord<Graph>;

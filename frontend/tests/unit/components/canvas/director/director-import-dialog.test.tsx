@@ -10,14 +10,14 @@ import {
 import {
   DirectorImportDialog,
   type DirectorImportDialogProps,
-} from "@glowloom/canvas/editor/director/director-import-dialog.tsx";
+} from "@/components/canvas-editor/director/director-import-dialog.tsx";
 
 const mocks = vi.hoisted(() => ({
   uploadMediaAsset: vi.fn(),
   convertDirectorModel: vi.fn(),
 }));
 vi.mock("@/api/media", () => ({ uploadMediaAsset: mocks.uploadMediaAsset }));
-vi.mock("@glowloom/canvas/editor/director/director-model-import.ts", () => ({
+vi.mock("@/components/canvas-editor/director/director-model-import.ts", () => ({
   DIRECTOR_MODEL_ACCEPT: ".glb,.gltf,.fbx,.obj",
   convertDirectorModel: mocks.convertDirectorModel,
 }));

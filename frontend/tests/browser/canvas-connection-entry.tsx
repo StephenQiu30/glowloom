@@ -6,8 +6,8 @@ import { TooltipProvider } from "../../src/components/ui/tooltip";
 import { Button } from "../../src/components/ui/button";
 import { Toaster } from "../../src/components/ui/sonner";
 import { CanvasProviders } from "../../src/components/canvas/editor";
-import CanvasPage from "@glowloom/canvas/editor/editor/canvas-editor.tsx";
-import type { CanvasEditorState } from "@glowloom/canvas/editor/lib/canvas-document-adapter.ts";
+import CanvasPage from "@/components/canvas-editor/editor/canvas-editor.tsx";
+import type { CanvasEditorState } from "@/components/canvas-editor/lib/canvas-document-adapter.ts";
 import "../../src/app/globals.css";
 
 const initialState: CanvasEditorState = {

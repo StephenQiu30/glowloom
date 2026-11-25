@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { Box3, BoxGeometry, Group, Mesh, MeshBasicMaterial } from "three";
-import { directorGroundPosition } from "@glowloom/canvas/editor/director/director-ground.ts";
+import { directorGroundPosition } from "@/components/canvas-editor/director/director-ground.ts";
 it("places rotated scaled mesh bounds on the ground without changing its horizontal location", () => {
   const stage = new Group(),
     target = new Mesh(new BoxGeometry(), new MeshBasicMaterial());

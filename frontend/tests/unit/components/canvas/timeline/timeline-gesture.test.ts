@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { timelinePointerDelta } from "@glowloom/canvas/editor/timeline/timeline-gesture.ts";
+import { timelinePointerDelta } from "@/components/canvas-editor/timeline/timeline-gesture.ts";
 describe("canvas-scaled timeline gestures", () => {
   it.each([0.5, 1, 2])(
     "keeps a one-second drag at canvas scale %s",

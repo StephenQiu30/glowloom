@@ -6,8 +6,8 @@ import {
   deleteDirectorRecovery,
 } from "@/api/canvases";
 import type { CanvasYjsLiveSession } from "../yjs-live-session";
-import { directorFingerprint } from "@glowloom/canvas/editor/director/director-model.ts";
-import { validateDirectorDocument } from "@glowloom/canvas/editor/director/director-workspaces.ts";
+import { directorFingerprint } from "@/components/canvas-editor/director/director-model.ts";
+import { validateDirectorDocument } from "@/components/canvas-editor/director/director-workspaces.ts";
 
 export async function directorRecoveryFingerprint(value: unknown) {
   const digest = await crypto.subtle.digest(

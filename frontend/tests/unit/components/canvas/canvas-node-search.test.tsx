@@ -9,9 +9,9 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { CanvasNodeSearch } from "@glowloom/canvas/editor/search/canvas-node-search.tsx";
-import { searchCanvasNodes } from "@glowloom/canvas/editor/search/canvas-node-search-state.ts";
-import type { CanvasNodeData } from "@glowloom/canvas/editor/types/canvas.ts";
+import { CanvasNodeSearch } from "@/components/canvas-editor/search/canvas-node-search.tsx";
+import { searchCanvasNodes } from "@/components/canvas-editor/search/canvas-node-search-state.ts";
+import type { CanvasNodeData } from "@/components/canvas-editor/types/canvas.ts";
 const previewAPI = vi.hoisted(() => ({
   session: "session",
   media: vi.fn(),

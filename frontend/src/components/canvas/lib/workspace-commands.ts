@@ -1,7 +1,7 @@
 import * as projects from "@/components/canvas/runtime/api/personal-workspace-bff";
 import * as canvases from "@/components/canvas/runtime/api/canvas-document-bff";
 import { ApiError, unwrap } from "@/components/canvas/runtime/lib/request";
-import type { WorkspaceResourceTarget } from "@glowloom/canvas/editor/lib/workspace-resources.ts";
+import type { WorkspaceResourceTarget } from "@/components/canvas-editor/lib/workspace-resources.ts";
 import type { ScopedMutator } from "swr";
 import { qualifyCanvasCommand } from "./canvas-command-scope";
 

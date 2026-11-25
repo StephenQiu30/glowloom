@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { acquireTimelineWaveform } from "@glowloom/canvas/editor/timeline/timeline-waveform.ts";
+import { acquireTimelineWaveform } from "@/components/canvas-editor/timeline/timeline-waveform.ts";
 const api = vi.hoisted(() => ({
   source: vi.fn(),
   input: vi.fn(),

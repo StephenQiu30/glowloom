@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   createCanvasNode,
   nextCanvasNodeTitle,
-} from "@glowloom/canvas/editor/lib/canvas-node-factory.ts";
-import type { CanvasNodeData } from "@glowloom/canvas/editor/types/canvas.ts";
+} from "@/components/canvas-editor/lib/canvas-node-factory.ts";
+import type { CanvasNodeData } from "@/components/canvas-editor/types/canvas.ts";
 
 describe("canvas node titles", () => {
   it("uses a two-word name and does not append a number", () => {

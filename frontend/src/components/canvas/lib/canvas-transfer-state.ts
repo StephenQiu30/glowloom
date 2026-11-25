@@ -6,8 +6,8 @@ import {
 import {
   instantiateCanvasClipboard,
   type CanvasClipboard,
-} from "@glowloom/canvas/editor/lib/canvas-clipboard.ts";
-import { canvasGraphFingerprint } from "@glowloom/canvas/editor/lib/canvas-json.ts";
+} from "@/components/canvas-editor/lib/canvas-clipboard.ts";
+import { canvasGraphFingerprint } from "@/components/canvas-editor/lib/canvas-json.ts";
 
 export type CanvasTransferOwner = {
   actorID: string;

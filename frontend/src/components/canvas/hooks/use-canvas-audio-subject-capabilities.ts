@@ -13,10 +13,10 @@ import {
   subscribeContextChange,
 } from "@/lib/request";
 import type { UnifiedSubject } from "@/components/subjects/unified-contracts";
-import type { CanvasNodeData } from "@glowloom/canvas/editor/types/canvas.ts";
-import type { CanvasAudioCatalogIdentity } from "@glowloom/canvas/editor/lib/canvas-audio-connection-capability.ts";
+import type { CanvasNodeData } from "@/components/canvas-editor/types/canvas.ts";
+import type { CanvasAudioCatalogIdentity } from "@/components/canvas-editor/lib/canvas-audio-connection-capability.ts";
 import { requireCanvasSubjectVersion } from "../lib/canvas-subject-source";
-import { subjectConfig } from "@glowloom/canvas/editor/subject/subject-node-state.ts";
+import { subjectConfig } from "@/components/canvas-editor/subject/subject-node-state.ts";
 
 const empty = new Map<string, UnifiedSubject>();
 const contextGeneration = () =>

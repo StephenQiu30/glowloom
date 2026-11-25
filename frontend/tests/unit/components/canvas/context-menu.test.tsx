@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { CanvasNodeContextMenu } from "@glowloom/canvas/editor/controls/canvas-context-menu.tsx";
+import { CanvasNodeContextMenu } from "@/components/canvas-editor/controls/canvas-context-menu.tsx";
 
 function props() {
   return {

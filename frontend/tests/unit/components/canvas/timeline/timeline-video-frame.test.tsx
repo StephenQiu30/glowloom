@@ -7,8 +7,8 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { TimelineThumbnail } from "@glowloom/canvas/editor/timeline/timeline-thumbnail.tsx";
-import { acquireTimelineVideoFrame } from "@glowloom/canvas/editor/timeline/timeline-video-frame.ts";
+import { TimelineThumbnail } from "@/components/canvas-editor/timeline/timeline-thumbnail.tsx";
+import { acquireTimelineVideoFrame } from "@/components/canvas-editor/timeline/timeline-video-frame.ts";
 let videos: HTMLVideoElement[];
 let draw: ReturnType<typeof vi.fn>;
 let revoke: ReturnType<typeof vi.fn>;

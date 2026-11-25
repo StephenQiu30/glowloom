@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import {
   openCanvasPendingJournal,
   type CanvasPendingStore,
-} from "@glowloom/canvas/editor/lib/canvas-yjs-pending-journal.ts";
+} from "@/components/canvas-editor/lib/canvas-yjs-pending-journal.ts";
 import type { RecoveryRecord } from "@glowloom/canvas/session";
 import type { ServiceGraph } from "@glowloom/canvas/service-document";
 

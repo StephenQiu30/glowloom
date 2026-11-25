@@ -1,11 +1,11 @@
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
-import { RichTextContent } from "@glowloom/canvas/editor/runtime/components/editor/rich-text/rich-text-content.tsx";
+import { RichTextContent } from "@/components/canvas-editor/runtime/components/editor/rich-text/rich-text-content.tsx";
 import {
   documentText,
   parseRichTextDocument,
-} from "@glowloom/canvas/editor/runtime/components/editor/lib/rich-text-document.ts";
-import type { RichTextDocument } from "@glowloom/canvas/editor/runtime/components/editor/types/rich-text.ts";
+} from "@/components/canvas-editor/runtime/components/editor/lib/rich-text-document.ts";
+import type { RichTextDocument } from "@/components/canvas-editor/runtime/components/editor/types/rich-text.ts";
 
 afterEach(cleanup);
 it("退出编辑或重开后有序列表保留起始编号和嵌套格式", () => {

@@ -7,7 +7,7 @@ import {
 } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, expect, it } from "vitest";
-import { ConnectionCreateMenu } from "@glowloom/canvas/editor/controls/canvas-create-menus.tsx";
+import { ConnectionCreateMenu } from "@/components/canvas-editor/controls/canvas-create-menus.tsx";
 
 afterEach(cleanup);
 it("returns creation focus to the new node instead of dismissing its composer via the canvas", async () => {

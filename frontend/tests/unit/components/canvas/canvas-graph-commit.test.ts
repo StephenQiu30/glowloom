@@ -1,11 +1,11 @@
-import { admitCanvasConnectionGraph } from "@glowloom/canvas/editor/types/canvas-document-integration.ts";
-import type { CanvasEditorState } from "@glowloom/canvas/editor/lib/canvas-document-adapter.ts";
+import { admitCanvasConnectionGraph } from "@/components/canvas-editor/types/canvas-document-integration.ts";
+import type { CanvasEditorState } from "@/components/canvas-editor/lib/canvas-document-adapter.ts";
 import { expect, it, vi } from "vitest";
-import { commitCanvasGraphResult } from "@glowloom/canvas/editor/lib/canvas-graph-commit.ts";
+import { commitCanvasGraphResult } from "@/components/canvas-editor/lib/canvas-graph-commit.ts";
 import type {
   CanvasNodeData,
   CanvasConnection,
-} from "@glowloom/canvas/editor/types/canvas.ts";
+} from "@/components/canvas-editor/types/canvas.ts";
 
 const node: CanvasNodeData = {
   id: "source",

@@ -2,7 +2,7 @@ import type { RichGeneration } from "@/components/generation/rich-generation";
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { emptyPromptDraft } from "@/components/generation/prompt-document";
-import { CanvasGenerationPanel } from "@glowloom/canvas/editor/nodes/canvas-generation-panel.tsx";
+import { CanvasGenerationPanel } from "@/components/canvas-editor/nodes/canvas-generation-panel.tsx";
 import { serviceGraph } from "@/components/canvas/service-graph";
 import type { CanvasYjsLiveSession } from "@/components/canvas/yjs-live-session";
 const captured = vi.hoisted(() => ({

@@ -10,13 +10,13 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { ComponentProps } from "react";
 import type { ComposerSession } from "@/components/generation/composer-session";
 import type { PromptEditor as PromptEditorType } from "@/components/generation/prompt-editor";
-import { CanvasTextEditor } from "@glowloom/canvas/editor/text-editor.tsx";
+import { CanvasTextEditor } from "@/components/canvas-editor/text-editor.tsx";
 import {
   createNode,
   emptyDocument,
   parseDocument,
-} from "@glowloom/canvas/editor/document.ts";
-import type { CanvasNodeData } from "@glowloom/canvas/editor/types.ts";
+} from "@/components/canvas-editor/document.ts";
+import type { CanvasNodeData } from "@/components/canvas-editor/types.ts";
 const state = vi.hoisted(() => ({ sessions: [] as ComposerSession[] }));
 vi.mock("@/components/generation/prompt-editor", async (importOriginal) => {
   const { PromptEditor } = await importOriginal<{

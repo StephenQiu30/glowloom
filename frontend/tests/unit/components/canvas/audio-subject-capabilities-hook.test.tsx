@@ -1,6 +1,6 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { createCanvasNode } from "@glowloom/canvas/editor/lib/canvas-node-factory.ts";
+import { createCanvasNode } from "@/components/canvas-editor/lib/canvas-node-factory.ts";
 import { useCanvasAudioSubjectCapabilities } from "@/components/canvas/hooks/use-canvas-audio-subject-capabilities";
 const mocks = vi.hoisted(() => ({
   read: vi.fn(),

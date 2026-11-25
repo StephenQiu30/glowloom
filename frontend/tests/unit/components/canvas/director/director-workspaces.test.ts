@@ -3,14 +3,14 @@ import {
   directorTransform,
   editDirector,
   emptyDirectorConfig,
-} from "@glowloom/canvas/editor/director/director-model.ts";
+} from "@/components/canvas-editor/director/director-model.ts";
 import {
   activeDirectorScene,
   migrateDirectorDocument,
   replaceDirectorScene,
   switchDirectorWorkspace,
   validateDirectorDocument,
-} from "@glowloom/canvas/editor/director/director-workspaces.ts";
+} from "@/components/canvas-editor/director/director-workspaces.ts";
 const populated = () =>
   editDirector(emptyDirectorConfig(), { type: "add-object", primitive: "box" });
 describe("independent director workspaces", () => {

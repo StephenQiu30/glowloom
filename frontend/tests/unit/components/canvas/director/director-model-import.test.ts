@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   convertDirectorModel,
   DIRECTOR_MODEL_MAX_BYTES,
-} from "@glowloom/canvas/editor/director/director-model-import.ts";
+} from "@/components/canvas-editor/director/director-model-import.ts";
 
 function file(name: string, content: string | Uint8Array) {
   const bytes =

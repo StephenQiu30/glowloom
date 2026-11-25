@@ -2,7 +2,7 @@ import { createRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { InfiniteCanvas } from "@glowloom/canvas/editor/editor/infinite-canvas.tsx";
+import { InfiniteCanvas } from "@/components/canvas-editor/editor/infinite-canvas.tsx";
 
 vi.mock("@/components/canvas/runtime/store/use-theme-store", () => ({
   useThemeStore: (select: (state: { theme: string }) => unknown) =>

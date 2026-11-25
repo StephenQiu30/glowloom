@@ -9,7 +9,7 @@ const config = {
     ...base.resolve,
     alias: {
       ...base.resolve.alias,
-      "@glowloom/canvas/editor/canvas.css": path.resolve(
+      "@/components/canvas-editor/canvas.css": path.resolve(
         import.meta.dirname,
         "../../../canvas/editor/canvas.css",
       ),

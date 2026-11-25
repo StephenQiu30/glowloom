@@ -5,7 +5,7 @@ import {
   canvasAudioCatalogAcceptsSubjects,
   createCanvasAudioConnectionDraft,
   type CanvasAudioModelCatalog,
-} from "@glowloom/canvas/editor/lib/canvas-audio-connection-capability.ts";
+} from "@/components/canvas-editor/lib/canvas-audio-connection-capability.ts";
 const identity = { projectID: "project", scopeID: "scope" };
 function model(types = ["image", "audio"], id = "one"): API.ModelResponse {
   return {

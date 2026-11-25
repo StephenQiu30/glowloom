@@ -14,8 +14,8 @@ import { emptyPromptDraft } from "@/components/generation/prompt-document";
 import { installDevelopmentTransport } from "@/lib/development-transport";
 import { setCSRFToken, setCreationScope } from "@/lib/request";
 import type { CanvasYjsLiveSession } from "@/components/canvas/yjs-live-session";
-import CanvasPage from "@glowloom/canvas/editor/editor/canvas-editor.tsx";
-import { CanvasGenerationPanel } from "@glowloom/canvas/editor/nodes/canvas-generation-panel.tsx";
+import CanvasPage from "@/components/canvas-editor/editor/canvas-editor.tsx";
+import { CanvasGenerationPanel } from "@/components/canvas-editor/nodes/canvas-generation-panel.tsx";
 import "../../src/app/globals.css";
 
 const id = (n: number) =>

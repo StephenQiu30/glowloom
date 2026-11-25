@@ -1,4 +1,3 @@
-import { canvasHostAliases } from "./canvas-host";
 import path from "node:path";
 
 import react from "@vitejs/plugin-react";
@@ -8,8 +7,8 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      ...canvasHostAliases,
       "@": path.resolve(import.meta.dirname, "src"),
+      "@public": path.resolve(import.meta.dirname, "public"),
     },
     dedupe: ["react", "react-dom", "yjs"],
   },

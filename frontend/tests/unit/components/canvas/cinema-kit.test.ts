@@ -5,22 +5,22 @@ import {
   readCinemaKit,
   cameraDefault,
   cinemaSupports,
-} from "@glowloom/canvas/editor/cinema-kit/cinema-kit-model.ts";
+} from "@/components/canvas-editor/cinema-kit/cinema-kit-model.ts";
 import {
   makeCinemaNode,
   effectiveCinema,
   updateCinemaSetting,
-} from "@glowloom/canvas/editor/cinema-kit/cinema-kit-graph.ts";
+} from "@/components/canvas-editor/cinema-kit/cinema-kit-graph.ts";
 import {
   sampledPalette,
   hexToHSV,
   hsvToHex,
   paletteHarmony,
-} from "@glowloom/canvas/editor/cinema-kit/cinema-palette.ts";
-import { connectCanvasDocument } from "@glowloom/canvas/editor/lib/canvas-document-connections.ts";
-import { createCanvasNode } from "@glowloom/canvas/editor/lib/canvas-node-factory.ts";
-import { registerBuiltinNodes } from "@glowloom/canvas/editor/nodes/builtin-nodes.tsx";
-import type { CanvasEditorState } from "@glowloom/canvas/editor/lib/canvas-document-adapter.ts";
+} from "@/components/canvas-editor/cinema-kit/cinema-palette.ts";
+import { connectCanvasDocument } from "@/components/canvas-editor/lib/canvas-document-connections.ts";
+import { createCanvasNode } from "@/components/canvas-editor/lib/canvas-node-factory.ts";
+import { registerBuiltinNodes } from "@/components/canvas-editor/nodes/builtin-nodes.tsx";
+import type { CanvasEditorState } from "@/components/canvas-editor/lib/canvas-document-adapter.ts";
 registerBuiltinNodes();
 function fixture(): CanvasEditorState {
   return {

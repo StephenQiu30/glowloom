@@ -10,8 +10,8 @@ import {
   notifyError,
   useErrorNotification,
 } from "@/components/canvas/runtime/components/feedback/error-notification";
-import { type CanvasGenerationProjection } from "@glowloom/canvas/editor/lib/canvas-generation-projection.ts";
-import type { CanvasPreparedDocument } from "@glowloom/canvas/editor/types/canvas-document-integration.ts";
+import { type CanvasGenerationProjection } from "@/components/canvas-editor/lib/canvas-generation-projection.ts";
+import type { CanvasPreparedDocument } from "@/components/canvas-editor/types/canvas-document-integration.ts";
 
 /** Reads restore the original commands; only explicit submit/retry can create work. */
 export function useCanvasGeneration({

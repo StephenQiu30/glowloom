@@ -11,30 +11,30 @@ import {
   QuaternionKeyframeTrack,
   Vector3,
 } from "three";
-import { createDirectorActor } from "@glowloom/canvas/editor/director/director-assets.ts";
+import { createDirectorActor } from "@/components/canvas-editor/director/director-assets.ts";
 import {
   DirectorModelMotion,
   directorModelInfo,
-} from "@glowloom/canvas/editor/director/director-motion.ts";
+} from "@/components/canvas-editor/director/director-motion.ts";
 import {
   directorTransform,
   emptyDirectorConfig,
   readDirector,
-} from "@glowloom/canvas/editor/director/director-model.ts";
+} from "@/components/canvas-editor/director/director-model.ts";
 import {
   directorLibraryClips,
   directorPoseSource,
-} from "@glowloom/canvas/editor/director/director-motion-library-runtime.ts";
+} from "@/components/canvas-editor/director/director-motion-library-runtime.ts";
 import {
   addDirectorMotionSource,
   directorMotionSourceName,
   validateDirectorMotionLibrary,
   type DirectorMotionSource,
-} from "@glowloom/canvas/editor/director/director-motion-library-model.ts";
-import { placeDirectorMotionClip } from "@glowloom/canvas/editor/director/director-motion-model.ts";
-import { DirectorMotionLibrary } from "@glowloom/canvas/editor/director/director-motion-library.tsx";
-import { DirectorPoseEditor } from "@glowloom/canvas/editor/director/director-pose-editor.tsx";
-import { importDirectorMotion } from "@glowloom/canvas/editor/director/director-motion-import.ts";
+} from "@/components/canvas-editor/director/director-motion-library-model.ts";
+import { placeDirectorMotionClip } from "@/components/canvas-editor/director/director-motion-model.ts";
+import { DirectorMotionLibrary } from "@/components/canvas-editor/director/director-motion-library.tsx";
+import { DirectorPoseEditor } from "@/components/canvas-editor/director/director-pose-editor.tsx";
+import { importDirectorMotion } from "@/components/canvas-editor/director/director-motion-import.ts";
 afterEach(cleanup);
 function fixture() {
   const object = createDirectorActor("male_standard"),

@@ -3,19 +3,19 @@ import {
   effectiveCinema,
   makeCinemaNode,
   updateCinemaSetting,
-} from "@glowloom/canvas/editor/cinema-kit/cinema-kit-graph.ts";
+} from "@/components/canvas-editor/cinema-kit/cinema-kit-graph.ts";
 import {
   cameraDefault,
   cinemaCatalog,
   type CinemaKit,
-} from "@glowloom/canvas/editor/cinema-kit/cinema-kit-model.ts";
-import type { CanvasEditorState } from "@glowloom/canvas/editor/lib/canvas-document-adapter.ts";
+} from "@/components/canvas-editor/cinema-kit/cinema-kit-model.ts";
+import type { CanvasEditorState } from "@/components/canvas-editor/lib/canvas-document-adapter.ts";
 import {
   connectCanvasDocumentSources,
   supportsCanvasConnection,
-} from "@glowloom/canvas/editor/lib/canvas-document-connections.ts";
-import { createCanvasNode } from "@glowloom/canvas/editor/lib/canvas-node-factory.ts";
-import type { CanvasNodeData } from "@glowloom/canvas/editor/types/canvas.ts";
+} from "@/components/canvas-editor/lib/canvas-document-connections.ts";
+import { createCanvasNode } from "@/components/canvas-editor/lib/canvas-node-factory.ts";
+import type { CanvasNodeData } from "@/components/canvas-editor/types/canvas.ts";
 
 function fixture(nodes: CanvasNodeData[]): CanvasEditorState {
   return {

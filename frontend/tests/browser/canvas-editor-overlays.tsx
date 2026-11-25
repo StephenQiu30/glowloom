@@ -7,17 +7,17 @@ import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { SWRConfig, unstable_serialize } from "swr";
 import { ThemeProvider } from "next-themes";
-import { CanvasDocumentNodePanel } from "@glowloom/canvas/editor/nodes/canvas-document-node-panel.tsx";
+import { CanvasDocumentNodePanel } from "@/components/canvas-editor/nodes/canvas-document-node-panel.tsx";
 import { CanvasAccountContext } from "../../src/components/canvas/runtime/components/account/account-provider";
 import {
   CanvasNodeType,
   type CanvasNodeData,
-} from "@glowloom/canvas/editor/types/canvas.ts";
-import { toCanvasGraph } from "@glowloom/canvas/editor/lib/canvas-document-adapter.ts";
-import { RichTextEditor } from "@glowloom/canvas/editor/runtime/components/editor/rich-text/rich-text-editor.tsx";
-import type { RichTextDocument } from "@glowloom/canvas/editor/runtime/components/editor/types/rich-text.ts";
+} from "@/components/canvas-editor/types/canvas.ts";
+import { toCanvasGraph } from "@/components/canvas-editor/lib/canvas-document-adapter.ts";
+import { RichTextEditor } from "@/components/canvas-editor/runtime/components/editor/rich-text/rich-text-editor.tsx";
+import type { RichTextDocument } from "@/components/canvas-editor/runtime/components/editor/types/rich-text.ts";
 import "../../src/app/globals.css";
-import "@glowloom/canvas/editor/canvas.css";
+import "@/components/canvas-editor/canvas.css";
 
 const store = makeAppStore("dark");
 const image: CanvasNodeData = {

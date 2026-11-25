@@ -1,6 +1,6 @@
 import { uploadMediaAsset } from "@/api/media";
 import { validateUpload } from "@/components/media/library";
-import type { CanvasEditorState } from "@glowloom/canvas/editor/lib/canvas-document-adapter.ts";
+import type { CanvasEditorState } from "@/components/canvas-editor/lib/canvas-document-adapter.ts";
 export type CanvasMediaReceipt = {
   source: string;
   key: string;

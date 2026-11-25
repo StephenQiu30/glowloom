@@ -8,7 +8,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { useCanvasFilePreviews } from "@/components/canvas/hooks/use-canvas-file-previews";
-import type { CanvasNodeData } from "@glowloom/canvas/editor/types/canvas.ts";
+import type { CanvasNodeData } from "@/components/canvas-editor/types/canvas.ts";
 const preview = vi.hoisted(() => vi.fn());
 vi.mock("@/components/canvas/lib/canvas-file-preview", () => ({
   readCanvasFilePreviewGrant: preview,

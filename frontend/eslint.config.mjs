@@ -32,7 +32,7 @@ export default defineConfig([
     },
   },
   {
-    files: ["src/components/**/*.{ts,tsx}", "canvas/editor/**/*.{ts,tsx}"],
+    files: ["src/components/**/*.{ts,tsx}"],
     ignores: [
       "src/components/feedback/notification.ts",
       "src/components/ui/sonner.tsx",
@@ -78,14 +78,14 @@ export default defineConfig([
     },
   },
   {
-    files: ["src/**/*.{ts,tsx}", "canvas/editor/**/*.{ts,tsx}"],
+    files: ["src/**/*.{ts,tsx}"],
     ignores: ["src/app/api/**", "src/lib/request.ts"],
     rules: {
       "no-restricted-syntax": ["error", ...apiSyntaxRules],
     },
   },
   {
-    files: ["src/**/*.tsx", "canvas/editor/**/*.tsx"],
+    files: ["src/**/*.tsx"],
     ignores: ["src/app/api/**", "src/lib/request.ts", "src/components/ui/**"],
     rules: {
       "no-restricted-syntax": [

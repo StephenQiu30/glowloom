@@ -7,11 +7,11 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { DirectorProjectAssetPreview } from "@glowloom/canvas/editor/director/director-asset-preview.tsx";
+import { DirectorProjectAssetPreview } from "@/components/canvas-editor/director/director-asset-preview.tsx";
 const mocks = vi.hoisted(() => ({ preview: vi.fn(), render: vi.fn() }));
 vi.mock("@/api/media", () => ({ getMediaPreview: mocks.preview }));
 vi.mock(
-  "@glowloom/canvas/editor/director/director-asset-preview-renderer.ts",
+  "@/components/canvas-editor/director/director-asset-preview-renderer.ts",
   () => ({
     renderDirectorAssetThumbnail: mocks.render,
   }),

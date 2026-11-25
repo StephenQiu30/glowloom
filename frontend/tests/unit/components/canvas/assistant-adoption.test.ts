@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createCanvasAssistantAdoption } from "@/components/canvas/assistant/canvas-assistant-adoption";
-import type { CanvasEditorState } from "@glowloom/canvas/editor/lib/canvas-document-adapter.ts";
+import type { CanvasEditorState } from "@/components/canvas-editor/lib/canvas-document-adapter.ts";
 import type { CanvasYjsLiveSession } from "@/components/canvas/yjs-live-session";
 const api = vi.hoisted(() => ({ operation: vi.fn(), media: vi.fn() }));
 vi.mock("@/api/operations", () => ({ getOperation: api.operation }));

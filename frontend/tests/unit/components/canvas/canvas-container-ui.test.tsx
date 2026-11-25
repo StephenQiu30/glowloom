@@ -4,9 +4,9 @@ import {
   CanvasContainerToolbar,
   CanvasStackGallery,
   CanvasStackCard,
-} from "@glowloom/canvas/editor/containers/canvas-container-ui.tsx";
-import { createCanvasNode } from "@glowloom/canvas/editor/lib/canvas-node-factory.ts";
-import { createContainer } from "@glowloom/canvas/editor/lib/canvas-containers.ts";
+} from "@/components/canvas-editor/containers/canvas-container-ui.tsx";
+import { createCanvasNode } from "@/components/canvas-editor/lib/canvas-node-factory.ts";
+import { createContainer } from "@/components/canvas-editor/lib/canvas-containers.ts";
 afterEach(cleanup);
 const a = createCanvasNode(
   "text",

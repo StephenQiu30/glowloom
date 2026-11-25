@@ -1,14 +1,14 @@
 import type { JSONContent } from "@tiptap/core";
-import type { CanvasEditorState } from "@glowloom/canvas/editor/lib/canvas-document-adapter.ts";
+import type { CanvasEditorState } from "@/components/canvas-editor/lib/canvas-document-adapter.ts";
 import type {
   CanvasNodeData,
   CanvasConnection,
-} from "@glowloom/canvas/editor/types/canvas.ts";
+} from "@/components/canvas-editor/types/canvas.ts";
 import {
   textToDocument,
   documentText,
   parseRichTextDocument,
-} from "@glowloom/canvas/editor/runtime/components/editor/lib/rich-text-document.ts";
+} from "@/components/canvas-editor/runtime/components/editor/lib/rich-text-document.ts";
 import {
   emptyPromptDraft,
   validatePromptDraft,

@@ -7,7 +7,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { RecoveryField } from "@glowloom/canvas/recovery";
-import { CanvasLocalDrafts } from "@glowloom/canvas/editor/controls/canvas-local-drafts.tsx";
+import { CanvasLocalDrafts } from "@/components/canvas-editor/controls/canvas-local-drafts.tsx";
 
 afterEach(cleanup);
 

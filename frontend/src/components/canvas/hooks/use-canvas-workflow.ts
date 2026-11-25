@@ -5,7 +5,7 @@ import useSWR from "@/components/canvas/runtime/lib/use-live-query";
 import * as api from "@/components/canvas/runtime/api/workflow-bff";
 import { refreshGenerationTask } from "@/components/canvas/runtime/api/generation-bff";
 import { ApiError, unwrap } from "@/components/canvas/runtime/lib/request";
-import type { CanvasPreparedDocument } from "@glowloom/canvas/editor/types/canvas-document-integration.ts";
+import type { CanvasPreparedDocument } from "@/components/canvas-editor/types/canvas-document-integration.ts";
 import {
   claimWorkflowCommand,
   clearWorkflowCommand,

@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { requireVoiceTransfer } from "@glowloom/canvas/editor/subject/subject-voice-transfer.ts";
+import { requireVoiceTransfer } from "@/components/canvas-editor/subject/subject-voice-transfer.ts";
 const id = (n: number) =>
   `11111111-1111-4111-8111-${String(n).padStart(12, "0")}`;
 const job: API.TransferJob = {

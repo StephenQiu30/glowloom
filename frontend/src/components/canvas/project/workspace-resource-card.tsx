@@ -14,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { WorkspaceResource } from "@glowloom/canvas/editor/lib/workspace-resources.ts";
+import type { WorkspaceResource } from "@/components/canvas-editor/lib/workspace-resources.ts";
 
 import { ResourceCover } from "./resource-cover";
 export { ResourceCover } from "./resource-cover";

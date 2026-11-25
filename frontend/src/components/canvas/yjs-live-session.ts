@@ -1,10 +1,10 @@
-import type { CanvasNodeData } from "@glowloom/canvas/editor/types/canvas.ts";
+import type { CanvasNodeData } from "@/components/canvas-editor/types/canvas.ts";
 import {
   openCanvasPendingJournal,
   type CanvasPendingJournal,
   type CanvasPendingJournalFactory,
-} from "@glowloom/canvas/editor/lib/canvas-yjs-pending-journal.ts";
-import { reconcileTimelineConnections } from "@glowloom/canvas/editor/lib/canvas-timeline-connections.ts";
+} from "@/components/canvas-editor/lib/canvas-yjs-pending-journal.ts";
+import { reconcileTimelineConnections } from "@/components/canvas-editor/lib/canvas-timeline-connections.ts";
 import {
   CollaborationSession,
   type CommittedState,
@@ -35,15 +35,15 @@ import type { Transaction } from "@tiptap/pm/state";
 import { DOMParser as PromptDOMParser } from "@tiptap/pm/model";
 import type { ComposerSession } from "@/components/generation/composer-session";
 import { RequestError } from "@/lib/request";
-import { canvasGraphFingerprint } from "@glowloom/canvas/editor/lib/canvas-json.ts";
-import { directorFingerprint } from "@glowloom/canvas/editor/director/director-model.ts";
-import { validateDirectorDocument } from "@glowloom/canvas/editor/director/director-workspaces.ts";
+import { canvasGraphFingerprint } from "@/components/canvas-editor/lib/canvas-json.ts";
+import { directorFingerprint } from "@/components/canvas-editor/director/director-model.ts";
+import { validateDirectorDocument } from "@/components/canvas-editor/director/director-workspaces.ts";
 import {
   readTimeline,
   type Timeline,
-} from "@glowloom/canvas/editor/timeline/timeline-model.ts";
+} from "@/components/canvas-editor/timeline/timeline-model.ts";
 import { serviceDocumentFromEditor, serviceGraph } from "./service-graph";
-import type { CanvasEditorState } from "@glowloom/canvas/editor/lib/canvas-document-adapter.ts";
+import type { CanvasEditorState } from "@/components/canvas-editor/lib/canvas-document-adapter.ts";
 import { publishCanvasMedia, type CanvasMediaReceipt } from "./publish-media";
 import {
   validatePromptDraft,

@@ -33,7 +33,7 @@ import {
 import {
   resourceKey,
   type WorkspaceResourceTarget,
-} from "@glowloom/canvas/editor/lib/workspace-resources.ts";
+} from "@/components/canvas-editor/lib/workspace-resources.ts";
 import { CommandRecovery } from "./project-feedback";
 import { ResourceCoverField } from "./resource-cover-field";
 import type { CoverReference } from "./resource-cover";

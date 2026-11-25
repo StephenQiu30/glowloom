@@ -6,11 +6,11 @@ import {
   screen,
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { CanvasVideoPlayer } from "@glowloom/canvas/editor/nodes/canvas-video-player.tsx";
+import { CanvasVideoPlayer } from "@/components/canvas-editor/nodes/canvas-video-player.tsx";
 import {
   CanvasNodeType,
   type CanvasNodeData,
-} from "@glowloom/canvas/editor/types/canvas.ts";
+} from "@/components/canvas-editor/types/canvas.ts";
 const node: CanvasNodeData = {
   id: "video-test",
   type: CanvasNodeType.Video,

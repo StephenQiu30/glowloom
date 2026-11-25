@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { changeCanvasColorTags } from "@glowloom/canvas/editor/lib/canvas-color-tags.ts";
-import { CanvasColorTags } from "@glowloom/canvas/editor/controls/canvas-color-tags.tsx";
-import { createCanvasNode } from "@glowloom/canvas/editor/lib/canvas-node-factory.ts";
+import { changeCanvasColorTags } from "@/components/canvas-editor/lib/canvas-color-tags.ts";
+import { CanvasColorTags } from "@/components/canvas-editor/controls/canvas-color-tags.tsx";
+import { createCanvasNode } from "@/components/canvas-editor/lib/canvas-node-factory.ts";
 import {
   serviceGraph,
   serviceDocumentFromEditor,

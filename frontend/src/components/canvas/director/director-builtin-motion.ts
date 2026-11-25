@@ -6,8 +6,8 @@ import {
   QuaternionKeyframeTrack,
 } from "three";
 
-import { DIRECTOR_BUILTIN_MOTION_PRESETS } from "@glowloom/canvas/editor/director/director-motion-catalog.ts";
-export { DIRECTOR_BUILTIN_MOTION_PRESETS } from "@glowloom/canvas/editor/director/director-motion-catalog.ts";
+import { DIRECTOR_BUILTIN_MOTION_PRESETS } from "@/components/canvas-editor/director/director-motion-catalog.ts";
+export { DIRECTOR_BUILTIN_MOTION_PRESETS } from "@/components/canvas-editor/director/director-motion-catalog.ts";
 const RESOURCE =
   "/director/motions/quaternius-ual1-standard.json?v=standard-43-v1";
 const MAX_BYTES = 24 * 1024 * 1024;

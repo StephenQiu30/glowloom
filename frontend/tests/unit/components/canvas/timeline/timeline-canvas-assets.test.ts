@@ -1,8 +1,8 @@
 import { expect, it } from "vitest";
-import { timelineCanvasAssets } from "@glowloom/canvas/editor/timeline/timeline-canvas-assets.ts";
-import { timelineResultGraph } from "@glowloom/canvas/editor/timeline/timeline-delivery.ts";
-import type { CanvasNodeData } from "@glowloom/canvas/editor/types/canvas.ts";
-import type { CanvasEditorState } from "@glowloom/canvas/editor/lib/canvas-document-adapter.ts";
+import { timelineCanvasAssets } from "@/components/canvas-editor/timeline/timeline-canvas-assets.ts";
+import { timelineResultGraph } from "@/components/canvas-editor/timeline/timeline-delivery.ts";
+import type { CanvasNodeData } from "@/components/canvas-editor/types/canvas.ts";
+import type { CanvasEditorState } from "@/components/canvas-editor/lib/canvas-document-adapter.ts";
 const target = "10000000-0000-4000-8000-000000000001";
 const asset = "10000000-0000-4000-8000-000000000002";
 const result = "10000000-0000-4000-8000-000000000003";

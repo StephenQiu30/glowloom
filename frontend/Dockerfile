@@ -17,7 +17,6 @@ COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml 
 COPY canvas/package.json /canvas/package.json
 COPY --from=collaboration /canvas/dist /canvas/dist
 COPY --from=collaboration /canvas/types /canvas/types
-COPY canvas/editor /canvas/editor
 RUN pnpm install --frozen-lockfile
 
 FROM deps AS dev

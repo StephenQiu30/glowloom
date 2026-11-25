@@ -9,15 +9,15 @@ import {
   type ModelCapability,
   type ModelChannel,
   type ChannelModel,
-} from "@glowloom/canvas/editor/runtime/types/generation-config.ts";
-export { defaultConfig } from "@glowloom/canvas/editor/runtime/types/generation-config.ts";
+} from "@/components/canvas-editor/runtime/types/generation-config.ts";
+export { defaultConfig } from "@/components/canvas-editor/runtime/types/generation-config.ts";
 export type {
   AiConfig,
   ModelCapability,
   ModelChannel,
   ChannelModel,
   ReasoningEffort,
-} from "@glowloom/canvas/editor/runtime/types/generation-config.ts";
+} from "@/components/canvas-editor/runtime/types/generation-config.ts";
 const CHANNEL_MODEL_SEPARATOR = "::";
 
 type ConfigStore = {

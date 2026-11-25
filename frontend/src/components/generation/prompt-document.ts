@@ -1,7 +1,7 @@
 import {
   readCinemaKit,
   type CinemaKit,
-} from "@glowloom/canvas/editor/cinema-kit/cinema-kit-model.ts";
+} from "@/components/canvas-editor/cinema-kit/cinema-kit-model.ts";
 /** E0 client contract. Resource authorization and server hashes belong to E1/E4. */
 export type MediaKind = "image" | "video" | "audio" | "document";
 export type LabelKind = MediaKind | "subject";

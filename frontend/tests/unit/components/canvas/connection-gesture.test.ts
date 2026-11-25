@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { updateConnectionGesture } from "@glowloom/canvas/editor/connections/connection-gesture.ts";
+import { updateConnectionGesture } from "@/components/canvas-editor/connections/connection-gesture.ts";
 
 it("keeps a one-pixel move a click but starts dragging strictly beyond it", () => {
   const start = { x: 10, y: 20, dragged: false };

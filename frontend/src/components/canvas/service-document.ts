@@ -1,11 +1,11 @@
-import { validateCanvasComposer } from "@glowloom/canvas/editor/text-content.ts";
+import { validateCanvasComposer } from "@/components/canvas-editor/text-content.ts";
 import { isProjectID } from "@/components/projects/project";
-import { emptyDocument } from "@glowloom/canvas/editor/document.ts";
+import { emptyDocument } from "@/components/canvas-editor/document.ts";
 import type {
   CanvasDocument,
   CanvasNodeData,
   NodeType,
-} from "@glowloom/canvas/editor/types.ts";
+} from "@/components/canvas-editor/types.ts";
 
 export class UnsupportedCanvasContentError extends Error {}
 export function revision(value: unknown): string {

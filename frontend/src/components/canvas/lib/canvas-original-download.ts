@@ -5,7 +5,7 @@ import { downloadFixedFile } from "@/components/canvas/runtime/components/assets
 import {
   CanvasNodeType,
   type CanvasNodeData,
-} from "@glowloom/canvas/editor/types/canvas.ts";
+} from "@/components/canvas-editor/types/canvas.ts";
 
 export async function downloadCanvasOriginal(
   node: CanvasNodeData,

@@ -13,10 +13,10 @@ import {
   readCanvasFilePreviewGrant,
   type CanvasFilePreviewContext,
 } from "../lib/canvas-file-preview";
-import { CANVAS_FILE_PREVIEW_CONCURRENCY } from "@glowloom/canvas/editor/constants/canvas-file-previews.ts";
+import { CANVAS_FILE_PREVIEW_CONCURRENCY } from "@/components/canvas-editor/constants/canvas-file-previews.ts";
 import { notifyError } from "@/components/canvas/runtime/components/feedback/error-notification";
 import { RequestError } from "@/lib/request";
-import type { CanvasNodeData } from "@glowloom/canvas/editor/types/canvas.ts";
+import type { CanvasNodeData } from "@/components/canvas-editor/types/canvas.ts";
 
 export const CanvasPreviewRenewal = createContext<
   ((node: CanvasNodeData) => void) | null

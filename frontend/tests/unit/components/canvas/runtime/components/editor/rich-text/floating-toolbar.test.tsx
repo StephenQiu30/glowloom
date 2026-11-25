@@ -9,7 +9,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import type { Editor } from "@tiptap/core";
-import { RichTextEditor } from "@glowloom/canvas/editor/runtime/components/editor/rich-text/rich-text-editor.tsx";
+import { RichTextEditor } from "@/components/canvas-editor/runtime/components/editor/rich-text/rich-text-editor.tsx";
 
 // Tiptap scrolls its selection; JSDOM has no text-range layout.
 beforeAll(() => {

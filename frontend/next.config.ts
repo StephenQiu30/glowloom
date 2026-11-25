@@ -1,4 +1,3 @@
-import { canvasHostAliases } from "./canvas-host";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import type { NextConfig } from "next";
@@ -29,12 +28,11 @@ const nextConfig: NextConfig = {
   turbopack: {
     resolveAlias: {
       yjs: { browser: "./node_modules/yjs/dist/yjs.mjs" },
-      "@glowloom/canvas-host/*": "./src/*",
-      "@glowloom/canvas-host-public/*": "./public/*",
+      "@public/*": "./public/*",
     },
   },
   webpack(config, { isServer }) {
-    Object.assign(config.resolve.alias, canvasHostAliases);
+    config.resolve.alias["@public"] = join(import.meta.dirname, "public");
     if (!isServer) config.resolve.alias["yjs$"] = yjsBrowserEntry;
     return config;
   },

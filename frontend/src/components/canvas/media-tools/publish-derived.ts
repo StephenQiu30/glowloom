@@ -1,7 +1,7 @@
 import { uploadMediaAsset } from "@/api/media";
 import { isProjectID } from "@/components/projects/project";
 import { validateUpload } from "@/components/media/library";
-import type { CanvasNodeData } from "@glowloom/canvas/editor/types.ts";
+import type { CanvasNodeData } from "@/components/canvas-editor/types.ts";
 
 export type DerivedReceipt = { key: string; assetID?: string };
 

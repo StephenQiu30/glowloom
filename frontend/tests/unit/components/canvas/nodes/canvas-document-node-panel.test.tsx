@@ -1,31 +1,31 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { CanvasDocumentNodePanel } from "@glowloom/canvas/editor/nodes/canvas-document-node-panel.tsx";
-import type { CanvasDocumentIntegration } from "@glowloom/canvas/editor/types/canvas-document-integration.ts";
-import type { CanvasNodeData } from "@glowloom/canvas/editor/types/canvas.ts";
+import { CanvasDocumentNodePanel } from "@/components/canvas-editor/nodes/canvas-document-node-panel.tsx";
+import type { CanvasDocumentIntegration } from "@/components/canvas-editor/types/canvas-document-integration.ts";
+import type { CanvasNodeData } from "@/components/canvas-editor/types/canvas.ts";
 vi.mock("@/components/canvas/runtime/hooks/use-copy-text", () => ({
   useCopyText: () => vi.fn(),
 }));
-vi.mock("@glowloom/canvas/editor/parameters/canvas-model-select.tsx", () => ({
+vi.mock("@/components/canvas-editor/parameters/canvas-model-select.tsx", () => ({
   CanvasModelSelect: () => null,
 }));
 vi.mock(
-  "@glowloom/canvas/editor/parameters/canvas-generation-parameters.tsx",
+  "@/components/canvas-editor/parameters/canvas-generation-parameters.tsx",
   () => ({
     CanvasGenerationParameters: () => null,
   }),
 );
 vi.mock(
-  "@glowloom/canvas/editor/hooks/use-canvas-reference-previews.ts",
+  "@/components/canvas-editor/hooks/use-canvas-reference-previews.ts",
   () => ({
     useCanvasReferencePreviews: () => ({ references: [] }),
   }),
 );
-vi.mock("@glowloom/canvas/editor/nodes/canvas-node-reference-bar.tsx", () => ({
+vi.mock("@/components/canvas-editor/nodes/canvas-node-reference-bar.tsx", () => ({
   CanvasNodeReferenceBar: () => null,
 }));
 vi.mock(
-  "@glowloom/canvas/editor/runtime/components/editor/rich-text/rich-text-input.tsx",
+  "@/components/canvas-editor/runtime/components/editor/rich-text/rich-text-input.tsx",
   () => ({ RichTextInput: () => <div>提示词编辑器</div> }),
 );
 afterEach(cleanup);

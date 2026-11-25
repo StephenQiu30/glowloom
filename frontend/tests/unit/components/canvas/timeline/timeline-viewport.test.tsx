@@ -3,7 +3,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import {
   timelineTrackGeometry,
   useTimelineViewport,
-} from "@glowloom/canvas/editor/timeline/use-timeline-viewport.ts";
+} from "@/components/canvas-editor/timeline/use-timeline-viewport.ts";
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();

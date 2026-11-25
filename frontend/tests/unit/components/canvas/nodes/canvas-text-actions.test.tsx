@@ -6,7 +6,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { CanvasTextActions } from "@glowloom/canvas/editor/nodes/canvas-text-actions.tsx";
+import { CanvasTextActions } from "@/components/canvas-editor/nodes/canvas-text-actions.tsx";
 import type { ComponentProps } from "react";
 
 vi.mock("@/components/canvas/hooks/use-bound-references", () => ({
