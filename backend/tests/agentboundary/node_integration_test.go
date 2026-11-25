@@ -130,12 +130,19 @@ func TestNodeProductionGRPCBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 	agentDir := filepath.Join(root, "agent")
-	buildCtx, cancelBuild := context.WithTimeout(t.Context(), 3*time.Minute)
-	defer cancelBuild()
-	build := exec.CommandContext(buildCtx, "pnpm", "--dir", agentDir, "build")
-	build.Env = append(os.Environ(), "PATH="+filepath.Dir(node)+string(os.PathListSeparator)+os.Getenv("PATH"))
-	if output, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("compile current Node production entry: %v\n%s", err, output)
+	entrypoint := os.Getenv("GLOWLOOM_TEST_AGENT_ENTRYPOINT")
+	if entrypoint == "" {
+		buildCtx, cancelBuild := context.WithTimeout(t.Context(), 3*time.Minute)
+		defer cancelBuild()
+		build := exec.CommandContext(buildCtx, "pnpm", "--dir", agentDir, "build")
+		build.Env = append(os.Environ(), "PATH="+filepath.Dir(node)+string(os.PathListSeparator)+os.Getenv("PATH"))
+		if output, err := build.CombinedOutput(); err != nil {
+			t.Fatalf("compile current Node production entry: %v\n%s", err, output)
+		}
+		entrypoint = filepath.Join(agentDir, "dist", "src", "server.js")
+	}
+	if info, err := os.Stat(entrypoint); !filepath.IsAbs(entrypoint) || err != nil || !info.Mode().IsRegular() {
+		t.Fatalf("production Agent entrypoint must be an absolute, built file: %q (%v)", entrypoint, err)
 	}
 
 	gin.SetMode(gin.TestMode)
@@ -271,7 +278,7 @@ func TestNodeProductionGRPCBoundary(t *testing.T) {
 		}
 	})
 
-	nodeOrigin := launchNode(t, node, agentDir, nodeDSN, businessServer.URL, runtimeToken, businessToken)
+	nodeOrigin := launchNode(t, node, agentDir, entrypoint, nodeDSN, businessServer.URL, runtimeToken, businessToken)
 	runtime, err := runtimeclient.New(nodeOrigin, runtimeToken)
 	if err != nil {
 		t.Fatal(err)
@@ -611,7 +618,7 @@ func (l *lockedLog) text() string {
 	defer l.mu.Unlock()
 	return l.buf.String()
 }
-func launchNode(t *testing.T, binary, dir, dsn, businessOrigin, runtimeToken, businessToken string) string {
+func launchNode(t *testing.T, binary, dir, entrypoint, dsn, businessOrigin, runtimeToken, businessToken string) string {
 	t.Helper()
 	var listen net.ListenConfig
 	listener, err := listen.Listen(t.Context(), "tcp", "127.0.0.1:0")
@@ -629,7 +636,7 @@ func launchNode(t *testing.T, binary, dir, dsn, businessOrigin, runtimeToken, bu
 	_ = listener.Close()
 	// Cleanup owns graceful termination and joining even after the test context ends.
 	processContext, cancelProcess := context.WithCancel(context.WithoutCancel(t.Context()))
-	cmd := exec.CommandContext(processContext, binary, "--enable-source-maps", filepath.Join(dir, "dist", "src", "server.js"))
+	cmd := exec.CommandContext(processContext, binary, "--enable-source-maps", entrypoint)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GLOWLOOM_AGENT_HTTP_ADDR="+addr, "GLOWLOOM_AGENT_GRPC_ADDR="+grpcAddr, "GLOWLOOM_AGENT_DB_DSN="+dsn, "GLOWLOOM_AGENT_BUSINESS_ORIGIN="+businessOrigin, "GLOWLOOM_AGENT_SERVICE_TOKEN="+runtimeToken, "GLOWLOOM_AGENT_BUSINESS_TOKEN="+businessToken, "GLOWLOOM_AGENT_POOL_MAX=4", "GLOWLOOM_AGENT_LEASE_MS=10000", "GLOWLOOM_LOG_LEVEL=error")
 	logs := &lockedLog{}

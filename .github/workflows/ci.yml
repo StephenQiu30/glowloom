@@ -72,6 +72,7 @@ jobs:
       GLOWLOOM_TEST_AI_REBUILD_DSN: postgres://postgres@127.0.0.1:5432/glowloom_ai_rebuild_test?sslmode=disable
       GLOWLOOM_TEST_MODEL_GATEWAY_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_gateway_test?sslmode=disable
       GLOWLOOM_AGENT_TEST_DB_DSN: postgres://glowloom_agent@127.0.0.1:5432/glowloom_boundary_test?sslmode=disable
+      GLOWLOOM_TEST_AGENT_ENTRYPOINT: ${{ github.workspace }}/agent/dist/src/server.js
       GLOWLOOM_TEST_SCHEMA_DB_DSN: postgres://postgres@127.0.0.1:5432/schema_probe?sslmode=disable
       GLOWLOOM_TEST_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_owner_ci_test?sslmode=disable
       GLOWLOOM_TEST_WRITE_FENCE_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_owner_ci_test?sslmode=disable
@@ -144,9 +145,11 @@ jobs:
           done
           psql "$admin_dsn" -X -v ON_ERROR_STOP=1 -c 'CREATE DATABASE glowloom_document_ci_test'
           psql postgres://postgres@127.0.0.1:5432/glowloom_document_ci_test -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql -f db/data.sql
-      - name: Install the production Agent used by boundary tests
+      - name: Build the production Agent used by boundary tests
         working-directory: agent
-        run: pnpm install --frozen-lockfile
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
       - name: Verify multimedia references, style library, storyboards and Agent eval fixtures
         env:
           GLOWLOOM_TEST_WORKSPACE_DB_DSN: postgres://postgres@127.0.0.1:5432/glowloom_studio_inputs_test?sslmode=disable
