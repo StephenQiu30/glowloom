@@ -6,3 +6,16 @@ allowBuilds:
   es5-ext: false
   '@prisma/engines': false
   prisma: false
+minimumReleaseAgeExclude:
+  - '@ai-sdk/anthropic@4.0.108'
+  - '@ai-sdk/google@4.0.126'
+  - '@ai-sdk/openai@4.0.123'
+  - '@mastra/core@1.86.0'
+  - '@mastra/evals@1.10.12'
+  - '@mastra/langfuse@1.7.2'
+  - '@mastra/mcp@2.11.0'
+  - '@mastra/memory@1.41.3'
+  - '@mastra/observability@1.24.3'
+  - '@mastra/otel-exporter@1.6.2'
+  - '@mastra/pg@1.38.0'
+  - '@mastra/schema-compat@1.4.1'

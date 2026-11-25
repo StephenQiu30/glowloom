@@ -1,365 +1,413 @@
-import type { Pool } from 'pg';
-import { database, queries } from '../database/connection.js';
-import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
+import { randomUUID } from 'node:crypto';
+import type { Logger } from 'pino';
+import {
+  createBusinessMcpClient,
+  type BusinessMcpConfig,
+} from '../business/mcp-client.js';
+import type { AgentTeam } from '../mastra/runtime.js';
+import {
+  filterToolsByAllowlist,
+  type DeclarativeSkill,
+} from '../skills/loader.js';
+import type { RunEventBus } from './event-bus.js';
+import type { SessionStore } from './store.js';
 import type {
-  RuntimeEvent,
   AgentApplication,
+  ApplyDecisionInput,
   CreateSessionInput,
-  UpdateSessionInput,
-  CreateRunInput,
-  ControlInput,
   Identity,
-  HistoryInput,
-  MessageInput,
+  PublicMessageView,
+  RunEvent,
+  RunView,
+  SessionView,
+  StartRunInput,
+  UpdateSessionInput,
 } from './types.js';
-import { AgentError } from './session-errors.js';
-import { BusinessClient } from '../business/client.js';
-import {
-  SessionStore,
-  inTransaction,
-  runRow,
-  type RunRow,
-} from './session-store.js';
-import { SessionRuntime } from '../harness/runtime.js';
-import { freezeManifest } from './manifest.js';
-import { StateDoc } from '../harness/state-doc.js';
-import { ConversationStore } from './conversations.js';
-import type { DeliveryOptions } from '../harness/delivery-verifier.js';
-import { runtimeDefaults } from '../config.js';
-import {
-  RecoveryStore,
-  RecoveryKind,
-  RecoveryCode,
-  type RecoveryEvent,
-} from './recovery-store.js';
-import { SessionControls } from './controls.js';
-import { readRunEvents } from './public-events.js';
-import { RecoveryPump } from './recovery-pump.js';
-import { RunEventBus } from './event-bus.js';
 
-const context = BACKGROUND_CONTEXT;
+export interface SessionServiceOptions {
+  store: SessionStore;
+  eventBus: RunEventBus;
+  agentTeam: AgentTeam;
+  mcpConfig: BusinessMcpConfig;
+  skills: DeclarativeSkill[];
+  logger: Logger;
+  leaseMs: number;
+  recoveryPollMs: number;
+}
 
 export class SessionService implements AgentApplication {
-  readonly store: SessionStore;
-  readonly conversations: ConversationStore;
-  private readonly backoff: RecoveryStore;
-  private readonly controls: SessionControls;
-  private readonly recovery: RecoveryPump;
-  private readonly eventBus = new RunEventBus();
-  private active = new Map<string, SessionRuntime>();
-  private opening = new Map<string, Promise<SessionRuntime>>();
-  private jobs = new Map<string, Promise<void>>();
+  private readonly ownerId = `agent-${randomUUID()}`;
+  private readonly activeControllers = new Map<string, AbortController>();
+  private recoveryTimer: NodeJS.Timeout | undefined;
   private stopping = false;
-  private closing: Promise<void> | undefined;
-  constructor(
-    private pool: Pool,
-    private business: BusinessClient,
-    private options: {
-      leaseMs: number;
-      onRecoveryEvent?: (event: RecoveryEvent) => void;
-    } & DeliveryOptions,
-  ) {
-    this.store = new SessionStore(pool);
-    this.backoff = new RecoveryStore(pool);
-    this.conversations = new ConversationStore(pool, this.store);
-    this.controls = new SessionControls(
-      this.store,
-      business,
-      this.backoff,
-      (run) => this.runtime(run),
-      (run) => this.launch(run),
-    );
-    this.recovery = new RecoveryPump(this.backoff, this.store, {
-      command: (id, input) => this.command(id, input),
-      launch: (run) => this.launch(run),
-      onEvent: options.onRecoveryEvent,
-    });
+
+  constructor(private readonly options: SessionServiceOptions) {}
+
+  async ready(): Promise<boolean> {
+    if (this.stopping) return false;
+    return this.options.store.ready();
   }
-  async ready() {
-    try {
-      await queries(this.pool)
-        .selectFrom('service_sessions as sessions')
-        .leftJoin('service_runs as runs', 'runs.session_id', 'sessions.id')
-        .leftJoin('public_messages as messages', 'messages.run_id', 'runs.id')
-        .leftJoin(
-          'recovery_backoff as backoff',
-          'backoff.root_run_id',
-          'runs.id',
-        )
-        .select([
-          'sessions.id',
-          'sessions.pinned',
-          'sessions.archived_at',
-          'runs.input',
-          'runs.retry_of_run_id',
-          'messages.message_id',
-          'backoff.attempts',
-        ])
-        .limit(0)
-        .execute();
-      return !this.stopping;
-    } catch {
-      return false;
+
+  createSession(input: CreateSessionInput): Promise<SessionView> {
+    return this.options.store.createSession(input);
+  }
+
+  listSessions(
+    identity: Identity,
+    limit?: number,
+  ): Promise<{ items: SessionView[]; next_cursor?: string }> {
+    return this.options.store.listSessions(identity, limit);
+  }
+
+  getSession(identity: Identity, sessionId: string): Promise<SessionView> {
+    return this.options.store.getSession(identity, sessionId);
+  }
+
+  updateSession(input: UpdateSessionInput): Promise<SessionView> {
+    return this.options.store.updateSession(input);
+  }
+
+  async startRun(input: StartRunInput): Promise<Record<string, unknown>> {
+    const admitted = await this.options.store.admitRun(
+      input,
+      this.ownerId,
+      this.options.leaseMs,
+    );
+
+    if (!admitted.deduplicated) {
+      await this.emitDurableEvent(admitted.runId, 'run.accepted', {
+        root_run_id: admitted.runId,
+        session_id: input.sessionId,
+        accepted_revision: admitted.acceptedRevision,
+      });
+      void this.executeRun(admitted.runId, input);
     }
-  }
-  createSession(input: CreateSessionInput) {
-    if (this.stopping) throw new AgentError('shutting_down');
-    return this.store.createSession(input);
-  }
-  updateSession(id: string, input: UpdateSessionInput) {
-    if (this.stopping) throw new AgentError('shutting_down');
-    return this.conversations.updateSession(id, input);
-  }
-  listSessions(who: HistoryInput) {
-    return this.conversations.sessions(who);
-  }
-  listRuns(id: string, query: HistoryInput) {
-    return this.conversations.runs(id, query);
-  }
-  readSubmission(id: string, request: string, who: Identity) {
-    return this.conversations.submission(id, request, who);
-  }
-  currentSubmission(id: string, who: Identity) {
-    return this.conversations.current(id, who);
-  }
-  listMessages(id: string, query: MessageInput) {
-    return this.conversations.messages(id, query);
-  }
-  readPublicMessage(id: string, messageId: string, who: Identity) {
-    return this.conversations.message(id, messageId, who);
-  }
-  async readSession(id: string, who: Identity) {
-    return inTransaction(
-      this.pool,
-      async (client) => {
-        const session = await this.store.session(id, who, client);
-        if (!session) return undefined;
-        const last = await database(client).serviceRun.findFirst({
-          where: { session_id: id },
-          orderBy: { accepted_revision: 'desc' },
-        });
-        const run = last
-          ? await this.store.snapshot(runRow(last), client)
-          : undefined;
-        return {
-          ...this.store.sessionDTO(session),
-          execution_revision: Number(
-            run?.state.execution_revision ?? session.execution_revision,
-          ),
-          run,
-        };
-      },
-      true,
-    );
-  }
-  async createRun(id: string, input: CreateRunInput) {
-    if (this.stopping) throw new AgentError('shutting_down');
-    const session = await this.store.session(id, input);
-    if (!session) throw new AgentError('session_not_found');
-    const manifest = freezeManifest(
-      input.manifest,
-      await this.business.tools(),
-    );
-    const run = await this.store.admitRun(id, input, manifest);
-    this.launch(run);
+
     return {
-      root_run_id: run.id,
-      session_id: run.session_id,
-      submission_id: run.submission_id,
-      status: 'accepted',
-      execution_revision: Number(run.accepted_revision),
+      root_run_id: admitted.runId,
+      session_id: input.sessionId,
+      submission_id: admitted.submissionId,
+      accepted_revision: admitted.acceptedRevision,
+      status: 'running',
     };
   }
-  async readRun(id: string, who: Identity) {
-    return inTransaction(
-      this.pool,
-      async (client) => {
-        const run = await this.store.run(id, who, client);
-        return run ? this.store.snapshot(run, client) : undefined;
-      },
-      true,
+
+  listRuns(
+    identity: Identity,
+    sessionId: string,
+    limit?: number,
+  ): Promise<{ items: Array<Record<string, unknown>>; next_cursor?: string }> {
+    return this.options.store.listRuns(identity, sessionId, limit);
+  }
+
+  getRun(identity: Identity, runId: string): Promise<RunView> {
+    return this.options.store.getRun(identity, runId);
+  }
+
+  getCurrentSubmission(
+    identity: Identity,
+    sessionId: string,
+  ): Promise<Record<string, unknown>> {
+    return this.options.store.getCurrentSubmission(identity, sessionId);
+  }
+
+  getSubmission(
+    identity: Identity,
+    sessionId: string,
+    requestId: string,
+  ): Promise<Record<string, unknown>> {
+    return this.options.store.getSubmission(identity, sessionId, requestId);
+  }
+
+  listMessages(
+    identity: Identity,
+    runId: string,
+    limit?: number,
+    before?: string,
+    through?: string,
+  ): Promise<{ items: PublicMessageView[]; next_cursor?: string; through: string }> {
+    return this.options.store.listMessages(
+      identity,
+      runId,
+      limit,
+      before,
+      through,
     );
   }
-  private async runtime(run: RunRow) {
-    const prior = this.active.get(run.session_id);
-    if (this.stopping) throw new AgentError('shutting_down');
-    if (prior?.run.id === run.id && !prior.isClosed) return prior;
-    if (prior) {
-      await prior.close();
-      this.active.delete(run.session_id);
+
+  getMessage(
+    identity: Identity,
+    runId: string,
+    messageId: string,
+  ): Promise<PublicMessageView> {
+    return this.options.store.getMessage(identity, runId, messageId);
+  }
+
+  async applyDecision(
+    input: ApplyDecisionInput,
+  ): Promise<Record<string, unknown>> {
+    const recorded = await this.options.store.recordDecision(input);
+    if (recorded.deduplicated) {
+      return { decision_id: input.decisionId, applied: true, deduplicated: true };
     }
-    const pending = this.opening.get(run.session_id);
-    if (pending) return pending;
-    const open = SessionRuntime.open(
-      this.pool,
-      this.business,
-      run,
-      this.options.leaseMs,
-      {
-        ...this.options,
-        onEventCommitted: () => this.eventBus.notify(run.id),
-        onCloseFailure: () =>
-          this.recovery.failed(
-            RecoveryKind.Run,
-            run.id,
-            run.id,
-            RecoveryCode.CloseFailed,
-          ),
-      },
-    )
-      .then(async (value) => {
-        if (this.stopping) {
-          await value.close();
-          throw new AgentError('shutting_down');
-        }
-        this.active.set(run.session_id, value);
-        return value;
-      })
-      .finally(() => this.opening.delete(run.session_id));
-    this.opening.set(run.session_id, open);
-    return open;
-  }
-  private launch(run: RunRow) {
-    if (
-      this.stopping ||
-      this.jobs.has(run.id) ||
-      this.jobs.size >= runtimeDefaults.maxConcurrentRoots
-    )
-      return;
-    const job = (async () => {
-      const runtime = await this.runtime(run);
-      await runtime.start();
-      await this.backoff.succeeded(RecoveryKind.Run, run.id);
-    })()
-      .catch(async () => {
-        await this.recovery.failed(
-          RecoveryKind.Run,
-          run.id,
-          run.id,
-          RecoveryCode.ExecutionUnavailable,
-        );
-        const current = this.active.get(run.session_id);
-        if (current && !current.isClosed)
-          await current.harness
-            .commit(async (tx) => {
-              const state = await tx.doc(StateDoc, current.root.id);
-              if (
-                state.root_run_id === run.id &&
-                ['accepted', 'running'].includes(state.status)
-              ) {
-                state.status = 'failed';
-                state.failure = {
-                  code: 'execution_unavailable',
-                  message:
-                    'The execution could not proceed. Check the original business receipts before retrying.',
-                };
-                state.execution_revision++;
-              }
-            }, context)
-            .catch(() =>
-              this.recovery.failed(
-                RecoveryKind.Run,
-                run.id,
-                run.id,
-                RecoveryCode.ExecutionUnavailable,
-              ),
-            );
-      })
-      .finally(async () => {
-        const current = this.active.get(run.session_id);
-        let continueRun = false;
-        if (current?.run.id === run.id && !current.isClosed) {
-          await current
-            .serialize(async () => {
-              const state = await current.state();
-              continueRun = state?.status === 'running';
-              if (state && !['accepted', 'running'].includes(state.status)) {
-                if (this.active.get(run.session_id) === current)
-                  this.active.delete(run.session_id);
-                await current.close();
-              }
-            })
-            .catch(() =>
-              this.recovery.failed(
-                RecoveryKind.Run,
-                run.id,
-                run.id,
-                RecoveryCode.CloseFailed,
-              ),
-            );
-        }
-        if (current?.isClosed && this.active.get(run.session_id) === current)
-          this.active.delete(run.session_id);
-        this.jobs.delete(run.id);
-        // A control may submit its continuation before the previous drive has returned.
-        if (continueRun) this.launch(run);
+
+    if (input.action === 'stop' || input.action === 'cancel') {
+      this.activeControllers.get(input.runId)?.abort();
+      await this.options.store.updateRunStatus(input.runId, 'cancelled');
+      await this.emitDurableEvent(input.runId, 'run.cancelled', {
+        root_run_id: input.runId,
+        decision_id: input.decisionId,
       });
-    this.jobs.set(run.id, job);
-  }
-  async waitForRun(id: string) {
-    await this.jobs.get(id);
-  }
-  command(id: string, input: ControlInput) {
-    if (this.stopping) return Promise.reject(new AgentError('shutting_down'));
-    return this.controls.command(id, input);
-  }
+      return { decision_id: input.decisionId, applied: true, status: 'cancelled' };
+    }
 
-  async events(
-    id: string,
-    who: Identity,
-    after: string | undefined,
-  ): Promise<RuntimeEvent[]> {
-    const run = await this.store.run(id, who);
-    if (!run) throw new AgentError('run_not_found');
-    return readRunEvents(this.pool, run, after);
-  }
-
-  waitForEvents(
-    id: string,
-    timeoutMs: number,
-    signal?: AbortSignal,
-  ): Promise<void> {
-    return this.eventBus.waitForUpdate(id, timeoutMs, signal);
-  }
-
-  get recoveryStatus() {
-    return this.recovery.status;
-  }
-
-  recoverOnce() {
-    return this.recovery.scanOnce();
-  }
-
-  startRecovery() {
-    this.recovery.start();
-  }
-
-  stopAccepting() {
-    this.stopping = true;
-    this.recovery.stop();
-    this.eventBus.close();
-  }
-
-  close(): Promise<void> {
-    this.stopAccepting();
-    this.closing ??= this.drain();
-    return this.closing;
-  }
-
-  private async drain() {
-    await this.recovery.close();
-    await Promise.allSettled([...this.opening.values()]);
-    const closed = await Promise.allSettled(
-      [...this.active.values()].map((runtime) => runtime.close()),
-    );
-    await Promise.allSettled([...this.jobs.values()]);
-    this.active.clear();
-    if (closed.some((result) => result.status === 'rejected'))
-      throw new AggregateError(
-        closed
-          .filter((result) => result.status === 'rejected')
-          .map(() => new Error(RecoveryCode.CloseFailed)),
-        'Execution shutdown failed',
+    if (
+      (input.action === 'approve' || input.action === 'reject') &&
+      recorded.workflowRunId
+    ) {
+      const workflow = this.options.agentTeam.mastra.getWorkflow(
+        'creativeDeliveryWorkflow',
       );
+      const wfRun = await workflow.createRun({
+        runId: recorded.workflowRunId,
+      });
+      const resumed = await wfRun.resume({
+        step: 'approval-gate',
+        resumeData: {
+          approved: input.action === 'approve',
+          decisionId: input.decisionId,
+        },
+      });
+      const completed = resumed.status === 'success';
+      await this.options.store.updateRunStatus(
+        input.runId,
+        completed ? 'completed' : 'failed',
+      );
+      await this.emitDurableEvent(input.runId, 'workflow.resumed', {
+        root_run_id: input.runId,
+        workflow_run_id: recorded.workflowRunId,
+        status: resumed.status,
+      });
+      return {
+        decision_id: input.decisionId,
+        applied: true,
+        workflow_status: resumed.status,
+      };
+    }
+
+    return { decision_id: input.decisionId, applied: true };
+  }
+
+  listRunEventsAfter(
+    identity: Identity,
+    runId: string,
+    lastEventId?: string,
+  ): Promise<{ events: RunEvent[]; terminal: boolean }> {
+    return this.options.store.listRunEventsAfter(identity, runId, lastEventId);
+  }
+
+  subscribeRunEvents(
+    runId: string,
+    handler: (event: RunEvent) => void,
+  ): () => void {
+    return this.options.eventBus.subscribe(runId, handler);
+  }
+
+  startRecovery(): void {
+    if (this.recoveryTimer) return;
+    this.recoveryTimer = setInterval(() => {
+      void this.runRecoverySweep();
+    }, this.options.recoveryPollMs);
+    this.recoveryTimer.unref();
+  }
+
+  async stopRecovery(): Promise<void> {
+    this.stopping = true;
+    if (this.recoveryTimer) {
+      clearInterval(this.recoveryTimer);
+      this.recoveryTimer = undefined;
+    }
+    for (const controller of this.activeControllers.values()) {
+      controller.abort();
+    }
+    this.activeControllers.clear();
+  }
+
+  private async runRecoverySweep(): Promise<void> {
+    if (this.stopping) return;
+    try {
+      const expired = await this.options.store.claimExpiredRuns(10);
+      for (const run of expired) {
+        if (run.workflow_run_id) {
+          await this.options.store.updateRunStatus(run.id, 'waiting_approval');
+          await this.emitDurableEvent(run.id, 'run.recovered_waiting', {
+            root_run_id: run.id,
+            workflow_run_id: run.workflow_run_id,
+          });
+        } else {
+          await this.options.store.updateRunStatus(run.id, 'failed', {
+            errorCode: 'lease_expired_recovered',
+          });
+          await this.emitDurableEvent(run.id, 'run.failed', {
+            root_run_id: run.id,
+            code: 'lease_expired_recovered',
+          });
+        }
+      }
+    } catch (error: unknown) {
+      this.options.logger.warn(
+        { err: error instanceof Error ? error.message : String(error) },
+        'Recovery sweep failed',
+      );
+    }
+  }
+
+  private async executeRun(runId: string, input: StartRunInput): Promise<void> {
+    const controller = new AbortController();
+    this.activeControllers.set(runId, controller);
+    const leaseTimer = setInterval(() => {
+      void this.options.store.renewLease(
+        runId,
+        this.ownerId,
+        this.options.leaseMs,
+      );
+    }, Math.max(2000, Math.floor(this.options.leaseMs / 3)));
+    leaseTimer.unref();
+
+    const mcpClient = createBusinessMcpClient(this.options.mcpConfig, {
+      actorId: input.identity.actorId,
+      orgId: input.identity.orgId ?? input.identity.actorId,
+      scopeId: input.identity.scopeId ?? input.identity.projectId,
+      projectId: input.identity.projectId,
+      runId,
+      ...(input.traceparent ? { traceparent: input.traceparent } : {}),
+    });
+
+    try {
+      const requiresApproval = Boolean(input.manifest.requires_approval);
+      if (requiresApproval) {
+        const workflow = this.options.agentTeam.mastra.getWorkflow(
+          'creativeDeliveryWorkflow',
+        );
+        const wfRun = await workflow.createRun();
+        const result = await wfRun.start({
+          inputData: {
+            runId,
+            projectId: input.identity.projectId,
+            goal: input.goal,
+            estimatedCostMicros: input.budgetMicros ?? 0,
+            requiresApproval: true,
+          },
+        });
+        if (result.status === 'suspended') {
+          await this.options.store.updateRunStatus(runId, 'waiting_approval', {
+            workflowRunId: wfRun.runId,
+          });
+          await this.emitDurableEvent(runId, 'approval.required', {
+            root_run_id: runId,
+            workflow_run_id: wfRun.runId,
+            suspended: result.suspended,
+          });
+          return;
+        }
+      }
+
+      let toolsets: Record<string, unknown> = {};
+      try {
+        const rawTools = await mcpClient.listTools();
+        const selectedSkillNames = Array.isArray(input.manifest.skills)
+          ? input.manifest.skills.filter(
+              (s): s is string => typeof s === 'string',
+            )
+          : [];
+        if (selectedSkillNames.length > 0) {
+          const allowlist = this.options.skills
+            .filter((skill) => selectedSkillNames.includes(skill.name))
+            .flatMap((skill) => skill.allowedTools);
+          toolsets = filterToolsByAllowlist(rawTools, allowlist);
+        } else {
+          toolsets = rawTools;
+        }
+      } catch (error: unknown) {
+        this.options.logger.debug(
+          {
+            runId,
+            err: error instanceof Error ? error.message : String(error),
+          },
+          'Go MCP tool discovery unavailable; continuing with core agent',
+        );
+      }
+
+      const modelKey =
+        typeof input.manifest.model_key === 'string'
+          ? input.manifest.model_key
+          : undefined;
+      const producer = await this.options.agentTeam.createScopedProducer(
+        {
+          actorId: input.identity.actorId,
+          orgId: input.identity.orgId ?? input.identity.actorId,
+          scopeId: input.identity.scopeId ?? input.identity.projectId,
+          projectId: input.identity.projectId,
+          runId,
+          ...(input.traceparent ? { traceparent: input.traceparent } : {}),
+        },
+        modelKey,
+      );
+
+      const response = await producer.generate(input.goal, {
+        maxSteps: 8,
+        ...(Object.keys(toolsets).length > 0 ? { toolsets: { glowloom: toolsets } as never } : {}),
+      });
+
+      const assistantText = response.text ?? '';
+      const msg = await this.options.store.appendPublicMessage(
+        runId,
+        'assistant',
+        assistantText,
+      );
+      await this.emitDurableEvent(runId, 'message.completed', {
+        root_run_id: runId,
+        message: msg,
+      });
+      await this.options.store.updateRunStatus(runId, 'completed');
+      await this.emitDurableEvent(runId, 'run.completed', {
+        root_run_id: runId,
+      });
+    } catch (error: unknown) {
+      if (controller.signal.aborted) {
+        return;
+      }
+      this.options.logger.error(
+        {
+          runId,
+          err: error instanceof Error ? error.message : String(error),
+        },
+        'Agent run execution failed',
+      );
+      await this.options.store.updateRunStatus(runId, 'failed', {
+        errorCode: 'execution_failed',
+      });
+      await this.emitDurableEvent(runId, 'run.failed', {
+        root_run_id: runId,
+        code: 'execution_failed',
+      });
+    } finally {
+      clearInterval(leaseTimer);
+      this.activeControllers.delete(runId);
+      await mcpClient.disconnect().catch(() => undefined);
+    }
+  }
+
+  private async emitDurableEvent(
+    runId: string,
+    eventType: string,
+    payload: Record<string, unknown>,
+  ): Promise<void> {
+    const event = await this.options.store.appendEvent(
+      runId,
+      eventType,
+      payload,
+    );
+    await this.options.eventBus.publish(event);
   }
 }

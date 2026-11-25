@@ -7190,104 +7190,136 @@ CREATE INDEX export_launch_expiry_idx ON mediatool.export_launch(expires_at);
 GRANT SELECT,INSERT,DELETE ON mediatool.export_launch TO glowloom_app;
 
 
--- Agent runtime storage.
+-- Agent runtime storage (Mastra static tables + Kysely service control tables).
+-- @mastra/pg runs with disableInit: true; all DDL lives exclusively in schema.sql.
 CREATE SCHEMA agent;
-CREATE TABLE agent.runtime_sessions (
-    session_id text PRIMARY KEY,
-    owner_id text NOT NULL,
-    owner_epoch bigint NOT NULL CHECK (owner_epoch > 0),
-    lease_until timestamptz NOT NULL,
-    last_id bigint NOT NULL DEFAULT 1 CHECK (last_id BETWEEN 1 AND 9007199254740991),
-    commit_seq bigint NOT NULL DEFAULT 0 CHECK (commit_seq BETWEEN 0 AND 9007199254740991)
+
+CREATE TABLE agent.mastra_threads (
+    id text PRIMARY KEY,
+    "resourceId" text NOT NULL,
+    title text NOT NULL,
+    metadata jsonb,
+    "createdAt" timestamp NOT NULL DEFAULT now(),
+    "updatedAt" timestamp NOT NULL DEFAULT now()
 );
--- JSON encoded text preserves JS strings including lone surrogates and NUL.
--- Indexed identity columns store JSON encoded scalar strings for the same reason.
-CREATE TABLE agent.runtime_records (
-    session_id text NOT NULL REFERENCES agent.runtime_sessions,
-    id bigint NOT NULL CHECK (id BETWEEN 1 AND 9007199254740991),
-    record_type text NOT NULL CHECK (record_type IN ('conversation','entry','task','submission','document')),
-    body text NOT NULL,
-    commit_seq bigint NOT NULL,
-    conversation_id bigint,
-    owner_conversation_id bigint,
-    owner_task_id bigint,
-    parent_id bigint,
-    parent_at bigint,
-    head_id bigint,
-    kind_key text,
-    status text,
-    background boolean,
-    abort_requested boolean,
-    request_key text,
-    scope_key text,
-    address_key text,
-    created_at_seq bigint,
-    retired_at_seq bigint,
-    PRIMARY KEY (session_id, id)
-);
-CREATE INDEX runtime_records_scan ON agent.runtime_records(session_id, record_type, id);
-CREATE INDEX runtime_records_conversation ON agent.runtime_records(session_id, record_type, conversation_id, id);
-CREATE INDEX runtime_records_owner_task ON agent.runtime_records(session_id, owner_task_id, id) WHERE owner_task_id IS NOT NULL;
--- Hash exclusion rechecks exact equality and avoids btree's key-size limit for
--- arbitrary SDK strings. No digest is treated as a durable identity.
-ALTER TABLE agent.runtime_records ADD CONSTRAINT runtime_submission_request
-  EXCLUDE USING hash ((ARRAY[session_id, conversation_id::text, request_key]) WITH =) WHERE (request_key IS NOT NULL);
-CREATE INDEX runtime_request_lookup ON agent.runtime_records USING hash(request_key) WHERE request_key IS NOT NULL;
-ALTER TABLE agent.runtime_records ADD CONSTRAINT runtime_live_document
-  EXCLUDE USING hash ((ARRAY[session_id,address_key]) WITH =) WHERE (address_key IS NOT NULL AND retired_at_seq IS NULL);
-CREATE INDEX runtime_document_address ON agent.runtime_records USING hash(address_key) WHERE address_key IS NOT NULL;
-CREATE INDEX runtime_document_scope ON agent.runtime_records(session_id,scope_key,id) WHERE scope_key IS NOT NULL;
-CREATE TABLE agent.runtime_document_versions (
-    session_id text NOT NULL,
-    document_id bigint NOT NULL,
-    commit_seq bigint NOT NULL,
-    version integer NOT NULL,
+CREATE INDEX mastra_threads_resource_idx ON agent.mastra_threads("resourceId", "updatedAt" DESC);
+
+CREATE TABLE agent.mastra_messages (
+    id text PRIMARY KEY,
+    thread_id text NOT NULL,
     content text NOT NULL,
-    deltas_since_base integer NOT NULL,
-    PRIMARY KEY(session_id,document_id,commit_seq),
-    FOREIGN KEY(session_id,document_id) REFERENCES agent.runtime_records
+    role text NOT NULL,
+    type text NOT NULL,
+    "createdAt" timestamp NOT NULL DEFAULT now(),
+    "resourceId" text
 );
-CREATE TABLE agent.runtime_events (
-    session_id text NOT NULL REFERENCES agent.runtime_sessions,
-    commit_seq bigint NOT NULL,
-    event_ordinal integer NOT NULL CHECK (event_ordinal > 0),
+CREATE INDEX mastra_messages_thread_idx ON agent.mastra_messages(thread_id, "createdAt" ASC);
+
+CREATE TABLE agent.mastra_resources (
+    id text PRIMARY KEY,
+    "workingMemory" text,
+    metadata jsonb,
+    "createdAt" timestamp NOT NULL DEFAULT now(),
+    "updatedAt" timestamp NOT NULL DEFAULT now()
+);
+
+CREATE TABLE agent.mastra_workflow_snapshot (
+    workflow_name text NOT NULL,
+    run_id text NOT NULL,
+    "resourceId" text,
+    snapshot jsonb NOT NULL,
+    "createdAt" timestamp NOT NULL DEFAULT now(),
+    "updatedAt" timestamp NOT NULL DEFAULT now(),
+    PRIMARY KEY (workflow_name, run_id)
+);
+CREATE INDEX mastra_workflow_snapshot_resource_idx ON agent.mastra_workflow_snapshot("resourceId", "updatedAt" DESC);
+
+REVOKE ALL ON agent.mastra_threads, agent.mastra_messages, agent.mastra_resources, agent.mastra_workflow_snapshot FROM PUBLIC;
+GRANT USAGE ON SCHEMA agent TO glowloom_agent;
+GRANT SELECT, INSERT, UPDATE, DELETE ON agent.mastra_threads, agent.mastra_messages, agent.mastra_resources, agent.mastra_workflow_snapshot TO glowloom_agent;
+
+-- Agent service control metadata (managed by Kysely).
+CREATE TABLE agent.service_sessions (
+    id uuid PRIMARY KEY,
+    actor_id uuid NOT NULL,
+    org_id uuid NOT NULL,
+    scope_id uuid NOT NULL,
+    project_id uuid NOT NULL,
+    canvas_id uuid,
+    title text NOT NULL,
+    request_id uuid NOT NULL,
+    content_hash text NOT NULL,
+    execution_revision bigint NOT NULL DEFAULT 0 CHECK (execution_revision >= 0),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    last_input_at timestamptz,
+    pinned boolean NOT NULL DEFAULT false,
+    archived_at timestamptz,
+    UNIQUE (actor_id, project_id, request_id)
+);
+CREATE INDEX service_sessions_owner ON agent.service_sessions(actor_id, project_id, created_at DESC, id);
+CREATE INDEX service_sessions_input ON agent.service_sessions(actor_id, project_id, last_input_at DESC, id);
+
+CREATE TABLE agent.service_runs (
+    id uuid PRIMARY KEY,
+    session_id uuid NOT NULL REFERENCES agent.service_sessions(id),
+    request_id uuid NOT NULL,
+    content_hash text NOT NULL,
+    goal text NOT NULL,
+    manifest jsonb NOT NULL,
+    submission_id uuid NOT NULL,
+    accepted_revision bigint NOT NULL,
+    status text NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'running', 'waiting_approval', 'completed', 'failed', 'cancelled')),
+    lease_owner text,
+    lease_until timestamptz,
+    workflow_run_id text,
+    error_code text,
+    input jsonb,
+    retry_of_run_id uuid REFERENCES agent.service_runs(id),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    completed_at timestamptz,
+    UNIQUE (session_id, request_id)
+);
+CREATE INDEX service_runs_history ON agent.service_runs(session_id, accepted_revision DESC, id);
+CREATE INDEX service_runs_active_lease ON agent.service_runs(status, lease_until) WHERE status IN ('queued', 'running');
+
+CREATE TABLE agent.service_run_events (
+    run_id uuid NOT NULL REFERENCES agent.service_runs(id) ON DELETE CASCADE,
+    seq bigint NOT NULL CHECK (seq > 0),
     event_type text NOT NULL,
     payload jsonb NOT NULL,
-    PRIMARY KEY (session_id,commit_seq,event_ordinal)
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    PRIMARY KEY (run_id, seq)
 );
-REVOKE ALL ON agent.runtime_sessions, agent.runtime_records, agent.runtime_document_versions, agent.runtime_events FROM PUBLIC;
-GRANT USAGE ON SCHEMA agent TO glowloom_agent;
-GRANT SELECT,INSERT,UPDATE ON agent.runtime_sessions, agent.runtime_records TO glowloom_agent;
-GRANT SELECT,INSERT,DELETE ON agent.runtime_document_versions, agent.runtime_events TO glowloom_agent;
 
--- Agent admission metadata.
-CREATE TABLE agent.service_sessions (
- id uuid PRIMARY KEY, actor_id uuid NOT NULL, org_id uuid NOT NULL, scope_id uuid NOT NULL,
- project_id uuid NOT NULL, canvas_id uuid, title text NOT NULL,
- request_id uuid NOT NULL, content_hash text NOT NULL,
- execution_revision bigint NOT NULL DEFAULT 0 CHECK(execution_revision>=0),
- created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
- UNIQUE(actor_id,project_id,request_id)
+CREATE TABLE agent.service_public_messages (
+    run_id uuid NOT NULL REFERENCES agent.service_runs(id) ON DELETE CASCADE,
+    seq bigint NOT NULL CHECK (seq > 0),
+    part_index integer NOT NULL DEFAULT 0,
+    message_id uuid NOT NULL,
+    kind text NOT NULL,
+    content text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    PRIMARY KEY (run_id, seq, part_index)
 );
-CREATE INDEX service_sessions_owner ON agent.service_sessions(actor_id,project_id,created_at DESC,id);
-CREATE TABLE agent.service_runs (
- id uuid PRIMARY KEY, session_id uuid NOT NULL REFERENCES agent.service_sessions,
- request_id uuid NOT NULL, content_hash text NOT NULL, goal text NOT NULL, manifest jsonb NOT NULL,
- submission_id uuid NOT NULL, accepted_revision bigint NOT NULL,
- created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
- UNIQUE(session_id,request_id)
-);
+CREATE INDEX service_public_messages_history ON agent.service_public_messages(run_id, seq DESC, part_index DESC);
+CREATE INDEX service_public_messages_identity ON agent.service_public_messages(run_id, message_id, part_index);
+
 CREATE TABLE agent.service_control_inbox (
- decision_id uuid PRIMARY KEY, root_run_id uuid NOT NULL REFERENCES agent.service_runs,
- authorization_revision bigint NOT NULL, content_hash text NOT NULL, input jsonb NOT NULL,
- receipt jsonb, created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
- UNIQUE(root_run_id,authorization_revision)
+    decision_id uuid PRIMARY KEY,
+    root_run_id uuid NOT NULL REFERENCES agent.service_runs(id) ON DELETE CASCADE,
+    authorization_revision bigint NOT NULL,
+    content_hash text NOT NULL,
+    input jsonb NOT NULL,
+    receipt jsonb,
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    UNIQUE (root_run_id, authorization_revision)
 );
-CREATE INDEX service_control_pending ON agent.service_control_inbox(root_run_id,authorization_revision) WHERE receipt IS NULL;
-CREATE INDEX runtime_events_run ON agent.runtime_events(session_id,(payload->>'root_run_id'),commit_seq,event_ordinal);
-REVOKE ALL ON agent.service_sessions,agent.service_runs,agent.service_control_inbox FROM PUBLIC;
-GRANT SELECT,INSERT,UPDATE ON agent.service_sessions,agent.service_control_inbox TO glowloom_agent;
-GRANT SELECT,INSERT ON agent.service_runs TO glowloom_agent;
+CREATE INDEX service_control_pending ON agent.service_control_inbox(root_run_id, authorization_revision) WHERE receipt IS NULL;
+
+REVOKE ALL ON agent.service_sessions, agent.service_runs, agent.service_run_events, agent.service_public_messages, agent.service_control_inbox FROM PUBLIC;
+GRANT SELECT, INSERT, UPDATE ON agent.service_sessions, agent.service_runs, agent.service_control_inbox TO glowloom_agent;
+GRANT SELECT, INSERT ON agent.service_run_events, agent.service_public_messages TO glowloom_agent;
 
 -- Agent business authorization.
 CREATE SCHEMA agent_business;
@@ -7413,33 +7445,7 @@ GRANT SELECT, INSERT, UPDATE ON infra.task_work, operation.development_trial TO 
 ALTER TABLE operation.batch ADD COLUMN resumed_at timestamptz;
 GRANT SELECT(resumed_at), UPDATE(resumed_at) ON operation.batch TO glowloom_app;
 
--- Agent conversation history.
-ALTER TABLE agent.service_runs ADD COLUMN input jsonb;
-ALTER TABLE agent.service_runs ADD COLUMN retry_of_run_id uuid REFERENCES agent.service_runs(id);
-ALTER TABLE agent.service_sessions ADD COLUMN last_input_at timestamptz;
--- Additive Agent conversation history metadata.
-ALTER TABLE agent.service_sessions
- ADD COLUMN pinned boolean NOT NULL DEFAULT false,
- ADD COLUMN archived_at timestamptz;
-CREATE INDEX service_runs_history ON agent.service_runs(session_id,accepted_revision DESC,id);
-CREATE INDEX service_sessions_input ON agent.service_sessions(actor_id,project_id,last_input_at DESC,id);
-CREATE TABLE agent.public_messages (
- session_id text NOT NULL REFERENCES agent.runtime_sessions(session_id),
- run_id uuid NOT NULL,
- commit_seq bigint NOT NULL,
- event_ordinal integer NOT NULL,
- part_index integer NOT NULL,
- message_id uuid NOT NULL,
- conversation_id bigint NOT NULL,
- sequence text NOT NULL,
- kind text NOT NULL,
- content text NOT NULL,
- PRIMARY KEY(session_id,commit_seq,event_ordinal,part_index)
-);
-CREATE INDEX public_messages_history ON agent.public_messages(run_id,commit_seq DESC,event_ordinal DESC,part_index DESC);
-CREATE INDEX public_messages_identity ON agent.public_messages(run_id,message_id,part_index);
-REVOKE ALL ON agent.public_messages FROM PUBLIC;
-GRANT SELECT,INSERT ON agent.public_messages TO glowloom_agent;
+-- Agent conversation history columns & service_public_messages are defined inline in CREATE SCHEMA agent above.
 
 -- Transfer output attempt facts.
 CREATE TABLE media.transfer_output_attempt (

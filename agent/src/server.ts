@@ -1,98 +1,120 @@
-import { Pool } from 'pg';
-import { disconnectDatabase } from './database/connection.js';
 import { loadConfig } from './config.js';
-import { BusinessClient } from './business/client.js';
+import { createDatabaseBundle } from './database/connection.js';
+import { createMastraRuntime } from './mastra/runtime.js';
+import { PromptRegistry } from './observability/langfuse.js';
+import { createAgentLogger } from './observability/logger.js';
+import { createEventBus } from './sessions/event-bus.js';
 import { SessionService } from './sessions/service.js';
-import { buildApp } from './transport/app.js';
+import { SessionStore } from './sessions/store.js';
+import { loadDeclarativeSkills } from './skills/loader.js';
 import {
   startAgentGrpcServer,
   type AgentGrpcServer,
 } from './transport/grpc-server.js';
-import { createAgentLogger } from './observability/logger.js';
-import { setSpanSink } from './observability/otel.js';
+import {
+  startHealthServer,
+  type HealthServer,
+} from './transport/health-server.js';
 
 const config = loadConfig(process.env);
-const logger = createAgentLogger();
-setSpanSink((span) => {
-  logger.debug({ span }, 'agent.span');
-});
-const pool = new Pool({
-  connectionString: config.dbDsn,
-  max: config.poolMax,
-  connectionTimeoutMillis: 5000,
-  idleTimeoutMillis: 30000,
-  statement_timeout: 10000,
-});
-pool.on('error', () =>
-  logger.error(
-    { code: 'postgres_connection_error' },
-    'Agent database connection failed',
-  ),
-);
-const service = new SessionService(
-  pool,
-  new BusinessClient(config.businessOrigin, config.businessToken),
-  {
-    onRecoveryEvent: (event) =>
-      logger.warn({ recovery: event }, 'Agent recovery requires attention'),
-    leaseMs: config.leaseMs,
-    deliveryPollMs: config.deliveryPollMs,
-    deliveryTimeoutMs: config.deliveryTimeoutMs,
+const logger = createAgentLogger(config.logLevel);
+const dbBundle = createDatabaseBundle(config.dbDsn, config.poolMax);
+const eventBus = createEventBus(config.redisUrl, logger);
+const prompts = new PromptRegistry(config.langfuse, logger);
+const skills = await loadDeclarativeSkills();
+
+const agentTeam = await createMastraRuntime({
+  storage: dbBundle.mastraStore,
+  gatewayConfig: {
+    businessOrigin: config.businessOrigin,
+    businessToken: config.businessToken,
+    defaultModel: config.defaultModel,
   },
-);
-const app = await buildApp({
-  service,
-  serviceToken: config.serviceToken,
+  prompts,
   logger,
-  swagger: config.swagger,
-}).catch(async (error: unknown) => {
-  await disconnectDatabase(pool).finally(() => pool.end());
-  throw error;
 });
 
+const service = new SessionService({
+  store: new SessionStore(dbBundle.db),
+  eventBus,
+  agentTeam,
+  mcpConfig: {
+    businessOrigin: config.businessOrigin,
+    businessToken: config.businessToken,
+  },
+  skills,
+  logger,
+  leaseMs: config.leaseMs,
+  recoveryPollMs: config.recoveryPollMs,
+});
+
+let healthServer: HealthServer | undefined;
 let grpcServer: AgentGrpcServer | undefined;
 let closing: Promise<void> | undefined;
+
 function close(): Promise<void> {
   closing ??= (async () => {
-    logger.info('Closing agent');
+    logger.info('Shutting down Glowloom Mastra Agent service');
+    healthServer?.markDraining();
     const deadline = setTimeout(() => {
-      logger.error(
-        { code: 'shutdown_timeout' },
-        'Agent shutdown deadline exceeded',
-      );
+      logger.error({ code: 'shutdown_timeout' }, 'Agent shutdown deadline exceeded');
       process.exit(1);
-    }, 30000);
+    }, 30_000);
     deadline.unref();
     try {
-      await (grpcServer ? grpcServer.close() : Promise.resolve())
-        .finally(() => app.close())
-        .finally(() => disconnectDatabase(pool).finally(() => pool.end()));
+      await service.stopRecovery();
+      await Promise.allSettled([
+        grpcServer?.close(),
+        healthServer?.close(),
+        eventBus.close(),
+        prompts.shutdown(),
+        dbBundle.close(),
+      ]);
     } finally {
       clearTimeout(deadline);
     }
   })();
   return closing;
 }
-function onSignal() {
+
+function onSignal(): void {
   void close().catch(() => {
-    logger.error({ code: 'shutdown_failed' }, 'Agent shutdown failed');
     process.exitCode = 1;
   });
 }
+
 process.on('SIGTERM', onSignal);
 process.on('SIGINT', onSignal);
 
 try {
-  await app.listen(config.port, config.host);
-  const grpcAddr = process.env.GLOWLOOM_AGENT_GRPC_ADDR ?? '0.0.0.0:4402';
-  grpcServer = await startAgentGrpcServer({
-    app,
+  healthServer = await startHealthServer({
+    host: config.httpHost,
+    port: config.httpPort,
     service,
-    address: grpcAddr,
+  });
+  grpcServer = await startAgentGrpcServer({
+    service,
+    address: config.grpcAddr,
     serviceToken: config.serviceToken,
   });
-  if (!closing) service.startRecovery();
-} catch (error) {
+  if (!closing) {
+    service.startRecovery();
+  }
+  logger.info(
+    {
+      http: healthServer.address,
+      grpc: grpcServer.address,
+      skills: skills.map((s) => s.name),
+      langfuseEnabled: Boolean(config.langfuse),
+      redisEnabled: Boolean(config.redisUrl),
+    },
+    'Glowloom Mastra Agent service listening',
+  );
+} catch (error: unknown) {
+  logger.error(
+    { err: error instanceof Error ? error.message : String(error) },
+    'Agent startup failed',
+  );
   await close();
   throw error;
 }

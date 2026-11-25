@@ -1,20 +1,23 @@
 import { timingSafeEqual } from 'node:crypto';
 
-export type AuthFailureReason = 'unauthorized' | 'invalid_audience';
+export type IdentityFailure = 'unauthorized' | 'invalid_audience' | null;
 
 export function verifyServiceIdentity(
-  authorizationHeader: string | undefined,
-  audienceHeader: string | undefined,
+  authorization: string | undefined,
+  audience: string | undefined,
   expectedAuthorization: Buffer,
-): AuthFailureReason | null {
-  const actual = Buffer.from(authorizationHeader ?? '');
+): IdentityFailure {
+  if (!authorization) {
+    return 'unauthorized';
+  }
+  const actual = Buffer.from(authorization);
   if (
     actual.length !== expectedAuthorization.length ||
     !timingSafeEqual(actual, expectedAuthorization)
   ) {
     return 'unauthorized';
   }
-  if (audienceHeader !== 'agent') {
+  if (audience !== 'agent') {
     return 'invalid_audience';
   }
   return null;

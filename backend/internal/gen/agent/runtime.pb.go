@@ -21,33 +21,30 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type InvokeRequest struct {
+type Identity struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Operation     string                 `protobuf:"bytes,1,opt,name=operation,proto3" json:"operation,omitempty"`
-	Method        string                 `protobuf:"bytes,2,opt,name=method,proto3" json:"method,omitempty"`
-	Path          string                 `protobuf:"bytes,3,opt,name=path,proto3" json:"path,omitempty"`
-	Params        map[string]string      `protobuf:"bytes,4,rep,name=params,proto3" json:"params,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Query         map[string]string      `protobuf:"bytes,5,rep,name=query,proto3" json:"query,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Headers       map[string]string      `protobuf:"bytes,6,rep,name=headers,proto3" json:"headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	BodyJson      []byte                 `protobuf:"bytes,7,opt,name=body_json,json=bodyJson,proto3" json:"body_json,omitempty"`
+	ActorId       string                 `protobuf:"bytes,1,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"`
+	OrgId         string                 `protobuf:"bytes,2,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	ScopeId       string                 `protobuf:"bytes,3,opt,name=scope_id,json=scopeId,proto3" json:"scope_id,omitempty"`
+	ProjectId     string                 `protobuf:"bytes,4,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *InvokeRequest) Reset() {
-	*x = InvokeRequest{}
+func (x *Identity) Reset() {
+	*x = Identity{}
 	mi := &file_glowloom_agent_runtime_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *InvokeRequest) String() string {
+func (x *Identity) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*InvokeRequest) ProtoMessage() {}
+func (*Identity) ProtoMessage() {}
 
-func (x *InvokeRequest) ProtoReflect() protoreflect.Message {
+func (x *Identity) ProtoReflect() protoreflect.Message {
 	mi := &file_glowloom_agent_runtime_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -59,83 +56,63 @@ func (x *InvokeRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use InvokeRequest.ProtoReflect.Descriptor instead.
-func (*InvokeRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use Identity.ProtoReflect.Descriptor instead.
+func (*Identity) Descriptor() ([]byte, []int) {
 	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *InvokeRequest) GetOperation() string {
+func (x *Identity) GetActorId() string {
 	if x != nil {
-		return x.Operation
+		return x.ActorId
 	}
 	return ""
 }
 
-func (x *InvokeRequest) GetMethod() string {
+func (x *Identity) GetOrgId() string {
 	if x != nil {
-		return x.Method
+		return x.OrgId
 	}
 	return ""
 }
 
-func (x *InvokeRequest) GetPath() string {
+func (x *Identity) GetScopeId() string {
 	if x != nil {
-		return x.Path
+		return x.ScopeId
 	}
 	return ""
 }
 
-func (x *InvokeRequest) GetParams() map[string]string {
+func (x *Identity) GetProjectId() string {
 	if x != nil {
-		return x.Params
+		return x.ProjectId
 	}
-	return nil
+	return ""
 }
 
-func (x *InvokeRequest) GetQuery() map[string]string {
-	if x != nil {
-		return x.Query
-	}
-	return nil
-}
-
-func (x *InvokeRequest) GetHeaders() map[string]string {
-	if x != nil {
-		return x.Headers
-	}
-	return nil
-}
-
-func (x *InvokeRequest) GetBodyJson() []byte {
-	if x != nil {
-		return x.BodyJson
-	}
-	return nil
-}
-
-type InvokeResponse struct {
+type CreateSessionRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	StatusCode    int32                  `protobuf:"varint,1,opt,name=status_code,json=statusCode,proto3" json:"status_code,omitempty"`
-	ContentType   string                 `protobuf:"bytes,2,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
-	BodyJson      []byte                 `protobuf:"bytes,3,opt,name=body_json,json=bodyJson,proto3" json:"body_json,omitempty"`
+	Identity      *Identity              `protobuf:"bytes,1,opt,name=identity,proto3" json:"identity,omitempty"`
+	RequestId     string                 `protobuf:"bytes,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Title         string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
+	CanvasId      string                 `protobuf:"bytes,4,opt,name=canvas_id,json=canvasId,proto3" json:"canvas_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *InvokeResponse) Reset() {
-	*x = InvokeResponse{}
+func (x *CreateSessionRequest) Reset() {
+	*x = CreateSessionRequest{}
 	mi := &file_glowloom_agent_runtime_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *InvokeResponse) String() string {
+func (x *CreateSessionRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*InvokeResponse) ProtoMessage() {}
+func (*CreateSessionRequest) ProtoMessage() {}
 
-func (x *InvokeResponse) ProtoReflect() protoreflect.Message {
+func (x *CreateSessionRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_glowloom_agent_runtime_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -147,44 +124,799 @@ func (x *InvokeResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use InvokeResponse.ProtoReflect.Descriptor instead.
-func (*InvokeResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use CreateSessionRequest.ProtoReflect.Descriptor instead.
+func (*CreateSessionRequest) Descriptor() ([]byte, []int) {
 	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *InvokeResponse) GetStatusCode() int32 {
+func (x *CreateSessionRequest) GetIdentity() *Identity {
 	if x != nil {
-		return x.StatusCode
+		return x.Identity
+	}
+	return nil
+}
+
+func (x *CreateSessionRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *CreateSessionRequest) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *CreateSessionRequest) GetCanvasId() string {
+	if x != nil {
+		return x.CanvasId
+	}
+	return ""
+}
+
+type ListSessionsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Identity      *Identity              `protobuf:"bytes,1,opt,name=identity,proto3" json:"identity,omitempty"`
+	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
+	Cursor        string                 `protobuf:"bytes,3,opt,name=cursor,proto3" json:"cursor,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListSessionsRequest) Reset() {
+	*x = ListSessionsRequest{}
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListSessionsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListSessionsRequest) ProtoMessage() {}
+
+func (x *ListSessionsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListSessionsRequest.ProtoReflect.Descriptor instead.
+func (*ListSessionsRequest) Descriptor() ([]byte, []int) {
+	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ListSessionsRequest) GetIdentity() *Identity {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
+}
+
+func (x *ListSessionsRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
 	}
 	return 0
 }
 
-func (x *InvokeResponse) GetContentType() string {
+func (x *ListSessionsRequest) GetCursor() string {
 	if x != nil {
-		return x.ContentType
+		return x.Cursor
 	}
 	return ""
 }
 
-func (x *InvokeResponse) GetBodyJson() []byte {
+type GetSessionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Identity      *Identity              `protobuf:"bytes,1,opt,name=identity,proto3" json:"identity,omitempty"`
+	SessionId     string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSessionRequest) Reset() {
+	*x = GetSessionRequest{}
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSessionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSessionRequest) ProtoMessage() {}
+
+func (x *GetSessionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[3]
 	if x != nil {
-		return x.BodyJson
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSessionRequest.ProtoReflect.Descriptor instead.
+func (*GetSessionRequest) Descriptor() ([]byte, []int) {
+	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *GetSessionRequest) GetIdentity() *Identity {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
+}
+
+func (x *GetSessionRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+type UpdateSessionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Identity      *Identity              `protobuf:"bytes,1,opt,name=identity,proto3" json:"identity,omitempty"`
+	SessionId     string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	Title         *string                `protobuf:"bytes,3,opt,name=title,proto3,oneof" json:"title,omitempty"`
+	Pinned        *bool                  `protobuf:"varint,4,opt,name=pinned,proto3,oneof" json:"pinned,omitempty"`
+	Archived      *bool                  `protobuf:"varint,5,opt,name=archived,proto3,oneof" json:"archived,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateSessionRequest) Reset() {
+	*x = UpdateSessionRequest{}
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateSessionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateSessionRequest) ProtoMessage() {}
+
+func (x *UpdateSessionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateSessionRequest.ProtoReflect.Descriptor instead.
+func (*UpdateSessionRequest) Descriptor() ([]byte, []int) {
+	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *UpdateSessionRequest) GetIdentity() *Identity {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
+}
+
+func (x *UpdateSessionRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *UpdateSessionRequest) GetTitle() string {
+	if x != nil && x.Title != nil {
+		return *x.Title
+	}
+	return ""
+}
+
+func (x *UpdateSessionRequest) GetPinned() bool {
+	if x != nil && x.Pinned != nil {
+		return *x.Pinned
+	}
+	return false
+}
+
+func (x *UpdateSessionRequest) GetArchived() bool {
+	if x != nil && x.Archived != nil {
+		return *x.Archived
+	}
+	return false
+}
+
+type StartRunRequest struct {
+	state                     protoimpl.MessageState `protogen:"open.v1"`
+	Identity                  *Identity              `protobuf:"bytes,1,opt,name=identity,proto3" json:"identity,omitempty"`
+	SessionId                 string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	RequestId                 string                 `protobuf:"bytes,3,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Goal                      string                 `protobuf:"bytes,4,opt,name=goal,proto3" json:"goal,omitempty"`
+	ManifestJson              []byte                 `protobuf:"bytes,5,opt,name=manifest_json,json=manifestJson,proto3" json:"manifest_json,omitempty"`
+	InputJson                 []byte                 `protobuf:"bytes,6,opt,name=input_json,json=inputJson,proto3" json:"input_json,omitempty"`
+	RetryOfRunId              string                 `protobuf:"bytes,7,opt,name=retry_of_run_id,json=retryOfRunId,proto3" json:"retry_of_run_id,omitempty"`
+	ExpectedExecutionRevision int64                  `protobuf:"varint,8,opt,name=expected_execution_revision,json=expectedExecutionRevision,proto3" json:"expected_execution_revision,omitempty"`
+	BudgetMicros              int64                  `protobuf:"varint,9,opt,name=budget_micros,json=budgetMicros,proto3" json:"budget_micros,omitempty"`
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
+}
+
+func (x *StartRunRequest) Reset() {
+	*x = StartRunRequest{}
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartRunRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartRunRequest) ProtoMessage() {}
+
+func (x *StartRunRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartRunRequest.ProtoReflect.Descriptor instead.
+func (*StartRunRequest) Descriptor() ([]byte, []int) {
+	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *StartRunRequest) GetIdentity() *Identity {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
+}
+
+func (x *StartRunRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *StartRunRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *StartRunRequest) GetGoal() string {
+	if x != nil {
+		return x.Goal
+	}
+	return ""
+}
+
+func (x *StartRunRequest) GetManifestJson() []byte {
+	if x != nil {
+		return x.ManifestJson
+	}
+	return nil
+}
+
+func (x *StartRunRequest) GetInputJson() []byte {
+	if x != nil {
+		return x.InputJson
+	}
+	return nil
+}
+
+func (x *StartRunRequest) GetRetryOfRunId() string {
+	if x != nil {
+		return x.RetryOfRunId
+	}
+	return ""
+}
+
+func (x *StartRunRequest) GetExpectedExecutionRevision() int64 {
+	if x != nil {
+		return x.ExpectedExecutionRevision
+	}
+	return 0
+}
+
+func (x *StartRunRequest) GetBudgetMicros() int64 {
+	if x != nil {
+		return x.BudgetMicros
+	}
+	return 0
+}
+
+type ListRunsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Identity      *Identity              `protobuf:"bytes,1,opt,name=identity,proto3" json:"identity,omitempty"`
+	SessionId     string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	Limit         int32                  `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`
+	Cursor        string                 `protobuf:"bytes,4,opt,name=cursor,proto3" json:"cursor,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListRunsRequest) Reset() {
+	*x = ListRunsRequest{}
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListRunsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListRunsRequest) ProtoMessage() {}
+
+func (x *ListRunsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListRunsRequest.ProtoReflect.Descriptor instead.
+func (*ListRunsRequest) Descriptor() ([]byte, []int) {
+	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ListRunsRequest) GetIdentity() *Identity {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
+}
+
+func (x *ListRunsRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *ListRunsRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *ListRunsRequest) GetCursor() string {
+	if x != nil {
+		return x.Cursor
+	}
+	return ""
+}
+
+type GetRunRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Identity      *Identity              `protobuf:"bytes,1,opt,name=identity,proto3" json:"identity,omitempty"`
+	RunId         string                 `protobuf:"bytes,2,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetRunRequest) Reset() {
+	*x = GetRunRequest{}
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetRunRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetRunRequest) ProtoMessage() {}
+
+func (x *GetRunRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetRunRequest.ProtoReflect.Descriptor instead.
+func (*GetRunRequest) Descriptor() ([]byte, []int) {
+	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *GetRunRequest) GetIdentity() *Identity {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
+}
+
+func (x *GetRunRequest) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+type GetCurrentSubmissionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Identity      *Identity              `protobuf:"bytes,1,opt,name=identity,proto3" json:"identity,omitempty"`
+	SessionId     string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetCurrentSubmissionRequest) Reset() {
+	*x = GetCurrentSubmissionRequest{}
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetCurrentSubmissionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetCurrentSubmissionRequest) ProtoMessage() {}
+
+func (x *GetCurrentSubmissionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetCurrentSubmissionRequest.ProtoReflect.Descriptor instead.
+func (*GetCurrentSubmissionRequest) Descriptor() ([]byte, []int) {
+	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *GetCurrentSubmissionRequest) GetIdentity() *Identity {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
+}
+
+func (x *GetCurrentSubmissionRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+type GetSubmissionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Identity      *Identity              `protobuf:"bytes,1,opt,name=identity,proto3" json:"identity,omitempty"`
+	SessionId     string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	RequestId     string                 `protobuf:"bytes,3,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSubmissionRequest) Reset() {
+	*x = GetSubmissionRequest{}
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSubmissionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSubmissionRequest) ProtoMessage() {}
+
+func (x *GetSubmissionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSubmissionRequest.ProtoReflect.Descriptor instead.
+func (*GetSubmissionRequest) Descriptor() ([]byte, []int) {
+	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *GetSubmissionRequest) GetIdentity() *Identity {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
+}
+
+func (x *GetSubmissionRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *GetSubmissionRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+type ListMessagesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Identity      *Identity              `protobuf:"bytes,1,opt,name=identity,proto3" json:"identity,omitempty"`
+	RunId         string                 `protobuf:"bytes,2,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	Limit         int32                  `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`
+	Before        string                 `protobuf:"bytes,4,opt,name=before,proto3" json:"before,omitempty"`
+	Through       string                 `protobuf:"bytes,5,opt,name=through,proto3" json:"through,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListMessagesRequest) Reset() {
+	*x = ListMessagesRequest{}
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListMessagesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListMessagesRequest) ProtoMessage() {}
+
+func (x *ListMessagesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListMessagesRequest.ProtoReflect.Descriptor instead.
+func (*ListMessagesRequest) Descriptor() ([]byte, []int) {
+	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ListMessagesRequest) GetIdentity() *Identity {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
+}
+
+func (x *ListMessagesRequest) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *ListMessagesRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *ListMessagesRequest) GetBefore() string {
+	if x != nil {
+		return x.Before
+	}
+	return ""
+}
+
+func (x *ListMessagesRequest) GetThrough() string {
+	if x != nil {
+		return x.Through
+	}
+	return ""
+}
+
+type GetMessageRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Identity      *Identity              `protobuf:"bytes,1,opt,name=identity,proto3" json:"identity,omitempty"`
+	RunId         string                 `protobuf:"bytes,2,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	MessageId     string                 `protobuf:"bytes,3,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetMessageRequest) Reset() {
+	*x = GetMessageRequest{}
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetMessageRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetMessageRequest) ProtoMessage() {}
+
+func (x *GetMessageRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetMessageRequest.ProtoReflect.Descriptor instead.
+func (*GetMessageRequest) Descriptor() ([]byte, []int) {
+	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *GetMessageRequest) GetIdentity() *Identity {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
+}
+
+func (x *GetMessageRequest) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *GetMessageRequest) GetMessageId() string {
+	if x != nil {
+		return x.MessageId
+	}
+	return ""
+}
+
+type ApplyDecisionRequest struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	Identity              *Identity              `protobuf:"bytes,1,opt,name=identity,proto3" json:"identity,omitempty"`
+	RunId                 string                 `protobuf:"bytes,2,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	DecisionId            string                 `protobuf:"bytes,3,opt,name=decision_id,json=decisionId,proto3" json:"decision_id,omitempty"`
+	AuthorizationRevision int64                  `protobuf:"varint,4,opt,name=authorization_revision,json=authorizationRevision,proto3" json:"authorization_revision,omitempty"`
+	Action                string                 `protobuf:"bytes,5,opt,name=action,proto3" json:"action,omitempty"`
+	PayloadJson           []byte                 `protobuf:"bytes,6,opt,name=payload_json,json=payloadJson,proto3" json:"payload_json,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *ApplyDecisionRequest) Reset() {
+	*x = ApplyDecisionRequest{}
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ApplyDecisionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ApplyDecisionRequest) ProtoMessage() {}
+
+func (x *ApplyDecisionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ApplyDecisionRequest.ProtoReflect.Descriptor instead.
+func (*ApplyDecisionRequest) Descriptor() ([]byte, []int) {
+	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *ApplyDecisionRequest) GetIdentity() *Identity {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
+}
+
+func (x *ApplyDecisionRequest) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *ApplyDecisionRequest) GetDecisionId() string {
+	if x != nil {
+		return x.DecisionId
+	}
+	return ""
+}
+
+func (x *ApplyDecisionRequest) GetAuthorizationRevision() int64 {
+	if x != nil {
+		return x.AuthorizationRevision
+	}
+	return 0
+}
+
+func (x *ApplyDecisionRequest) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *ApplyDecisionRequest) GetPayloadJson() []byte {
+	if x != nil {
+		return x.PayloadJson
 	}
 	return nil
 }
 
 type StreamRunEventsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
-	LastEventId   string                 `protobuf:"bytes,2,opt,name=last_event_id,json=lastEventId,proto3" json:"last_event_id,omitempty"`
-	Query         map[string]string      `protobuf:"bytes,3,rep,name=query,proto3" json:"query,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Identity      *Identity              `protobuf:"bytes,1,opt,name=identity,proto3" json:"identity,omitempty"`
+	RunId         string                 `protobuf:"bytes,2,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	LastEventId   string                 `protobuf:"bytes,3,opt,name=last_event_id,json=lastEventId,proto3" json:"last_event_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *StreamRunEventsRequest) Reset() {
 	*x = StreamRunEventsRequest{}
-	mi := &file_glowloom_agent_runtime_proto_msgTypes[2]
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -196,7 +928,7 @@ func (x *StreamRunEventsRequest) String() string {
 func (*StreamRunEventsRequest) ProtoMessage() {}
 
 func (x *StreamRunEventsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_glowloom_agent_runtime_proto_msgTypes[2]
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -209,7 +941,14 @@ func (x *StreamRunEventsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamRunEventsRequest.ProtoReflect.Descriptor instead.
 func (*StreamRunEventsRequest) Descriptor() ([]byte, []int) {
-	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{2}
+	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *StreamRunEventsRequest) GetIdentity() *Identity {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
 }
 
 func (x *StreamRunEventsRequest) GetRunId() string {
@@ -226,13 +965,6 @@ func (x *StreamRunEventsRequest) GetLastEventId() string {
 	return ""
 }
 
-func (x *StreamRunEventsRequest) GetQuery() map[string]string {
-	if x != nil {
-		return x.Query
-	}
-	return nil
-}
-
 type RunEventFrame struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -244,7 +976,7 @@ type RunEventFrame struct {
 
 func (x *RunEventFrame) Reset() {
 	*x = RunEventFrame{}
-	mi := &file_glowloom_agent_runtime_proto_msgTypes[3]
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -256,7 +988,7 @@ func (x *RunEventFrame) String() string {
 func (*RunEventFrame) ProtoMessage() {}
 
 func (x *RunEventFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_glowloom_agent_runtime_proto_msgTypes[3]
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -269,7 +1001,7 @@ func (x *RunEventFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunEventFrame.ProtoReflect.Descriptor instead.
 func (*RunEventFrame) Descriptor() ([]byte, []int) {
-	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{3}
+	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *RunEventFrame) GetId() string {
@@ -293,6 +1025,886 @@ func (x *RunEventFrame) GetDataJson() []byte {
 	return nil
 }
 
+type SessionPayloadResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	StatusCode    int32                  `protobuf:"varint,1,opt,name=status_code,json=statusCode,proto3" json:"status_code,omitempty"`
+	PayloadJson   []byte                 `protobuf:"bytes,2,opt,name=payload_json,json=payloadJson,proto3" json:"payload_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SessionPayloadResponse) Reset() {
+	*x = SessionPayloadResponse{}
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SessionPayloadResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SessionPayloadResponse) ProtoMessage() {}
+
+func (x *SessionPayloadResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SessionPayloadResponse.ProtoReflect.Descriptor instead.
+func (*SessionPayloadResponse) Descriptor() ([]byte, []int) {
+	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *SessionPayloadResponse) GetStatusCode() int32 {
+	if x != nil {
+		return x.StatusCode
+	}
+	return 0
+}
+
+func (x *SessionPayloadResponse) GetPayloadJson() []byte {
+	if x != nil {
+		return x.PayloadJson
+	}
+	return nil
+}
+
+type RunPayloadResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	StatusCode    int32                  `protobuf:"varint,1,opt,name=status_code,json=statusCode,proto3" json:"status_code,omitempty"`
+	PayloadJson   []byte                 `protobuf:"bytes,2,opt,name=payload_json,json=payloadJson,proto3" json:"payload_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunPayloadResponse) Reset() {
+	*x = RunPayloadResponse{}
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunPayloadResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunPayloadResponse) ProtoMessage() {}
+
+func (x *RunPayloadResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunPayloadResponse.ProtoReflect.Descriptor instead.
+func (*RunPayloadResponse) Descriptor() ([]byte, []int) {
+	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *RunPayloadResponse) GetStatusCode() int32 {
+	if x != nil {
+		return x.StatusCode
+	}
+	return 0
+}
+
+func (x *RunPayloadResponse) GetPayloadJson() []byte {
+	if x != nil {
+		return x.PayloadJson
+	}
+	return nil
+}
+
+type MessagePayloadResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	StatusCode    int32                  `protobuf:"varint,1,opt,name=status_code,json=statusCode,proto3" json:"status_code,omitempty"`
+	PayloadJson   []byte                 `protobuf:"bytes,2,opt,name=payload_json,json=payloadJson,proto3" json:"payload_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MessagePayloadResponse) Reset() {
+	*x = MessagePayloadResponse{}
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessagePayloadResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessagePayloadResponse) ProtoMessage() {}
+
+func (x *MessagePayloadResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessagePayloadResponse.ProtoReflect.Descriptor instead.
+func (*MessagePayloadResponse) Descriptor() ([]byte, []int) {
+	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *MessagePayloadResponse) GetStatusCode() int32 {
+	if x != nil {
+		return x.StatusCode
+	}
+	return 0
+}
+
+func (x *MessagePayloadResponse) GetPayloadJson() []byte {
+	if x != nil {
+		return x.PayloadJson
+	}
+	return nil
+}
+
+type DecisionPayloadResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	StatusCode    int32                  `protobuf:"varint,1,opt,name=status_code,json=statusCode,proto3" json:"status_code,omitempty"`
+	PayloadJson   []byte                 `protobuf:"bytes,2,opt,name=payload_json,json=payloadJson,proto3" json:"payload_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DecisionPayloadResponse) Reset() {
+	*x = DecisionPayloadResponse{}
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DecisionPayloadResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DecisionPayloadResponse) ProtoMessage() {}
+
+func (x *DecisionPayloadResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DecisionPayloadResponse.ProtoReflect.Descriptor instead.
+func (*DecisionPayloadResponse) Descriptor() ([]byte, []int) {
+	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *DecisionPayloadResponse) GetStatusCode() int32 {
+	if x != nil {
+		return x.StatusCode
+	}
+	return 0
+}
+
+func (x *DecisionPayloadResponse) GetPayloadJson() []byte {
+	if x != nil {
+		return x.PayloadJson
+	}
+	return nil
+}
+
+type AuthorizeRunRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Identity      *Identity              `protobuf:"bytes,1,opt,name=identity,proto3" json:"identity,omitempty"`
+	SessionId     string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	RunId         string                 `protobuf:"bytes,3,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	ModelKey      string                 `protobuf:"bytes,4,opt,name=model_key,json=modelKey,proto3" json:"model_key,omitempty"`
+	BudgetMicros  int64                  `protobuf:"varint,5,opt,name=budget_micros,json=budgetMicros,proto3" json:"budget_micros,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AuthorizeRunRequest) Reset() {
+	*x = AuthorizeRunRequest{}
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AuthorizeRunRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AuthorizeRunRequest) ProtoMessage() {}
+
+func (x *AuthorizeRunRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AuthorizeRunRequest.ProtoReflect.Descriptor instead.
+func (*AuthorizeRunRequest) Descriptor() ([]byte, []int) {
+	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *AuthorizeRunRequest) GetIdentity() *Identity {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
+}
+
+func (x *AuthorizeRunRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *AuthorizeRunRequest) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *AuthorizeRunRequest) GetModelKey() string {
+	if x != nil {
+		return x.ModelKey
+	}
+	return ""
+}
+
+func (x *AuthorizeRunRequest) GetBudgetMicros() int64 {
+	if x != nil {
+		return x.BudgetMicros
+	}
+	return 0
+}
+
+type AuthorizeRunResponse struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	Allowed               bool                   `protobuf:"varint,1,opt,name=allowed,proto3" json:"allowed,omitempty"`
+	Reason                string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
+	AuthorizationRevision int64                  `protobuf:"varint,3,opt,name=authorization_revision,json=authorizationRevision,proto3" json:"authorization_revision,omitempty"`
+	RemainingBudgetMicros int64                  `protobuf:"varint,4,opt,name=remaining_budget_micros,json=remainingBudgetMicros,proto3" json:"remaining_budget_micros,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *AuthorizeRunResponse) Reset() {
+	*x = AuthorizeRunResponse{}
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AuthorizeRunResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AuthorizeRunResponse) ProtoMessage() {}
+
+func (x *AuthorizeRunResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AuthorizeRunResponse.ProtoReflect.Descriptor instead.
+func (*AuthorizeRunResponse) Descriptor() ([]byte, []int) {
+	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *AuthorizeRunResponse) GetAllowed() bool {
+	if x != nil {
+		return x.Allowed
+	}
+	return false
+}
+
+func (x *AuthorizeRunResponse) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *AuthorizeRunResponse) GetAuthorizationRevision() int64 {
+	if x != nil {
+		return x.AuthorizationRevision
+	}
+	return 0
+}
+
+func (x *AuthorizeRunResponse) GetRemainingBudgetMicros() int64 {
+	if x != nil {
+		return x.RemainingBudgetMicros
+	}
+	return 0
+}
+
+type ReserveBudgetRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Identity        *Identity              `protobuf:"bytes,1,opt,name=identity,proto3" json:"identity,omitempty"`
+	RunId           string                 `protobuf:"bytes,2,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	CallId          string                 `protobuf:"bytes,3,opt,name=call_id,json=callId,proto3" json:"call_id,omitempty"`
+	ModelKey        string                 `protobuf:"bytes,4,opt,name=model_key,json=modelKey,proto3" json:"model_key,omitempty"`
+	EstimatedMicros int64                  `protobuf:"varint,5,opt,name=estimated_micros,json=estimatedMicros,proto3" json:"estimated_micros,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ReserveBudgetRequest) Reset() {
+	*x = ReserveBudgetRequest{}
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReserveBudgetRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReserveBudgetRequest) ProtoMessage() {}
+
+func (x *ReserveBudgetRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReserveBudgetRequest.ProtoReflect.Descriptor instead.
+func (*ReserveBudgetRequest) Descriptor() ([]byte, []int) {
+	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *ReserveBudgetRequest) GetIdentity() *Identity {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
+}
+
+func (x *ReserveBudgetRequest) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *ReserveBudgetRequest) GetCallId() string {
+	if x != nil {
+		return x.CallId
+	}
+	return ""
+}
+
+func (x *ReserveBudgetRequest) GetModelKey() string {
+	if x != nil {
+		return x.ModelKey
+	}
+	return ""
+}
+
+func (x *ReserveBudgetRequest) GetEstimatedMicros() int64 {
+	if x != nil {
+		return x.EstimatedMicros
+	}
+	return 0
+}
+
+type ReserveBudgetResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Reserved      bool                   `protobuf:"varint,1,opt,name=reserved,proto3" json:"reserved,omitempty"`
+	ReservationId string                 `protobuf:"bytes,2,opt,name=reservation_id,json=reservationId,proto3" json:"reservation_id,omitempty"`
+	Reason        string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReserveBudgetResponse) Reset() {
+	*x = ReserveBudgetResponse{}
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReserveBudgetResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReserveBudgetResponse) ProtoMessage() {}
+
+func (x *ReserveBudgetResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReserveBudgetResponse.ProtoReflect.Descriptor instead.
+func (*ReserveBudgetResponse) Descriptor() ([]byte, []int) {
+	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *ReserveBudgetResponse) GetReserved() bool {
+	if x != nil {
+		return x.Reserved
+	}
+	return false
+}
+
+func (x *ReserveBudgetResponse) GetReservationId() string {
+	if x != nil {
+		return x.ReservationId
+	}
+	return ""
+}
+
+func (x *ReserveBudgetResponse) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+type ReportUsageRequest struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Identity         *Identity              `protobuf:"bytes,1,opt,name=identity,proto3" json:"identity,omitempty"`
+	RunId            string                 `protobuf:"bytes,2,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	ReservationId    string                 `protobuf:"bytes,3,opt,name=reservation_id,json=reservationId,proto3" json:"reservation_id,omitempty"`
+	ModelKey         string                 `protobuf:"bytes,4,opt,name=model_key,json=modelKey,proto3" json:"model_key,omitempty"`
+	InputTokens      int64                  `protobuf:"varint,5,opt,name=input_tokens,json=inputTokens,proto3" json:"input_tokens,omitempty"`
+	OutputTokens     int64                  `protobuf:"varint,6,opt,name=output_tokens,json=outputTokens,proto3" json:"output_tokens,omitempty"`
+	CacheReadTokens  int64                  `protobuf:"varint,7,opt,name=cache_read_tokens,json=cacheReadTokens,proto3" json:"cache_read_tokens,omitempty"`
+	CacheWriteTokens int64                  `protobuf:"varint,8,opt,name=cache_write_tokens,json=cacheWriteTokens,proto3" json:"cache_write_tokens,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *ReportUsageRequest) Reset() {
+	*x = ReportUsageRequest{}
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReportUsageRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReportUsageRequest) ProtoMessage() {}
+
+func (x *ReportUsageRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReportUsageRequest.ProtoReflect.Descriptor instead.
+func (*ReportUsageRequest) Descriptor() ([]byte, []int) {
+	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *ReportUsageRequest) GetIdentity() *Identity {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
+}
+
+func (x *ReportUsageRequest) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *ReportUsageRequest) GetReservationId() string {
+	if x != nil {
+		return x.ReservationId
+	}
+	return ""
+}
+
+func (x *ReportUsageRequest) GetModelKey() string {
+	if x != nil {
+		return x.ModelKey
+	}
+	return ""
+}
+
+func (x *ReportUsageRequest) GetInputTokens() int64 {
+	if x != nil {
+		return x.InputTokens
+	}
+	return 0
+}
+
+func (x *ReportUsageRequest) GetOutputTokens() int64 {
+	if x != nil {
+		return x.OutputTokens
+	}
+	return 0
+}
+
+func (x *ReportUsageRequest) GetCacheReadTokens() int64 {
+	if x != nil {
+		return x.CacheReadTokens
+	}
+	return 0
+}
+
+func (x *ReportUsageRequest) GetCacheWriteTokens() int64 {
+	if x != nil {
+		return x.CacheWriteTokens
+	}
+	return 0
+}
+
+type ReportUsageResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Settled       bool                   `protobuf:"varint,1,opt,name=settled,proto3" json:"settled,omitempty"`
+	ActualMicros  int64                  `protobuf:"varint,2,opt,name=actual_micros,json=actualMicros,proto3" json:"actual_micros,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReportUsageResponse) Reset() {
+	*x = ReportUsageResponse{}
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReportUsageResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReportUsageResponse) ProtoMessage() {}
+
+func (x *ReportUsageResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReportUsageResponse.ProtoReflect.Descriptor instead.
+func (*ReportUsageResponse) Descriptor() ([]byte, []int) {
+	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *ReportUsageResponse) GetSettled() bool {
+	if x != nil {
+		return x.Settled
+	}
+	return false
+}
+
+func (x *ReportUsageResponse) GetActualMicros() int64 {
+	if x != nil {
+		return x.ActualMicros
+	}
+	return 0
+}
+
+type GetProjectDigestRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Identity      *Identity              `protobuf:"bytes,1,opt,name=identity,proto3" json:"identity,omitempty"`
+	SessionId     string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	CanvasId      string                 `protobuf:"bytes,3,opt,name=canvas_id,json=canvasId,proto3" json:"canvas_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetProjectDigestRequest) Reset() {
+	*x = GetProjectDigestRequest{}
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetProjectDigestRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetProjectDigestRequest) ProtoMessage() {}
+
+func (x *GetProjectDigestRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetProjectDigestRequest.ProtoReflect.Descriptor instead.
+func (*GetProjectDigestRequest) Descriptor() ([]byte, []int) {
+	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *GetProjectDigestRequest) GetIdentity() *Identity {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
+}
+
+func (x *GetProjectDigestRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *GetProjectDigestRequest) GetCanvasId() string {
+	if x != nil {
+		return x.CanvasId
+	}
+	return ""
+}
+
+type GetProjectDigestResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DigestVersion string                 `protobuf:"bytes,1,opt,name=digest_version,json=digestVersion,proto3" json:"digest_version,omitempty"`
+	DigestJson    []byte                 `protobuf:"bytes,2,opt,name=digest_json,json=digestJson,proto3" json:"digest_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetProjectDigestResponse) Reset() {
+	*x = GetProjectDigestResponse{}
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetProjectDigestResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetProjectDigestResponse) ProtoMessage() {}
+
+func (x *GetProjectDigestResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetProjectDigestResponse.ProtoReflect.Descriptor instead.
+func (*GetProjectDigestResponse) Descriptor() ([]byte, []int) {
+	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *GetProjectDigestResponse) GetDigestVersion() string {
+	if x != nil {
+		return x.DigestVersion
+	}
+	return ""
+}
+
+func (x *GetProjectDigestResponse) GetDigestJson() []byte {
+	if x != nil {
+		return x.DigestJson
+	}
+	return nil
+}
+
+type RecordApprovalAuditRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Identity      *Identity              `protobuf:"bytes,1,opt,name=identity,proto3" json:"identity,omitempty"`
+	RunId         string                 `protobuf:"bytes,2,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	DecisionId    string                 `protobuf:"bytes,3,opt,name=decision_id,json=decisionId,proto3" json:"decision_id,omitempty"`
+	WorkflowRunId string                 `protobuf:"bytes,4,opt,name=workflow_run_id,json=workflowRunId,proto3" json:"workflow_run_id,omitempty"`
+	Action        string                 `protobuf:"bytes,5,opt,name=action,proto3" json:"action,omitempty"`
+	DetailJson    []byte                 `protobuf:"bytes,6,opt,name=detail_json,json=detailJson,proto3" json:"detail_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RecordApprovalAuditRequest) Reset() {
+	*x = RecordApprovalAuditRequest{}
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RecordApprovalAuditRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecordApprovalAuditRequest) ProtoMessage() {}
+
+func (x *RecordApprovalAuditRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecordApprovalAuditRequest.ProtoReflect.Descriptor instead.
+func (*RecordApprovalAuditRequest) Descriptor() ([]byte, []int) {
+	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *RecordApprovalAuditRequest) GetIdentity() *Identity {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
+}
+
+func (x *RecordApprovalAuditRequest) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *RecordApprovalAuditRequest) GetDecisionId() string {
+	if x != nil {
+		return x.DecisionId
+	}
+	return ""
+}
+
+func (x *RecordApprovalAuditRequest) GetWorkflowRunId() string {
+	if x != nil {
+		return x.WorkflowRunId
+	}
+	return ""
+}
+
+func (x *RecordApprovalAuditRequest) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *RecordApprovalAuditRequest) GetDetailJson() []byte {
+	if x != nil {
+		return x.DetailJson
+	}
+	return nil
+}
+
+type RecordApprovalAuditResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Recorded      bool                   `protobuf:"varint,1,opt,name=recorded,proto3" json:"recorded,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RecordApprovalAuditResponse) Reset() {
+	*x = RecordApprovalAuditResponse{}
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RecordApprovalAuditResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecordApprovalAuditResponse) ProtoMessage() {}
+
+func (x *RecordApprovalAuditResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecordApprovalAuditResponse.ProtoReflect.Descriptor instead.
+func (*RecordApprovalAuditResponse) Descriptor() ([]byte, []int) {
+	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *RecordApprovalAuditResponse) GetRecorded() bool {
+	if x != nil {
+		return x.Recorded
+	}
+	return false
+}
+
 type HealthRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -301,7 +1913,7 @@ type HealthRequest struct {
 
 func (x *HealthRequest) Reset() {
 	*x = HealthRequest{}
-	mi := &file_glowloom_agent_runtime_proto_msgTypes[4]
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -313,7 +1925,7 @@ func (x *HealthRequest) String() string {
 func (*HealthRequest) ProtoMessage() {}
 
 func (x *HealthRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_glowloom_agent_runtime_proto_msgTypes[4]
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -326,7 +1938,7 @@ func (x *HealthRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthRequest.ProtoReflect.Descriptor instead.
 func (*HealthRequest) Descriptor() ([]byte, []int) {
-	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{4}
+	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{29}
 }
 
 type HealthResponse struct {
@@ -338,7 +1950,7 @@ type HealthResponse struct {
 
 func (x *HealthResponse) Reset() {
 	*x = HealthResponse{}
-	mi := &file_glowloom_agent_runtime_proto_msgTypes[5]
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -350,7 +1962,7 @@ func (x *HealthResponse) String() string {
 func (*HealthResponse) ProtoMessage() {}
 
 func (x *HealthResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_glowloom_agent_runtime_proto_msgTypes[5]
+	mi := &file_glowloom_agent_runtime_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -363,7 +1975,7 @@ func (x *HealthResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthResponse.ProtoReflect.Descriptor instead.
 func (*HealthResponse) Descriptor() ([]byte, []int) {
-	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{5}
+	return file_glowloom_agent_runtime_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *HealthResponse) GetStatus() string {
@@ -377,51 +1989,192 @@ var File_glowloom_agent_runtime_proto protoreflect.FileDescriptor
 
 const file_glowloom_agent_runtime_proto_rawDesc = "" +
 	"\n" +
-	"\x1cglowloom/agent/runtime.proto\x12\x0eglowloom.agent\"\xf0\x03\n" +
-	"\rInvokeRequest\x12\x1c\n" +
-	"\toperation\x18\x01 \x01(\tR\toperation\x12\x16\n" +
-	"\x06method\x18\x02 \x01(\tR\x06method\x12\x12\n" +
-	"\x04path\x18\x03 \x01(\tR\x04path\x12A\n" +
-	"\x06params\x18\x04 \x03(\v2).glowloom.agent.InvokeRequest.ParamsEntryR\x06params\x12>\n" +
-	"\x05query\x18\x05 \x03(\v2(.glowloom.agent.InvokeRequest.QueryEntryR\x05query\x12D\n" +
-	"\aheaders\x18\x06 \x03(\v2*.glowloom.agent.InvokeRequest.HeadersEntryR\aheaders\x12\x1b\n" +
-	"\tbody_json\x18\a \x01(\fR\bbodyJson\x1a9\n" +
-	"\vParamsEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a8\n" +
+	"\x1cglowloom/agent/runtime.proto\x12\x0eglowloom.agent\"v\n" +
+	"\bIdentity\x12\x19\n" +
+	"\bactor_id\x18\x01 \x01(\tR\aactorId\x12\x15\n" +
+	"\x06org_id\x18\x02 \x01(\tR\x05orgId\x12\x19\n" +
+	"\bscope_id\x18\x03 \x01(\tR\ascopeId\x12\x1d\n" +
 	"\n" +
-	"QueryEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a:\n" +
-	"\fHeadersEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"q\n" +
-	"\x0eInvokeResponse\x12\x1f\n" +
-	"\vstatus_code\x18\x01 \x01(\x05R\n" +
-	"statusCode\x12!\n" +
-	"\fcontent_type\x18\x02 \x01(\tR\vcontentType\x12\x1b\n" +
-	"\tbody_json\x18\x03 \x01(\fR\bbodyJson\"\xd6\x01\n" +
-	"\x16StreamRunEventsRequest\x12\x15\n" +
-	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\"\n" +
-	"\rlast_event_id\x18\x02 \x01(\tR\vlastEventId\x12G\n" +
-	"\x05query\x18\x03 \x03(\v21.glowloom.agent.StreamRunEventsRequest.QueryEntryR\x05query\x1a8\n" +
+	"project_id\x18\x04 \x01(\tR\tprojectId\"\x9e\x01\n" +
+	"\x14CreateSessionRequest\x124\n" +
+	"\bidentity\x18\x01 \x01(\v2\x18.glowloom.agent.IdentityR\bidentity\x12\x1d\n" +
 	"\n" +
-	"QueryEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"R\n" +
+	"request_id\x18\x02 \x01(\tR\trequestId\x12\x14\n" +
+	"\x05title\x18\x03 \x01(\tR\x05title\x12\x1b\n" +
+	"\tcanvas_id\x18\x04 \x01(\tR\bcanvasId\"y\n" +
+	"\x13ListSessionsRequest\x124\n" +
+	"\bidentity\x18\x01 \x01(\v2\x18.glowloom.agent.IdentityR\bidentity\x12\x14\n" +
+	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n" +
+	"\x06cursor\x18\x03 \x01(\tR\x06cursor\"h\n" +
+	"\x11GetSessionRequest\x124\n" +
+	"\bidentity\x18\x01 \x01(\v2\x18.glowloom.agent.IdentityR\bidentity\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\"\xe6\x01\n" +
+	"\x14UpdateSessionRequest\x124\n" +
+	"\bidentity\x18\x01 \x01(\v2\x18.glowloom.agent.IdentityR\bidentity\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x19\n" +
+	"\x05title\x18\x03 \x01(\tH\x00R\x05title\x88\x01\x01\x12\x1b\n" +
+	"\x06pinned\x18\x04 \x01(\bH\x01R\x06pinned\x88\x01\x01\x12\x1f\n" +
+	"\barchived\x18\x05 \x01(\bH\x02R\barchived\x88\x01\x01B\b\n" +
+	"\x06_titleB\t\n" +
+	"\a_pinnedB\v\n" +
+	"\t_archived\"\xe9\x02\n" +
+	"\x0fStartRunRequest\x124\n" +
+	"\bidentity\x18\x01 \x01(\v2\x18.glowloom.agent.IdentityR\bidentity\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x03 \x01(\tR\trequestId\x12\x12\n" +
+	"\x04goal\x18\x04 \x01(\tR\x04goal\x12#\n" +
+	"\rmanifest_json\x18\x05 \x01(\fR\fmanifestJson\x12\x1d\n" +
+	"\n" +
+	"input_json\x18\x06 \x01(\fR\tinputJson\x12%\n" +
+	"\x0fretry_of_run_id\x18\a \x01(\tR\fretryOfRunId\x12>\n" +
+	"\x1bexpected_execution_revision\x18\b \x01(\x03R\x19expectedExecutionRevision\x12#\n" +
+	"\rbudget_micros\x18\t \x01(\x03R\fbudgetMicros\"\x94\x01\n" +
+	"\x0fListRunsRequest\x124\n" +
+	"\bidentity\x18\x01 \x01(\v2\x18.glowloom.agent.IdentityR\bidentity\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x14\n" +
+	"\x05limit\x18\x03 \x01(\x05R\x05limit\x12\x16\n" +
+	"\x06cursor\x18\x04 \x01(\tR\x06cursor\"\\\n" +
+	"\rGetRunRequest\x124\n" +
+	"\bidentity\x18\x01 \x01(\v2\x18.glowloom.agent.IdentityR\bidentity\x12\x15\n" +
+	"\x06run_id\x18\x02 \x01(\tR\x05runId\"r\n" +
+	"\x1bGetCurrentSubmissionRequest\x124\n" +
+	"\bidentity\x18\x01 \x01(\v2\x18.glowloom.agent.IdentityR\bidentity\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\"\x8a\x01\n" +
+	"\x14GetSubmissionRequest\x124\n" +
+	"\bidentity\x18\x01 \x01(\v2\x18.glowloom.agent.IdentityR\bidentity\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x03 \x01(\tR\trequestId\"\xaa\x01\n" +
+	"\x13ListMessagesRequest\x124\n" +
+	"\bidentity\x18\x01 \x01(\v2\x18.glowloom.agent.IdentityR\bidentity\x12\x15\n" +
+	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x14\n" +
+	"\x05limit\x18\x03 \x01(\x05R\x05limit\x12\x16\n" +
+	"\x06before\x18\x04 \x01(\tR\x06before\x12\x18\n" +
+	"\athrough\x18\x05 \x01(\tR\athrough\"\x7f\n" +
+	"\x11GetMessageRequest\x124\n" +
+	"\bidentity\x18\x01 \x01(\v2\x18.glowloom.agent.IdentityR\bidentity\x12\x15\n" +
+	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x1d\n" +
+	"\n" +
+	"message_id\x18\x03 \x01(\tR\tmessageId\"\xf6\x01\n" +
+	"\x14ApplyDecisionRequest\x124\n" +
+	"\bidentity\x18\x01 \x01(\v2\x18.glowloom.agent.IdentityR\bidentity\x12\x15\n" +
+	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x1f\n" +
+	"\vdecision_id\x18\x03 \x01(\tR\n" +
+	"decisionId\x125\n" +
+	"\x16authorization_revision\x18\x04 \x01(\x03R\x15authorizationRevision\x12\x16\n" +
+	"\x06action\x18\x05 \x01(\tR\x06action\x12!\n" +
+	"\fpayload_json\x18\x06 \x01(\fR\vpayloadJson\"\x89\x01\n" +
+	"\x16StreamRunEventsRequest\x124\n" +
+	"\bidentity\x18\x01 \x01(\v2\x18.glowloom.agent.IdentityR\bidentity\x12\x15\n" +
+	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12\"\n" +
+	"\rlast_event_id\x18\x03 \x01(\tR\vlastEventId\"R\n" +
 	"\rRunEventFrame\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05event\x18\x02 \x01(\tR\x05event\x12\x1b\n" +
-	"\tdata_json\x18\x03 \x01(\fR\bdataJson\"\x0f\n" +
+	"\tdata_json\x18\x03 \x01(\fR\bdataJson\"\\\n" +
+	"\x16SessionPayloadResponse\x12\x1f\n" +
+	"\vstatus_code\x18\x01 \x01(\x05R\n" +
+	"statusCode\x12!\n" +
+	"\fpayload_json\x18\x02 \x01(\fR\vpayloadJson\"X\n" +
+	"\x12RunPayloadResponse\x12\x1f\n" +
+	"\vstatus_code\x18\x01 \x01(\x05R\n" +
+	"statusCode\x12!\n" +
+	"\fpayload_json\x18\x02 \x01(\fR\vpayloadJson\"\\\n" +
+	"\x16MessagePayloadResponse\x12\x1f\n" +
+	"\vstatus_code\x18\x01 \x01(\x05R\n" +
+	"statusCode\x12!\n" +
+	"\fpayload_json\x18\x02 \x01(\fR\vpayloadJson\"]\n" +
+	"\x17DecisionPayloadResponse\x12\x1f\n" +
+	"\vstatus_code\x18\x01 \x01(\x05R\n" +
+	"statusCode\x12!\n" +
+	"\fpayload_json\x18\x02 \x01(\fR\vpayloadJson\"\xc3\x01\n" +
+	"\x13AuthorizeRunRequest\x124\n" +
+	"\bidentity\x18\x01 \x01(\v2\x18.glowloom.agent.IdentityR\bidentity\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x15\n" +
+	"\x06run_id\x18\x03 \x01(\tR\x05runId\x12\x1b\n" +
+	"\tmodel_key\x18\x04 \x01(\tR\bmodelKey\x12#\n" +
+	"\rbudget_micros\x18\x05 \x01(\x03R\fbudgetMicros\"\xb7\x01\n" +
+	"\x14AuthorizeRunResponse\x12\x18\n" +
+	"\aallowed\x18\x01 \x01(\bR\aallowed\x12\x16\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\x125\n" +
+	"\x16authorization_revision\x18\x03 \x01(\x03R\x15authorizationRevision\x126\n" +
+	"\x17remaining_budget_micros\x18\x04 \x01(\x03R\x15remainingBudgetMicros\"\xc4\x01\n" +
+	"\x14ReserveBudgetRequest\x124\n" +
+	"\bidentity\x18\x01 \x01(\v2\x18.glowloom.agent.IdentityR\bidentity\x12\x15\n" +
+	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x17\n" +
+	"\acall_id\x18\x03 \x01(\tR\x06callId\x12\x1b\n" +
+	"\tmodel_key\x18\x04 \x01(\tR\bmodelKey\x12)\n" +
+	"\x10estimated_micros\x18\x05 \x01(\x03R\x0festimatedMicros\"r\n" +
+	"\x15ReserveBudgetResponse\x12\x1a\n" +
+	"\breserved\x18\x01 \x01(\bR\breserved\x12%\n" +
+	"\x0ereservation_id\x18\x02 \x01(\tR\rreservationId\x12\x16\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\"\xc7\x02\n" +
+	"\x12ReportUsageRequest\x124\n" +
+	"\bidentity\x18\x01 \x01(\v2\x18.glowloom.agent.IdentityR\bidentity\x12\x15\n" +
+	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12%\n" +
+	"\x0ereservation_id\x18\x03 \x01(\tR\rreservationId\x12\x1b\n" +
+	"\tmodel_key\x18\x04 \x01(\tR\bmodelKey\x12!\n" +
+	"\finput_tokens\x18\x05 \x01(\x03R\vinputTokens\x12#\n" +
+	"\routput_tokens\x18\x06 \x01(\x03R\foutputTokens\x12*\n" +
+	"\x11cache_read_tokens\x18\a \x01(\x03R\x0fcacheReadTokens\x12,\n" +
+	"\x12cache_write_tokens\x18\b \x01(\x03R\x10cacheWriteTokens\"T\n" +
+	"\x13ReportUsageResponse\x12\x18\n" +
+	"\asettled\x18\x01 \x01(\bR\asettled\x12#\n" +
+	"\ractual_micros\x18\x02 \x01(\x03R\factualMicros\"\x8b\x01\n" +
+	"\x17GetProjectDigestRequest\x124\n" +
+	"\bidentity\x18\x01 \x01(\v2\x18.glowloom.agent.IdentityR\bidentity\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x1b\n" +
+	"\tcanvas_id\x18\x03 \x01(\tR\bcanvasId\"b\n" +
+	"\x18GetProjectDigestResponse\x12%\n" +
+	"\x0edigest_version\x18\x01 \x01(\tR\rdigestVersion\x12\x1f\n" +
+	"\vdigest_json\x18\x02 \x01(\fR\n" +
+	"digestJson\"\xeb\x01\n" +
+	"\x1aRecordApprovalAuditRequest\x124\n" +
+	"\bidentity\x18\x01 \x01(\v2\x18.glowloom.agent.IdentityR\bidentity\x12\x15\n" +
+	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x1f\n" +
+	"\vdecision_id\x18\x03 \x01(\tR\n" +
+	"decisionId\x12&\n" +
+	"\x0fworkflow_run_id\x18\x04 \x01(\tR\rworkflowRunId\x12\x16\n" +
+	"\x06action\x18\x05 \x01(\tR\x06action\x12\x1f\n" +
+	"\vdetail_json\x18\x06 \x01(\fR\n" +
+	"detailJson\"9\n" +
+	"\x1bRecordApprovalAuditResponse\x12\x1a\n" +
+	"\brecorded\x18\x01 \x01(\bR\brecorded\"\x0f\n" +
 	"\rHealthRequest\"(\n" +
 	"\x0eHealthResponse\x12\x16\n" +
-	"\x06status\x18\x01 \x01(\tR\x06status2\x81\x02\n" +
-	"\fAgentRuntime\x12G\n" +
-	"\x06Invoke\x12\x1d.glowloom.agent.InvokeRequest\x1a\x1e.glowloom.agent.InvokeResponse\x12Z\n" +
+	"\x06status\x18\x01 \x01(\tR\x06status2\xf5\t\n" +
+	"\fAgentRuntime\x12]\n" +
+	"\rCreateSession\x12$.glowloom.agent.CreateSessionRequest\x1a&.glowloom.agent.SessionPayloadResponse\x12[\n" +
+	"\fListSessions\x12#.glowloom.agent.ListSessionsRequest\x1a&.glowloom.agent.SessionPayloadResponse\x12W\n" +
+	"\n" +
+	"GetSession\x12!.glowloom.agent.GetSessionRequest\x1a&.glowloom.agent.SessionPayloadResponse\x12]\n" +
+	"\rUpdateSession\x12$.glowloom.agent.UpdateSessionRequest\x1a&.glowloom.agent.SessionPayloadResponse\x12O\n" +
+	"\bStartRun\x12\x1f.glowloom.agent.StartRunRequest\x1a\".glowloom.agent.RunPayloadResponse\x12O\n" +
+	"\bListRuns\x12\x1f.glowloom.agent.ListRunsRequest\x1a\".glowloom.agent.RunPayloadResponse\x12K\n" +
+	"\x06GetRun\x12\x1d.glowloom.agent.GetRunRequest\x1a\".glowloom.agent.RunPayloadResponse\x12g\n" +
+	"\x14GetCurrentSubmission\x12+.glowloom.agent.GetCurrentSubmissionRequest\x1a\".glowloom.agent.RunPayloadResponse\x12Y\n" +
+	"\rGetSubmission\x12$.glowloom.agent.GetSubmissionRequest\x1a\".glowloom.agent.RunPayloadResponse\x12[\n" +
+	"\fListMessages\x12#.glowloom.agent.ListMessagesRequest\x1a&.glowloom.agent.MessagePayloadResponse\x12W\n" +
+	"\n" +
+	"GetMessage\x12!.glowloom.agent.GetMessageRequest\x1a&.glowloom.agent.MessagePayloadResponse\x12^\n" +
+	"\rApplyDecision\x12$.glowloom.agent.ApplyDecisionRequest\x1a'.glowloom.agent.DecisionPayloadResponse\x12Z\n" +
 	"\x0fStreamRunEvents\x12&.glowloom.agent.StreamRunEventsRequest\x1a\x1d.glowloom.agent.RunEventFrame0\x01\x12L\n" +
-	"\vCheckHealth\x12\x1d.glowloom.agent.HealthRequest\x1a\x1e.glowloom.agent.HealthResponse2\xa6\x01\n" +
-	"\rAgentBusiness\x12G\n" +
-	"\x06Invoke\x12\x1d.glowloom.agent.InvokeRequest\x1a\x1e.glowloom.agent.InvokeResponse\x12L\n" +
+	"\vCheckHealth\x12\x1d.glowloom.agent.HealthRequest\x1a\x1e.glowloom.agent.HealthResponse2\xc5\x04\n" +
+	"\rAgentBusiness\x12Y\n" +
+	"\fAuthorizeRun\x12#.glowloom.agent.AuthorizeRunRequest\x1a$.glowloom.agent.AuthorizeRunResponse\x12\\\n" +
+	"\rReserveBudget\x12$.glowloom.agent.ReserveBudgetRequest\x1a%.glowloom.agent.ReserveBudgetResponse\x12V\n" +
+	"\vReportUsage\x12\".glowloom.agent.ReportUsageRequest\x1a#.glowloom.agent.ReportUsageResponse\x12e\n" +
+	"\x10GetProjectDigest\x12'.glowloom.agent.GetProjectDigestRequest\x1a(.glowloom.agent.GetProjectDigestResponse\x12n\n" +
+	"\x13RecordApprovalAudit\x12*.glowloom.agent.RecordApprovalAuditRequest\x1a+.glowloom.agent.RecordApprovalAuditResponse\x12L\n" +
 	"\vCheckHealth\x12\x1d.glowloom.agent.HealthRequest\x1a\x1e.glowloom.agent.HealthResponseBLZJgithub.com/StephenQiu30/glowloom-server/backend/internal/gen/agent;agentpbb\x06proto3"
 
 var (
@@ -436,39 +2189,104 @@ func file_glowloom_agent_runtime_proto_rawDescGZIP() []byte {
 	return file_glowloom_agent_runtime_proto_rawDescData
 }
 
-var file_glowloom_agent_runtime_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_glowloom_agent_runtime_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_glowloom_agent_runtime_proto_goTypes = []any{
-	(*InvokeRequest)(nil),          // 0: glowloom.agent.InvokeRequest
-	(*InvokeResponse)(nil),         // 1: glowloom.agent.InvokeResponse
-	(*StreamRunEventsRequest)(nil), // 2: glowloom.agent.StreamRunEventsRequest
-	(*RunEventFrame)(nil),          // 3: glowloom.agent.RunEventFrame
-	(*HealthRequest)(nil),          // 4: glowloom.agent.HealthRequest
-	(*HealthResponse)(nil),         // 5: glowloom.agent.HealthResponse
-	nil,                            // 6: glowloom.agent.InvokeRequest.ParamsEntry
-	nil,                            // 7: glowloom.agent.InvokeRequest.QueryEntry
-	nil,                            // 8: glowloom.agent.InvokeRequest.HeadersEntry
-	nil,                            // 9: glowloom.agent.StreamRunEventsRequest.QueryEntry
+	(*Identity)(nil),                    // 0: glowloom.agent.Identity
+	(*CreateSessionRequest)(nil),        // 1: glowloom.agent.CreateSessionRequest
+	(*ListSessionsRequest)(nil),         // 2: glowloom.agent.ListSessionsRequest
+	(*GetSessionRequest)(nil),           // 3: glowloom.agent.GetSessionRequest
+	(*UpdateSessionRequest)(nil),        // 4: glowloom.agent.UpdateSessionRequest
+	(*StartRunRequest)(nil),             // 5: glowloom.agent.StartRunRequest
+	(*ListRunsRequest)(nil),             // 6: glowloom.agent.ListRunsRequest
+	(*GetRunRequest)(nil),               // 7: glowloom.agent.GetRunRequest
+	(*GetCurrentSubmissionRequest)(nil), // 8: glowloom.agent.GetCurrentSubmissionRequest
+	(*GetSubmissionRequest)(nil),        // 9: glowloom.agent.GetSubmissionRequest
+	(*ListMessagesRequest)(nil),         // 10: glowloom.agent.ListMessagesRequest
+	(*GetMessageRequest)(nil),           // 11: glowloom.agent.GetMessageRequest
+	(*ApplyDecisionRequest)(nil),        // 12: glowloom.agent.ApplyDecisionRequest
+	(*StreamRunEventsRequest)(nil),      // 13: glowloom.agent.StreamRunEventsRequest
+	(*RunEventFrame)(nil),               // 14: glowloom.agent.RunEventFrame
+	(*SessionPayloadResponse)(nil),      // 15: glowloom.agent.SessionPayloadResponse
+	(*RunPayloadResponse)(nil),          // 16: glowloom.agent.RunPayloadResponse
+	(*MessagePayloadResponse)(nil),      // 17: glowloom.agent.MessagePayloadResponse
+	(*DecisionPayloadResponse)(nil),     // 18: glowloom.agent.DecisionPayloadResponse
+	(*AuthorizeRunRequest)(nil),         // 19: glowloom.agent.AuthorizeRunRequest
+	(*AuthorizeRunResponse)(nil),        // 20: glowloom.agent.AuthorizeRunResponse
+	(*ReserveBudgetRequest)(nil),        // 21: glowloom.agent.ReserveBudgetRequest
+	(*ReserveBudgetResponse)(nil),       // 22: glowloom.agent.ReserveBudgetResponse
+	(*ReportUsageRequest)(nil),          // 23: glowloom.agent.ReportUsageRequest
+	(*ReportUsageResponse)(nil),         // 24: glowloom.agent.ReportUsageResponse
+	(*GetProjectDigestRequest)(nil),     // 25: glowloom.agent.GetProjectDigestRequest
+	(*GetProjectDigestResponse)(nil),    // 26: glowloom.agent.GetProjectDigestResponse
+	(*RecordApprovalAuditRequest)(nil),  // 27: glowloom.agent.RecordApprovalAuditRequest
+	(*RecordApprovalAuditResponse)(nil), // 28: glowloom.agent.RecordApprovalAuditResponse
+	(*HealthRequest)(nil),               // 29: glowloom.agent.HealthRequest
+	(*HealthResponse)(nil),              // 30: glowloom.agent.HealthResponse
 }
 var file_glowloom_agent_runtime_proto_depIdxs = []int32{
-	6, // 0: glowloom.agent.InvokeRequest.params:type_name -> glowloom.agent.InvokeRequest.ParamsEntry
-	7, // 1: glowloom.agent.InvokeRequest.query:type_name -> glowloom.agent.InvokeRequest.QueryEntry
-	8, // 2: glowloom.agent.InvokeRequest.headers:type_name -> glowloom.agent.InvokeRequest.HeadersEntry
-	9, // 3: glowloom.agent.StreamRunEventsRequest.query:type_name -> glowloom.agent.StreamRunEventsRequest.QueryEntry
-	0, // 4: glowloom.agent.AgentRuntime.Invoke:input_type -> glowloom.agent.InvokeRequest
-	2, // 5: glowloom.agent.AgentRuntime.StreamRunEvents:input_type -> glowloom.agent.StreamRunEventsRequest
-	4, // 6: glowloom.agent.AgentRuntime.CheckHealth:input_type -> glowloom.agent.HealthRequest
-	0, // 7: glowloom.agent.AgentBusiness.Invoke:input_type -> glowloom.agent.InvokeRequest
-	4, // 8: glowloom.agent.AgentBusiness.CheckHealth:input_type -> glowloom.agent.HealthRequest
-	1, // 9: glowloom.agent.AgentRuntime.Invoke:output_type -> glowloom.agent.InvokeResponse
-	3, // 10: glowloom.agent.AgentRuntime.StreamRunEvents:output_type -> glowloom.agent.RunEventFrame
-	5, // 11: glowloom.agent.AgentRuntime.CheckHealth:output_type -> glowloom.agent.HealthResponse
-	1, // 12: glowloom.agent.AgentBusiness.Invoke:output_type -> glowloom.agent.InvokeResponse
-	5, // 13: glowloom.agent.AgentBusiness.CheckHealth:output_type -> glowloom.agent.HealthResponse
-	9, // [9:14] is the sub-list for method output_type
-	4, // [4:9] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	0,  // 0: glowloom.agent.CreateSessionRequest.identity:type_name -> glowloom.agent.Identity
+	0,  // 1: glowloom.agent.ListSessionsRequest.identity:type_name -> glowloom.agent.Identity
+	0,  // 2: glowloom.agent.GetSessionRequest.identity:type_name -> glowloom.agent.Identity
+	0,  // 3: glowloom.agent.UpdateSessionRequest.identity:type_name -> glowloom.agent.Identity
+	0,  // 4: glowloom.agent.StartRunRequest.identity:type_name -> glowloom.agent.Identity
+	0,  // 5: glowloom.agent.ListRunsRequest.identity:type_name -> glowloom.agent.Identity
+	0,  // 6: glowloom.agent.GetRunRequest.identity:type_name -> glowloom.agent.Identity
+	0,  // 7: glowloom.agent.GetCurrentSubmissionRequest.identity:type_name -> glowloom.agent.Identity
+	0,  // 8: glowloom.agent.GetSubmissionRequest.identity:type_name -> glowloom.agent.Identity
+	0,  // 9: glowloom.agent.ListMessagesRequest.identity:type_name -> glowloom.agent.Identity
+	0,  // 10: glowloom.agent.GetMessageRequest.identity:type_name -> glowloom.agent.Identity
+	0,  // 11: glowloom.agent.ApplyDecisionRequest.identity:type_name -> glowloom.agent.Identity
+	0,  // 12: glowloom.agent.StreamRunEventsRequest.identity:type_name -> glowloom.agent.Identity
+	0,  // 13: glowloom.agent.AuthorizeRunRequest.identity:type_name -> glowloom.agent.Identity
+	0,  // 14: glowloom.agent.ReserveBudgetRequest.identity:type_name -> glowloom.agent.Identity
+	0,  // 15: glowloom.agent.ReportUsageRequest.identity:type_name -> glowloom.agent.Identity
+	0,  // 16: glowloom.agent.GetProjectDigestRequest.identity:type_name -> glowloom.agent.Identity
+	0,  // 17: glowloom.agent.RecordApprovalAuditRequest.identity:type_name -> glowloom.agent.Identity
+	1,  // 18: glowloom.agent.AgentRuntime.CreateSession:input_type -> glowloom.agent.CreateSessionRequest
+	2,  // 19: glowloom.agent.AgentRuntime.ListSessions:input_type -> glowloom.agent.ListSessionsRequest
+	3,  // 20: glowloom.agent.AgentRuntime.GetSession:input_type -> glowloom.agent.GetSessionRequest
+	4,  // 21: glowloom.agent.AgentRuntime.UpdateSession:input_type -> glowloom.agent.UpdateSessionRequest
+	5,  // 22: glowloom.agent.AgentRuntime.StartRun:input_type -> glowloom.agent.StartRunRequest
+	6,  // 23: glowloom.agent.AgentRuntime.ListRuns:input_type -> glowloom.agent.ListRunsRequest
+	7,  // 24: glowloom.agent.AgentRuntime.GetRun:input_type -> glowloom.agent.GetRunRequest
+	8,  // 25: glowloom.agent.AgentRuntime.GetCurrentSubmission:input_type -> glowloom.agent.GetCurrentSubmissionRequest
+	9,  // 26: glowloom.agent.AgentRuntime.GetSubmission:input_type -> glowloom.agent.GetSubmissionRequest
+	10, // 27: glowloom.agent.AgentRuntime.ListMessages:input_type -> glowloom.agent.ListMessagesRequest
+	11, // 28: glowloom.agent.AgentRuntime.GetMessage:input_type -> glowloom.agent.GetMessageRequest
+	12, // 29: glowloom.agent.AgentRuntime.ApplyDecision:input_type -> glowloom.agent.ApplyDecisionRequest
+	13, // 30: glowloom.agent.AgentRuntime.StreamRunEvents:input_type -> glowloom.agent.StreamRunEventsRequest
+	29, // 31: glowloom.agent.AgentRuntime.CheckHealth:input_type -> glowloom.agent.HealthRequest
+	19, // 32: glowloom.agent.AgentBusiness.AuthorizeRun:input_type -> glowloom.agent.AuthorizeRunRequest
+	21, // 33: glowloom.agent.AgentBusiness.ReserveBudget:input_type -> glowloom.agent.ReserveBudgetRequest
+	23, // 34: glowloom.agent.AgentBusiness.ReportUsage:input_type -> glowloom.agent.ReportUsageRequest
+	25, // 35: glowloom.agent.AgentBusiness.GetProjectDigest:input_type -> glowloom.agent.GetProjectDigestRequest
+	27, // 36: glowloom.agent.AgentBusiness.RecordApprovalAudit:input_type -> glowloom.agent.RecordApprovalAuditRequest
+	29, // 37: glowloom.agent.AgentBusiness.CheckHealth:input_type -> glowloom.agent.HealthRequest
+	15, // 38: glowloom.agent.AgentRuntime.CreateSession:output_type -> glowloom.agent.SessionPayloadResponse
+	15, // 39: glowloom.agent.AgentRuntime.ListSessions:output_type -> glowloom.agent.SessionPayloadResponse
+	15, // 40: glowloom.agent.AgentRuntime.GetSession:output_type -> glowloom.agent.SessionPayloadResponse
+	15, // 41: glowloom.agent.AgentRuntime.UpdateSession:output_type -> glowloom.agent.SessionPayloadResponse
+	16, // 42: glowloom.agent.AgentRuntime.StartRun:output_type -> glowloom.agent.RunPayloadResponse
+	16, // 43: glowloom.agent.AgentRuntime.ListRuns:output_type -> glowloom.agent.RunPayloadResponse
+	16, // 44: glowloom.agent.AgentRuntime.GetRun:output_type -> glowloom.agent.RunPayloadResponse
+	16, // 45: glowloom.agent.AgentRuntime.GetCurrentSubmission:output_type -> glowloom.agent.RunPayloadResponse
+	16, // 46: glowloom.agent.AgentRuntime.GetSubmission:output_type -> glowloom.agent.RunPayloadResponse
+	17, // 47: glowloom.agent.AgentRuntime.ListMessages:output_type -> glowloom.agent.MessagePayloadResponse
+	17, // 48: glowloom.agent.AgentRuntime.GetMessage:output_type -> glowloom.agent.MessagePayloadResponse
+	18, // 49: glowloom.agent.AgentRuntime.ApplyDecision:output_type -> glowloom.agent.DecisionPayloadResponse
+	14, // 50: glowloom.agent.AgentRuntime.StreamRunEvents:output_type -> glowloom.agent.RunEventFrame
+	30, // 51: glowloom.agent.AgentRuntime.CheckHealth:output_type -> glowloom.agent.HealthResponse
+	20, // 52: glowloom.agent.AgentBusiness.AuthorizeRun:output_type -> glowloom.agent.AuthorizeRunResponse
+	22, // 53: glowloom.agent.AgentBusiness.ReserveBudget:output_type -> glowloom.agent.ReserveBudgetResponse
+	24, // 54: glowloom.agent.AgentBusiness.ReportUsage:output_type -> glowloom.agent.ReportUsageResponse
+	26, // 55: glowloom.agent.AgentBusiness.GetProjectDigest:output_type -> glowloom.agent.GetProjectDigestResponse
+	28, // 56: glowloom.agent.AgentBusiness.RecordApprovalAudit:output_type -> glowloom.agent.RecordApprovalAuditResponse
+	30, // 57: glowloom.agent.AgentBusiness.CheckHealth:output_type -> glowloom.agent.HealthResponse
+	38, // [38:58] is the sub-list for method output_type
+	18, // [18:38] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_glowloom_agent_runtime_proto_init() }
@@ -476,13 +2294,14 @@ func file_glowloom_agent_runtime_proto_init() {
 	if File_glowloom_agent_runtime_proto != nil {
 		return
 	}
+	file_glowloom_agent_runtime_proto_msgTypes[4].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_glowloom_agent_runtime_proto_rawDesc), len(file_glowloom_agent_runtime_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   31,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

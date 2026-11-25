@@ -4,45 +4,227 @@ package glowloom.agent;
 
 option go_package = "github.com/StephenQiu30/glowloom-server/backend/internal/gen/agent;agentpb";
 
-// AgentRuntime exposes the independent Pi Durable Agent runtime to the Go monolith over gRPC.
+// AgentRuntime exposes the independent Mastra Agent runtime to the Go monolith over strongly-typed gRPC.
 service AgentRuntime {
-  rpc Invoke(InvokeRequest) returns (InvokeResponse);
+  rpc CreateSession(CreateSessionRequest) returns (SessionPayloadResponse);
+  rpc ListSessions(ListSessionsRequest) returns (SessionPayloadResponse);
+  rpc GetSession(GetSessionRequest) returns (SessionPayloadResponse);
+  rpc UpdateSession(UpdateSessionRequest) returns (SessionPayloadResponse);
+
+  rpc StartRun(StartRunRequest) returns (RunPayloadResponse);
+  rpc ListRuns(ListRunsRequest) returns (RunPayloadResponse);
+  rpc GetRun(GetRunRequest) returns (RunPayloadResponse);
+  rpc GetCurrentSubmission(GetCurrentSubmissionRequest) returns (RunPayloadResponse);
+  rpc GetSubmission(GetSubmissionRequest) returns (RunPayloadResponse);
+
+  rpc ListMessages(ListMessagesRequest) returns (MessagePayloadResponse);
+  rpc GetMessage(GetMessageRequest) returns (MessagePayloadResponse);
+
+  rpc ApplyDecision(ApplyDecisionRequest) returns (DecisionPayloadResponse);
   rpc StreamRunEvents(StreamRunEventsRequest) returns (stream RunEventFrame);
   rpc CheckHealth(HealthRequest) returns (HealthResponse);
 }
 
-// AgentBusiness exposes Go monolith business authority callbacks to the Agent runtime over gRPC.
+// AgentBusiness exposes Go monolith authorization, budget, usage settlement, and project digest callbacks.
 service AgentBusiness {
-  rpc Invoke(InvokeRequest) returns (InvokeResponse);
+  rpc AuthorizeRun(AuthorizeRunRequest) returns (AuthorizeRunResponse);
+  rpc ReserveBudget(ReserveBudgetRequest) returns (ReserveBudgetResponse);
+  rpc ReportUsage(ReportUsageRequest) returns (ReportUsageResponse);
+  rpc GetProjectDigest(GetProjectDigestRequest) returns (GetProjectDigestResponse);
+  rpc RecordApprovalAudit(RecordApprovalAuditRequest) returns (RecordApprovalAuditResponse);
   rpc CheckHealth(HealthRequest) returns (HealthResponse);
 }
 
-message InvokeRequest {
-  string operation = 1;
-  string method = 2;
-  string path = 3;
-  map<string, string> params = 4;
-  map<string, string> query = 5;
-  map<string, string> headers = 6;
-  bytes body_json = 7;
+message Identity {
+  string actor_id = 1;
+  string org_id = 2;
+  string scope_id = 3;
+  string project_id = 4;
 }
 
-message InvokeResponse {
-  int32 status_code = 1;
-  string content_type = 2;
-  bytes body_json = 3;
+message CreateSessionRequest {
+  Identity identity = 1;
+  string request_id = 2;
+  string title = 3;
+  string canvas_id = 4;
+}
+
+message ListSessionsRequest {
+  Identity identity = 1;
+  int32 limit = 2;
+  string cursor = 3;
+}
+
+message GetSessionRequest {
+  Identity identity = 1;
+  string session_id = 2;
+}
+
+message UpdateSessionRequest {
+  Identity identity = 1;
+  string session_id = 2;
+  optional string title = 3;
+  optional bool pinned = 4;
+  optional bool archived = 5;
+}
+
+message StartRunRequest {
+  Identity identity = 1;
+  string session_id = 2;
+  string request_id = 3;
+  string goal = 4;
+  bytes manifest_json = 5;
+  bytes input_json = 6;
+  string retry_of_run_id = 7;
+  int64 expected_execution_revision = 8;
+  int64 budget_micros = 9;
+}
+
+message ListRunsRequest {
+  Identity identity = 1;
+  string session_id = 2;
+  int32 limit = 3;
+  string cursor = 4;
+}
+
+message GetRunRequest {
+  Identity identity = 1;
+  string run_id = 2;
+}
+
+message GetCurrentSubmissionRequest {
+  Identity identity = 1;
+  string session_id = 2;
+}
+
+message GetSubmissionRequest {
+  Identity identity = 1;
+  string session_id = 2;
+  string request_id = 3;
+}
+
+message ListMessagesRequest {
+  Identity identity = 1;
+  string run_id = 2;
+  int32 limit = 3;
+  string before = 4;
+  string through = 5;
+}
+
+message GetMessageRequest {
+  Identity identity = 1;
+  string run_id = 2;
+  string message_id = 3;
+}
+
+message ApplyDecisionRequest {
+  Identity identity = 1;
+  string run_id = 2;
+  string decision_id = 3;
+  int64 authorization_revision = 4;
+  string action = 5;
+  bytes payload_json = 6;
 }
 
 message StreamRunEventsRequest {
-  string run_id = 1;
-  string last_event_id = 2;
-  map<string, string> query = 3;
+  Identity identity = 1;
+  string run_id = 2;
+  string last_event_id = 3;
 }
 
 message RunEventFrame {
   string id = 1;
   string event = 2;
   bytes data_json = 3;
+}
+
+message SessionPayloadResponse {
+  int32 status_code = 1;
+  bytes payload_json = 2;
+}
+
+message RunPayloadResponse {
+  int32 status_code = 1;
+  bytes payload_json = 2;
+}
+
+message MessagePayloadResponse {
+  int32 status_code = 1;
+  bytes payload_json = 2;
+}
+
+message DecisionPayloadResponse {
+  int32 status_code = 1;
+  bytes payload_json = 2;
+}
+
+message AuthorizeRunRequest {
+  Identity identity = 1;
+  string session_id = 2;
+  string run_id = 3;
+  string model_key = 4;
+  int64 budget_micros = 5;
+}
+
+message AuthorizeRunResponse {
+  bool allowed = 1;
+  string reason = 2;
+  int64 authorization_revision = 3;
+  int64 remaining_budget_micros = 4;
+}
+
+message ReserveBudgetRequest {
+  Identity identity = 1;
+  string run_id = 2;
+  string call_id = 3;
+  string model_key = 4;
+  int64 estimated_micros = 5;
+}
+
+message ReserveBudgetResponse {
+  bool reserved = 1;
+  string reservation_id = 2;
+  string reason = 3;
+}
+
+message ReportUsageRequest {
+  Identity identity = 1;
+  string run_id = 2;
+  string reservation_id = 3;
+  string model_key = 4;
+  int64 input_tokens = 5;
+  int64 output_tokens = 6;
+  int64 cache_read_tokens = 7;
+  int64 cache_write_tokens = 8;
+}
+
+message ReportUsageResponse {
+  bool settled = 1;
+  int64 actual_micros = 2;
+}
+
+message GetProjectDigestRequest {
+  Identity identity = 1;
+  string session_id = 2;
+  string canvas_id = 3;
+}
+
+message GetProjectDigestResponse {
+  string digest_version = 1;
+  bytes digest_json = 2;
+}
+
+message RecordApprovalAuditRequest {
+  Identity identity = 1;
+  string run_id = 2;
+  string decision_id = 3;
+  string workflow_run_id = 4;
+  string action = 5;
+  bytes detail_json = 6;
+}
+
+message RecordApprovalAuditResponse {
+  bool recorded = 1;
 }
 
 message HealthRequest {}

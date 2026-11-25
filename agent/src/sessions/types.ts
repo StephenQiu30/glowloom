@@ -1,87 +1,37 @@
-export interface Scope {
+import type { RunStatus } from '../database/schema.js';
+
+export interface Identity {
+  actorId: string;
+  orgId?: string;
+  scopeId?: string;
+  projectId: string;
+}
+
+export interface RunEvent {
+  id: string;
+  seq: number;
+  runId: string;
+  event: string;
+  data: Record<string, unknown>;
+}
+
+export interface SessionView {
+  id: string;
   actor_id: string;
   org_id: string;
   scope_id: string;
   project_id: string;
   canvas_id?: string;
-}
-
-export interface Identity {
-  actor_id: string;
-  project_id: string;
-}
-
-export interface HistoryInput extends Identity {
-  limit?: number;
-  cursor?: string;
-}
-
-export interface MessageInput extends Identity {
-  limit?: number;
-  before?: string;
-  through: string;
-}
-
-export interface StoryboardTarget {
-  ordinal: number;
-  board_id: string;
-  shot_id: string;
-  shot_revision: number;
-}
-
-export interface AuthorizedInput {
-  schema_version: 1;
-  references_unavailable?: boolean;
-  draft: Record<string, unknown>;
-  input_hash: string;
-  plain_text: string;
-  prompt: string;
-  media_pins: Array<{
-    sourceId: string;
-    sourceVersion: string;
-    mediaKind: 'image' | 'video' | 'audio' | 'document';
-    bindingId?: string;
-  }>;
-  storyboard_targets?: StoryboardTarget[];
-  quote?: {
-    run_id: string;
-    message_id: string;
-    text: string;
-    content_hash: string;
-  };
-}
-
-export interface CreateSessionInput extends Scope {
-  request_id: string;
-  content_hash: string;
   title: string;
+  execution_revision: number;
+  pinned: boolean;
+  archived_at?: string;
+  created_at: string;
+  last_input_at?: string;
+  run?: RunView;
 }
 
-export interface UpdateSessionInput extends Scope {
-  action: 'pin' | 'unpin' | 'rename' | 'delete';
-  title?: string;
-}
-
-export interface CreateRunInput extends Scope {
-  request_id: string;
-  content_hash: string;
-  expected_execution_revision: number;
-  goal: string;
-  input: AuthorizedInput;
-  retry_of_run_id?: string;
-  manifest: Record<string, unknown>;
-}
-
-export interface ControlInput extends Scope {
-  decision_id: string;
-  root_run_id: string;
-  session_id: string;
-  authorization_revision: number;
-  action: 'approve' | 'reject' | 'pause' | 'resume' | 'stop';
-  content_hash: string;
-}
-
-export interface PublicMessage {
+export interface PublicMessageView {
   message_id: string;
   run_id: string;
   conversation_id: number;
@@ -91,65 +41,117 @@ export interface PublicMessage {
   content: string;
 }
 
-export interface MessagePage {
-  items: PublicMessage[];
-  next_cursor?: string;
-  through: string;
-}
-
-export interface RunSummary {
+export interface RunView {
   root_run_id: string;
   session_id: string;
-  accepted_revision: number;
-  created_at: string;
-  status: string;
-  input_excerpt: string;
-  retry_of_run_id?: string;
+  submission_id: string;
+  goal: string;
+  manifest: Record<string, unknown>;
+  execution_available: boolean;
+  state: {
+    status: RunStatus;
+    execution_revision: number;
+    workflow_run_id?: string;
+    error_code?: string;
+  };
+  snapshot_cursor: string;
+  messages_page: {
+    items: PublicMessageView[];
+    through: string;
+  };
+  events: Array<{
+    id: string;
+    event: string;
+    data: Record<string, unknown>;
+  }>;
 }
 
-export interface RunPage {
-  items: RunSummary[];
-  next_cursor?: string;
+export interface CreateSessionInput {
+  identity: Identity;
+  requestId: string;
+  title: string;
+  canvasId?: string;
 }
 
-export interface RuntimeEvent {
-  cursor: string;
-  type: string;
-  payload: unknown;
+export interface UpdateSessionInput {
+  identity: Identity;
+  sessionId: string;
+  title?: string;
+  pinned?: boolean;
+  archived?: boolean;
+}
+
+export interface StartRunInput {
+  identity: Identity;
+  sessionId: string;
+  requestId: string;
+  goal: string;
+  manifest: Record<string, unknown>;
+  input?: Record<string, unknown>;
+  retryOfRunId?: string;
+  expectedExecutionRevision: number;
+  budgetMicros?: number;
+  traceparent?: string;
+}
+
+export interface ApplyDecisionInput {
+  identity: Identity;
+  runId: string;
+  decisionId: string;
+  authorizationRevision: number;
+  action: string;
+  payload: Record<string, unknown>;
 }
 
 export interface AgentApplication {
   ready(): Promise<boolean>;
-  createSession(input: CreateSessionInput): Promise<unknown>;
-  updateSession(id: string, input: UpdateSessionInput): Promise<unknown>;
-  listSessions(identity: HistoryInput): Promise<unknown>;
-  readSession(id: string, identity: Identity): Promise<unknown>;
-  createRun(sessionId: string, input: CreateRunInput): Promise<unknown>;
-  readRun(id: string, identity: Identity): Promise<unknown>;
-  command(id: string, input: ControlInput): Promise<unknown>;
-  events(
-    id: string,
+  createSession(input: CreateSessionInput): Promise<SessionView>;
+  listSessions(
     identity: Identity,
-    after: string | undefined,
-  ): Promise<RuntimeEvent[]>;
-  waitForEvents?(
-    id: string,
-    timeoutMs: number,
-    signal?: AbortSignal,
-  ): Promise<void>;
-  stopAccepting(): void;
-  close(): Promise<void>;
-  listRuns(sessionId: string, query: HistoryInput): Promise<unknown>;
-  readSubmission(
+    limit?: number,
+    cursor?: string,
+  ): Promise<{ items: SessionView[]; next_cursor?: string }>;
+  getSession(identity: Identity, sessionId: string): Promise<SessionView>;
+  updateSession(input: UpdateSessionInput): Promise<SessionView>;
+  startRun(input: StartRunInput): Promise<Record<string, unknown>>;
+  listRuns(
+    identity: Identity,
+    sessionId: string,
+    limit?: number,
+    cursor?: string,
+  ): Promise<{ items: Array<Record<string, unknown>>; next_cursor?: string }>;
+  getRun(identity: Identity, runId: string): Promise<RunView>;
+  getCurrentSubmission(
+    identity: Identity,
+    sessionId: string,
+  ): Promise<Record<string, unknown>>;
+  getSubmission(
+    identity: Identity,
     sessionId: string,
     requestId: string,
+  ): Promise<Record<string, unknown>>;
+  listMessages(
     identity: Identity,
-  ): Promise<unknown>;
-  currentSubmission(sessionId: string, identity: Identity): Promise<unknown>;
-  listMessages(runId: string, query: MessageInput): Promise<unknown>;
-  readPublicMessage(
+    runId: string,
+    limit?: number,
+    before?: string,
+    through?: string,
+  ): Promise<{ items: PublicMessageView[]; next_cursor?: string; through: string }>;
+  getMessage(
+    identity: Identity,
     runId: string,
     messageId: string,
+  ): Promise<PublicMessageView>;
+  applyDecision(input: ApplyDecisionInput): Promise<Record<string, unknown>>;
+  listRunEventsAfter(
     identity: Identity,
-  ): Promise<unknown>;
+    runId: string,
+    lastEventId?: string,
+  ): Promise<{ events: RunEvent[]; terminal: boolean }>;
+  subscribeRunEvents(
+    runId: string,
+    handler: (event: RunEvent) => void,
+  ): () => void;
+  startRecovery(): void;
+  stopRecovery(): Promise<void>;
 }

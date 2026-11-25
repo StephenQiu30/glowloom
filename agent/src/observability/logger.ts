@@ -1,25 +1,26 @@
 import pino, { type Logger } from 'pino';
 
 export function createAgentLogger(
-  level = process.env.GLOWLOOM_LOG_LEVEL ?? 'info',
+  level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal' = 'info',
 ): Logger {
   return pino({
-    name: 'agent',
+    name: 'glowloom-agent',
     level,
-    base: { service: 'agent' },
     redact: {
       paths: [
-        'req.headers.authorization',
         'authorization',
-        'serviceToken',
-        'businessToken',
-        'dbDsn',
-        'messages',
-        'goal',
-        'params',
-        'manifest',
+        '*.authorization',
+        '*.token',
+        '*.serviceToken',
+        '*.businessToken',
+        '*.dbDsn',
+        '*.secretKey',
+        '*.apiKey',
+        '*.prompt',
+        '*.messages',
+        '*.content',
       ],
-      remove: true,
+      censor: '[REDACTED]',
     },
   });
 }

@@ -1,30 +1,34 @@
 # Agent 服务代码规范
 
-本文件适用于 `agent/` 及其测试，继承[仓库工程规范](../AGENTS.md)。业务与持久化合同由[设计32](../workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)维护，NestJS 迁移目标、目录与验收见[设计37](../workspace/content/design/37-Agent服务目录与TypeScript规范设计.md)。当前运行依赖以包清单和锁文件为准。
+本文件适用于 `agent/` 及其测试，继承[仓库工程规范](../AGENTS.md)。现行架构与技术选型合同由[设计48](../workspace/content/design/48-Agent服务Mastra架构与技术选型设计.md)唯一维护。当前运行依赖以包清单和锁文件为准。
 
 ## Google TypeScript
 
 1. 手写代码遵循 [Google TypeScript Style Guide](https://google.github.io/styleguide/tsguide.html)。使用 ESM、具名导出、`const` 优先及单引号。类型和类用 `PascalCase`，值和方法用 `lowerCamelCase`，接口省略 `I` 前缀，缩写按单词处理，例如 `HttpUrl`。Prettier 执行基础格式。
-2. 纯类型用 `import type`，对外部值以 `unknown` 收窄。避免 `any`、不安全断言和非空断言。手写业务代码禁止 `@ts-ignore`、`@ts-nocheck`。`@ts-expect-error` 仅用于验证类型错误的测试并说明预期。
-3. NodeNext 项目约定相对导入使用运行时 `.js` 扩展名，Node 内置模块用 `node:`。Nest DTO、运行时类及 DI token 使用值导入。启用 Nest 所需的 TypeScript legacy decorators 与元数据，并验证生产和测试入口使用相同的装饰器语义。
-4. 保持模块、函数与文件职责清晰。用局部、具名的模块表达功能，避免手写命名空间、无职责的 `common`、`utils` 和全量 barrel。确需偏离风格时，在对应设计或注释记录理由。
+2. 纯类型用 `import type`，对外部值以 `unknown` 收窄并使用 Zod 校验。避免 `any`、不安全断言和非空断言。手写业务代码禁止 `@ts-ignore`、`@ts-nocheck`。`@ts-expect-error` 仅用于验证类型错误的测试并说明预期。
+3. NodeNext 项目约定相对导入使用运行时 `.js` 扩展名，Node 内置模块用 `node:`。不使用 NestJS 装饰器或 `reflect-metadata`。
+4. 保持模块、函数与文件职责清晰。`src/` 遵循扁平两层包组织（`src/<package>/<module>.ts`），跨包相对导入不超过一层 `../<package>/<module>.js`，文件名统一 `kebab-case`，禁止手写 `index.ts` barrel 与无职责 `common`/`utils`。
 
-## NestJS 与职责
+## Mastra、协议与职责边界
 
-1. 使用[官方 NestJS 模块](https://docs.nestjs.com/modules)和[自定义 Provider](https://docs.nestjs.com/fundamentals/custom-providers)。`server.ts` 负责进程入口。Nest 模块、Provider 与 gRPC 入站统一位于 `src/transport/`。连接池由进程入口创建和释放。会话服务、Harness、Context、Tools、Storage、Observability 和 Go 客户端保持普通 TypeScript 类与模块级函数，显式构造注入。依赖方向严格单向无环：`transport → sessions → harness → {context, tools, storage} → {business, database, observability}`，禁止循环依赖和服务定位器。
-2. `src/` 遵循 Google TypeScript 扁平两层包组织（`src/<package>/<module>.ts`），跨包相对导入不超过一层 `../<package>/<module>.js`，杜绝 `../../` 与 `../../../` 路径攀爬。所有手写文件名统一 `kebab-case` 且全局无歧义，禁止手写 `index.ts` barrel 与无职责 `common`/`utils`。
-3. Controller、DTO、SSE、gRPC、校验与错误映射统一位于 `transport/`，应用接口、控制收束、恢复与读模型位于 `sessions/`。Controller 与 gRPC Server 调用 `sessions/` 应用端口与事件总线，应用层不读取 Nest/Fastify request/reply，gRPC 流直连事件流而不经 `fastify.inject` 缓冲。预期错误用 `AgentError` 表达，保留错误因果；Exception Filter 与适配器错误处理保持现有状态和错误结构。
-4. HTTP 的唯一维护位置是功能边界上的 Controller/DTO。运行时验证和 OpenAPI 注解随 DTO 一起维护，并通过合同测试核对。环境与持久化外部数据在各自边界校验。生成文件由工具重生成。目录按真实职责组织，避免独立 `contracts/`、`scripts/`、全局 Controller/Service/DAO 分层和纯转发层。
-5. 配置在启动边界读取并校验。连接池、恢复循环和订阅分别有明确的资源所有者。请求路径避免阻塞事件循环，限制请求体、并发、等待和重试。将 `AbortSignal` 传到可取消的调用，收尾等待有界。SSE/gRPC 断开只关闭订阅。
-6. Pino 日志与 OpenTelemetry 追踪归 `observability/`，带排障所需的 request/session/run 与 W3C `traceparent` 标识。脱敏服务令牌、数据库 DSN、提示词、模型输入输出和用户内容。Agent 使用独立 schema 与受限角色，Go 保留身份、预算、审批、模型出站、业务工具和业务数据权威。
-7. 普通数据增删改查使用 Prisma；行锁、数据库时钟、条件冲突更新、JSON/窗口与微秒游标等查询使用 Kysely 类型化构建器，并通过同一 Prisma 客户端/事务执行。pg 仅管理连接池与底层传输，不直接执行应用 SQL。禁止完整手写 SQL、业务原生 query/execute 旁路、自动结构同步与迁移执行器；私有查询驱动仅接收构建器编译结果及独立绑定参数。`prisma/schema.prisma` 仅为客户端映射，`src/database/schema.ts` 从生成模型派生构建器类型；结构唯一来源仍为 `backend/db/schema.sql`。只运行 `prisma generate`，不运行 db push/migrate，不读取业务库生成客户端。
-8. 运行实例、执行槽、控制收束、恢复泵、事件总线与读模型归 `sessions/`；Harness 执行循环、热 `StateDoc`、模型流式路由与外环校验归 `harness/`；静态前缀/增量尾部上下文与记忆热更新归 `context/`；并行工具/委派、Skill 装载与自纠错错误归 `tools/`；Pi Storage 实现归 `storage/`；版本化领域提示词归根级 `prompts/`；行为评测归根级 `evals/`。契约版本与构建指纹在 `src/contract.ts` 解耦维护。移动参与编译的文件时清理 `dist/src` 产物。
-
-## 接口生成
-
-- 生成方向与检查见[设计37 §7.6](../workspace/content/design/37-Agent服务目录与TypeScript规范设计.md#76-swagger-与-umi-接口生成)。Agent 注解生成 OpenAPI 供 Go 客户端消费。Go 内部独立 Swagger 经 `@umijs/openapi` 生成 Agent 消费的 TypeScript 请求和类型，位于 `src/business/generated/`。
-- 仅可验证重生成的 Umi 产物允许保留官方生成器输出的命名空间、聚合入口、默认导出与局部抑制注释。生成代码纳入严格编译和生产构建，生成声明和传输层另用 `pnpm api:typecheck` 在 `skipLibCheck=false` 下校验。请求层保留服务端身份、取消、超时及有界读取。
+1. `server.ts` 负责进程入口、配置加载（Zod）、连接池与组件装配、gRPC Server（`:4402`）与极简 HTTP 健康探针（`:4401`，仅 `/healthz`、`/readyz`）启动以及优雅停机。不引入 NestJS、Fastify、Swagger/OpenAPI 或 Prisma。
+2. 依赖方向严格单向无环：`transport → sessions → mastra → {skills, business, database, observability}`，禁止循环依赖和服务定位器。
+3. **跨服务通信**：
+   - Go → Agent：强类型 `AgentRuntime` gRPC（唯一真源 `backend/api/proto/glowloom/agent/runtime.proto`），`StreamRunEvents` 使用 gRPC Server Streaming。
+   - Agent → Go 业务工具：通过 `@mastra/mcp` 连接 Go 内部 MCP Server（`/internal/agent-mcp`）。
+   - Agent → Go 鉴权/配额/摘要：通过强类型 `AgentBusiness` gRPC 或受控内部接口。
+   - Agent → LLM：通过 Vercel AI SDK 连接 Go 统一渠道透传网关（`/internal/agent-gateway`），完整保留 Prompt Cache、Thinking 与流式输出。
+4. **数据库与持久化**：
+   - 复用 PostgreSQL 独立 `agent` schema 与受限 `glowloom_agent` 角色；`backend/db/schema.sql` 是唯一表结构真源，严禁任何运行时 DDL 或自动迁移。
+   - `@mastra/pg` 显式关闭运行时自动建表（`disableInit: true`）；服务级控制表（`service_sessions`、`service_runs`、`service_run_events`、`service_public_messages`、`service_control_inbox`、`recovery_backoff`）统一使用 `Kysely` + `pg` 访问。
+5. **混合编排、记忆与 Skill**：
+   - Producer 主 Agent 与专家子 Agent 负责自由创作与委派；多阶段交付与高成本审批链路封装为 Mastra Workflow，使用原生 `suspend()` / `resume()` 持久化恢复。
+   - Mastra Memory（对话窗口 + Working Memory + PgVector）仅存储对话与偏好；剧本、设定集、分镜、画布等权威数据不复制到 Agent 向量库，由 Go MCP 按需拉取。
+   - 声明式 Skill 存放于 `skills/*/SKILL.md` 并绑定 MCP 工具白名单；Agent 容器内严禁执行任何动态或第三方脚本。
+6. **可观测性与双轨 Evals**：
+   - Pino 脱敏日志与 W3C `traceparent` 透传归 `observability/`；线上深度对接自托管 Langfuse（OTel Trace + Prompt 版本管理 + 本地 `prompts/` 缓存兜底）。
+   - 离线开发与 CI 回归门禁归 `evals/`，使用 Mastra Scorers + Vitest 断言工具轨迹、步数/成本上限与质量 Rubric。
 
 ## 质量门禁
 
-按变更范围执行 `pnpm typecheck`、`pnpm lint`、`pnpm format:check`、`pnpm test`、`pnpm api:check` 和 `pnpm build`。框架迁移还须验证生产 JS 入口、实际 HTTP/SSE、隔离 PostgreSQL、官方 Storage conformance 和真实进程恢复。记录实际执行结果、未执行项和环境限制。
+按变更范围执行 `pnpm typecheck`、`pnpm lint`、`pnpm format:check`、`pnpm test`、`pnpm eval` 和 `pnpm build`。记录实际执行结果、未执行项与环境限制。

@@ -4,8 +4,7 @@ WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@12.4.2 --activate
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
-COPY tsconfig.json tsconfig.build.json prisma.config.ts ./
-COPY prisma ./prisma
+COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
 RUN pnpm build && pnpm prune --prod
 
@@ -18,6 +17,7 @@ COPY --from=build --chown=node:node /app/dist ./dist
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=proto --chown=node:node glowloom/agent/runtime.proto ./proto/runtime.proto
 COPY --chown=node:node prompts ./prompts
+COPY --chown=node:node skills ./skills
 USER node
 EXPOSE 4401 4402
 CMD ["node", "--enable-source-maps", "dist/src/server.js"]

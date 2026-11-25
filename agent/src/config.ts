@@ -1,111 +1,105 @@
-export const deliveryDefaults = { pollMs: 5000, timeoutMs: 1_800_000 } as const;
-export const recoveryDefaults = {
-  pollMs: 1000,
-  maxBackoffMs: 60_000,
-  maxAttempts: 5,
-  controlBatch: 20,
-  runBatch: 32,
-} as const;
-export const runtimeDefaults = { maxConcurrentRoots: 4 } as const;
+import { z } from 'zod';
 
-export interface Config {
-  host: string;
-  port: number;
-  businessOrigin: string;
-  serviceToken: string;
-  businessToken: string;
+const envSchema = z.object({
+  GLOWLOOM_AGENT_HTTP_ADDR: z.string().default('0.0.0.0:4401'),
+  GLOWLOOM_AGENT_GRPC_ADDR: z.string().default('0.0.0.0:4402'),
+  GLOWLOOM_AGENT_DB_DSN: z.string().min(1, 'GLOWLOOM_AGENT_DB_DSN is required'),
+  GLOWLOOM_AGENT_SERVICE_TOKEN: z
+    .string()
+    .min(32, 'GLOWLOOM_AGENT_SERVICE_TOKEN must be at least 32 chars'),
+  GLOWLOOM_AGENT_BUSINESS_ORIGIN: z.string().url(),
+  GLOWLOOM_AGENT_BUSINESS_TOKEN: z
+    .string()
+    .min(32, 'GLOWLOOM_AGENT_BUSINESS_TOKEN must be at least 32 chars'),
+  GLOWLOOM_AGENT_POOL_MAX: z.coerce.number().int().min(1).max(64).default(12),
+  GLOWLOOM_AGENT_LEASE_MS: z.coerce
+    .number()
+    .int()
+    .min(5000)
+    .max(300000)
+    .default(30000),
+  GLOWLOOM_AGENT_RECOVERY_POLL_MS: z.coerce
+    .number()
+    .int()
+    .min(500)
+    .max(60000)
+    .default(5000),
+  GLOWLOOM_AGENT_DEFAULT_MODEL: z.string().default('gpt-4o-mini'),
+  GLOWLOOM_REDIS_URL: z.string().optional(),
+  LANGFUSE_BASE_URL: z.string().url().optional(),
+  LANGFUSE_PUBLIC_KEY: z.string().optional(),
+  LANGFUSE_SECRET_KEY: z.string().optional(),
+  GLOWLOOM_LOG_LEVEL: z
+    .enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal'])
+    .default('info'),
+});
+
+export interface AgentConfig {
+  httpHost: string;
+  httpPort: number;
+  grpcAddr: string;
   dbDsn: string;
+  serviceToken: string;
+  businessOrigin: string;
+  businessToken: string;
   poolMax: number;
   leaseMs: number;
-  deliveryPollMs: number;
-  deliveryTimeoutMs: number;
-  swagger: boolean;
+  recoveryPollMs: number;
+  defaultModel: string;
+  redisUrl?: string;
+  langfuse?: {
+    baseUrl: string;
+    publicKey: string;
+    secretKey: string;
+  };
+  logLevel: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
 }
 
-export function loadConfig(env: NodeJS.ProcessEnv): Config {
-  function invalid(key: string): never {
-    throw new Error(`Invalid GLOWLOOM_AGENT_${key}`);
+function parseHostPort(addr: string): { host: string; port: number } {
+  const idx = addr.lastIndexOf(':');
+  if (idx <= 0) {
+    throw new Error(`Invalid listen address: ${addr}`);
   }
-  function required(key: string) {
-    return env[`GLOWLOOM_AGENT_${key}`]?.trim() || invalid(key);
+  const host = addr.slice(0, idx);
+  const port = Number.parseInt(addr.slice(idx + 1), 10);
+  if (!Number.isInteger(port) || port < 0 || port > 65535) {
+    throw new Error(`Invalid listen port in address: ${addr}`);
   }
-  function url(key: string, raw: string) {
-    try {
-      return new URL(raw);
-    } catch {
-      return invalid(key);
-    }
-  }
-  function integer(key: string, fallback: number, min: number, max: number) {
-    const raw = env[`GLOWLOOM_AGENT_${key}`];
-    if (raw === undefined) return fallback;
-    const n = Number(raw);
-    return /^\d+$/.test(raw) && Number.isSafeInteger(n) && n >= min && n <= max
-      ? n
-      : invalid(key);
-  }
-  function token(key: string) {
-    const value = required(key);
-    return /^[!-~]{32,}$/.test(value) ? value : invalid(key);
-  }
-  const addr = required('HTTP_ADDR').match(
-    /^(\[[\da-fA-F:.]+\]|[\w.-]+):(\d+)$/,
+  return { host, port };
+}
+
+export function loadConfig(env: NodeJS.ProcessEnv): AgentConfig {
+  const parsed = envSchema.parse(env);
+  const { host: httpHost, port: httpPort } = parseHostPort(
+    parsed.GLOWLOOM_AGENT_HTTP_ADDR,
   );
-  if (!addr || !addr[1] || !addr[2]) invalid('HTTP_ADDR');
-  const port = Number(addr[2]);
-  if (port < 1 || port > 65535) invalid('HTTP_ADDR');
-  const origin = url('BUSINESS_ORIGIN', required('BUSINESS_ORIGIN'));
-  if (
-    !['http:', 'https:'].includes(origin.protocol) ||
-    !origin.host ||
-    origin.username ||
-    origin.password ||
-    origin.pathname !== '/' ||
-    origin.search ||
-    origin.hash
-  )
-    invalid('BUSINESS_ORIGIN');
-  const dbDsn = required('DB_DSN');
-  const db = url('DB_DSN', dbDsn);
-  if (
-    !['postgres:', 'postgresql:'].includes(db.protocol) ||
-    !db.hostname ||
-    db.username !== 'glowloom_agent' ||
-    db.pathname.length < 2 ||
-    db.hash ||
-    [...db.searchParams.keys()].some(
-      (key) => !['sslmode', 'application_name'].includes(key),
-    )
-  )
-    invalid('DB_DSN');
-  const serviceToken = token('SERVICE_TOKEN');
-  const businessToken = token('BUSINESS_TOKEN');
-  if (serviceToken === businessToken) invalid('BUSINESS_TOKEN');
-  const swagger = env.GLOWLOOM_AGENT_SWAGGER_ENABLED;
-  if (swagger !== undefined && swagger !== 'true' && swagger !== 'false') {
-    invalid('SWAGGER_ENABLED');
-  }
+  const hasLangfuse =
+    Boolean(parsed.LANGFUSE_BASE_URL) &&
+    Boolean(parsed.LANGFUSE_PUBLIC_KEY) &&
+    Boolean(parsed.LANGFUSE_SECRET_KEY);
+
   return {
-    swagger: swagger === 'true',
-    host: addr[1].replace(/^\[|\]$/g, ''),
-    port,
-    dbDsn,
-    serviceToken,
-    businessToken,
-    businessOrigin: origin.origin,
-    poolMax: integer('POOL_MAX', 8, 1, 64),
-    leaseMs: integer('LEASE_MS', 30_000, 1000, 300_000),
-    deliveryPollMs: integer(
-      'DELIVERY_POLL_MS',
-      deliveryDefaults.pollMs,
-      1000,
-      60_000,
-    ),
-    deliveryTimeoutMs: integer(
-      'DELIVERY_TIMEOUT_MS',
-      deliveryDefaults.timeoutMs,
-      60_000,
-      86_400_000,
-    ),
+    httpHost,
+    httpPort,
+    grpcAddr: parsed.GLOWLOOM_AGENT_GRPC_ADDR,
+    dbDsn: parsed.GLOWLOOM_AGENT_DB_DSN,
+    serviceToken: parsed.GLOWLOOM_AGENT_SERVICE_TOKEN,
+    businessOrigin: parsed.GLOWLOOM_AGENT_BUSINESS_ORIGIN.replace(/\/+$/, ''),
+    businessToken: parsed.GLOWLOOM_AGENT_BUSINESS_TOKEN,
+    poolMax: parsed.GLOWLOOM_AGENT_POOL_MAX,
+    leaseMs: parsed.GLOWLOOM_AGENT_LEASE_MS,
+    recoveryPollMs: parsed.GLOWLOOM_AGENT_RECOVERY_POLL_MS,
+    defaultModel: parsed.GLOWLOOM_AGENT_DEFAULT_MODEL,
+    ...(parsed.GLOWLOOM_REDIS_URL ? { redisUrl: parsed.GLOWLOOM_REDIS_URL } : {}),
+    ...(hasLangfuse
+      ? {
+          langfuse: {
+            baseUrl: parsed.LANGFUSE_BASE_URL!,
+            publicKey: parsed.LANGFUSE_PUBLIC_KEY!,
+            secretKey: parsed.LANGFUSE_SECRET_KEY!,
+          },
+        }
+      : {}),
+    logLevel: parsed.GLOWLOOM_LOG_LEVEL,
   };
 }

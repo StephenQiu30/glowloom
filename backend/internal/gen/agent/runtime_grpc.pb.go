@@ -19,18 +19,40 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AgentRuntime_Invoke_FullMethodName          = "/glowloom.agent.AgentRuntime/Invoke"
-	AgentRuntime_StreamRunEvents_FullMethodName = "/glowloom.agent.AgentRuntime/StreamRunEvents"
-	AgentRuntime_CheckHealth_FullMethodName     = "/glowloom.agent.AgentRuntime/CheckHealth"
+	AgentRuntime_CreateSession_FullMethodName        = "/glowloom.agent.AgentRuntime/CreateSession"
+	AgentRuntime_ListSessions_FullMethodName         = "/glowloom.agent.AgentRuntime/ListSessions"
+	AgentRuntime_GetSession_FullMethodName           = "/glowloom.agent.AgentRuntime/GetSession"
+	AgentRuntime_UpdateSession_FullMethodName        = "/glowloom.agent.AgentRuntime/UpdateSession"
+	AgentRuntime_StartRun_FullMethodName             = "/glowloom.agent.AgentRuntime/StartRun"
+	AgentRuntime_ListRuns_FullMethodName             = "/glowloom.agent.AgentRuntime/ListRuns"
+	AgentRuntime_GetRun_FullMethodName               = "/glowloom.agent.AgentRuntime/GetRun"
+	AgentRuntime_GetCurrentSubmission_FullMethodName = "/glowloom.agent.AgentRuntime/GetCurrentSubmission"
+	AgentRuntime_GetSubmission_FullMethodName        = "/glowloom.agent.AgentRuntime/GetSubmission"
+	AgentRuntime_ListMessages_FullMethodName         = "/glowloom.agent.AgentRuntime/ListMessages"
+	AgentRuntime_GetMessage_FullMethodName           = "/glowloom.agent.AgentRuntime/GetMessage"
+	AgentRuntime_ApplyDecision_FullMethodName        = "/glowloom.agent.AgentRuntime/ApplyDecision"
+	AgentRuntime_StreamRunEvents_FullMethodName      = "/glowloom.agent.AgentRuntime/StreamRunEvents"
+	AgentRuntime_CheckHealth_FullMethodName          = "/glowloom.agent.AgentRuntime/CheckHealth"
 )
 
 // AgentRuntimeClient is the client API for AgentRuntime service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// AgentRuntime exposes the independent Pi Durable Agent runtime to the Go monolith over gRPC.
+// AgentRuntime exposes the independent Mastra Agent runtime to the Go monolith over strongly-typed gRPC.
 type AgentRuntimeClient interface {
-	Invoke(ctx context.Context, in *InvokeRequest, opts ...grpc.CallOption) (*InvokeResponse, error)
+	CreateSession(ctx context.Context, in *CreateSessionRequest, opts ...grpc.CallOption) (*SessionPayloadResponse, error)
+	ListSessions(ctx context.Context, in *ListSessionsRequest, opts ...grpc.CallOption) (*SessionPayloadResponse, error)
+	GetSession(ctx context.Context, in *GetSessionRequest, opts ...grpc.CallOption) (*SessionPayloadResponse, error)
+	UpdateSession(ctx context.Context, in *UpdateSessionRequest, opts ...grpc.CallOption) (*SessionPayloadResponse, error)
+	StartRun(ctx context.Context, in *StartRunRequest, opts ...grpc.CallOption) (*RunPayloadResponse, error)
+	ListRuns(ctx context.Context, in *ListRunsRequest, opts ...grpc.CallOption) (*RunPayloadResponse, error)
+	GetRun(ctx context.Context, in *GetRunRequest, opts ...grpc.CallOption) (*RunPayloadResponse, error)
+	GetCurrentSubmission(ctx context.Context, in *GetCurrentSubmissionRequest, opts ...grpc.CallOption) (*RunPayloadResponse, error)
+	GetSubmission(ctx context.Context, in *GetSubmissionRequest, opts ...grpc.CallOption) (*RunPayloadResponse, error)
+	ListMessages(ctx context.Context, in *ListMessagesRequest, opts ...grpc.CallOption) (*MessagePayloadResponse, error)
+	GetMessage(ctx context.Context, in *GetMessageRequest, opts ...grpc.CallOption) (*MessagePayloadResponse, error)
+	ApplyDecision(ctx context.Context, in *ApplyDecisionRequest, opts ...grpc.CallOption) (*DecisionPayloadResponse, error)
 	StreamRunEvents(ctx context.Context, in *StreamRunEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[RunEventFrame], error)
 	CheckHealth(ctx context.Context, in *HealthRequest, opts ...grpc.CallOption) (*HealthResponse, error)
 }
@@ -43,10 +65,120 @@ func NewAgentRuntimeClient(cc grpc.ClientConnInterface) AgentRuntimeClient {
 	return &agentRuntimeClient{cc}
 }
 
-func (c *agentRuntimeClient) Invoke(ctx context.Context, in *InvokeRequest, opts ...grpc.CallOption) (*InvokeResponse, error) {
+func (c *agentRuntimeClient) CreateSession(ctx context.Context, in *CreateSessionRequest, opts ...grpc.CallOption) (*SessionPayloadResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(InvokeResponse)
-	err := c.cc.Invoke(ctx, AgentRuntime_Invoke_FullMethodName, in, out, cOpts...)
+	out := new(SessionPayloadResponse)
+	err := c.cc.Invoke(ctx, AgentRuntime_CreateSession_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentRuntimeClient) ListSessions(ctx context.Context, in *ListSessionsRequest, opts ...grpc.CallOption) (*SessionPayloadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SessionPayloadResponse)
+	err := c.cc.Invoke(ctx, AgentRuntime_ListSessions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentRuntimeClient) GetSession(ctx context.Context, in *GetSessionRequest, opts ...grpc.CallOption) (*SessionPayloadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SessionPayloadResponse)
+	err := c.cc.Invoke(ctx, AgentRuntime_GetSession_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentRuntimeClient) UpdateSession(ctx context.Context, in *UpdateSessionRequest, opts ...grpc.CallOption) (*SessionPayloadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SessionPayloadResponse)
+	err := c.cc.Invoke(ctx, AgentRuntime_UpdateSession_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentRuntimeClient) StartRun(ctx context.Context, in *StartRunRequest, opts ...grpc.CallOption) (*RunPayloadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RunPayloadResponse)
+	err := c.cc.Invoke(ctx, AgentRuntime_StartRun_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentRuntimeClient) ListRuns(ctx context.Context, in *ListRunsRequest, opts ...grpc.CallOption) (*RunPayloadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RunPayloadResponse)
+	err := c.cc.Invoke(ctx, AgentRuntime_ListRuns_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentRuntimeClient) GetRun(ctx context.Context, in *GetRunRequest, opts ...grpc.CallOption) (*RunPayloadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RunPayloadResponse)
+	err := c.cc.Invoke(ctx, AgentRuntime_GetRun_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentRuntimeClient) GetCurrentSubmission(ctx context.Context, in *GetCurrentSubmissionRequest, opts ...grpc.CallOption) (*RunPayloadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RunPayloadResponse)
+	err := c.cc.Invoke(ctx, AgentRuntime_GetCurrentSubmission_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentRuntimeClient) GetSubmission(ctx context.Context, in *GetSubmissionRequest, opts ...grpc.CallOption) (*RunPayloadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RunPayloadResponse)
+	err := c.cc.Invoke(ctx, AgentRuntime_GetSubmission_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentRuntimeClient) ListMessages(ctx context.Context, in *ListMessagesRequest, opts ...grpc.CallOption) (*MessagePayloadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MessagePayloadResponse)
+	err := c.cc.Invoke(ctx, AgentRuntime_ListMessages_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentRuntimeClient) GetMessage(ctx context.Context, in *GetMessageRequest, opts ...grpc.CallOption) (*MessagePayloadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MessagePayloadResponse)
+	err := c.cc.Invoke(ctx, AgentRuntime_GetMessage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentRuntimeClient) ApplyDecision(ctx context.Context, in *ApplyDecisionRequest, opts ...grpc.CallOption) (*DecisionPayloadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DecisionPayloadResponse)
+	err := c.cc.Invoke(ctx, AgentRuntime_ApplyDecision_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -86,9 +218,20 @@ func (c *agentRuntimeClient) CheckHealth(ctx context.Context, in *HealthRequest,
 // All implementations must embed UnimplementedAgentRuntimeServer
 // for forward compatibility.
 //
-// AgentRuntime exposes the independent Pi Durable Agent runtime to the Go monolith over gRPC.
+// AgentRuntime exposes the independent Mastra Agent runtime to the Go monolith over strongly-typed gRPC.
 type AgentRuntimeServer interface {
-	Invoke(context.Context, *InvokeRequest) (*InvokeResponse, error)
+	CreateSession(context.Context, *CreateSessionRequest) (*SessionPayloadResponse, error)
+	ListSessions(context.Context, *ListSessionsRequest) (*SessionPayloadResponse, error)
+	GetSession(context.Context, *GetSessionRequest) (*SessionPayloadResponse, error)
+	UpdateSession(context.Context, *UpdateSessionRequest) (*SessionPayloadResponse, error)
+	StartRun(context.Context, *StartRunRequest) (*RunPayloadResponse, error)
+	ListRuns(context.Context, *ListRunsRequest) (*RunPayloadResponse, error)
+	GetRun(context.Context, *GetRunRequest) (*RunPayloadResponse, error)
+	GetCurrentSubmission(context.Context, *GetCurrentSubmissionRequest) (*RunPayloadResponse, error)
+	GetSubmission(context.Context, *GetSubmissionRequest) (*RunPayloadResponse, error)
+	ListMessages(context.Context, *ListMessagesRequest) (*MessagePayloadResponse, error)
+	GetMessage(context.Context, *GetMessageRequest) (*MessagePayloadResponse, error)
+	ApplyDecision(context.Context, *ApplyDecisionRequest) (*DecisionPayloadResponse, error)
 	StreamRunEvents(*StreamRunEventsRequest, grpc.ServerStreamingServer[RunEventFrame]) error
 	CheckHealth(context.Context, *HealthRequest) (*HealthResponse, error)
 	mustEmbedUnimplementedAgentRuntimeServer()
@@ -101,8 +244,41 @@ type AgentRuntimeServer interface {
 // pointer dereference when methods are called.
 type UnimplementedAgentRuntimeServer struct{}
 
-func (UnimplementedAgentRuntimeServer) Invoke(context.Context, *InvokeRequest) (*InvokeResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method Invoke not implemented")
+func (UnimplementedAgentRuntimeServer) CreateSession(context.Context, *CreateSessionRequest) (*SessionPayloadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateSession not implemented")
+}
+func (UnimplementedAgentRuntimeServer) ListSessions(context.Context, *ListSessionsRequest) (*SessionPayloadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListSessions not implemented")
+}
+func (UnimplementedAgentRuntimeServer) GetSession(context.Context, *GetSessionRequest) (*SessionPayloadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSession not implemented")
+}
+func (UnimplementedAgentRuntimeServer) UpdateSession(context.Context, *UpdateSessionRequest) (*SessionPayloadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateSession not implemented")
+}
+func (UnimplementedAgentRuntimeServer) StartRun(context.Context, *StartRunRequest) (*RunPayloadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method StartRun not implemented")
+}
+func (UnimplementedAgentRuntimeServer) ListRuns(context.Context, *ListRunsRequest) (*RunPayloadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRuns not implemented")
+}
+func (UnimplementedAgentRuntimeServer) GetRun(context.Context, *GetRunRequest) (*RunPayloadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRun not implemented")
+}
+func (UnimplementedAgentRuntimeServer) GetCurrentSubmission(context.Context, *GetCurrentSubmissionRequest) (*RunPayloadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetCurrentSubmission not implemented")
+}
+func (UnimplementedAgentRuntimeServer) GetSubmission(context.Context, *GetSubmissionRequest) (*RunPayloadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSubmission not implemented")
+}
+func (UnimplementedAgentRuntimeServer) ListMessages(context.Context, *ListMessagesRequest) (*MessagePayloadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListMessages not implemented")
+}
+func (UnimplementedAgentRuntimeServer) GetMessage(context.Context, *GetMessageRequest) (*MessagePayloadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetMessage not implemented")
+}
+func (UnimplementedAgentRuntimeServer) ApplyDecision(context.Context, *ApplyDecisionRequest) (*DecisionPayloadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ApplyDecision not implemented")
 }
 func (UnimplementedAgentRuntimeServer) StreamRunEvents(*StreamRunEventsRequest, grpc.ServerStreamingServer[RunEventFrame]) error {
 	return status.Error(codes.Unimplemented, "method StreamRunEvents not implemented")
@@ -131,20 +307,218 @@ func RegisterAgentRuntimeServer(s grpc.ServiceRegistrar, srv AgentRuntimeServer)
 	s.RegisterService(&AgentRuntime_ServiceDesc, srv)
 }
 
-func _AgentRuntime_Invoke_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(InvokeRequest)
+func _AgentRuntime_CreateSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateSessionRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AgentRuntimeServer).Invoke(ctx, in)
+		return srv.(AgentRuntimeServer).CreateSession(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: AgentRuntime_Invoke_FullMethodName,
+		FullMethod: AgentRuntime_CreateSession_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AgentRuntimeServer).Invoke(ctx, req.(*InvokeRequest))
+		return srv.(AgentRuntimeServer).CreateSession(ctx, req.(*CreateSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentRuntime_ListSessions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSessionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentRuntimeServer).ListSessions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentRuntime_ListSessions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentRuntimeServer).ListSessions(ctx, req.(*ListSessionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentRuntime_GetSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSessionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentRuntimeServer).GetSession(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentRuntime_GetSession_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentRuntimeServer).GetSession(ctx, req.(*GetSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentRuntime_UpdateSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateSessionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentRuntimeServer).UpdateSession(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentRuntime_UpdateSession_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentRuntimeServer).UpdateSession(ctx, req.(*UpdateSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentRuntime_StartRun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartRunRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentRuntimeServer).StartRun(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentRuntime_StartRun_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentRuntimeServer).StartRun(ctx, req.(*StartRunRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentRuntime_ListRuns_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRunsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentRuntimeServer).ListRuns(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentRuntime_ListRuns_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentRuntimeServer).ListRuns(ctx, req.(*ListRunsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentRuntime_GetRun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRunRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentRuntimeServer).GetRun(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentRuntime_GetRun_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentRuntimeServer).GetRun(ctx, req.(*GetRunRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentRuntime_GetCurrentSubmission_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCurrentSubmissionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentRuntimeServer).GetCurrentSubmission(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentRuntime_GetCurrentSubmission_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentRuntimeServer).GetCurrentSubmission(ctx, req.(*GetCurrentSubmissionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentRuntime_GetSubmission_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSubmissionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentRuntimeServer).GetSubmission(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentRuntime_GetSubmission_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentRuntimeServer).GetSubmission(ctx, req.(*GetSubmissionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentRuntime_ListMessages_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListMessagesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentRuntimeServer).ListMessages(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentRuntime_ListMessages_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentRuntimeServer).ListMessages(ctx, req.(*ListMessagesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentRuntime_GetMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetMessageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentRuntimeServer).GetMessage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentRuntime_GetMessage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentRuntimeServer).GetMessage(ctx, req.(*GetMessageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentRuntime_ApplyDecision_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ApplyDecisionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentRuntimeServer).ApplyDecision(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentRuntime_ApplyDecision_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentRuntimeServer).ApplyDecision(ctx, req.(*ApplyDecisionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -186,8 +560,52 @@ var AgentRuntime_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*AgentRuntimeServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Invoke",
-			Handler:    _AgentRuntime_Invoke_Handler,
+			MethodName: "CreateSession",
+			Handler:    _AgentRuntime_CreateSession_Handler,
+		},
+		{
+			MethodName: "ListSessions",
+			Handler:    _AgentRuntime_ListSessions_Handler,
+		},
+		{
+			MethodName: "GetSession",
+			Handler:    _AgentRuntime_GetSession_Handler,
+		},
+		{
+			MethodName: "UpdateSession",
+			Handler:    _AgentRuntime_UpdateSession_Handler,
+		},
+		{
+			MethodName: "StartRun",
+			Handler:    _AgentRuntime_StartRun_Handler,
+		},
+		{
+			MethodName: "ListRuns",
+			Handler:    _AgentRuntime_ListRuns_Handler,
+		},
+		{
+			MethodName: "GetRun",
+			Handler:    _AgentRuntime_GetRun_Handler,
+		},
+		{
+			MethodName: "GetCurrentSubmission",
+			Handler:    _AgentRuntime_GetCurrentSubmission_Handler,
+		},
+		{
+			MethodName: "GetSubmission",
+			Handler:    _AgentRuntime_GetSubmission_Handler,
+		},
+		{
+			MethodName: "ListMessages",
+			Handler:    _AgentRuntime_ListMessages_Handler,
+		},
+		{
+			MethodName: "GetMessage",
+			Handler:    _AgentRuntime_GetMessage_Handler,
+		},
+		{
+			MethodName: "ApplyDecision",
+			Handler:    _AgentRuntime_ApplyDecision_Handler,
 		},
 		{
 			MethodName: "CheckHealth",
@@ -205,17 +623,25 @@ var AgentRuntime_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	AgentBusiness_Invoke_FullMethodName      = "/glowloom.agent.AgentBusiness/Invoke"
-	AgentBusiness_CheckHealth_FullMethodName = "/glowloom.agent.AgentBusiness/CheckHealth"
+	AgentBusiness_AuthorizeRun_FullMethodName        = "/glowloom.agent.AgentBusiness/AuthorizeRun"
+	AgentBusiness_ReserveBudget_FullMethodName       = "/glowloom.agent.AgentBusiness/ReserveBudget"
+	AgentBusiness_ReportUsage_FullMethodName         = "/glowloom.agent.AgentBusiness/ReportUsage"
+	AgentBusiness_GetProjectDigest_FullMethodName    = "/glowloom.agent.AgentBusiness/GetProjectDigest"
+	AgentBusiness_RecordApprovalAudit_FullMethodName = "/glowloom.agent.AgentBusiness/RecordApprovalAudit"
+	AgentBusiness_CheckHealth_FullMethodName         = "/glowloom.agent.AgentBusiness/CheckHealth"
 )
 
 // AgentBusinessClient is the client API for AgentBusiness service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// AgentBusiness exposes Go monolith business authority callbacks to the Agent runtime over gRPC.
+// AgentBusiness exposes Go monolith authorization, budget, usage settlement, and project digest callbacks.
 type AgentBusinessClient interface {
-	Invoke(ctx context.Context, in *InvokeRequest, opts ...grpc.CallOption) (*InvokeResponse, error)
+	AuthorizeRun(ctx context.Context, in *AuthorizeRunRequest, opts ...grpc.CallOption) (*AuthorizeRunResponse, error)
+	ReserveBudget(ctx context.Context, in *ReserveBudgetRequest, opts ...grpc.CallOption) (*ReserveBudgetResponse, error)
+	ReportUsage(ctx context.Context, in *ReportUsageRequest, opts ...grpc.CallOption) (*ReportUsageResponse, error)
+	GetProjectDigest(ctx context.Context, in *GetProjectDigestRequest, opts ...grpc.CallOption) (*GetProjectDigestResponse, error)
+	RecordApprovalAudit(ctx context.Context, in *RecordApprovalAuditRequest, opts ...grpc.CallOption) (*RecordApprovalAuditResponse, error)
 	CheckHealth(ctx context.Context, in *HealthRequest, opts ...grpc.CallOption) (*HealthResponse, error)
 }
 
@@ -227,10 +653,50 @@ func NewAgentBusinessClient(cc grpc.ClientConnInterface) AgentBusinessClient {
 	return &agentBusinessClient{cc}
 }
 
-func (c *agentBusinessClient) Invoke(ctx context.Context, in *InvokeRequest, opts ...grpc.CallOption) (*InvokeResponse, error) {
+func (c *agentBusinessClient) AuthorizeRun(ctx context.Context, in *AuthorizeRunRequest, opts ...grpc.CallOption) (*AuthorizeRunResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(InvokeResponse)
-	err := c.cc.Invoke(ctx, AgentBusiness_Invoke_FullMethodName, in, out, cOpts...)
+	out := new(AuthorizeRunResponse)
+	err := c.cc.Invoke(ctx, AgentBusiness_AuthorizeRun_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentBusinessClient) ReserveBudget(ctx context.Context, in *ReserveBudgetRequest, opts ...grpc.CallOption) (*ReserveBudgetResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReserveBudgetResponse)
+	err := c.cc.Invoke(ctx, AgentBusiness_ReserveBudget_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentBusinessClient) ReportUsage(ctx context.Context, in *ReportUsageRequest, opts ...grpc.CallOption) (*ReportUsageResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReportUsageResponse)
+	err := c.cc.Invoke(ctx, AgentBusiness_ReportUsage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentBusinessClient) GetProjectDigest(ctx context.Context, in *GetProjectDigestRequest, opts ...grpc.CallOption) (*GetProjectDigestResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetProjectDigestResponse)
+	err := c.cc.Invoke(ctx, AgentBusiness_GetProjectDigest_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentBusinessClient) RecordApprovalAudit(ctx context.Context, in *RecordApprovalAuditRequest, opts ...grpc.CallOption) (*RecordApprovalAuditResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RecordApprovalAuditResponse)
+	err := c.cc.Invoke(ctx, AgentBusiness_RecordApprovalAudit_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -251,9 +717,13 @@ func (c *agentBusinessClient) CheckHealth(ctx context.Context, in *HealthRequest
 // All implementations must embed UnimplementedAgentBusinessServer
 // for forward compatibility.
 //
-// AgentBusiness exposes Go monolith business authority callbacks to the Agent runtime over gRPC.
+// AgentBusiness exposes Go monolith authorization, budget, usage settlement, and project digest callbacks.
 type AgentBusinessServer interface {
-	Invoke(context.Context, *InvokeRequest) (*InvokeResponse, error)
+	AuthorizeRun(context.Context, *AuthorizeRunRequest) (*AuthorizeRunResponse, error)
+	ReserveBudget(context.Context, *ReserveBudgetRequest) (*ReserveBudgetResponse, error)
+	ReportUsage(context.Context, *ReportUsageRequest) (*ReportUsageResponse, error)
+	GetProjectDigest(context.Context, *GetProjectDigestRequest) (*GetProjectDigestResponse, error)
+	RecordApprovalAudit(context.Context, *RecordApprovalAuditRequest) (*RecordApprovalAuditResponse, error)
 	CheckHealth(context.Context, *HealthRequest) (*HealthResponse, error)
 	mustEmbedUnimplementedAgentBusinessServer()
 }
@@ -265,8 +735,20 @@ type AgentBusinessServer interface {
 // pointer dereference when methods are called.
 type UnimplementedAgentBusinessServer struct{}
 
-func (UnimplementedAgentBusinessServer) Invoke(context.Context, *InvokeRequest) (*InvokeResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method Invoke not implemented")
+func (UnimplementedAgentBusinessServer) AuthorizeRun(context.Context, *AuthorizeRunRequest) (*AuthorizeRunResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AuthorizeRun not implemented")
+}
+func (UnimplementedAgentBusinessServer) ReserveBudget(context.Context, *ReserveBudgetRequest) (*ReserveBudgetResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReserveBudget not implemented")
+}
+func (UnimplementedAgentBusinessServer) ReportUsage(context.Context, *ReportUsageRequest) (*ReportUsageResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportUsage not implemented")
+}
+func (UnimplementedAgentBusinessServer) GetProjectDigest(context.Context, *GetProjectDigestRequest) (*GetProjectDigestResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetProjectDigest not implemented")
+}
+func (UnimplementedAgentBusinessServer) RecordApprovalAudit(context.Context, *RecordApprovalAuditRequest) (*RecordApprovalAuditResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RecordApprovalAudit not implemented")
 }
 func (UnimplementedAgentBusinessServer) CheckHealth(context.Context, *HealthRequest) (*HealthResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CheckHealth not implemented")
@@ -292,20 +774,92 @@ func RegisterAgentBusinessServer(s grpc.ServiceRegistrar, srv AgentBusinessServe
 	s.RegisterService(&AgentBusiness_ServiceDesc, srv)
 }
 
-func _AgentBusiness_Invoke_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(InvokeRequest)
+func _AgentBusiness_AuthorizeRun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AuthorizeRunRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AgentBusinessServer).Invoke(ctx, in)
+		return srv.(AgentBusinessServer).AuthorizeRun(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: AgentBusiness_Invoke_FullMethodName,
+		FullMethod: AgentBusiness_AuthorizeRun_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AgentBusinessServer).Invoke(ctx, req.(*InvokeRequest))
+		return srv.(AgentBusinessServer).AuthorizeRun(ctx, req.(*AuthorizeRunRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentBusiness_ReserveBudget_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReserveBudgetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentBusinessServer).ReserveBudget(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentBusiness_ReserveBudget_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentBusinessServer).ReserveBudget(ctx, req.(*ReserveBudgetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentBusiness_ReportUsage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportUsageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentBusinessServer).ReportUsage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentBusiness_ReportUsage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentBusinessServer).ReportUsage(ctx, req.(*ReportUsageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentBusiness_GetProjectDigest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetProjectDigestRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentBusinessServer).GetProjectDigest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentBusiness_GetProjectDigest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentBusinessServer).GetProjectDigest(ctx, req.(*GetProjectDigestRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentBusiness_RecordApprovalAudit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecordApprovalAuditRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentBusinessServer).RecordApprovalAudit(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentBusiness_RecordApprovalAudit_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentBusinessServer).RecordApprovalAudit(ctx, req.(*RecordApprovalAuditRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -336,8 +890,24 @@ var AgentBusiness_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*AgentBusinessServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Invoke",
-			Handler:    _AgentBusiness_Invoke_Handler,
+			MethodName: "AuthorizeRun",
+			Handler:    _AgentBusiness_AuthorizeRun_Handler,
+		},
+		{
+			MethodName: "ReserveBudget",
+			Handler:    _AgentBusiness_ReserveBudget_Handler,
+		},
+		{
+			MethodName: "ReportUsage",
+			Handler:    _AgentBusiness_ReportUsage_Handler,
+		},
+		{
+			MethodName: "GetProjectDigest",
+			Handler:    _AgentBusiness_GetProjectDigest_Handler,
+		},
+		{
+			MethodName: "RecordApprovalAudit",
+			Handler:    _AgentBusiness_RecordApprovalAudit_Handler,
 		},
 		{
 			MethodName: "CheckHealth",

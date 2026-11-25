@@ -98,6 +98,8 @@ func (h *BusinessHandler) Register(router *gin.Engine) {
 	g.POST("/models/stream", h.model)
 	g.GET("/runs/:rid/calls/:call_id", h.call)
 	g.POST("/snapshot", h.getSnapshot)
+	h.registerMCP(router)
+	h.registerLLMGateway(router)
 }
 
 // @Summary listTools

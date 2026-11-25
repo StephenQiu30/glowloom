@@ -1,47 +1,34 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { setTimeout as delay } from 'node:timers/promises';
 import * as grpc from '@grpc/grpc-js';
 import * as protoLoader from '@grpc/proto-loader';
-import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { AgentError } from '../sessions/session-errors.js';
-import type { AgentApplication, Identity } from '../sessions/types.js';
+import { AgentError } from '../sessions/errors.js';
+import type {
+  AgentApplication,
+  Identity,
+  RunEvent,
+} from '../sessions/types.js';
 import { verifyServiceIdentity } from './auth.js';
 
 const maxMessageBytes = 8 * 1024 * 1024;
-const streamPollFallbackMs = 1000;
 
-interface InvokeRequest {
-  operation?: string;
-  method?: string;
-  path?: string;
-  params?: Record<string, string>;
-  query?: Record<string, string>;
-  headers?: Record<string, string>;
-  body_json?: Buffer;
+interface ProtoIdentity {
+  actor_id?: string;
+  org_id?: string;
+  scope_id?: string;
+  project_id?: string;
 }
 
-interface InvokeResponse {
+interface PayloadResponse {
   status_code: number;
-  content_type: string;
-  body_json: Buffer;
-}
-
-interface StreamRunEventsRequest {
-  run_id?: string;
-  last_event_id?: string;
-  query?: Record<string, string>;
+  payload_json: Buffer;
 }
 
 interface RunEventFrame {
   id: string;
   event: string;
   data_json: Buffer;
-}
-
-interface HealthResponse {
-  status: string;
 }
 
 export interface AgentGrpcServer {
@@ -70,7 +57,7 @@ function resolveProtoPath(): string {
   return found;
 }
 
-function verifyServiceMetadata(
+function verifyMetadata(
   metadata: grpc.Metadata,
   expectedAuth: Buffer,
 ): Partial<grpc.StatusObject> | null {
@@ -91,236 +78,456 @@ function verifyServiceMetadata(
   return null;
 }
 
-function parseStreamIdentity(
-  query: Record<string, string> | undefined,
-): Identity | null {
-  const actorId = query?.actor_id?.trim() ?? '';
-  const projectId = query?.project_id?.trim() ?? '';
-  if (!actorId || !projectId) return null;
-  return { actor_id: actorId, project_id: projectId };
+function extractTraceparent(metadata: grpc.Metadata): string | undefined {
+  const values = metadata.get('traceparent');
+  return typeof values[0] === 'string' ? values[0] : undefined;
 }
 
-function grpcCodeForAgentError(error: AgentError): grpc.status {
-  switch (error.code) {
-    case 'run_not_found':
-    case 'session_not_found':
-    case 'submission_not_found':
-    case 'message_not_found':
-      return grpc.status.NOT_FOUND;
-    case 'invalid_cursor':
-    case 'invalid_event_cursor':
-    case 'invalid_snapshot_watermark':
-    case 'cursor_snapshot_mismatch':
-    case 'invalid_session_update':
-      return grpc.status.INVALID_ARGUMENT;
-    case 'shutting_down':
-      return grpc.status.UNAVAILABLE;
-    default:
-      return grpc.status.FAILED_PRECONDITION;
+function parseIdentity(raw: ProtoIdentity | undefined): Identity {
+  const actorId = raw?.actor_id?.trim() ?? '';
+  const projectId = raw?.project_id?.trim() ?? '';
+  if (!actorId || !projectId) {
+    throw new AgentError(
+      'invalid_request',
+      'identity.actor_id and identity.project_id are required',
+    );
   }
+  return {
+    actorId,
+    projectId,
+    ...(raw?.org_id?.trim() ? { orgId: raw.org_id.trim() } : {}),
+    ...(raw?.scope_id?.trim() ? { scopeId: raw.scope_id.trim() } : {}),
+  };
 }
 
-export async function startAgentGrpcServer({
-  app,
-  service,
-  address,
-  serviceToken,
-}: {
-  app: NestFastifyApplication;
+function parseJsonBuffer(
+  buf: Buffer | undefined,
+): Record<string, unknown> | undefined {
+  if (!buf || buf.length === 0) return undefined;
+  const parsed: unknown = JSON.parse(buf.toString('utf8'));
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return undefined;
+  }
+  return parsed as Record<string, unknown>;
+}
+
+function toPayloadResponse(
+  statusCode: number,
+  body: unknown,
+): PayloadResponse {
+  return {
+    status_code: statusCode,
+    payload_json: Buffer.from(JSON.stringify(body), 'utf8'),
+  };
+}
+
+function handleUnaryError(
+  error: unknown,
+  callback: grpc.sendUnaryData<PayloadResponse>,
+): void {
+  if (error instanceof AgentError) {
+    callback(
+      null,
+      toPayloadResponse(error.statusCode, {
+        code: error.code,
+        message: error.message,
+      }),
+    );
+    return;
+  }
+  callback({
+    code: grpc.status.INTERNAL,
+    details: error instanceof Error ? error.message : 'INTERNAL_ERROR',
+  });
+}
+
+function grpcStatusForError(error: unknown): Partial<grpc.StatusObject> {
+  if (error instanceof AgentError) {
+    switch (error.code) {
+      case 'run_not_found':
+      case 'session_not_found':
+      case 'submission_not_found':
+      case 'message_not_found':
+        return { code: grpc.status.NOT_FOUND, details: error.code };
+      case 'invalid_request':
+      case 'invalid_cursor':
+        return { code: grpc.status.INVALID_ARGUMENT, details: error.code };
+      case 'shutting_down':
+        return { code: grpc.status.UNAVAILABLE, details: error.code };
+      default:
+        return { code: grpc.status.FAILED_PRECONDITION, details: error.code };
+    }
+  }
+  return {
+    code: grpc.status.INTERNAL,
+    details: error instanceof Error ? error.message : 'INTERNAL_ERROR',
+  };
+}
+
+function writeEventFrame(
+  call: grpc.ServerWritableStream<unknown, RunEventFrame>,
+  event: RunEvent,
+): void {
+  call.write({
+    id: event.id,
+    event: event.event,
+    data_json: Buffer.from(JSON.stringify(event.data), 'utf8'),
+  });
+}
+
+export async function startAgentGrpcServer(options: {
   service: AgentApplication;
   address: string;
   serviceToken: string;
 }): Promise<AgentGrpcServer> {
-  if (Buffer.byteLength(serviceToken) < 32) {
-    throw new Error('AGENT_SERVICE_TOKEN_REQUIRED');
-  }
-  const expectedAuth = Buffer.from(`Bearer ${serviceToken}`);
-  const packageDef = protoLoader.loadSync(resolveProtoPath(), {
+  const packageDefinition = protoLoader.loadSync(resolveProtoPath(), {
     keepCase: true,
     longs: String,
     enums: String,
-    defaults: true,
+    defaults: false,
     oneofs: true,
   });
-  const loaded = grpc.loadPackageDefinition(packageDef) as unknown as {
+  const protoDescriptor = grpc.loadPackageDefinition(packageDefinition) as {
     glowloom: {
       agent: {
-        AgentRuntime: { service: grpc.ServiceDefinition };
+        AgentRuntime: grpc.ServiceClientConstructor & {
+          service: grpc.ServiceDefinition;
+        };
       };
     };
   };
 
-  const fastify = app.getHttpAdapter().getInstance();
-
+  const expectedAuth = Buffer.from(`Bearer ${options.serviceToken}`);
   const server = new grpc.Server({
     'grpc.max_receive_message_length': maxMessageBytes,
     'grpc.max_send_message_length': maxMessageBytes,
   });
 
-  server.addService(loaded.glowloom.agent.AgentRuntime.service, {
-    CheckHealth: (
-      _call: grpc.ServerUnaryCall<Record<string, never>, HealthResponse>,
-      callback: grpc.sendUnaryData<HealthResponse>,
-    ) => {
-      callback(null, { status: 'ok' });
-    },
-
-    Invoke: async (
-      call: grpc.ServerUnaryCall<InvokeRequest, InvokeResponse>,
-      callback: grpc.sendUnaryData<InvokeResponse>,
-    ) => {
-      const authErr = verifyServiceMetadata(call.metadata, expectedAuth);
-      if (authErr) {
-        callback(authErr);
+  function guardUnary<Req>(
+    handler: (
+      req: Req,
+      metadata: grpc.Metadata,
+    ) => Promise<PayloadResponse>,
+  ): grpc.handleUnaryCall<Req, PayloadResponse> {
+    return (call, callback) => {
+      const authError = verifyMetadata(call.metadata, expectedAuth);
+      if (authError) {
+        callback(authError);
         return;
       }
-      try {
-        const req = call.request;
-        const method = (req.method ?? 'GET').toUpperCase() as
-          'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
-        const qs = new URLSearchParams(req.query ?? {}).toString();
-        const url = qs ? `${req.path ?? ''}?${qs}` : (req.path ?? '');
-        const headers: Record<string, string> = {
-          ...(req.headers ?? {}),
-          authorization: `Bearer ${serviceToken}`,
-          'x-agent-audience': 'agent',
-        };
-        const payload =
-          req.body_json && req.body_json.length > 0 ? req.body_json : undefined;
-        if (payload && !headers['content-type']) {
-          headers['content-type'] = 'application/json';
-        }
-        const injected = await fastify.inject({
-          method,
-          url,
-          headers,
-          ...(payload ? { payload } : {}),
-        });
-        const contentType = String(
-          injected.headers['content-type'] ?? 'application/json',
-        );
-        callback(null, {
-          status_code: injected.statusCode,
-          content_type: contentType,
-          body_json: Buffer.from(injected.rawPayload),
-        });
-      } catch (error) {
-        const details =
-          error instanceof Error ? error.message : 'AGENT_GRPC_INTERNAL';
-        callback({ code: grpc.status.INTERNAL, details });
-      }
-    },
+      void handler(call.request, call.metadata)
+        .then((res) => callback(null, res))
+        .catch((err: unknown) => handleUnaryError(err, callback));
+    };
+  }
 
-    StreamRunEvents: async (
-      call: grpc.ServerWritableStream<StreamRunEventsRequest, RunEventFrame>,
-    ) => {
-      const authErr = verifyServiceMetadata(call.metadata, expectedAuth);
-      if (authErr) {
-        call.destroy(
-          Object.assign(new Error(authErr.details ?? 'UNAUTHORIZED'), authErr),
-        );
+  server.addService(protoDescriptor.glowloom.agent.AgentRuntime.service, {
+    CreateSession: guardUnary<{
+      identity?: ProtoIdentity;
+      request_id?: string;
+      title?: string;
+      canvas_id?: string;
+    }>(async (req) => {
+      const identity = parseIdentity(req.identity);
+      const session = await options.service.createSession({
+        identity,
+        requestId: req.request_id ?? '',
+        title: req.title ?? 'Untitled',
+        ...(req.canvas_id ? { canvasId: req.canvas_id } : {}),
+      });
+      return toPayloadResponse(200, session);
+    }),
+
+    ListSessions: guardUnary<{
+      identity?: ProtoIdentity;
+      limit?: number;
+      cursor?: string;
+    }>(async (req) => {
+      const identity = parseIdentity(req.identity);
+      const page = await options.service.listSessions(
+        identity,
+        req.limit,
+        req.cursor,
+      );
+      return toPayloadResponse(200, page);
+    }),
+
+    GetSession: guardUnary<{
+      identity?: ProtoIdentity;
+      session_id?: string;
+    }>(async (req) => {
+      const identity = parseIdentity(req.identity);
+      const session = await options.service.getSession(
+        identity,
+        req.session_id ?? '',
+      );
+      return toPayloadResponse(200, session);
+    }),
+
+    UpdateSession: guardUnary<{
+      identity?: ProtoIdentity;
+      session_id?: string;
+      title?: string;
+      pinned?: boolean;
+      archived?: boolean;
+    }>(async (req) => {
+      const identity = parseIdentity(req.identity);
+      const session = await options.service.updateSession({
+        identity,
+        sessionId: req.session_id ?? '',
+        ...(req.title !== undefined ? { title: req.title } : {}),
+        ...(req.pinned !== undefined ? { pinned: req.pinned } : {}),
+        ...(req.archived !== undefined ? { archived: req.archived } : {}),
+      });
+      return toPayloadResponse(200, session);
+    }),
+
+    StartRun: guardUnary<{
+      identity?: ProtoIdentity;
+      session_id?: string;
+      request_id?: string;
+      goal?: string;
+      manifest_json?: Buffer;
+      input_json?: Buffer;
+      retry_of_run_id?: string;
+      expected_execution_revision?: string | number;
+      budget_micros?: string | number;
+    }>(async (req, metadata) => {
+      const identity = parseIdentity(req.identity);
+      const traceparent = extractTraceparent(metadata);
+      const inputPayload = parseJsonBuffer(req.input_json);
+      const accepted = await options.service.startRun({
+        identity,
+        sessionId: req.session_id ?? '',
+        requestId: req.request_id ?? '',
+        goal: req.goal ?? '',
+        manifest: parseJsonBuffer(req.manifest_json) ?? {},
+        ...(inputPayload ? { input: inputPayload } : {}),
+        ...(req.retry_of_run_id ? { retryOfRunId: req.retry_of_run_id } : {}),
+        expectedExecutionRevision: Number(req.expected_execution_revision ?? 0),
+        ...(req.budget_micros !== undefined
+          ? { budgetMicros: Number(req.budget_micros) }
+          : {}),
+        ...(traceparent ? { traceparent } : {}),
+      });
+      return toPayloadResponse(200, accepted);
+    }),
+
+    ListRuns: guardUnary<{
+      identity?: ProtoIdentity;
+      session_id?: string;
+      limit?: number;
+      cursor?: string;
+    }>(async (req) => {
+      const identity = parseIdentity(req.identity);
+      const page = await options.service.listRuns(
+        identity,
+        req.session_id ?? '',
+        req.limit,
+        req.cursor,
+      );
+      return toPayloadResponse(200, page);
+    }),
+
+    GetRun: guardUnary<{
+      identity?: ProtoIdentity;
+      run_id?: string;
+    }>(async (req) => {
+      const identity = parseIdentity(req.identity);
+      const run = await options.service.getRun(identity, req.run_id ?? '');
+      return toPayloadResponse(200, run);
+    }),
+
+    GetCurrentSubmission: guardUnary<{
+      identity?: ProtoIdentity;
+      session_id?: string;
+    }>(async (req) => {
+      const identity = parseIdentity(req.identity);
+      const submission = await options.service.getCurrentSubmission(
+        identity,
+        req.session_id ?? '',
+      );
+      return toPayloadResponse(200, submission);
+    }),
+
+    GetSubmission: guardUnary<{
+      identity?: ProtoIdentity;
+      session_id?: string;
+      request_id?: string;
+    }>(async (req) => {
+      const identity = parseIdentity(req.identity);
+      const submission = await options.service.getSubmission(
+        identity,
+        req.session_id ?? '',
+        req.request_id ?? '',
+      );
+      return toPayloadResponse(200, submission);
+    }),
+
+    ListMessages: guardUnary<{
+      identity?: ProtoIdentity;
+      run_id?: string;
+      limit?: number;
+      before?: string;
+      through?: string;
+    }>(async (req) => {
+      const identity = parseIdentity(req.identity);
+      const page = await options.service.listMessages(
+        identity,
+        req.run_id ?? '',
+        req.limit,
+        req.before,
+        req.through,
+      );
+      return toPayloadResponse(200, page);
+    }),
+
+    GetMessage: guardUnary<{
+      identity?: ProtoIdentity;
+      run_id?: string;
+      message_id?: string;
+    }>(async (req) => {
+      const identity = parseIdentity(req.identity);
+      const message = await options.service.getMessage(
+        identity,
+        req.run_id ?? '',
+        req.message_id ?? '',
+      );
+      return toPayloadResponse(200, message);
+    }),
+
+    ApplyDecision: guardUnary<{
+      identity?: ProtoIdentity;
+      run_id?: string;
+      decision_id?: string;
+      authorization_revision?: string | number;
+      action?: string;
+      payload_json?: Buffer;
+    }>(async (req) => {
+      const identity = parseIdentity(req.identity);
+      const receipt = await options.service.applyDecision({
+        identity,
+        runId: req.run_id ?? '',
+        decisionId: req.decision_id ?? '',
+        authorizationRevision: Number(req.authorization_revision ?? 0),
+        action: req.action ?? '',
+        payload: parseJsonBuffer(req.payload_json) ?? {},
+      });
+      return toPayloadResponse(200, receipt);
+    }),
+
+    StreamRunEvents(
+      call: grpc.ServerWritableStream<
+        {
+          identity?: ProtoIdentity;
+          run_id?: string;
+          last_event_id?: string;
+        },
+        RunEventFrame
+      >,
+    ) {
+      const authError = verifyMetadata(call.metadata, expectedAuth);
+      if (authError) {
+        call.destroy(Object.assign(new Error(authError.details), authError));
         return;
       }
-      const req = call.request;
-      const runId = req.run_id?.trim() ?? '';
-      if (!runId) {
-        call.destroy(
-          Object.assign(new Error('MISSING_RUN_ID'), {
-            code: grpc.status.INVALID_ARGUMENT,
-          }),
-        );
-        return;
-      }
-      const identity = parseStreamIdentity(req.query);
-      if (!identity) {
-        call.destroy(
-          Object.assign(new Error('MISSING_IDENTITY'), {
-            code: grpc.status.INVALID_ARGUMENT,
-          }),
-        );
-        return;
-      }
 
-      const abort = new AbortController();
-      const onCancel = () => abort.abort();
-      call.once('cancelled', onCancel);
-      call.once('close', onCancel);
-
-      let cursor: string | undefined =
-        req.last_event_id?.trim() || req.query?.after?.trim() || undefined;
-      try {
-        // Validate run scope & cursor before streaming frames.
-        let batch = await service.events(runId, identity, cursor);
-        while (!abort.signal.aborted && !call.cancelled) {
-          for (const event of batch) {
-            if (abort.signal.aborted || call.cancelled) break;
-            cursor = event.cursor;
-            call.write({
-              id: event.cursor,
-              event: event.type,
-              data_json: Buffer.from(JSON.stringify(event.payload), 'utf8'),
-            });
+      void (async () => {
+        let unsubscribe: (() => void) | undefined;
+        try {
+          const identity = parseIdentity(call.request.identity);
+          const runId = call.request.run_id?.trim() ?? '';
+          if (!runId) {
+            throw new AgentError('invalid_request', 'run_id is required');
           }
-          if (abort.signal.aborted || call.cancelled) break;
-          if (service.waitForEvents) {
-            await service.waitForEvents(
-              runId,
-              streamPollFallbackMs,
-              abort.signal,
-            );
-          } else {
-            await delay(streamPollFallbackMs, undefined, {
-              signal: abort.signal,
-            });
-          }
-          if (abort.signal.aborted || call.cancelled) break;
-          batch = await service.events(runId, identity, cursor);
-        }
-        if (!call.destroyed) call.end();
-      } catch (error) {
-        if (abort.signal.aborted || call.cancelled) return;
-        if (error instanceof AgentError) {
-          call.destroy(
-            Object.assign(new Error(error.code), {
-              code: grpcCodeForAgentError(error),
-            }),
+
+          let lastSentSeq = call.request.last_event_id
+            ? Number.parseInt(call.request.last_event_id, 10) || 0
+            : 0;
+          const buffered: RunEvent[] = [];
+          let replaying = true;
+
+          unsubscribe = options.service.subscribeRunEvents(runId, (ev) => {
+            if (replaying) {
+              buffered.push(ev);
+              return;
+            }
+            if (ev.seq <= lastSentSeq) return;
+            lastSentSeq = ev.seq;
+            writeEventFrame(call, ev);
+            if (
+              ev.event === 'run.completed' ||
+              ev.event === 'run.failed' ||
+              ev.event === 'run.cancelled'
+            ) {
+              unsubscribe?.();
+              call.end();
+            }
+          });
+
+          call.on('cancelled', () => unsubscribe?.());
+          call.on('close', () => unsubscribe?.());
+
+          const snapshot = await options.service.listRunEventsAfter(
+            identity,
+            runId,
+            call.request.last_event_id,
           );
-          return;
+          for (const ev of snapshot.events) {
+            if (ev.seq > lastSentSeq) {
+              lastSentSeq = ev.seq;
+              writeEventFrame(call, ev);
+            }
+          }
+          for (const ev of buffered) {
+            if (ev.seq > lastSentSeq) {
+              lastSentSeq = ev.seq;
+              writeEventFrame(call, ev);
+            }
+          }
+          replaying = false;
+
+          if (snapshot.terminal) {
+            unsubscribe?.();
+            call.end();
+          }
+        } catch (error: unknown) {
+          unsubscribe?.();
+          const st = grpcStatusForError(error);
+          call.destroy(Object.assign(new Error(st.details), st));
         }
-        const message =
-          error instanceof Error ? error.message : 'STREAM_FAILED';
-        call.destroy(
-          Object.assign(new Error(message), { code: grpc.status.INTERNAL }),
-        );
-      } finally {
-        call.off('cancelled', onCancel);
-        call.off('close', onCancel);
-      }
+      })();
+    },
+
+    CheckHealth(
+      _call: grpc.ServerUnaryCall<Record<string, never>, { status: string }>,
+      callback: grpc.sendUnaryData<{ status: string }>,
+    ) {
+      void options.service.ready().then((ok) => {
+        callback(null, { status: ok ? 'SERVING' : 'NOT_SERVING' });
+      });
     },
   });
 
   const boundPort = await new Promise<number>((resolve, reject) => {
     server.bindAsync(
-      address,
+      options.address,
       grpc.ServerCredentials.createInsecure(),
       (err, port) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        resolve(port);
+        if (err) reject(err);
+        else resolve(port);
       },
     );
   });
 
-  const host = address.includes(':')
-    ? address.slice(0, address.lastIndexOf(':'))
-    : '127.0.0.1';
+  const host = options.address.slice(0, options.address.lastIndexOf(':')) || '0.0.0.0';
+
   return {
     address: `${host}:${boundPort}`,
-    close: () =>
-      new Promise<void>((resolve) => {
+    close() {
+      return new Promise<void>((resolve) => {
         server.tryShutdown(() => resolve());
-      }),
+      });
+    },
   };
 }

@@ -1,53 +1,94 @@
-import type { JsonObject } from '@earendil-works/pi-durable';
-import type { Generated } from 'kysely';
-import type {
-  RuntimeSession,
-  RuntimeRecord,
-  RuntimeDocumentVersion,
-  RuntimeEvent,
-  ServiceSession,
-  ServiceRun,
-  ServiceControlInbox,
-  PublicMessage,
-  RecoveryBackoff,
-} from './generated/client.js';
-import type { FrozenManifest } from '../sessions/manifest.js';
-import type { AuthorizedInput, ControlInput } from '../sessions/types.js';
+import type { ColumnType } from 'kysely';
 
-// Builder types derive from the generated Prisma client. Neither mapping owns DDL.
-// backend/db/schema.sql remains the only database structure source.
-export interface Database {
-  runtime_sessions: Omit<RuntimeSession, 'last_id' | 'commit_seq'> & {
-    last_id: Generated<bigint>;
-    commit_seq: Generated<bigint>;
-  };
-  runtime_records: RuntimeRecord;
-  runtime_document_versions: RuntimeDocumentVersion;
-  runtime_events: Omit<RuntimeEvent, 'payload'> & { payload: JsonObject };
-  service_sessions: Omit<
-    ServiceSession,
-    'execution_revision' | 'created_at' | 'pinned'
-  > & {
-    execution_revision: Generated<bigint>;
-    created_at: Generated<Date>;
-    pinned: Generated<boolean>;
-  };
-  service_runs: Omit<ServiceRun, 'manifest' | 'input' | 'created_at'> & {
-    manifest: FrozenManifest;
-    input: AuthorizedInput | null;
-    created_at: Generated<Date>;
-  };
-  service_control_inbox: Omit<
-    ServiceControlInbox,
-    'input' | 'receipt' | 'created_at'
-  > & {
-    input: ControlInput;
-    receipt: JsonObject | null;
-    created_at: Generated<Date>;
-  };
-  public_messages: PublicMessage;
-  recovery_backoff: Omit<RecoveryBackoff, 'attempts' | 'next_attempt_at'> & {
-    attempts: Generated<number>;
-    next_attempt_at: Generated<Date>;
-  };
+export type RunStatus =
+  | 'queued'
+  | 'running'
+  | 'waiting_approval'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
+
+export interface ServiceSessionsTable {
+  id: string;
+  actor_id: string;
+  org_id: string;
+  scope_id: string;
+  project_id: string;
+  canvas_id: string | null;
+  title: string;
+  request_id: string;
+  content_hash: string;
+  execution_revision: ColumnType<string, string | number | bigint, string | number | bigint>;
+  created_at: ColumnType<Date, Date | string | undefined, never>;
+  last_input_at: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
+  pinned: ColumnType<boolean, boolean | undefined, boolean>;
+  archived_at: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
+}
+
+export interface ServiceRunsTable {
+  id: string;
+  session_id: string;
+  request_id: string;
+  content_hash: string;
+  goal: string;
+  manifest: Record<string, unknown>;
+  submission_id: string;
+  accepted_revision: ColumnType<string, string | number | bigint, string | number | bigint>;
+  status: RunStatus;
+  lease_owner: string | null;
+  lease_until: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
+  workflow_run_id: string | null;
+  error_code: string | null;
+  input: Record<string, unknown> | null;
+  retry_of_run_id: string | null;
+  created_at: ColumnType<Date, Date | string | undefined, never>;
+  updated_at: ColumnType<Date, Date | string | undefined, Date | string>;
+  completed_at: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
+}
+
+export interface ServiceRunEventsTable {
+  run_id: string;
+  seq: ColumnType<string, string | number | bigint, never>;
+  event_type: string;
+  payload: Record<string, unknown>;
+  created_at: ColumnType<Date, Date | string | undefined, never>;
+}
+
+export interface ServicePublicMessagesTable {
+  run_id: string;
+  seq: ColumnType<string, string | number | bigint, never>;
+  part_index: number;
+  message_id: string;
+  kind: string;
+  content: string;
+  created_at: ColumnType<Date, Date | string | undefined, never>;
+}
+
+export interface ServiceControlInboxTable {
+  decision_id: string;
+  root_run_id: string;
+  authorization_revision: ColumnType<string, string | number | bigint, never>;
+  content_hash: string;
+  input: Record<string, unknown>;
+  receipt: Record<string, unknown> | null;
+  created_at: ColumnType<Date, Date | string | undefined, never>;
+}
+
+export interface RecoveryBackoffTable {
+  kind: 'run' | 'control';
+  subject_id: string;
+  root_run_id: string;
+  attempts: number;
+  code: string | null;
+  next_attempt_at: ColumnType<Date, Date | string | undefined, Date | string>;
+  parked_at: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
+}
+
+export interface AgentDatabase {
+  'agent.service_sessions': ServiceSessionsTable;
+  'agent.service_runs': ServiceRunsTable;
+  'agent.service_run_events': ServiceRunEventsTable;
+  'agent.service_public_messages': ServicePublicMessagesTable;
+  'agent.service_control_inbox': ServiceControlInboxTable;
+  'agent.recovery_backoff': RecoveryBackoffTable;
 }

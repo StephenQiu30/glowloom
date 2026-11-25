@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -52,26 +53,41 @@ func (g *grpcTransport) outgoingContext(ctx context.Context) context.Context {
 	))
 }
 
+func identityFromQuery(query url.Values) *agentpb.Identity {
+	return &agentpb.Identity{
+		ActorId:   query.Get("actor_id"),
+		OrgId:     query.Get("org_id"),
+		ScopeId:   query.Get("scope_id"),
+		ProjectId: query.Get("project_id"),
+	}
+}
+
+func parseLimit(query url.Values) int32 {
+	if raw := query.Get("limit"); raw != "" {
+		if n, err := strconv.ParseInt(raw, 10, 32); err == nil {
+			return int32(n)
+		}
+	}
+	return 0
+}
+
+func jsonResponse(statusCode int32, payload []byte) *http.Response {
+	code := int(statusCode)
+	if code == 0 {
+		code = http.StatusOK
+	}
+	header := http.Header{}
+	header.Set("Content-Type", "application/json")
+	return &http.Response{
+		StatusCode: code,
+		Header:     header,
+		Body:       io.NopCloser(bytes.NewReader(payload)),
+	}
+}
+
 func (g *grpcTransport) request(ctx context.Context, operation string, params map[string]string, query url.Values, body any, lastEventID string) (*http.Response, error) {
 	if operation == "subscribeAgentEvents" {
 		return g.streamEvents(ctx, params["rid"], query, lastEventID)
-	}
-	method, path, err := operationRoute(operation, params)
-	if err != nil {
-		return nil, err
-	}
-	var payload []byte
-	if body != nil {
-		payload, err = json.Marshal(body)
-		if err != nil {
-			return nil, err
-		}
-	}
-	qMap := make(map[string]string, len(query))
-	for k, vals := range query {
-		if len(vals) > 0 {
-			qMap[k] = vals[0]
-		}
 	}
 	callCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -82,26 +98,222 @@ func (g *grpcTransport) request(ctx context.Context, operation string, params ma
 	}
 	defer func() { _ = conn.Close() }()
 
-	resp, err := agentpb.NewAgentRuntimeClient(conn).Invoke(g.outgoingContext(callCtx), &agentpb.InvokeRequest{
-		Operation: operation,
-		Method:    method,
-		Path:      path,
-		Params:    params,
-		Query:     qMap,
-		BodyJson:  payload,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("agent gRPC %s: %w", operation, err)
+	client := agentpb.NewAgentRuntimeClient(conn)
+	outCtx := g.outgoingContext(callCtx)
+	id := identityFromQuery(query)
+
+	switch operation {
+	case "createAgentSession":
+		in, ok := body.(CreateSessionRequest)
+		if !ok {
+			return nil, fmt.Errorf("invalid Agent request body for %s", operation)
+		}
+		req := &agentpb.CreateSessionRequest{
+			Identity: &agentpb.Identity{
+				ActorId:   in.ActorId,
+				OrgId:     in.OrgId,
+				ScopeId:   in.ScopeId,
+				ProjectId: in.ProjectId,
+			},
+			RequestId: in.RequestId,
+			Title:     in.Title,
+		}
+		if in.CanvasId != nil {
+			req.CanvasId = *in.CanvasId
+		}
+		resp, callErr := client.CreateSession(outCtx, req)
+		if callErr != nil {
+			return nil, fmt.Errorf("agent gRPC %s: %w", operation, callErr)
+		}
+		return jsonResponse(resp.GetStatusCode(), resp.GetPayloadJson()), nil
+
+	case "listAgentSessions":
+		resp, callErr := client.ListSessions(outCtx, &agentpb.ListSessionsRequest{
+			Identity: id,
+			Limit:    parseLimit(query),
+			Cursor:   query.Get("cursor"),
+		})
+		if callErr != nil {
+			return nil, fmt.Errorf("agent gRPC %s: %w", operation, callErr)
+		}
+		return jsonResponse(resp.GetStatusCode(), resp.GetPayloadJson()), nil
+
+	case "getAgentSession":
+		resp, callErr := client.GetSession(outCtx, &agentpb.GetSessionRequest{
+			Identity:  id,
+			SessionId: params["sid"],
+		})
+		if callErr != nil {
+			return nil, fmt.Errorf("agent gRPC %s: %w", operation, callErr)
+		}
+		return jsonResponse(resp.GetStatusCode(), resp.GetPayloadJson()), nil
+
+	case "updateAgentSession":
+		in, ok := body.(UpdateSessionRequest)
+		if !ok {
+			return nil, fmt.Errorf("invalid Agent request body for %s", operation)
+		}
+		req := &agentpb.UpdateSessionRequest{
+			Identity: &agentpb.Identity{
+				ActorId:   in.ActorId,
+				OrgId:     in.OrgId,
+				ScopeId:   in.ScopeId,
+				ProjectId: in.ProjectId,
+			},
+			SessionId: params["sid"],
+			Title:     in.Title,
+		}
+		switch string(in.Action) {
+		case "pin":
+			v := true
+			req.Pinned = &v
+		case "unpin":
+			v := false
+			req.Pinned = &v
+		case "archive":
+			v := true
+			req.Archived = &v
+		case "unarchive":
+			v := false
+			req.Archived = &v
+		}
+		resp, callErr := client.UpdateSession(outCtx, req)
+		if callErr != nil {
+			return nil, fmt.Errorf("agent gRPC %s: %w", operation, callErr)
+		}
+		return jsonResponse(resp.GetStatusCode(), resp.GetPayloadJson()), nil
+
+	case "createAgentRun":
+		in, ok := body.(CreateRunRequest)
+		if !ok {
+			return nil, fmt.Errorf("invalid Agent request body for %s", operation)
+		}
+		manifestRaw, marshalErr := json.Marshal(in.Manifest)
+		if marshalErr != nil {
+			return nil, marshalErr
+		}
+		inputRaw, marshalErr := json.Marshal(in.Input)
+		if marshalErr != nil {
+			return nil, marshalErr
+		}
+		req := &agentpb.StartRunRequest{
+			Identity: &agentpb.Identity{
+				ActorId:   in.ActorId,
+				OrgId:     in.OrgId,
+				ScopeId:   in.ScopeId,
+				ProjectId: in.ProjectId,
+			},
+			SessionId:                 params["sid"],
+			RequestId:                 in.RequestId,
+			Goal:                      in.Goal,
+			ManifestJson:              manifestRaw,
+			InputJson:                 inputRaw,
+			ExpectedExecutionRevision: in.ExpectedExecutionRevision,
+		}
+		if in.RetryOfRunId != nil {
+			req.RetryOfRunId = *in.RetryOfRunId
+		}
+		resp, callErr := client.StartRun(outCtx, req)
+		if callErr != nil {
+			return nil, fmt.Errorf("agent gRPC %s: %w", operation, callErr)
+		}
+		return jsonResponse(resp.GetStatusCode(), resp.GetPayloadJson()), nil
+
+	case "listAgentRuns":
+		resp, callErr := client.ListRuns(outCtx, &agentpb.ListRunsRequest{
+			Identity:  id,
+			SessionId: params["sid"],
+			Limit:     parseLimit(query),
+			Cursor:    query.Get("cursor"),
+		})
+		if callErr != nil {
+			return nil, fmt.Errorf("agent gRPC %s: %w", operation, callErr)
+		}
+		return jsonResponse(resp.GetStatusCode(), resp.GetPayloadJson()), nil
+
+	case "getAgentRun":
+		resp, callErr := client.GetRun(outCtx, &agentpb.GetRunRequest{
+			Identity: id,
+			RunId:    params["rid"],
+		})
+		if callErr != nil {
+			return nil, fmt.Errorf("agent gRPC %s: %w", operation, callErr)
+		}
+		return jsonResponse(resp.GetStatusCode(), resp.GetPayloadJson()), nil
+
+	case "getCurrentAgentSubmission":
+		resp, callErr := client.GetCurrentSubmission(outCtx, &agentpb.GetCurrentSubmissionRequest{
+			Identity:  id,
+			SessionId: params["sid"],
+		})
+		if callErr != nil {
+			return nil, fmt.Errorf("agent gRPC %s: %w", operation, callErr)
+		}
+		return jsonResponse(resp.GetStatusCode(), resp.GetPayloadJson()), nil
+
+	case "getAgentSubmission":
+		resp, callErr := client.GetSubmission(outCtx, &agentpb.GetSubmissionRequest{
+			Identity:  id,
+			SessionId: params["sid"],
+			RequestId: params["requestId"],
+		})
+		if callErr != nil {
+			return nil, fmt.Errorf("agent gRPC %s: %w", operation, callErr)
+		}
+		return jsonResponse(resp.GetStatusCode(), resp.GetPayloadJson()), nil
+
+	case "listAgentMessages":
+		resp, callErr := client.ListMessages(outCtx, &agentpb.ListMessagesRequest{
+			Identity: id,
+			RunId:    params["rid"],
+			Limit:    parseLimit(query),
+			Before:   query.Get("before"),
+			Through:  query.Get("through"),
+		})
+		if callErr != nil {
+			return nil, fmt.Errorf("agent gRPC %s: %w", operation, callErr)
+		}
+		return jsonResponse(resp.GetStatusCode(), resp.GetPayloadJson()), nil
+
+	case "getAgentMessage":
+		resp, callErr := client.GetMessage(outCtx, &agentpb.GetMessageRequest{
+			Identity:  id,
+			RunId:     params["rid"],
+			MessageId: params["messageId"],
+		})
+		if callErr != nil {
+			return nil, fmt.Errorf("agent gRPC %s: %w", operation, callErr)
+		}
+		return jsonResponse(resp.GetStatusCode(), resp.GetPayloadJson()), nil
+
+	case "applyAgentDecision":
+		in, ok := body.(ControlRequest)
+		if !ok {
+			return nil, fmt.Errorf("invalid Agent request body for %s", operation)
+		}
+		payloadRaw, marshalErr := json.Marshal(in)
+		if marshalErr != nil {
+			return nil, marshalErr
+		}
+		resp, callErr := client.ApplyDecision(outCtx, &agentpb.ApplyDecisionRequest{
+			Identity: &agentpb.Identity{
+				ActorId:   in.ActorId,
+				ProjectId: in.ProjectId,
+			},
+			RunId:                 params["rid"],
+			DecisionId:            in.DecisionId,
+			AuthorizationRevision: in.AuthorizationRevision,
+			Action:                string(in.Action),
+			PayloadJson:           payloadRaw,
+		})
+		if callErr != nil {
+			return nil, fmt.Errorf("agent gRPC %s: %w", operation, callErr)
+		}
+		return jsonResponse(resp.GetStatusCode(), resp.GetPayloadJson()), nil
+
+	default:
+		return nil, fmt.Errorf("unknown Agent operation %q", operation)
 	}
-	header := http.Header{}
-	if ct := resp.GetContentType(); ct != "" {
-		header.Set("Content-Type", ct)
-	}
-	return &http.Response{
-		StatusCode: int(resp.GetStatusCode()),
-		Header:     header,
-		Body:       io.NopCloser(bytes.NewReader(resp.GetBodyJson())),
-	}, nil
 }
 
 func (g *grpcTransport) streamEvents(ctx context.Context, runID string, query url.Values, lastEventID string) (*http.Response, error) {
@@ -110,16 +322,10 @@ func (g *grpcTransport) streamEvents(ctx context.Context, runID string, query ur
 		return nil, fmt.Errorf("connect Agent gRPC stream: %w", err)
 	}
 	streamCtx, cancel := context.WithCancel(ctx)
-	qMap := make(map[string]string, len(query))
-	for k, vals := range query {
-		if len(vals) > 0 {
-			qMap[k] = vals[0]
-		}
-	}
 	stream, err := agentpb.NewAgentRuntimeClient(conn).StreamRunEvents(g.outgoingContext(streamCtx), &agentpb.StreamRunEventsRequest{
+		Identity:    identityFromQuery(query),
 		RunId:       runID,
 		LastEventId: lastEventID,
-		Query:       qMap,
 	})
 	if err != nil {
 		cancel()
@@ -175,35 +381,4 @@ type grpcStreamBody struct {
 func (b *grpcStreamBody) Close() error {
 	b.cancel()
 	return b.ReadCloser.Close()
-}
-
-func operationRoute(operation string, params map[string]string) (string, string, error) {
-	switch operation {
-	case "createAgentSession":
-		return http.MethodPost, "/internal/agent/sessions", nil
-	case "listAgentSessions":
-		return http.MethodGet, "/internal/agent/sessions", nil
-	case "getAgentSession":
-		return http.MethodGet, "/internal/agent/sessions/" + url.PathEscape(params["sid"]), nil
-	case "updateAgentSession":
-		return http.MethodPatch, "/internal/agent/sessions/" + url.PathEscape(params["sid"]), nil
-	case "createAgentRun":
-		return http.MethodPost, "/internal/agent/sessions/" + url.PathEscape(params["sid"]) + "/runs", nil
-	case "listAgentRuns":
-		return http.MethodGet, "/internal/agent/sessions/" + url.PathEscape(params["sid"]) + "/runs", nil
-	case "getCurrentAgentSubmission":
-		return http.MethodGet, "/internal/agent/sessions/" + url.PathEscape(params["sid"]) + "/submissions/current", nil
-	case "getAgentSubmission":
-		return http.MethodGet, "/internal/agent/sessions/" + url.PathEscape(params["sid"]) + "/submissions/" + url.PathEscape(params["requestId"]), nil
-	case "getAgentRun":
-		return http.MethodGet, "/internal/agent/runs/" + url.PathEscape(params["rid"]), nil
-	case "listAgentMessages":
-		return http.MethodGet, "/internal/agent/runs/" + url.PathEscape(params["rid"]) + "/messages", nil
-	case "getAgentMessage":
-		return http.MethodGet, "/internal/agent/runs/" + url.PathEscape(params["rid"]) + "/messages/" + url.PathEscape(params["messageId"]), nil
-	case "applyAgentDecision":
-		return http.MethodPost, "/internal/agent/runs/" + url.PathEscape(params["rid"]) + "/controls", nil
-	default:
-		return "", "", fmt.Errorf("unknown Agent operation %q", operation)
-	}
 }
