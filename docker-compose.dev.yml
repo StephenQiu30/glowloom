@@ -28,8 +28,6 @@ services:
         - action: rebuild
           path: ./canvas/src
         - action: rebuild
-          path: ./canvas/editor
-        - action: rebuild
           path: ./canvas/types
         - action: rebuild
           path: ./canvas/package.json
@@ -57,6 +55,8 @@ services:
     develop:
       watch:
         - action: rebuild
+          path: ./backend/api/proto/glowloom/agent/runtime.proto
+        - action: rebuild
           path: ./agent
           ignore:
             - node_modules/
@@ -70,10 +70,10 @@ services:
     develop:
       watch:
         - action: rebuild
+          path: ./backend/api/proto/glowloom/canvas/runtime.proto
+        - action: rebuild
           path: ./canvas
           ignore:
-            - editor/
-            - tsconfig.editor.json
             - node_modules/
             - dist/
             - coverage/

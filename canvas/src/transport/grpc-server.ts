@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as grpc from "@grpc/grpc-js";
@@ -30,7 +31,18 @@ export interface CanvasGrpcServer {
 
 function resolveProtoPath(): string {
   const currentDir = path.dirname(fileURLToPath(import.meta.url));
-  return path.resolve(currentDir, "../../proto/runtime.proto");
+  const candidates = [
+    path.resolve(currentDir, "../../proto/runtime.proto"),
+    path.resolve(
+      currentDir,
+      "../../../backend/api/proto/glowloom/canvas/runtime.proto",
+    ),
+  ];
+  const found = candidates.find((candidate) => existsSync(candidate));
+  if (!found) {
+    throw new Error("CANVAS_PROTO_NOT_FOUND");
+  }
+  return found;
 }
 
 function verifyToken(

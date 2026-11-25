@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -50,7 +51,23 @@ export interface AgentGrpcServer {
 
 function resolveProtoPath(): string {
   const currentDir = path.dirname(fileURLToPath(import.meta.url));
-  return path.resolve(currentDir, '../../../proto/runtime.proto');
+  const candidates = [
+    path.resolve(currentDir, '../../../proto/runtime.proto'),
+    path.resolve(currentDir, '../../proto/runtime.proto'),
+    path.resolve(
+      currentDir,
+      '../../../../backend/api/proto/glowloom/agent/runtime.proto',
+    ),
+    path.resolve(
+      currentDir,
+      '../../../backend/api/proto/glowloom/agent/runtime.proto',
+    ),
+  ];
+  const found = candidates.find((candidate) => existsSync(candidate));
+  if (!found) {
+    throw new Error('AGENT_PROTO_NOT_FOUND');
+  }
+  return found;
 }
 
 function verifyServiceMetadata(

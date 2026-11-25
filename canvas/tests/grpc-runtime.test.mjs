@@ -13,7 +13,7 @@ test("Canvas gRPC runtime enforces Bearer auth and serves Health + Initialize", 
   try {
     const protoPath = path.resolve(
       path.dirname(fileURLToPath(import.meta.url)),
-      "../proto/runtime.proto",
+      "../../backend/api/proto/glowloom/canvas/runtime.proto",
     );
     const def = protoLoader.loadSync(protoPath, {
       keepCase: true,

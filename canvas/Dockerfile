@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 FROM node:24.21.0-bookworm-slim AS base
 WORKDIR /app
 RUN corepack enable
@@ -14,7 +15,7 @@ FROM base
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=4400
 RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 COPY --from=build /app/dist ./dist
-COPY proto ./proto
+COPY --from=proto glowloom/canvas/runtime.proto ./proto/runtime.proto
 USER node
 EXPOSE 4400 4402
 CMD ["node", "--enable-source-maps", "dist/server.js"]

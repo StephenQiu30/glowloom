@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 FROM node:24.22.2-bookworm-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c AS build
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@12.4.2 --activate
@@ -15,7 +16,7 @@ COPY --from=build --chown=node:node /app/package.json ./package.json
 COPY --from=build --chown=node:node /app/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=build --chown=node:node /app/dist ./dist
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
-COPY --chown=node:node proto ./proto
+COPY --from=proto --chown=node:node glowloom/agent/runtime.proto ./proto/runtime.proto
 COPY --chown=node:node prompts ./prompts
 USER node
 EXPOSE 4401 4402
