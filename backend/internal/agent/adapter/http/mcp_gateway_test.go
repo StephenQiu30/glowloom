@@ -30,7 +30,7 @@ func TestInternalMCPAndGatewayEndpoints(t *testing.T) {
 			Execute: func(_ context.Context, scope domain.Scope, _ uuid.UUID, raw json.RawMessage) (domain.CallResult, error) {
 				out, _ := json.Marshal(map[string]any{
 					"project_id": scope.ProjectID.String(),
-					"args":       json.RawMessage(raw),
+					"args":       raw,
 				})
 				return domain.CallResult{Status: domain.CallStatusCompleted, Result: out}, nil
 			},
@@ -45,7 +45,7 @@ func TestInternalMCPAndGatewayEndpoints(t *testing.T) {
 	NewBusinessHandler(nil, caps, token).Register(router)
 
 	// 1. MCP tools/list requires auth.
-	unauthReq := httptest.NewRequest(stdhttp.MethodPost, "/internal/agent-mcp", bytes.NewBufferString(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
+	unauthReq := httptest.NewRequestWithContext(t.Context(), stdhttp.MethodPost, "/internal/agent-mcp", bytes.NewBufferString(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
 	unauthRec := httptest.NewRecorder()
 	router.ServeHTTP(unauthRec, unauthReq)
 	if unauthRec.Code != stdhttp.StatusUnauthorized {
@@ -53,7 +53,7 @@ func TestInternalMCPAndGatewayEndpoints(t *testing.T) {
 	}
 
 	// 2. MCP tools/list succeeds with valid identity and standard Streamable HTTP Accept header.
-	listReq := httptest.NewRequest(stdhttp.MethodPost, "/internal/agent-mcp", bytes.NewBufferString(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
+	listReq := httptest.NewRequestWithContext(t.Context(), stdhttp.MethodPost, "/internal/agent-mcp", bytes.NewBufferString(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
 	listReq.Header.Set("Authorization", "Bearer "+token)
 	listReq.Header.Set("X-Agent-Audience", "agent-business")
 	listReq.Header.Set("Content-Type", "application/json")
@@ -66,7 +66,7 @@ func TestInternalMCPAndGatewayEndpoints(t *testing.T) {
 
 	// 3. MCP tools/call invokes business tool with scoped identity.
 	actorID, orgID, scopeID, projectID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
-	callReq := httptest.NewRequest(stdhttp.MethodPost, "/internal/agent-mcp", bytes.NewBufferString(`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"read_project_script","arguments":{"episode":1}}}`))
+	callReq := httptest.NewRequestWithContext(t.Context(), stdhttp.MethodPost, "/internal/agent-mcp", bytes.NewBufferString(`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"read_project_script","arguments":{"episode":1}}}`))
 	callReq.Header.Set("Authorization", "Bearer "+token)
 	callReq.Header.Set("X-Agent-Audience", "agent-business")
 	callReq.Header.Set("Content-Type", "application/json")
@@ -82,7 +82,7 @@ func TestInternalMCPAndGatewayEndpoints(t *testing.T) {
 	}
 
 	// 4. Unified channel pass-through gateway /v1/chat/completions succeeds.
-	gwReq := httptest.NewRequest(stdhttp.MethodPost, "/internal/agent-gateway/v1/chat/completions", bytes.NewBufferString(`{"model":"gpt-4o","messages":[{"role":"user","content":"plan shot 1"}]}`))
+	gwReq := httptest.NewRequestWithContext(t.Context(), stdhttp.MethodPost, "/internal/agent-gateway/v1/chat/completions", bytes.NewBufferString(`{"model":"gpt-4o","messages":[{"role":"user","content":"plan shot 1"}]}`))
 	gwReq.Header.Set("Authorization", "Bearer "+token)
 	gwReq.Header.Set("X-Agent-Audience", "agent-business")
 	gwReq.Header.Set("X-Glowloom-Actor-Id", actorID.String())

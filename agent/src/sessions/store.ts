@@ -176,11 +176,13 @@ export class SessionStore {
     acceptedRevision: number;
     deduplicated: boolean;
   }> {
-    const contentHash = hashContent({
-      goal: input.goal,
-      manifest: input.manifest,
-      input: input.input ?? null,
-    });
+    const contentHash =
+      input.contentHash ??
+      hashContent({
+        goal: input.goal,
+        manifest: input.manifest,
+        input: input.input ?? null,
+      });
 
     return this.db.transaction().execute(async (trx) => {
       const session = await trx

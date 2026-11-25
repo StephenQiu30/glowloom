@@ -73,6 +73,12 @@ export class SessionService implements AgentApplication {
   }
 
   async startRun(input: StartRunInput): Promise<Record<string, unknown>> {
+    if (
+      input.contentHash !== undefined &&
+      !/^[a-f0-9]{64}$/.test(input.contentHash)
+    ) {
+      throw new AgentError('invalid_request', 'Invalid run content hash');
+    }
     const parsedWorkflow = canvasWorkflowSchema
       .optional()
       .safeParse(input.manifest.workflow);
@@ -418,6 +424,11 @@ export class SessionService implements AgentApplication {
         );
         return {};
       });
+      const storyboardTargets = input.input?.storyboard_targets;
+      const userGoal =
+        Array.isArray(storyboardTargets) && storyboardTargets.length
+          ? `${input.goal}\n\n<storyboard_targets>${JSON.stringify(storyboardTargets)}</storyboard_targets>`
+          : input.goal;
       const assistantText = graph
         ? await this.options.agentTeam.runCanvasWorkflow(
             runId,
@@ -445,7 +456,7 @@ export class SessionService implements AgentApplication {
               }));
               const result = await stage.generate(
                 JSON.stringify({
-                  goal: input.goal,
+                  goal: userGoal,
                   task: node.task,
                   inputs: context,
                 }),
@@ -483,7 +494,7 @@ export class SessionService implements AgentApplication {
                 skillInstructions,
                 workspace,
               )
-            ).generate(input.goal, {
+            ).generate(userGoal, {
               maxSteps: 8,
               abortSignal: controller.signal,
               toolsets: {

@@ -85,6 +85,7 @@ export interface StartRunInput {
   sessionId: string;
   requestId: string;
   goal: string;
+  contentHash?: string;
   manifest: Record<string, unknown>;
   input?: Record<string, unknown>;
   retryOfRunId?: string;

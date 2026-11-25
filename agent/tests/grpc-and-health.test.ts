@@ -264,7 +264,7 @@ describe('AgentRuntime strongly-typed gRPC and minimal HTTP health servers', () 
           (err, res) => (err || !res ? reject(err) : resolve(res)),
         );
       });
-      expect(created.status_code).toBe(200);
+      expect(created.status_code).toBe(201);
       expect(JSON.parse(created.payload_json.toString('utf8')).title).toBe(
         'Episode 1',
       );

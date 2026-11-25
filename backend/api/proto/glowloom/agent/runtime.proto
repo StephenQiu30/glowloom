@@ -78,6 +78,7 @@ message StartRunRequest {
   string retry_of_run_id = 7;
   int64 expected_execution_revision = 8;
   int64 budget_micros = 9;
+  string content_hash = 10;
 }
 
 message ListRunsRequest {

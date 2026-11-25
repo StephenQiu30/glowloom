@@ -32,7 +32,7 @@ func TestShortDramaMCPToolsetGuards(t *testing.T) {
 	NewBusinessHandler(nil, app.Capabilities{Tools: tools}, token).Register(router)
 
 	callMCP := func(body string) *httptest.ResponseRecorder {
-		req := httptest.NewRequest(stdhttp.MethodPost, "/internal/agent-mcp", bytes.NewBufferString(body))
+		req := httptest.NewRequestWithContext(t.Context(), stdhttp.MethodPost, "/internal/agent-mcp", bytes.NewBufferString(body))
 		req.Header.Set("Authorization", "Bearer "+token)
 		req.Header.Set("X-Agent-Audience", "agent-business")
 		req.Header.Set("Content-Type", "application/json")

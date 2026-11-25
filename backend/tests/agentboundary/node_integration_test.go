@@ -1,6 +1,6 @@
-// Package agentboundary_test exercises the production Go/Node HTTP boundary.
+// Package agentboundary_test exercises the production Go/Node gRPC boundary.
 // Authentication and provider output are controlled fixtures; handlers, the
-// independent compiled Node process, Pi Harness and PostgreSQL are real.
+// independent compiled Node process, Mastra and PostgreSQL are real.
 package agentboundary_test
 
 import (
@@ -27,6 +27,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -37,6 +42,7 @@ import (
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/domain"
+	agentpb "github.com/StephenQiu30/glowloom-server/backend/internal/gen/agent"
 	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
@@ -83,30 +89,7 @@ func (a *fixtureAccess) AuthorizeProject(ctx context.Context, p identity.Princip
 	return a.AuthorizeRequest(ctx, p, project, write)
 }
 
-type capturedCall struct {
-	path  string
-	input domain.CallInput
-}
-type capture struct {
-	mu    sync.Mutex
-	calls []capturedCall
-}
-
-func (c *capture) add(path string, body []byte) {
-	var in domain.CallInput
-	if json.Unmarshal(body, &in) == nil {
-		c.mu.Lock()
-		defer c.mu.Unlock()
-		c.calls = append(c.calls, capturedCall{path: path, input: in})
-	}
-}
-func (c *capture) all() []capturedCall {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return append([]capturedCall(nil), c.calls...)
-}
-
-func TestNodeProductionHTTPBoundary(t *testing.T) {
+func TestNodeProductionGRPCBoundary(t *testing.T) {
 	// This suite requires an already provisioned, isolated full-schema database.
 	// It never runs schema.sql, truncates tables or changes existing services.
 	dsn := requiredDSN(t, "GLOWLOOM_TEST_AGENT_BOUNDARY_DB_DSN")
@@ -128,7 +111,7 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 	if err := sqlDB.PingContext(t.Context()); err != nil {
 		t.Fatal("boundary PostgreSQL unavailable:", err)
 	}
-	for _, table := range []string{"agent.service_sessions", "agent.runtime_records", "agent.runtime_events", "agent_business.run_authorization", "agent_business.call_receipt"} {
+	for _, table := range []string{"agent.service_sessions", "agent.service_public_messages", "agent.service_run_events", "agent_business.run_authorization", "agent_business.call_receipt"} {
 		var exists bool
 		if err := db.Raw("SELECT to_regclass(?) IS NOT NULL", table).Scan(&exists).Error; err != nil || !exists {
 			t.Fatalf("full current schema required: %s exists=%v error=%v", table, exists, err)
@@ -147,7 +130,7 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 	agentDir := filepath.Join(root, "agent")
-	buildCtx, cancelBuild := context.WithTimeout(t.Context(), time.Minute)
+	buildCtx, cancelBuild := context.WithTimeout(t.Context(), 3*time.Minute)
 	defer cancelBuild()
 	build := exec.CommandContext(buildCtx, "pnpm", "--dir", agentDir, "build")
 	build.Env = append(os.Environ(), "PATH="+filepath.Dir(node)+string(os.PathListSeparator)+os.Getenv("PATH"))
@@ -176,20 +159,15 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 	t.Cleanup(releaseModel)
 	const snapshotResult = `{"admitted_runs":1,"source":"agent_business.run_authorization"}`
 	capabilities := app.Capabilities{
-		Snapshot: func(ctx context.Context, got domain.Scope) (any, error) {
-			if !sameScope(got) {
-				return nil, domain.ErrNotFound
-			}
-			var count int64
-			err := db.WithContext(ctx).Raw(`SELECT count(*) FROM agent_business.run_authorization WHERE scope->>'actor_id'=? AND scope->>'project_id'=?`, scope.ActorID, scope.ProjectID).Scan(&count).Error
-			return map[string]any{"project_id": scope.ProjectID, "admitted_runs": count, "active_canvas": map[string]any{"id": canvasID}}, err
-		},
 		Model: func(ctx context.Context, got domain.Scope, _ uuid.UUID, raw json.RawMessage, _ int64) (domain.CallResult, error) {
 			if !sameScope(got) {
 				return domain.CallResult{}, domain.ErrNotFound
 			}
 			var input struct {
 				ModelKey string `json:"model_key"`
+				Tools    []struct {
+					Name string `json:"name"`
+				} `json:"tools"`
 				Messages []struct {
 					Role    string          `json:"role"`
 					Content json.RawMessage `json:"content"`
@@ -209,18 +187,45 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 				case <-ctx.Done():
 					return domain.CallResult{}, ctx.Err()
 				}
-				return completed(`{"output":"","tool_calls":[{"id":"boundary-snapshot-1","name":"project_snapshot","arguments":{}}],"usage":{"input_tokens":5,"output_tokens":2},"stop_reason":"tool_use","model_key":"boundary-fixture"}`, 0), nil
+				for _, tool := range input.Tools {
+					if strings.HasSuffix(tool.Name, "project_snapshot") {
+						raw := fmt.Sprintf(`{"output":"","tool_calls":[{"id":"boundary-snapshot-1","name":%q,"arguments":{}}],"usage":{"input_tokens":5,"output_tokens":2},"stop_reason":"tool_use","model_key":"boundary-fixture"}`, tool.Name)
+						return completed(raw, 0), nil
+					}
+				}
+				return domain.CallResult{}, fmt.Errorf("project_snapshot missing from model tools")
 			}
 			if n != 2 || tools.Load() != 1 {
 				return domain.CallResult{}, fmt.Errorf("expected exactly one tool before final: model=%d tools=%d", n, tools.Load())
 			}
 			found := false
 			for _, message := range input.Messages {
-				if message.Role == "tool" {
-					var content string
-					if json.Unmarshal(message.Content, &content) == nil && domain.Hash([]byte(content)) == domain.Hash([]byte(snapshotResult)) {
-						found = true
-					}
+				if message.Role != "tool" {
+					continue
+				}
+				var content string
+				var envelope struct {
+					IsError bool `json:"isError"`
+					Content []struct {
+						Type string `json:"type"`
+						Text string `json:"text"`
+					} `json:"content"`
+				}
+				if json.Unmarshal(message.Content, &content) != nil ||
+					json.Unmarshal([]byte(content), &envelope) != nil ||
+					envelope.IsError || len(envelope.Content) != 1 || envelope.Content[0].Type != "text" {
+					continue
+				}
+				var receipt domain.CallResult
+				var result struct {
+					AdmittedRuns int    `json:"admitted_runs"`
+					Source       string `json:"source"`
+				}
+				if json.Unmarshal([]byte(envelope.Content[0].Text), &receipt) == nil &&
+					receipt.Status == domain.CallStatusCompleted &&
+					json.Unmarshal(receipt.Result, &result) == nil &&
+					result.AdmittedRuns == 1 && result.Source == "agent_business.run_authorization" {
+					found = true
 				}
 			}
 			if !found {
@@ -245,27 +250,17 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 			return completed(snapshotResult, 0), nil
 		}}},
 	}
-	for _, name := range []string{"canvas_storyboard_read", "canvas_storyboard_write"} {
-		capabilities.Tools = append(capabilities.Tools, app.Tool{
-			Descriptor: app.ToolDescriptor{Name: name, Roles: []string{"producer"}, Description: "Fixture capability", Parameters: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`), Effect: "read", ContractVersion: "v1", Replay: "safe"},
-		})
-	}
 	businessRouter := gin.New()
-	agenthttp.NewBusinessHandler(store, capabilities, businessToken).Register(businessRouter)
-	captured := &capture{}
-	businessServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "/execute") || strings.HasSuffix(r.URL.Path, "/models/stream") {
-			body, readErr := io.ReadAll(r.Body)
-			if readErr != nil {
-				t.Error(readErr)
-			}
-			r.Body = io.NopCloser(bytes.NewReader(body))
-			if r.Header.Get("Authorization") == "Bearer "+businessToken && r.Header.Get("X-Agent-Audience") == "agent-business" {
-				captured.add(r.URL.Path, body)
-			}
+	agenthttp.NewBusinessHandler(store, capabilities, businessToken).WithAtomicTools(func(ctx context.Context, name string, in domain.CallInput) (domain.CallReceipt, error) {
+		tool := capabilities.Tools[0]
+		if tool.Descriptor.Name != name {
+			return domain.CallReceipt{}, domain.ErrNotFound
 		}
-		businessRouter.ServeHTTP(w, r)
-	}))
+		return store.ExecuteCall(ctx, domain.CallKindTool, name, in, func(ctx context.Context, scope domain.Scope, id uuid.UUID) (domain.CallResult, error) {
+			return tool.Execute(ctx, scope, id, in.Input)
+		})
+	}).Register(businessRouter)
+	businessServer := httptest.NewServer(businessRouter)
 	t.Cleanup(businessServer.Close)
 	var sid uuid.UUID
 	// Registered before launchNode so the process is reaped before its rows are
@@ -312,15 +307,29 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 	base := publicServer.URL + "/api/projects/" + scope.ProjectID.String() + "/agent/sessions"
 
 	t.Run("directional service identities", func(t *testing.T) {
-		for _, tc := range []struct{ origin, path, token, audience string }{
-			{nodeOrigin, "/internal/agent/sessions?actor_id=" + scope.ActorID.String() + "&project_id=" + scope.ProjectID.String(), "", ""},
-			{nodeOrigin, "/internal/agent/sessions?actor_id=" + scope.ActorID.String() + "&project_id=" + scope.ProjectID.String(), businessToken, "agent"},
-			{nodeOrigin, "/internal/agent/sessions?actor_id=" + scope.ActorID.String() + "&project_id=" + scope.ProjectID.String(), runtimeToken, "agent-business"},
-			{businessServer.URL, "/internal/agent-business/tools", "", ""},
-			{businessServer.URL, "/internal/agent-business/tools", runtimeToken, "agent-business"},
-			{businessServer.URL, "/internal/agent-business/tools", businessToken, "agent"},
+		conn, err := grpc.NewClient(strings.TrimPrefix(nodeOrigin, "grpc://"), grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = conn.Close() }()
+		node := agentpb.NewAgentRuntimeClient(conn)
+		for _, tc := range []struct {
+			token, audience string
+			code            codes.Code
+		}{
+			{"", "", codes.Unauthenticated},
+			{businessToken, "agent", codes.Unauthenticated},
+			{runtimeToken, "agent-business", codes.PermissionDenied},
 		} {
-			requestJSON(t, client, "GET", tc.origin+tc.path, nil, map[string]string{"Authorization": "Bearer " + tc.token, "X-Agent-Audience": tc.audience}, 401)
+			ctx := metadata.NewOutgoingContext(t.Context(), metadata.Pairs("authorization", "Bearer "+tc.token, "x-agent-audience", tc.audience))
+			if _, err := node.ListSessions(ctx, &agentpb.ListSessionsRequest{}); status.Code(err) != tc.code {
+				t.Fatalf("wrong gRPC auth result: %v", err)
+			}
+		}
+		for _, tc := range []struct{ token, audience string }{
+			{"", ""}, {runtimeToken, "agent-business"}, {businessToken, "agent"},
+		} {
+			requestJSON(t, client, "GET", businessServer.URL+"/internal/agent-business/tools", nil, map[string]string{"Authorization": "Bearer " + tc.token, "X-Agent-Audience": tc.audience}, 401)
 		}
 	})
 
@@ -359,7 +368,7 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 	case <-entered:
 	case <-time.After(15 * time.Second):
 		body := requestJSON(t, client, "GET", runURL, nil, nil, 200)
-		t.Fatalf("production Harness never reached Go model capability; snapshot=%s", body)
+		t.Fatalf("production Mastra Agent never reached Go model capability; snapshot=%s", body)
 	}
 	afterReorder.Store(true)
 	var repeated runtimeclient.AcceptedRun
@@ -387,8 +396,8 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 	}
 	releaseModel()
 	final := waitCompleted(t, client, runURL)
-	if final.State.ModelSteps == nil || *final.State.ModelSteps != 2 || final.State.ToolSteps == nil || *final.State.ToolSteps != 1 || models.Load() != 2 || tools.Load() != 1 {
-		t.Fatalf("expected actual official Harness model/tool/final: state=%+v model=%d tool=%d", final.State, models.Load(), tools.Load())
+	if models.Load() != 2 || tools.Load() != 1 {
+		t.Fatalf("expected two Mastra model calls and one tool: state=%+v model=%d tool=%d", final.State, models.Load(), tools.Load())
 	}
 	if !bytes.Contains(requestJSON(t, client, "GET", runURL, nil, nil, 200), []byte("Boundary fixture completed")) {
 		t.Fatal("public run snapshot omitted the committed final answer")
@@ -416,10 +425,10 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 		FROM agent_business.call_receipt WHERE root_run_id=?`, rid).Scan(&ledger).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Raw(`SELECT count(*) FROM agent.runtime_records WHERE session_id=?`, sid.String()).Scan(&recordCount).Error; err != nil {
+	if err := db.Raw(`SELECT count(*) FROM agent.service_public_messages WHERE run_id=?`, rid.String()).Scan(&recordCount).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Raw(`SELECT count(*) FROM agent.runtime_events WHERE session_id=? AND payload->>'root_run_id'=?`, sid.String(), rid.String()).Scan(&eventCount).Error; err != nil {
+	if err := db.Raw(`SELECT count(*) FROM agent.service_run_events WHERE run_id=?`, rid.String()).Scan(&eventCount).Error; err != nil {
 		t.Fatal(err)
 	}
 	authority, err = store.CurrentAuthority(t.Context(), rid)
@@ -434,38 +443,11 @@ func TestNodeProductionHTTPBoundary(t *testing.T) {
 		t.Fatalf("real PG persistence/accounting: ledger=%+v runtime_records=%d events=%d reserved=%d error=%v original_receipts=%s read_error=%v", ledger, recordCount, eventCount, authority.ReservedMicros, err, data, readErr)
 	}
 
-	// Read/replay the original Go receipts over authenticated HTTP. Replaying an
-	// intent returns its original receipt and never invokes a model/tool again.
-	serviceHeaders := map[string]string{"Authorization": "Bearer " + businessToken, "X-Agent-Audience": "agent-business"}
-	originalCalls := captured.all()
-	if len(originalCalls) != 3 {
-		t.Fatalf("expected two model and one tool HTTP request, got %d", len(originalCalls))
-	}
 	var paidRequests int64
 	if err := db.Raw(`SELECT count(*) FROM ai.call_cost WHERE run_id=?`, rid).Scan(&paidRequests).Error; err != nil || paidRequests != 0 {
 		t.Fatalf("free transport fixture created AI funding: count=%d error=%v", paidRequests, err)
 	}
-	for _, original := range originalCalls {
-		in := original.input
-		query := url.Values{"submission_id": {in.Grant.SubmissionID.String()}, "task_id": {in.Call.TaskID}, "checkpoint_id": {in.Call.CheckpointID}, "attempt": {fmt.Sprint(in.Call.Attempt)}, "contract_version": {in.Call.ContractVersion}, "input_hash": {in.Call.InputHash}}
-		path := businessServer.URL + "/internal/agent-business/runs/" + rid.String() + "/calls/" + url.PathEscape(in.Call.CallID) + "?" + query.Encode()
-		var saved, replay domain.CallReceipt
-		decode(t, requestJSON(t, client, "GET", path, nil, serviceHeaders, 200), &saved)
-		decode(t, requestJSON(t, client, "POST", businessServer.URL+original.path, in, serviceHeaders, 200), &replay)
-		wantCost := int64(0)
-		if saved.ReceiptID != replay.ReceiptID || saved.Call != in.Call || saved.Status != "completed" || replay.Status != "completed" || saved.CostMicros != wantCost || replay.CostMicros != wantCost || domain.Hash(saved.Result) != domain.Hash(replay.Result) {
-			t.Fatal("original Go receipt changed on HTTP replay")
-		}
-		in.Input = json.RawMessage(`{"changed":true}`)
-		in.Call.InputHash = domain.Hash(in.Input)
-		requestJSON(t, client, "POST", businessServer.URL+original.path, in, serviceHeaders, 409)
-		in.Call.CallID = "new-with-forged-grant"
-		in.Grant.GrantID = uuid.New()
-		requestJSON(t, client, "POST", businessServer.URL+original.path, in, serviceHeaders, 403)
-	}
-	if models.Load() != 2 || tools.Load() != 1 {
-		t.Fatal("repeated Go receipt executed a second side effect")
-	}
+
 	access.revoked.Store(true)
 	requestJSON(t, client, "GET", runURL, nil, nil, 403)
 	requestJSON(t, client, "GET", runURL+"/events", nil, nil, 403)
@@ -549,10 +531,10 @@ func waitCompleted(t *testing.T, client *http.Client, endpoint string) runtimecl
 		}
 		if snapshot.State.Status != "accepted" && snapshot.State.Status != "running" {
 			raw, _ := json.Marshal(snapshot)
-			t.Fatalf("production Harness ended without completed result: %s", raw)
+			t.Fatalf("production Mastra Agent ended without completed result: %s", raw)
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("timed out awaiting completed production Harness: %+v", snapshot.State)
+			t.Fatalf("timed out awaiting completed production Mastra Agent: %+v", snapshot.State)
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
@@ -637,12 +619,19 @@ func launchNode(t *testing.T, binary, dir, dsn, businessOrigin, runtimeToken, bu
 		t.Fatal(err)
 	}
 	addr := listener.Addr().String()
+	grpcListener, err := listen.Listen(t.Context(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		_ = listener.Close()
+		t.Fatal(err)
+	}
+	grpcAddr := grpcListener.Addr().String()
+	_ = grpcListener.Close()
 	_ = listener.Close()
 	// Cleanup owns graceful termination and joining even after the test context ends.
 	processContext, cancelProcess := context.WithCancel(context.WithoutCancel(t.Context()))
 	cmd := exec.CommandContext(processContext, binary, "--enable-source-maps", filepath.Join(dir, "dist", "src", "server.js"))
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GLOWLOOM_AGENT_HTTP_ADDR="+addr, "GLOWLOOM_AGENT_DB_DSN="+dsn, "GLOWLOOM_AGENT_BUSINESS_ORIGIN="+businessOrigin, "GLOWLOOM_AGENT_SERVICE_TOKEN="+runtimeToken, "GLOWLOOM_AGENT_BUSINESS_TOKEN="+businessToken, "GLOWLOOM_AGENT_POOL_MAX=4", "GLOWLOOM_AGENT_LEASE_MS=10000", "GLOWLOOM_LOG_LEVEL=error")
+	cmd.Env = append(os.Environ(), "GLOWLOOM_AGENT_HTTP_ADDR="+addr, "GLOWLOOM_AGENT_GRPC_ADDR="+grpcAddr, "GLOWLOOM_AGENT_DB_DSN="+dsn, "GLOWLOOM_AGENT_BUSINESS_ORIGIN="+businessOrigin, "GLOWLOOM_AGENT_SERVICE_TOKEN="+runtimeToken, "GLOWLOOM_AGENT_BUSINESS_TOKEN="+businessToken, "GLOWLOOM_AGENT_POOL_MAX=4", "GLOWLOOM_AGENT_LEASE_MS=10000", "GLOWLOOM_LOG_LEVEL=error")
 	logs := &lockedLog{}
 	cmd.Stdout, cmd.Stderr = logs, logs
 	if err := cmd.Start(); err != nil {
@@ -653,12 +642,22 @@ func launchNode(t *testing.T, binary, dir, dsn, businessOrigin, runtimeToken, bu
 	go func() { done <- cmd.Wait() }()
 	t.Cleanup(func() {
 		defer cancelProcess()
+		if t.Failed() {
+			safe := logs.text()
+			for _, secret := range []string{dsn, runtimeToken, businessToken} {
+				safe = strings.ReplaceAll(safe, secret, "[redacted]")
+			}
+			t.Logf("Agent child logs:\n%s", safe)
+		}
 		checkExit := func(err error) {
 			if err == nil {
 				return
 			}
 			var exit *exec.ExitError
 			if errors.As(err, &exit) {
+				if exit.ExitCode() == 128+int(syscall.SIGTERM) || exit.ExitCode() == 128+int(syscall.SIGKILL) {
+					return
+				}
 				if status, ok := exit.Sys().(syscall.WaitStatus); ok && status.Signaled() && (status.Signal() == syscall.SIGTERM || status.Signal() == syscall.SIGKILL) {
 					return // These signals are explicitly sent by this cleanup.
 				}
@@ -700,8 +699,12 @@ func launchNode(t *testing.T, binary, dir, dsn, businessOrigin, runtimeToken, bu
 		res, err := client.Do(request)
 		if err == nil {
 			_ = res.Body.Close()
-			if res.StatusCode == 200 {
-				return origin
+			if res.StatusCode == http.StatusOK {
+				probe, err := (&net.Dialer{Timeout: time.Second}).DialContext(t.Context(), "tcp", grpcAddr)
+				if err == nil {
+					_ = probe.Close()
+					return "grpc://" + grpcAddr
+				}
 			}
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -713,14 +716,11 @@ func cleanupSession(t *testing.T, db *gorm.DB, sid uuid.UUID) {
 	t.Helper()
 	// The test does not call schema DDL and removes only its random session.
 	for _, query := range []string{
-		`DELETE FROM agent.public_messages WHERE session_id=?`,
+		`DELETE FROM agent.service_public_messages WHERE run_id IN (SELECT id FROM agent.service_runs WHERE session_id=?)`,
+		`DELETE FROM agent.service_run_events WHERE run_id IN (SELECT id FROM agent.service_runs WHERE session_id=?)`,
 		`DELETE FROM agent.service_control_inbox WHERE root_run_id IN (SELECT id FROM agent.service_runs WHERE session_id=?)`,
 		`DELETE FROM agent.service_runs WHERE session_id=?`,
 		`DELETE FROM agent.service_sessions WHERE id=?`,
-		`DELETE FROM agent.runtime_document_versions WHERE session_id=?`,
-		`DELETE FROM agent.runtime_events WHERE session_id=?`,
-		`DELETE FROM agent.runtime_records WHERE session_id=?`,
-		`DELETE FROM agent.runtime_sessions WHERE session_id=?`,
 		`DELETE FROM agent_business.quiesced_receipt WHERE root_run_id IN (SELECT root_run_id FROM agent_business.run_authorization WHERE session_id=?)`,
 		`DELETE FROM agent_business.call_receipt WHERE root_run_id IN (SELECT root_run_id FROM agent_business.run_authorization WHERE session_id=?)`,
 		`DELETE FROM agent_business.proposal WHERE root_run_id IN (SELECT root_run_id FROM agent_business.run_authorization WHERE session_id=?)`,

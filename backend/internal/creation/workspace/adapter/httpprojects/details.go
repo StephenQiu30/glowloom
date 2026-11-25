@@ -1,3 +1,4 @@
+// Package httpprojects serves the HTTP contract for project workspaces.
 package httpprojects
 
 import (

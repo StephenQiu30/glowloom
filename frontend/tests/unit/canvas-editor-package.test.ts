@@ -8,11 +8,14 @@ import { describe, expect, it } from "vitest";
 const require = createRequire(import.meta.url);
 const root = resolve(import.meta.dirname, "../../..");
 
-describe("Canvas 编辑器源码包", () => {
-  it("前端从 Canvas 包解析唯一编辑器与样式", () => {
-    const editor = require.resolve("@/components/canvas-editor/editor/canvas-editor.tsx");
-    const css = require.resolve("@/components/canvas-editor/canvas.css");
-    expect(readFileSync(editor, "utf8")).toContain("function CanvasPage");
+const frontendRoot = resolve(root, "frontend");
+const editorRoot = resolve(frontendRoot, "src/components/canvas-editor");
+const editorEntry = resolve(editorRoot, "editor/canvas-editor.tsx");
+
+describe("Canvas 编辑器归属与运行时边界", () => {
+  it("前端持有唯一编辑器与样式", () => {
+    const css = resolve(editorRoot, "canvas.css");
+    expect(readFileSync(editorEntry, "utf8")).toContain("function CanvasPage");
     expect(readFileSync(css, "utf8")).toContain("canvas-controls-layout");
     expect(
       existsSync(
@@ -38,9 +41,7 @@ describe("Canvas 编辑器源码包", () => {
   });
 
   it("编辑器与宿主复用 React、Tiptap、ProseMirror 和 Yjs 实例", () => {
-    const editorRequire = createRequire(
-      require.resolve("@/components/canvas-editor/editor/canvas-editor.tsx"),
-    );
+    const editorRequire = createRequire(editorEntry);
     for (const dependency of [
       "react",
       "react-dom",
@@ -55,12 +56,8 @@ describe("Canvas 编辑器源码包", () => {
   });
 
   it("浏览器源码只通过宿主边界接入应用，不能导入页面或服务端入口", () => {
-    const editorRoot = resolve(
-      dirname(require.resolve("@/components/canvas-editor/editor/canvas-editor.tsx")),
-      "..",
-    );
     const manifest = JSON.parse(
-      readFileSync(resolve(editorRoot, "../package.json"), "utf8"),
+      readFileSync(resolve(frontendRoot, "package.json"), "utf8"),
     );
     const dependencies = {
       ...manifest.dependencies,
@@ -92,9 +89,19 @@ describe("Canvas 编辑器源码包", () => {
                 : undefined;
         if (moduleSpecifier && ts.isStringLiteral(moduleSpecifier)) {
           const specifier = moduleSpecifier.text;
-          if (
+          if (specifier.startsWith("@public/")) {
+            const assetRoot = resolve(frontendRoot, "public");
+            const asset = resolve(
+              assetRoot,
+              specifier.slice("@public/".length),
+            );
+            expect(relative(assetRoot, asset).startsWith(".."), file).toBe(
+              false,
+            );
+            expect(existsSync(asset), file).toBe(true);
+          } else if (
             !specifier.startsWith(".") &&
-            !specifier.startsWith("@glowloom/")
+            !specifier.startsWith("@/")
           ) {
             const dependency = specifier.startsWith("@")
               ? specifier.split("/").slice(0, 2).join("/")
@@ -105,24 +112,17 @@ describe("Canvas 编辑器源码包", () => {
             ).toBeTruthy();
           }
           expect(specifier, file).not.toMatch(
-            /^(?:@\/|node:|@nestjs\/|fastify|reflect-metadata)/,
+            /^(?:@\/(?:app|server)\/|node:|@nestjs\/|fastify|reflect-metadata|server-only)/,
           );
           if (specifier.startsWith(".")) {
             const path = relative(
-              editorRoot,
+              resolve(frontendRoot, "src"),
               resolve(dirname(file), specifier),
             );
             expect(path.startsWith("..") || isAbsolute(path), file).toBe(false);
+            expect(path, file).not.toMatch(/^(?:app|server)\//);
           }
-          if (specifier.startsWith("@/")) {
-            expect(specifier, file).not.toMatch(
-              /canvas-host\/(?:app|server)\//,
-            );
-          }
-          if (
-            specifier.startsWith("@glowloom/canvas/") &&
-            !specifier.startsWith("@/components/canvas-editor/")
-          ) {
+          if (specifier.startsWith("@glowloom/canvas/")) {
             expect(specifier, file).toMatch(
               /\/(?:model|rich-text|service-document|session|wire|journal|recovery)$/,
             );

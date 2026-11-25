@@ -356,6 +356,7 @@ type StartRunRequest struct {
 	RetryOfRunId              string                 `protobuf:"bytes,7,opt,name=retry_of_run_id,json=retryOfRunId,proto3" json:"retry_of_run_id,omitempty"`
 	ExpectedExecutionRevision int64                  `protobuf:"varint,8,opt,name=expected_execution_revision,json=expectedExecutionRevision,proto3" json:"expected_execution_revision,omitempty"`
 	BudgetMicros              int64                  `protobuf:"varint,9,opt,name=budget_micros,json=budgetMicros,proto3" json:"budget_micros,omitempty"`
+	ContentHash               string                 `protobuf:"bytes,10,opt,name=content_hash,json=contentHash,proto3" json:"content_hash,omitempty"`
 	unknownFields             protoimpl.UnknownFields
 	sizeCache                 protoimpl.SizeCache
 }
@@ -451,6 +452,13 @@ func (x *StartRunRequest) GetBudgetMicros() int64 {
 		return x.BudgetMicros
 	}
 	return 0
+}
+
+func (x *StartRunRequest) GetContentHash() string {
+	if x != nil {
+		return x.ContentHash
+	}
+	return ""
 }
 
 type ListRunsRequest struct {
@@ -2019,7 +2027,7 @@ const file_glowloom_agent_runtime_proto_rawDesc = "" +
 	"\barchived\x18\x05 \x01(\bH\x02R\barchived\x88\x01\x01B\b\n" +
 	"\x06_titleB\t\n" +
 	"\a_pinnedB\v\n" +
-	"\t_archived\"\xe9\x02\n" +
+	"\t_archived\"\x8c\x03\n" +
 	"\x0fStartRunRequest\x124\n" +
 	"\bidentity\x18\x01 \x01(\v2\x18.glowloom.agent.IdentityR\bidentity\x12\x1d\n" +
 	"\n" +
@@ -2032,7 +2040,9 @@ const file_glowloom_agent_runtime_proto_rawDesc = "" +
 	"input_json\x18\x06 \x01(\fR\tinputJson\x12%\n" +
 	"\x0fretry_of_run_id\x18\a \x01(\tR\fretryOfRunId\x12>\n" +
 	"\x1bexpected_execution_revision\x18\b \x01(\x03R\x19expectedExecutionRevision\x12#\n" +
-	"\rbudget_micros\x18\t \x01(\x03R\fbudgetMicros\"\x94\x01\n" +
+	"\rbudget_micros\x18\t \x01(\x03R\fbudgetMicros\x12!\n" +
+	"\fcontent_hash\x18\n" +
+	" \x01(\tR\vcontentHash\"\x94\x01\n" +
 	"\x0fListRunsRequest\x124\n" +
 	"\bidentity\x18\x01 \x01(\v2\x18.glowloom.agent.IdentityR\bidentity\x12\x1d\n" +
 	"\n" +

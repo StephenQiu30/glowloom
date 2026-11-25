@@ -60,13 +60,13 @@ Go 目录按[设计44 §7.5](workspace/content/design/44-Go微服务架构与技
 | Go 实现     | gofmt、goimports、go vet、golangci-lint、go test -race、govulncheck；相应契约生成一致性                                                                                                                 |
 | 前端实现    | 在 frontend 执行 pnpm exec eslint .、pnpm exec prettier --check .、pnpm exec next typegen、pnpm exec tsc --noEmit、pnpm exec vitest run、pnpm exec next build；交互变化补浏览器验证                     |
 | Agent 服务  | 在 agent 独立执行 TypeScript strict、lint、单元/官方 Storage conformance、真实隔离 PostgreSQL 与跨服务测试及构建；Go Agent 边界保留 backend/tests；验证根 owner/grant、可靠控制投递、SSE 一致性与无兼容 |
-| Canvas 服务 | 在 `canvas/` 执行 `pnpm typecheck`、`pnpm check` 和 `pnpm test`，并验证 Go 内部 HTTP 和前端共享包导出。浏览器源码在 canvas 执行 `pnpm check:editor`，在 frontend 执行 `pnpm canvas:typecheck` 和 `pnpm canvas:lint`，包边界/全部浏览器夹具接线由 Vitest 验证。                                                                                                 |
+| Canvas 服务 | 在 `canvas/` 执行 `pnpm typecheck`、`pnpm check` 和 `pnpm test`，并验证 Go 内部 HTTP 和前端共享包导出。编辑器源在 frontend 由 ESLint 和 Next.js 生产构建检查，包边界与交互由 Vitest 验证。                                                                                                 |
 | 文档        | Markdown 格式、相对链接与锚点、来源路径、需求/验收对应关系、陈述与源码一致；第三方许可原文保持不变                                                                                                      |
 
 默认 CI 并行运行 backend、agent、frontend 三个任务。Go 版本来自 `backend/go.mod`，Node.js 使用统一的 24 主版本，pnpm 版本来自各包清单，依赖使用冻结锁文件及缓存。
 
 - Backend 运行一次 `go test -race -count=1 ./...`，覆盖 Go 默认 vet、编译、竞态和跨服务协议。Canvas 的 `pnpm test` 同时构建生产入口，供后续 Go 测试直接使用。隔离 PostgreSQL、COS 协议夹具和 FFmpeg 提供实际集成依赖。
-- Agent 在独立 PostgreSQL 测试库和受限角色下做严格类型检查及一次生产编译和全量测试，覆盖官方 Storage、进程恢复与双向 API 合同。全量测试同时导出 Agent OpenAPI，随后核对 Go 客户端产物和生成声明。
+- Agent 执行类型检查、ESLint、Vitest、评测和生产编译。画布 Skill 运行测试使用独立 PostgreSQL 测试库与受限角色，Go 边界测试覆盖 gRPC 合同。
 - Frontend 构建共享 Canvas 包后运行全量 Vitest，最多两个 worker。一次 Next.js 生产构建完成 TypeScript 检查，并用 standalone 产物验证协作代理。
 
 格式、lint、专项安全扫描和容器镜像检查按改动范围执行。部署与真实供应商验收单独验证。

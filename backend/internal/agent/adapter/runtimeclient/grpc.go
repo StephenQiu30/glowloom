@@ -209,6 +209,7 @@ func (g *grpcTransport) request(ctx context.Context, operation string, params ma
 			ManifestJson:              manifestRaw,
 			InputJson:                 inputRaw,
 			ExpectedExecutionRevision: in.ExpectedExecutionRevision,
+			ContentHash:               in.ContentHash,
 		}
 		if in.RetryOfRunId != nil {
 			req.RetryOfRunId = *in.RetryOfRunId

@@ -46,7 +46,7 @@ func TestWorkflowModelGatewayRespectsFrozenSelectionAndPreservesToolCalls(t *tes
 	}}, token).Register(router)
 
 	call := func(project uuid.UUID) *httptest.ResponseRecorder {
-		req := httptest.NewRequest(http.MethodPost, "/internal/agent-gateway/v1/chat/completions", strings.NewReader(`{"model":"test-model","messages":[{"role":"user","content":"read the reference"}],"tools":[{"type":"function","function":{"name":"skill_read","parameters":{}}}],"max_tokens":2048}`))
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/internal/agent-gateway/v1/chat/completions", strings.NewReader(`{"model":"test-model","messages":[{"role":"user","content":"read the reference"}],"tools":[{"type":"function","function":{"name":"skill_read","parameters":{}}}],"max_tokens":2048}`))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+token)
 		req.Header.Set("X-Agent-Audience", "agent-business")

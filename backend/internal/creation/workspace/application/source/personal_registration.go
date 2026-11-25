@@ -1,3 +1,4 @@
+// Package source handles registration of workspace source data.
 package source
 
 import (

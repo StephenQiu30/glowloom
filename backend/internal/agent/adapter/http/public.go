@@ -9,6 +9,7 @@ import (
 	"io"
 	stdhttp "net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -706,7 +707,16 @@ func (h *PublicHandler) Events(c *gin.Context) {
 		send(c, nil, domain.ErrUnavailable)
 		return
 	}
-	response, err := h.runtime.Request(c.Request.Context(), "subscribeAgentEvents", map[string]string{"rid": a.RootRunID.String()}, scopeQuery(a.Scope), nil, c.GetHeader("Last-Event-ID"))
+	cursor := c.GetHeader("Last-Event-ID")
+	if cursor != "" {
+		sequence, part, _ := strings.Cut(cursor, ":")
+		n, parseErr := strconv.ParseInt(sequence, 10, 64)
+		if parseErr != nil || n < 0 || part != "0" || strconv.FormatInt(n, 10) != sequence {
+			c.JSON(stdhttp.StatusBadRequest, gin.H{"code": "invalid_cursor"})
+			return
+		}
+	}
+	response, err := h.runtime.Request(c.Request.Context(), "subscribeAgentEvents", map[string]string{"rid": a.RootRunID.String()}, scopeQuery(a.Scope), nil, cursor)
 	if err != nil {
 		send(c, nil, err)
 		return

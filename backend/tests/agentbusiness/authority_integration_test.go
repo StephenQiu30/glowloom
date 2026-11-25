@@ -403,7 +403,7 @@ func TestDatabaseRolesCannotCrossBusinessAndRuntimeTables(t *testing.T) {
 			t.Error("close database connection:", err)
 		}
 	})
-	for _, tc := range []struct{ role, query string }{{"glowloom_agent", `SELECT root_run_id FROM agent_business.run_authorization LIMIT 1`}, {"glowloom_app", `SELECT session_id FROM agent.runtime_sessions LIMIT 1`}} {
+	for _, tc := range []struct{ role, query string }{{"glowloom_agent", `SELECT root_run_id FROM agent_business.run_authorization LIMIT 1`}, {"glowloom_app", `SELECT id FROM agent.service_sessions LIMIT 1`}} {
 		err := db.Transaction(func(tx *gorm.DB) error {
 			if err := tx.Exec("SET LOCAL ROLE " + tc.role).Error; err != nil {
 				return err

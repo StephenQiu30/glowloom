@@ -111,10 +111,7 @@ function parseJsonBuffer(
   return parsed as Record<string, unknown>;
 }
 
-function toPayloadResponse(
-  statusCode: number,
-  body: unknown,
-): PayloadResponse {
+function toPayloadResponse(statusCode: number, body: unknown): PayloadResponse {
   return {
     status_code: statusCode,
     payload_json: Buffer.from(JSON.stringify(body), 'utf8'),
@@ -204,10 +201,7 @@ export async function startAgentGrpcServer(options: {
   });
 
   function guardUnary<Req>(
-    handler: (
-      req: Req,
-      metadata: grpc.Metadata,
-    ) => Promise<PayloadResponse>,
+    handler: (req: Req, metadata: grpc.Metadata) => Promise<PayloadResponse>,
   ): grpc.handleUnaryCall<Req, PayloadResponse> {
     return (call, callback) => {
       const authError = verifyMetadata(call.metadata, expectedAuth);
@@ -235,7 +229,7 @@ export async function startAgentGrpcServer(options: {
         title: req.title ?? 'Untitled',
         ...(req.canvas_id ? { canvasId: req.canvas_id } : {}),
       });
-      return toPayloadResponse(200, session);
+      return toPayloadResponse(201, session);
     }),
 
     ListSessions: guardUnary<{
@@ -292,6 +286,7 @@ export async function startAgentGrpcServer(options: {
       retry_of_run_id?: string;
       expected_execution_revision?: string | number;
       budget_micros?: string | number;
+      content_hash?: string;
     }>(async (req, metadata) => {
       const identity = parseIdentity(req.identity);
       const traceparent = extractTraceparent(metadata);
@@ -303,6 +298,7 @@ export async function startAgentGrpcServer(options: {
         goal: req.goal ?? '',
         manifest: parseJsonBuffer(req.manifest_json) ?? {},
         ...(inputPayload ? { input: inputPayload } : {}),
+        ...(req.content_hash ? { contentHash: req.content_hash } : {}),
         ...(req.retry_of_run_id ? { retryOfRunId: req.retry_of_run_id } : {}),
         expectedExecutionRevision: Number(req.expected_execution_revision ?? 0),
         ...(req.budget_micros !== undefined
@@ -310,7 +306,7 @@ export async function startAgentGrpcServer(options: {
           : {}),
         ...(traceparent ? { traceparent } : {}),
       });
-      return toPayloadResponse(200, accepted);
+      return toPayloadResponse(202, accepted);
     }),
 
     ListRuns: guardUnary<{
@@ -520,7 +516,8 @@ export async function startAgentGrpcServer(options: {
     );
   });
 
-  const host = options.address.slice(0, options.address.lastIndexOf(':')) || '0.0.0.0';
+  const host =
+    options.address.slice(0, options.address.lastIndexOf(':')) || '0.0.0.0';
 
   return {
     address: `${host}:${boundPort}`,
