@@ -15,7 +15,6 @@ import (
 
 	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	artifact "github.com/StephenQiu30/glowloom-server/backend/internal/contract/providerartifact"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/fetch"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
 )
@@ -92,7 +91,7 @@ func (v *GeneratedVideos) ReadAudio(ctx context.Context, config catalog.Provider
 }
 
 func processedGeneratedBytes(ctx context.Context, input *fetch.Downloaded, processing string, limit int64) ([]byte, int64, error) {
-	request := artifact.Request{ByteSize: input.Size, SHA256: input.SHA256, MIME: input.MIMEType, Processing: processing}
+	request := mediaflow.ProviderArtifactRequest{ByteSize: input.Size, SHA256: input.SHA256, MIME: input.MIMEType, Processing: processing}
 	output, duration, err := (mediaflow.ProviderArtifactProcessor{}).ProcessProviderArtifact(ctx, request, input)
 	if errors.Is(err, mediaflow.ErrGeneratedAudioInvalid) {
 		return nil, 0, application.ErrInvalidProviderCall

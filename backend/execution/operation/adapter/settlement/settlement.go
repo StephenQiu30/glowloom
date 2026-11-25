@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
-	pgfence "github.com/StephenQiu30/glowloom-server/backend/internal/platform/writefence/postgres"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -49,34 +48,6 @@ func (f *Finalizer) FinalizeOperation(ctx context.Context, input operationflow.S
 		}
 		return f.finalizeOperationInTransaction(ctx, tx, id, input, facts)
 	})
-}
-
-// FinalizeOutputInTransaction is called only after exact Media ACK adoption in
-// the same local transaction. It preserves original cost and all existing
-// reservation/cap/whole-credit/replay assertions and terminal Outbox behavior.
-func (f *Finalizer) FinalizeOutputInTransaction(ctx context.Context, tx *gorm.DB, request operationapp.OutputDeliveryRequest, rejected bool) error {
-	if operationapp.ValidateOutputDelivery(request) != nil {
-		return operationapp.ErrInvalidFinalizationInput
-	}
-	bound := *f
-	bound.operation = f.operation.WithLocalWorkerAuthority(func(ctx context.Context, db *gorm.DB, id uuid.UUID, _ bool) error {
-		if id != request.Publication.Output.OperationID {
-			return operationapp.ErrTransitionConflict
-		}
-		return pgfence.New(db).Guard(ctx, db, request.Command)
-	})
-	id := request.Publication.Output.OperationID
-	facts, err := bound.operation.ReadSettlementFactsInTransaction(ctx, tx, id)
-	if err != nil {
-		return err
-	}
-	input := operationflow.SettlementInput{OperationID: id.String(), From: facts.Status, To: operationdomain.StatusCompleted, ActualCostMicros: request.Publication.Output.Provider.ActualCostMicros, Reason: "media_publication_adopted"}
-	if rejected {
-		input.To = operationdomain.StatusFailed
-		input.FailureCode = "media_moderation_rejected"
-		input.Reason = "media_publication_rejected"
-	}
-	return bound.finalizeOperationInTransaction(ctx, tx, id, input, facts)
 }
 
 // finalizeOperationInTransaction uses the caller's facts and connection;

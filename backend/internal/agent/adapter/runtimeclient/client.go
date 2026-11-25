@@ -12,11 +12,22 @@ import (
 	"time"
 )
 
-// RuntimeClient wraps the generated client with service authentication and bounded request lifetimes.
-type RuntimeClient struct{ client *Client }
+// RuntimeClient wraps the gRPC (preferred) or HTTP transport to the independent Agent runtime.
+type RuntimeClient struct {
+	client *Client
+	grpc   *grpcTransport
+}
 
 // New creates a runtime client with the supplied origin and direction credential.
+// Origins with "grpc://" use gRPC + Server Streaming; "http(s)://" uses HTTP/SSE.
 func New(origin, token string) (*RuntimeClient, error) {
+	if strings.HasPrefix(origin, "grpc://") {
+		tr, err := newGRPCTransport(origin, token)
+		if err != nil {
+			return nil, err
+		}
+		return &RuntimeClient{grpc: tr}, nil
+	}
 	u, err := url.Parse(origin)
 	if err != nil || u.Host == "" || u.Scheme != "http" && u.Scheme != "https" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || len(token) < 32 {
 		return nil, fmt.Errorf("invalid Agent service configuration")
@@ -53,6 +64,9 @@ func (c *RuntimeClient) Request(ctx context.Context, operation string, params ma
 		if params[name] == "" {
 			return nil, fmt.Errorf("missing Agent operation parameter %q", name)
 		}
+	}
+	if c.grpc != nil {
+		return c.grpc.request(ctx, operation, params, query, body, lastEventID)
 	}
 	requestCtx := ctx
 	cancel := func() {}

@@ -10,9 +10,16 @@ import (
 	"os/exec"
 	"time"
 
-	contract "github.com/StephenQiu30/glowloom-server/backend/internal/contract/providerartifact"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/fetch"
 )
+
+// ProviderArtifactRequest describes verified source bytes and requested processing mode.
+type ProviderArtifactRequest struct {
+	ByteSize   int64
+	SHA256     string
+	MIME       string
+	Processing string
+}
 
 // ErrGeneratedAudioInvalid identifies an invalid canonical audio probe.
 var ErrGeneratedAudioInvalid = errors.New("generated audio probe invalid")
@@ -23,7 +30,7 @@ type ProviderArtifactProcessor struct{}
 
 // ProcessProviderArtifact returns an owned canonical file or the borrowed original.
 // The caller closes a returned file only when it differs from the original.
-func (ProviderArtifactProcessor) ProcessProviderArtifact(ctx context.Context, req contract.Request, input *fetch.Downloaded) (*fetch.Downloaded, int64, error) {
+func (ProviderArtifactProcessor) ProcessProviderArtifact(ctx context.Context, req ProviderArtifactRequest, input *fetch.Downloaded) (*fetch.Downloaded, int64, error) {
 	if input == nil || input.File == nil || input.Size != req.ByteSize || input.SHA256 != req.SHA256 || input.MIMEType != req.MIME {
 		return nil, 0, ErrUnsupportedMedia
 	}

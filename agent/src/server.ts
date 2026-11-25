@@ -5,6 +5,7 @@ import { loadConfig } from './config.js';
 import { BusinessClient } from './business/client.js';
 import { SessionService } from './sessions/service.js';
 import { buildApp } from './http/app.js';
+import { startAgentGrpcServer, type AgentGrpcServer } from './rpc/server.js';
 const config = loadConfig(process.env);
 const logger = pino({
   name: 'agent',
@@ -59,6 +60,7 @@ const app = await buildApp({
   throw error;
 });
 
+let grpcServer: AgentGrpcServer | undefined;
 let closing: Promise<void> | undefined;
 function close(): Promise<void> {
   closing ??= (async () => {
@@ -72,8 +74,8 @@ function close(): Promise<void> {
     }, 30000);
     deadline.unref();
     try {
-      await app
-        .close()
+      await (grpcServer ? grpcServer.close() : Promise.resolve())
+        .finally(() => app.close())
         .finally(() => disconnectDatabase(pool).finally(() => pool.end()));
     } finally {
       clearTimeout(deadline);
@@ -92,6 +94,12 @@ process.on('SIGINT', onSignal);
 
 try {
   await app.listen(config.port, config.host);
+  const grpcAddr = process.env.GLOWLOOM_AGENT_GRPC_ADDR ?? '0.0.0.0:4402';
+  grpcServer = await startAgentGrpcServer({
+    app,
+    address: grpcAddr,
+    serviceToken: config.serviceToken,
+  });
   if (!closing) service.startRecovery();
 } catch (error) {
   await close();

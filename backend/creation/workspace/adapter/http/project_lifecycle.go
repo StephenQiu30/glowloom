@@ -236,7 +236,7 @@ func (h *ProjectLifecycleHandler) change(c *gin.Context, action string, patch ap
 }
 
 func writeProjectSnapshot(c *gin.Context, s application.ProjectSnapshot) {
-	projecthttp.WriteProjectDetails(c, workspacesource.ProjectCloseDetails{Project: s.Project, DefaultModels: s.DefaultModels, LastModifiedAt: s.LastModifiedAt, LastModifiedBasis: s.LastModifiedBasis, CoverUnavailable: s.CoverUnavailable})
+	projecthttp.WriteProjectDetails(c, projecthttp.ProjectDetails{Project: s.Project, DefaultModels: s.DefaultModels, LastModifiedAt: s.LastModifiedAt, LastModifiedBasis: s.LastModifiedBasis, CoverUnavailable: s.CoverUnavailable})
 }
 
 func writeLifecycleError(c *gin.Context, err error) {

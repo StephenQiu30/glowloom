@@ -82,12 +82,8 @@ func TestPublicFreeQuotePreservesFrozenCompilationFailureStatus(t *testing.T) {
 		status  int
 		code    string
 	}{
-		{operationapp.ErrFrozenTemplateInvalid, 422, "template_invalid"},
-		{operationapp.ErrFrozenTemplateChanged, 409, "template_changed"},
-		{operationapp.ErrFrozenTemplateContextUnavailable, 409, "context_unavailable"},
-		{operationapp.ErrFrozenReferenceUnavailable, 422, "reference_unavailable"},
-		{operationapp.ErrFrozenCompilerUnsupported, 422, "invalid_request"},
 		{operationapp.ErrQuoteSourceStale, 409, "canvas_revision_conflict"},
+		{operationapp.ErrInvalidFreeQuote, 422, "invalid_request"},
 	} {
 		t.Run(test.code, func(t *testing.T) {
 			store := &publicQuoteStore{failure: test.failure}

@@ -56,11 +56,6 @@ func (s *GovernanceStore) GovernanceTransaction(ctx context.Context, actor appli
 		if err != nil {
 			return err
 		}
-		if s.source {
-			if err := requireOpenAccountHead(tx, actor.ID); err != nil {
-				return err
-			}
-		}
 		if recent {
 			if err := NewStore(tx).CheckRecentSession(ctx, actor, clock); err != nil {
 				return err
@@ -71,9 +66,6 @@ func (s *GovernanceStore) GovernanceTransaction(ctx context.Context, actor appli
 			g.teams = s.teams(tx)
 		}
 		return run(g)
-	}
-	if s.source {
-		return identityWriterTransaction(ctx, s.db, runTx)
 	}
 	return s.db.WithContext(ctx).Transaction(runTx)
 }

@@ -28,21 +28,6 @@ func NewGeneratedOutputArchiver(routes StorageWorkAdmission, objects RoutedInges
 	return &GeneratedOutputArchiver{routes: routes, objects: objects, prober: prober, renderer: renderer}
 }
 
-// ArchiveOutput deliberately leaves uncertain writes in storage_work/location.
-// A retry uses the same original command, asset ID, route and conditional keys.
-func (a *GeneratedOutputArchiver) ArchiveOutput(ctx context.Context, work OperationOutputWork, file *Downloaded) (domain.MediaAsset, []domain.Rendition, error) {
-	var asset domain.MediaAsset
-	if a == nil || a.routes == nil || a.objects == nil || a.prober == nil || a.renderer == nil || ValidateOutputPublication(work.Request) != nil || work.PreparedAt.IsZero() || work.AssetID == uuid.Nil || file == nil || file.File == nil {
-		return asset, nil, ErrUnavailable
-	}
-	output := work.Request.Output
-	if file.Size != output.ByteSize || file.SHA256 != output.SHA256 || file.MIMEType != output.MIMEType {
-		return asset, nil, ErrObjectMismatch
-	}
-	source := SourceOperation{ID: output.OperationID, ProjectID: output.ProjectID, ProviderKey: output.ProviderKey, ModelKey: output.ModelKey, Region: output.Region, AspectRatio: output.AspectRatio, OutputKind: domain.Kind(output.Kind), CreateTime: work.PreparedAt}
-	return a.archiveSource(ctx, source, work.AssetID, file, false)
-}
-
 // ArchiveGatewaySource archives saved AI receipt bytes without creating an old operation or write-fence command.
 // SourceOperation is used only as immutable source metadata; its ID is the new AI request.
 func (a *GeneratedOutputArchiver) ArchiveGatewaySource(ctx context.Context, source SourceOperation, assetID uuid.UUID, file *Downloaded) (domain.MediaAsset, []domain.Rendition, error) {

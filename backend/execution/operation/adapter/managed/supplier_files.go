@@ -2,6 +2,7 @@ package managed
 
 import (
 	"context"
+	"io"
 	"net/url"
 	"strings"
 
@@ -75,7 +76,11 @@ func (a *Activities) stageDownloaded(ctx context.Context, i application.Provider
 	if _, err := file.File.Seek(0, 0); err != nil {
 		return application.ManagedArtifact{}, err
 	}
-	return a.results.StageSource(ctx, i, application.ManagedArtifact{Sequence: 1, Size: file.Size, MIME: file.MIMEType, SHA256: file.SHA256}, file.File)
+	data, err := io.ReadAll(io.LimitReader(file.File, (512<<20)+1))
+	if err != nil || int64(len(data)) != file.Size {
+		return application.ManagedArtifact{}, application.ErrInvalidProviderCall
+	}
+	return a.results.StageArtifact(ctx, i, 1, data, file.MIMEType)
 }
 
 var _ GeneratedFiles = (*SupplierFiles)(nil)

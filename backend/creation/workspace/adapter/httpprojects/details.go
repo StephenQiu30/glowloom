@@ -6,8 +6,17 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
 )
+
+// ProjectDetails carries persisted project settings and recovery metadata for HTTP responses.
+type ProjectDetails struct {
+	Project           domain.Project
+	DefaultModels     map[string]string
+	LastModifiedAt    *time.Time
+	LastModifiedBasis *string
+	CoverUnavailable  bool
+}
 
 // ProjectDetailResponse contains safe settings and actual persisted recovery facts.
 type ProjectDetailResponse struct {
@@ -37,8 +46,8 @@ type ProjectDetailResponse struct {
 	UpdateTime          time.Time         `json:"update_time"`
 }
 
-// WriteProjectDetails is the single original legacy/native response formatter.
-func WriteProjectDetails(c *gin.Context, s source.ProjectCloseDetails) {
+// WriteProjectDetails formats project details with private no-store cache headers.
+func WriteProjectDetails(c *gin.Context, s ProjectDetails) {
 	p := s.Project
 	var preset, canvas *uuid.UUID
 	if p.StylePresetID != uuid.Nil {

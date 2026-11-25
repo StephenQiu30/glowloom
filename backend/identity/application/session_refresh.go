@@ -72,19 +72,6 @@ func (a *Auth) Refresh(ctx context.Context, token, csrf, source string, operatio
 	if operation == uuid.Nil || source == "" {
 		return AuthResult{}, ErrSessionInvalid
 	}
-	credentials := SessionRevocationCredentials{RefreshToken: token, CSRFToken: csrf}
-	if a.activation != nil {
-		if a.sessionRevocations == nil {
-			return AuthResult{}, ErrSessionRevocationUnavailable
-		}
-		resumed, err := a.sessionRevocations.ResumeRefreshReuse(ctx, credentials, operation)
-		if err != nil {
-			return AuthResult{}, err
-		}
-		if resumed {
-			return AuthResult{}, ErrSessionInvalid
-		}
-	}
 	candidate, err := a.refreshCandidate(ctx, token)
 	if err != nil {
 		return AuthResult{}, err
@@ -105,7 +92,7 @@ func (a *Auth) Refresh(ctx context.Context, token, csrf, source string, operatio
 	cancelCache()
 	var result AuthResult
 	var rejected error
-	var revoked, sourceReuse bool
+	var revoked bool
 	var receipt []byte
 	var replayUntil time.Time
 	var generation int64
@@ -150,15 +137,8 @@ func (a *Auth) Refresh(ctx context.Context, token, csrf, source string, operatio
 		if old.SessionID != s.ID || old.AccountID != u.ID || old.RevokedAt != nil || now.Before(old.IssuedAt) {
 			return ErrSessionInvalid
 		}
-		if err := a.checkCurrentSessionSources(tx, u, s); err != nil {
-			return err
-		}
 		if old.ConsumedAt != nil {
 			if old.ReplayUntil == nil || !now.Before(*old.ReplayUntil) {
-				if a.activation != nil {
-					sourceReuse = true
-					return nil
-				}
 				if err = tx.RevokeSession(u.ID, s.ID, now); err != nil {
 					return err
 				}
@@ -217,12 +197,6 @@ func (a *Auth) Refresh(ctx context.Context, token, csrf, source string, operatio
 	})
 	if err != nil {
 		return AuthResult{}, err
-	}
-	if sourceReuse {
-		if err := a.sessionRevocations.RevokeReusedRefresh(ctx, credentials, operation, candidate.SessionID); err != nil {
-			return AuthResult{}, err
-		}
-		return AuthResult{}, ErrSessionInvalid
 	}
 	if revoked {
 		hintCtx, cancelHint := context.WithTimeout(ctx, refreshOptionalTimeout)

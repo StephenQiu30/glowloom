@@ -56,17 +56,6 @@ func NewActivities(store Store, keys Unsealer, client application.GenerationProv
 	return &Activities{store: store, keys: keys, client: client, results: results, video: video}
 }
 
-// NewOwnedActivities requires Media-owned staging and raw authenticated downloads.
-func NewOwnedActivities(store Store, keys Unsealer, client application.GenerationProvider, results *application.ManagedResults, files GeneratedFiles) (*Activities, error) {
-	if store == nil || keys == nil || client == nil || results == nil || !results.UsesOwnedArtifacts() || files == nil {
-		return nil, application.ErrInvalidProviderCall
-	}
-	if _, ok := store.(application.SupplierObservations); !ok {
-		return nil, application.ErrInvalidProviderCall
-	}
-	return &Activities{store: store, keys: keys, client: client, results: results, files: files}, nil
-}
-
 // Step never resubmits a claimed operation, even after a timeout or worker crash.
 func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (output application.ManagedProgress, resultErr error) {
 	unknown := application.ManagedProgress{State: application.ManagedProgressUnknown}
@@ -94,15 +83,6 @@ func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (o
 	}
 	if input.Action == "query" && (saved == nil || saved.TaskID == "") {
 		return unknown, nil
-	}
-	if input.Action == "submit" && a.results.UsesOwnedArtifacts() {
-		// Existing paid recovery above remains available. A missing Execution
-		// input grant cannot authorize a new claim or classify old costs as zero.
-		for _, frozen := range loaded.Inputs {
-			if frozen.MediaAssetID != nil || frozen.MaskAssetID != nil || frozen.RefType == "subject_media" || frozen.RefType == "media_asset" {
-				return unknown, application.ErrFrozenReferenceUnavailable
-			}
-		}
 	}
 	observer, ok := a.store.(application.SupplierObservations)
 	if !ok {

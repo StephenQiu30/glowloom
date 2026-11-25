@@ -19,44 +19,6 @@ func NewGovernanceHandler(service *application.Governance) *GovernanceHandler {
 	return &GovernanceHandler{service: service}
 }
 
-// RegisterSource installs source-coordinated account qualification actions.
-// Original-proof recovery precedes live platform authentication on these commands;
-// new decisions still recheck current roles, recent proof and versions.
-func (h *GovernanceHandler) RegisterSource(api *gin.RouterGroup, sessions *EmailAuthHandler) {
-	group := api.Group("", func(c *gin.Context) { c.Header("Cache-Control", "no-store"); c.Next() }, httpapi.Middleware(sessions.origin))
-	group.GET("/platform/users/:id/commands/:request", sessions.RequireSession(), h.userCommandReceipt)
-	group.POST("/platform/users/:id/revoke-admin", func(c *gin.Context) { h.sourceCommand(c, sessions, "revoke_admin") })
-	group.POST("/platform/users/:id/revoke-sessions", func(c *gin.Context) { h.sourceCommand(c, sessions, "revoke_sessions") })
-	group.POST("/platform/users/:id/disable", func(c *gin.Context) { h.sourceCommand(c, sessions, "disable") })
-	group.POST("/platform/users/:id/enable", func(c *gin.Context) { h.sourceCommand(c, sessions, "enable") })
-	group.POST("/platform/users/:id/delete", func(c *gin.Context) { h.sourceCommand(c, sessions, "delete") })
-}
-
-func (h *GovernanceHandler) sourceCommand(c *gin.Context, sessions *EmailAuthHandler, action string) {
-	id, ok := httpapi.PathUUID(c, "id")
-	if !ok {
-		return
-	}
-	var in GovernanceMutation
-	if !httpapi.Decode(c, &in) {
-		return
-	}
-	request, err := uuid.Parse(c.GetHeader("Idempotency-Key"))
-	if err != nil || request == uuid.Nil {
-		httpapi.WriteProblem(c, 422, "invalid_idempotency_key", nil)
-		return
-	}
-	credential, ok := sessions.originalCredential(c)
-	if !ok {
-		return
-	}
-	if err := h.service.ExecuteSourceCommand(c.Request.Context(), application.GovernanceSourceCommand{RequestID: request, TargetID: id, Revision: in.ExpectedRevision, Action: action, Reason: in.Reason, Credential: credential}); err != nil {
-		governanceProblem(c, err)
-		return
-	}
-	c.Status(204)
-}
-
 // Register requires authenticated session and Origin/CSRF middleware on the supplied group.
 func (h *GovernanceHandler) Register(g *gin.RouterGroup) {
 	g.GET("/platform/users/:id/commands/:request", h.userCommandReceipt)

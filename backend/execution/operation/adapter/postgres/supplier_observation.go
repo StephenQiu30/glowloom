@@ -11,7 +11,6 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/writefence"
 )
 
 type supplierObservationRecord struct {
@@ -40,14 +39,14 @@ func (s *Store) RecordSupplierObservation(ctx context.Context, o application.Sup
 		return application.ErrInvalidProviderCall
 	}
 	if _, nested := s.db.Statement.ConnPool.(gorm.TxCommitter); nested {
-		return writefence.ErrTransaction
+		return application.ErrInvalidProviderCall
 	}
 	var owner string
 	if err := s.db.WithContext(ctx).Raw(`SELECT infra.runtime_owner()`).Scan(&owner).Error; err != nil {
 		return err
 	}
 	if owner != "execution" && owner != "legacy" {
-		return writefence.ErrInvalid
+		return application.ErrInvalidProviderCall
 	}
 	var callID uuid.UUID
 	var callCreated time.Time

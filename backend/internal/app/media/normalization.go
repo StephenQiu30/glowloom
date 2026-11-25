@@ -1,56 +1,62 @@
 package media
 
 import (
-	"crypto/tls"
-	"crypto/x509"
+	"context"
 	"errors"
-	"fmt"
-	"net"
-	"os"
 
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
-	"github.com/StephenQiu30/glowloom-server/backend/media/adapter/normalizationgrpc"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/media/processing/adapter/ffmpeg"
+	processingapp "github.com/StephenQiu30/glowloom-server/backend/media/processing/application"
 )
 
-// ProvideUploadNormalizer configures the real remote processing dependency.
-// Missing configuration disables only WebM conversion, never a local fallback.
-func ProvideUploadNormalizer(cfg config.Config) (*normalizationgrpc.Client, error) {
-	if cfg.MediaNormalizationAddress == "" && cfg.MediaServiceToken == "" {
-		if cfg.MediaNormalizationTLSCAFile != "" || cfg.MediaNormalizationTLSCertFile != "" || cfg.MediaNormalizationTLSKeyFile != "" || cfg.MediaNormalizationServerName != "" {
-			return nil, errors.New("media normalization TLS identity has no target")
-		}
-		return normalizationgrpc.New("", "", nil)
+const defaultNormalizationConcurrency int64 = 2
+
+// LocalNormalizer performs bounded in-process WebM-to-H264 MP4 normalization via FFmpeg.
+type LocalNormalizer struct {
+	normalizer ffmpeg.Normalizer
+	slots      *semaphore.Weighted
+}
+
+// Normalize borrows source, runs bounded FFmpeg transcoding, and transfers ownership of the result file.
+func (n *LocalNormalizer) Normalize(ctx context.Context, source *mediaapp.Downloaded) (mediaapp.NormalizedUpload, error) {
+	if err := n.slots.Acquire(ctx, 1); err != nil {
+		return mediaapp.NormalizedUpload{}, err
 	}
-	if _, _, err := net.SplitHostPort(cfg.MediaNormalizationAddress); err != nil {
-		return nil, errors.New("invalid media normalization address")
+	defer n.slots.Release(1)
+
+	var input *processingapp.File
+	if source != nil {
+		input = &processingapp.File{File: source.File, Size: source.Size, SHA256: source.SHA256, MIMEType: source.MIMEType}
 	}
-	var transport credentials.TransportCredentials
-	anyTLS := cfg.MediaNormalizationTLSCAFile != "" || cfg.MediaNormalizationTLSCertFile != "" || cfg.MediaNormalizationTLSKeyFile != "" || cfg.MediaNormalizationServerName != ""
-	if !anyTLS {
-		if cfg.Env != "local" {
-			return nil, errors.New("media normalization requires mTLS outside local mode")
+	result, err := n.normalizer.Normalize(ctx, input)
+	if err != nil {
+		switch {
+		case errors.Is(err, processingapp.ErrTooLarge):
+			return mediaapp.NormalizedUpload{}, mediaapp.ErrUploadTooLarge
+		case errors.Is(err, processingapp.ErrUnsupported), errors.Is(err, processingapp.ErrInvalidInput):
+			return mediaapp.NormalizedUpload{}, mediaapp.ErrInvalidUpload
+		default:
+			return mediaapp.NormalizedUpload{}, err
 		}
-		transport = insecure.NewCredentials()
-	} else {
-		if cfg.MediaNormalizationTLSCAFile == "" || cfg.MediaNormalizationTLSCertFile == "" || cfg.MediaNormalizationTLSKeyFile == "" {
-			return nil, errors.New("media normalization requires a complete mTLS identity")
-		}
-		pair, err := tls.LoadX509KeyPair(cfg.MediaNormalizationTLSCertFile, cfg.MediaNormalizationTLSKeyFile)
-		if err != nil {
-			return nil, fmt.Errorf("load media normalization identity: %w", err)
-		}
-		data, err := os.ReadFile(cfg.MediaNormalizationTLSCAFile)
-		if err != nil {
-			return nil, fmt.Errorf("load media normalization authorities: %w", err)
-		}
-		roots := x509.NewCertPool()
-		if !roots.AppendCertsFromPEM(data) {
-			return nil, errors.New("invalid media normalization authorities")
-		}
-		transport = credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS13, RootCAs: roots, Certificates: []tls.Certificate{pair}, ServerName: cfg.MediaNormalizationServerName})
 	}
-	return normalizationgrpc.New(cfg.MediaNormalizationAddress, cfg.MediaServiceToken, transport)
+	return mediaapp.NormalizedUpload{
+		File: &mediaapp.Downloaded{
+			File:     result.File.File,
+			Size:     result.File.Size,
+			SHA256:   result.File.SHA256,
+			MIMEType: result.File.MIMEType,
+		},
+		SourceCodec: result.SourceCodec,
+	}, nil
+}
+
+// ProvideUploadNormalizer configures the bounded in-process FFmpeg normalizer.
+func ProvideUploadNormalizer(_ config.Config) (*LocalNormalizer, error) {
+	return &LocalNormalizer{
+		normalizer: ffmpeg.Normalizer{},
+		slots:      semaphore.NewWeighted(defaultNormalizationConcurrency),
+	}, nil
 }

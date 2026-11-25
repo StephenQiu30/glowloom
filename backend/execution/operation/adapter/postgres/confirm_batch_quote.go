@@ -57,9 +57,6 @@ func (s *Store) confirmBatchQuote(ctx context.Context, actor identityapp.Princip
 	}
 	var result application.ConfirmBatchQuoteResult
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := s.checkAcceptedBatchFunding(ctx, tx, input.BatchID, excluded); err != nil {
-			return err
-		}
 		rows, err := s.lockBatchQuotes(tx, actor, input)
 		if err != nil {
 			return err
@@ -122,9 +119,6 @@ func (s *Store) confirmBatchQuote(ctx context.Context, actor identityapp.Princip
 	var discovered []application.BatchConfirmationItem
 	postBudgetStale := make(map[uuid.UUID]bool)
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := s.checkAcceptedBatchFunding(ctx, tx, input.BatchID, excluded); err != nil {
-			return err
-		}
 		rows, err := s.lockBatchQuotes(tx, actor, input)
 		if err != nil {
 			return err
@@ -198,11 +192,7 @@ func (s *Store) confirmBatchQuote(ctx context.Context, actor identityapp.Princip
 					return fmt.Errorf("decode frozen billing strategy: %w", err)
 				}
 			}
-			sourceScope, err := s.acceptedPayerScope(ctx, tx, quoted.ID, quoted.ProjectID)
-			if err != nil {
-				return err
-			}
-			reserve, err := s.billingStore(tx).ReserveInTransaction(ctx, tx, billingapp.ReserveInput{Actor: actor, SourceScopeID: sourceScope,
+			reserve, err := s.billingStore(tx).ReserveInTransaction(ctx, tx, billingapp.ReserveInput{Actor: actor,
 				ProjectID: input.ProjectID, OperationID: quoted.ID, ActorID: actor.ID,
 				AmountMicros: *quoted.QuoteMicros, WholeCredits: costs.WholeCredits, CommercialPriceReady: commercial, ReusedResult: quoted.ReusedFromID != nil, ModelKey: &model.ModelKey,
 				Region: quoted.Region, OccurredAt: at,

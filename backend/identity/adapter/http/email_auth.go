@@ -125,12 +125,11 @@ type AcceptedView struct {
 // EmailAuthHandler registers only email authentication. App cutover must also
 // install scope authorization before exposing these routes to public traffic.
 type EmailAuthHandler struct {
-	auth              *application.Auth
-	origin            string
-	secure            bool
-	revoke            gin.HandlerFunc
-	policy            SessionHTTPPolicy
-	publicRevocations SessionRevocationCommands
+	auth   *application.Auth
+	origin string
+	secure bool
+	revoke gin.HandlerFunc
+	policy SessionHTTPPolicy
 }
 
 // NewEmailAuthHandler constructs EmailAuthHandler with explicit caller-supplied dependencies.
@@ -159,17 +158,10 @@ func (h *EmailAuthHandler) register(api *gin.RouterGroup, credentials bool) {
 	if credentials {
 		routes.POST("/password-resets", h.resetStart)
 		routes.POST("/password-resets/complete", h.resetComplete)
-		if h.auth.PasswordChangesReady() {
-			routes.POST("/me/password", h.passwordCommand)
-		} else {
-			routes.POST("/me/password", h.authenticated(), h.password)
-		}
+		routes.POST("/me/password", h.authenticated(), h.password)
 	}
 	routes.POST("/me/reauthentication", h.authenticated(), h.reauthenticate)
 	routes.DELETE("/sessions/:id", h.revokeSession)
-	if h.publicRevocations != nil {
-		routes.POST("/me/sessions/revoke-others", h.revokeOtherSessionsPublic)
-	}
 }
 
 // WithSessionRevocation installs the self-owned session directory revocation adapter.
@@ -178,10 +170,6 @@ func (h *EmailAuthHandler) WithSessionRevocation(revoke gin.HandlerFunc) *EmailA
 	return h
 }
 func (h *EmailAuthHandler) revokeSession(c *gin.Context) {
-	if h.publicRevocations != nil {
-		h.revokeSessionPublic(c)
-		return
-	}
 	result, err := h.authenticateRequest(c, application.NoActivity)
 	if err != nil {
 		// A refresh is authority only for its own bound target, never the device directory.
@@ -391,12 +379,7 @@ func (h *EmailAuthHandler) login(c *gin.Context) {
 	if !httpapi.Decode(c, &input) {
 		return
 	}
-	requestID, err := uuid.Parse(c.GetHeader("Idempotency-Key"))
-	if err != nil || requestID == uuid.Nil {
-		emailAuthProblem(c, application.ErrSessionActivation)
-		return
-	}
-	r, err := h.auth.LoginFromCommand(c.Request.Context(), requestID, input.Email, input.Password, input.Persistent, requestSource(c))
+	r, err := h.auth.LoginFrom(c.Request.Context(), input.Email, input.Password, input.Persistent, requestSource(c))
 	h.respond(c, r, err, 201)
 }
 
@@ -447,18 +430,7 @@ func (h *EmailAuthHandler) resetComplete(c *gin.Context) {
 	if !httpapi.Decode(c, &input) {
 		return
 	}
-	var err error
-	if h.auth.PasswordResetsReady() {
-		request, parseErr := uuid.Parse(c.GetHeader("Idempotency-Key"))
-		if parseErr != nil || request == uuid.Nil {
-			httpapi.WriteProblem(c, 422, "invalid_idempotency_key", nil)
-			return
-		}
-		err = h.auth.CompletePasswordResetCommand(c.Request.Context(), request, input.Token, input.Password, input.Confirmation)
-	} else {
-		err = h.auth.CompletePasswordReset(c.Request.Context(), input.Token, input.Password, input.Confirmation)
-	}
-	if err != nil {
+	if err := h.auth.CompletePasswordReset(c.Request.Context(), input.Token, input.Password, input.Confirmation); err != nil {
 		emailAuthProblem(c, err)
 		return
 	}

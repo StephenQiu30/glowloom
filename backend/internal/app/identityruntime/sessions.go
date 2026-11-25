@@ -21,29 +21,6 @@ type SessionDependencies struct {
 	Receipts    application.RefreshReceiptProtector
 	Coordinator application.RefreshCoordinator
 	RedisClient *redis.Client
-	Revocations *SessionRevocationDependencies
-}
-
-// SessionRevocationDependencies supplies only the original-request store, source
-// closures and authenticated writer coordinator. It is separate from refresh
-// issuance and its optional Redis hints; absence keeps the current owner unswitched.
-type SessionRevocationDependencies struct {
-	Requests application.SessionRevocationRequestStore
-	Closures application.SessionRevocationStore
-	Writers  application.SessionFenceCoordinator
-}
-
-// NewPublicSessionRevocations rejects partial cutover instead of reverting a
-// failed durable operation to legacy local success. The root owns these ports.
-func NewPublicSessionRevocations(auth *application.Auth, dependencies *SessionRevocationDependencies, now func() time.Time) (*application.PublicSessionRevocations, error) {
-	if dependencies == nil {
-		return nil, nil
-	}
-	if auth == nil || dependencies.Requests == nil || dependencies.Closures == nil || dependencies.Writers == nil || now == nil {
-		return nil, errors.New("durable session revocation dependencies required")
-	}
-	closures := application.NewSessionRevocations(dependencies.Closures, dependencies.Writers, now)
-	return application.NewPublicSessionRevocations(auth, dependencies.Requests, closures, now), nil
 }
 
 // NewSessionDependencies loads configured security and reuses the API Redis client.

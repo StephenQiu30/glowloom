@@ -1,6 +1,6 @@
 # Local application stack; existing host middleware retains its data.
 # Single project entry point: docker compose up -d --build --wait
-# Fixed host ports: frontend 1122, public gateway 1123. Resolve conflicts before starting.
+# Fixed host ports: frontend 1122, monolith backend 1123, workspace 1130.
 name: glowloom
 
 services:
@@ -36,6 +36,7 @@ services:
       - /tmp:rw,noexec,nosuid,size=64m
     environment:
       GLOWLOOM_AGENT_HTTP_ADDR: 0.0.0.0:4401
+      GLOWLOOM_AGENT_GRPC_ADDR: 0.0.0.0:4402
       GLOWLOOM_AGENT_BUSINESS_ORIGIN: http://backend:18080
       GLOWLOOM_AGENT_DB_DSN: ${GLOWLOOM_AGENT_DB_DSN:?Set the restricted glowloom_agent PostgreSQL DSN}
       GLOWLOOM_AGENT_SERVICE_TOKEN: ${GLOWLOOM_AGENT_SERVICE_TOKEN:?Set a separate Go-to-Agent token of at least 32 bytes}
@@ -43,7 +44,7 @@ services:
       GLOWLOOM_AGENT_POOL_MAX: "12"
       GLOWLOOM_AGENT_LEASE_MS: "30000"
       GLOWLOOM_AGENT_SWAGGER_ENABLED: ${GLOWLOOM_AGENT_SWAGGER_ENABLED:-false}
-    expose: ["4401"]
+    expose: ["4401", "4402"]
     healthcheck:
       test:
         [
@@ -57,6 +58,7 @@ services:
       retries: 3
     mem_limit: 1g
     cpus: 1
+
   canvas:
     container_name: glowloom-canvas
     image: glowloom/canvas:current
@@ -68,8 +70,9 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     environment:
+      GLOWLOOM_CANVAS_GRPC_ADDR: 0.0.0.0:4402
       GLOWLOOM_COLLAB_RUNTIME_TOKEN: ${GLOWLOOM_COLLAB_RUNTIME_TOKEN:?Set an internal collaboration token of at least 32 bytes}
-    expose: ["4400"]
+    expose: ["4400", "4402"]
     healthcheck:
       test:
         [
@@ -83,145 +86,10 @@ services:
       retries: 3
     mem_limit: 512m
     cpus: 1
-  gateway:
-    container_name: glowloom-gateway
-    build:
-      context: ./backend
-      dockerfile: gateway/Dockerfile
-    image: glowloom/gateway:current
-    depends_on:
-      backend:
-        condition: service_healthy
-    init: true
-    restart: unless-stopped
-    read_only: true
-    cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
-    stop_grace_period: 15s
-    environment:
-      GLOWLOOM_ENV: ${GLOWLOOM_ENV:-local}
-      GLOWLOOM_LOG_LEVEL: ${GLOWLOOM_LOG_LEVEL:-info}
-      GLOWLOOM_GATEWAY_HTTP_ADDR: "0.0.0.0:8080"
-      GLOWLOOM_GATEWAY_BACKEND_ORIGIN: http://backend:18080
-    ports:
-      - "127.0.0.1:1123:8080"
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/readyz"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 15s
 
-  # Private Creation document extraction; no database, broker or object credentials.
-  creation:
-    container_name: glowloom-creation
-    build:
-      context: ./backend
-      dockerfile: creation/Dockerfile
-    image: glowloom/creation:current
-    init: true
-    restart: unless-stopped
-    read_only: true
-    cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
-    stop_grace_period: 15s
-    tmpfs:
-      - /work:rw,noexec,nosuid,size=64m,uid=65532,gid=65532,mode=0700
-    environment:
-      GLOWLOOM_CREATION_ENV: local
-      GLOWLOOM_CREATION_GRPC_ADDR: 0.0.0.0:9092
-      GLOWLOOM_CREATION_HTTP_ADDR: 0.0.0.0:8083
-      GLOWLOOM_CREATION_SERVICE_TOKEN: ${GLOWLOOM_CREATION_SERVICE_TOKEN:?Set a separate API-and-Worker-to-Creation token of at least 32 bytes}
-      GLOWLOOM_CREATION_CONCURRENCY: "2"
-    expose: ["9092", "8083"]
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "wget",
-          "-q",
-          "-O",
-          "/dev/null",
-          "http://127.0.0.1:8083/health/ready",
-        ]
-      interval: 10s
-      timeout: 3s
-      retries: 3
-      start_period: 15s
-    mem_limit: 1g
-    cpus: 2
-
-  # Private Media processing only; no database, broker or object-storage credentials.
-  media:
-    container_name: glowloom-media
-    build:
-      context: ./backend
-      dockerfile: media/Dockerfile
-    image: glowloom/media:current
-    init: true
-    restart: unless-stopped
-    read_only: true
-    cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
-    stop_grace_period: 15s
-    tmpfs:
-      - /work:rw,noexec,nosuid,size=2100m,uid=65532,gid=65532,mode=0700
-    environment:
-      GLOWLOOM_MEDIA_ENV: local
-      GLOWLOOM_MEDIA_GRPC_ADDR: 0.0.0.0:9091
-      GLOWLOOM_MEDIA_HTTP_ADDR: 0.0.0.0:8081
-      GLOWLOOM_MEDIA_SERVICE_TOKEN: ${GLOWLOOM_MEDIA_SERVICE_TOKEN:?Set a separate API-to-Media token of at least 32 bytes}
-      GLOWLOOM_MEDIA_CONCURRENCY: "2"
-    expose: ["9091", "8081"]
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8081/health/ready"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
-      start_period: 15s
-    mem_limit: 3g
-    cpus: 2
-
-  frontend:
-    container_name: glowloom-frontend
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
-      args:
-        GLOWLOOM_BACKEND_ORIGIN: &backend-origin http://gateway:8080
-    image: glowloom/frontend:latest
-    depends_on:
-      gateway:
-        condition: service_healthy
-    init: true
-    restart: unless-stopped
-    environment:
-      NEXT_TELEMETRY_DISABLED: "1"
-      GLOWLOOM_BACKEND_ORIGIN: *backend-origin
-      GLOWLOOM_PUBLIC_ORIGIN: "http://localhost:1122"
-      NODE_OPTIONS: "--max-old-space-size=2048"
-    ports:
-      - "127.0.0.1:1122:3000"
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "node",
-          "-e",
-          "fetch('http://127.0.0.1:3000/healthz').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 90s
-
-  backend: &backend-runtime
+  backend:
     depends_on:
       canvas:
-        condition: service_healthy
-      media:
-        condition: service_healthy
-      creation:
         condition: service_healthy
     container_name: glowloom-backend
     build:
@@ -233,23 +101,21 @@ services:
     stop_grace_period: 45s
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:1123:18080"
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:18080/healthz"]
       interval: 10s
       timeout: 3s
       retries: 3
       start_period: 45s
-    command: ["--role=api"]
+    command: ["--role=all"]
     tmpfs:
       - /work:rw,noexec,nosuid,size=8g,uid=65532,gid=65532,mode=0700
-    environment: &backend-environment
+    environment:
       GLOWLOOM_COMPOSE_API_PROXY: "true"
-      GLOWLOOM_CANVAS_RUNTIME_URL: http://canvas:4400
-      GLOWLOOM_AGENT_ORIGIN: http://agent:4401
-      GLOWLOOM_CREATION_EXTRACTION_ADDRESS: creation:9092
-      GLOWLOOM_CREATION_SERVICE_TOKEN: ${GLOWLOOM_CREATION_SERVICE_TOKEN:?Set a separate API-and-Worker-to-Creation token of at least 32 bytes}
-      GLOWLOOM_MEDIA_NORMALIZATION_ADDRESS: media:9091
-      GLOWLOOM_MEDIA_SERVICE_TOKEN: ${GLOWLOOM_MEDIA_SERVICE_TOKEN:?Set a separate API-to-Media token of at least 32 bytes}
+      GLOWLOOM_CANVAS_RUNTIME_URL: grpc://canvas:4402
+      GLOWLOOM_AGENT_ORIGIN: grpc://agent:4402
       GLOWLOOM_AGENT_SERVICE_TOKEN: ${GLOWLOOM_AGENT_SERVICE_TOKEN:?Set a separate Go-to-Agent token}
       GLOWLOOM_AGENT_BUSINESS_TOKEN: ${GLOWLOOM_AGENT_BUSINESS_TOKEN:?Set a separate Agent-to-Go token}
       GLOWLOOM_COLLAB_RUNTIME_TOKEN: ${GLOWLOOM_COLLAB_RUNTIME_TOKEN:?Set an internal collaboration token of at least 32 bytes}
@@ -264,7 +130,7 @@ services:
       GLOWLOOM_CREDENTIAL_REQUEST_MAC_KEY: ${GLOWLOOM_CREDENTIAL_REQUEST_MAC_KEY:-}
       GLOWLOOM_WORKER_HEALTH_ADDR: ":8081"
       GLOWLOOM_RELAY_HEALTH_ADDR: ":8082"
-      GLOWLOOM_KAFKA_BROKERS: ${GLOWLOOM_KAFKA_BROKERS:?Set GLOWLOOM_KAFKA_BROKERS for the backend relay}
+      GLOWLOOM_KAFKA_BROKERS: ${GLOWLOOM_KAFKA_BROKERS:?Set GLOWLOOM_KAFKA_BROKERS for async Kafka events}
       GLOWLOOM_MEDIA_RESULT_ALLOWED_ORIGINS: ${GLOWLOOM_MEDIA_RESULT_ALLOWED_ORIGINS:-}
       GLOWLOOM_MEDIA_ALLOW_TEST_LOOPBACK_TLS: ${GLOWLOOM_MEDIA_ALLOW_TEST_LOOPBACK_TLS:-false}
       GLOWLOOM_HTTP_ADDR: "127.0.0.1:8080"
@@ -287,13 +153,13 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
       SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Glowloom}
-      GLOWLOOM_DB_DSN: ${GLOWLOOM_DB_DSN:?Set GLOWLOOM_DB_DSN for the backend API}
+      GLOWLOOM_DB_DSN: ${GLOWLOOM_DB_DSN:?Set GLOWLOOM_DB_DSN for the backend monolith}
       GLOWLOOM_CREDIT_OPERATION_SAGA_ENABLED: ${GLOWLOOM_CREDIT_OPERATION_SAGA_ENABLED:-false}
       GLOWLOOM_CREDIT_COMMANDS_PER_MINUTE: ${GLOWLOOM_CREDIT_COMMANDS_PER_MINUTE:-120}
       GLOWLOOM_CREDIT_MAX_AMOUNT_MICROS: ${GLOWLOOM_CREDIT_MAX_AMOUNT_MICROS:-0}
       GLOWLOOM_CREDIT_MAX_DAILY_AMOUNT_MICROS: ${GLOWLOOM_CREDIT_MAX_DAILY_AMOUNT_MICROS:-0}
       GLOWLOOM_CREDIT_SERVICE_CALLERS_JSON: ${GLOWLOOM_CREDIT_SERVICE_CALLERS_JSON:-}
-      GLOWLOOM_REDIS_URL: ${GLOWLOOM_REDIS_URL:?Set GLOWLOOM_REDIS_URL for the backend API}
+      GLOWLOOM_REDIS_URL: ${GLOWLOOM_REDIS_URL:?Set GLOWLOOM_REDIS_URL for the backend monolith}
       GLOWLOOM_SESSION_IDLE_TTL: ${GLOWLOOM_SESSION_IDLE_TTL:-12h}
       GLOWLOOM_SESSION_ABSOLUTE_TTL: ${GLOWLOOM_SESSION_ABSOLUTE_TTL:-168h}
       GLOWLOOM_OBJECT_STORAGE_CONFIG: ${GLOWLOOM_OBJECT_STORAGE_CONFIG:-}
@@ -302,49 +168,37 @@ services:
       GLOWLOOM_STORAGE_SESSION_TOKEN: ${GLOWLOOM_STORAGE_SESSION_TOKEN:-}
       GLOWLOOM_STORAGE_MAINTENANCE_DSN: ${GLOWLOOM_STORAGE_MAINTENANCE_DSN:-}
       GLOWLOOM_OTEL_ENDPOINT: ${GLOWLOOM_OTEL_ENDPOINT:-}
-    # Business and internal Agent traffic stay on the Compose network.
     expose: ["18080"]
 
-  # Transitional runtime isolation, not independent business/data ownership.
-  # Selected task queues stay together until scratch-space and authority contracts move.
-  worker:
-    <<: *backend-runtime
-    container_name: glowloom-worker
+  frontend:
+    container_name: glowloom-frontend
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        GLOWLOOM_BACKEND_ORIGIN: &backend-origin http://backend:18080
+    image: glowloom/frontend:latest
     depends_on:
-      canvas:
+      backend:
         condition: service_healthy
-      creation:
-        condition: service_healthy
-    command: ["--role=worker", "--queues=auto"]
+    init: true
+    restart: unless-stopped
     environment:
-      <<: *backend-environment
-      GLOWLOOM_COMPOSE_API_PROXY: "false"
-      GLOWLOOM_MEDIA_NORMALIZATION_ADDRESS: ""
-      GLOWLOOM_MEDIA_SERVICE_TOKEN: ""
-    expose: ["8081"]
+      NEXT_TELEMETRY_DISABLED: "1"
+      GLOWLOOM_BACKEND_ORIGIN: *backend-origin
+      GLOWLOOM_PUBLIC_ORIGIN: "http://localhost:1122"
+      NODE_OPTIONS: "--max-old-space-size=2048"
+    ports:
+      - "127.0.0.1:1122:3000"
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8081/healthz"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/healthz').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))",
+        ]
       interval: 10s
-      timeout: 3s
+      timeout: 5s
       retries: 3
-      start_period: 45s
-
-  relay:
-    <<: *backend-runtime
-    container_name: glowloom-relay
-    depends_on: {}
-    command: ["--role=relay"]
-    environment:
-      <<: *backend-environment
-      GLOWLOOM_COMPOSE_API_PROXY: "false"
-      GLOWLOOM_CREATION_EXTRACTION_ADDRESS: ""
-      GLOWLOOM_CREATION_SERVICE_TOKEN: ""
-      GLOWLOOM_MEDIA_NORMALIZATION_ADDRESS: ""
-      GLOWLOOM_MEDIA_SERVICE_TOKEN: ""
-    expose: ["8082"]
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8082/healthz"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
-      start_period: 45s
+      start_period: 90s

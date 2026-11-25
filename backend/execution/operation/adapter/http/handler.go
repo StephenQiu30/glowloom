@@ -594,11 +594,11 @@ func queryProject(c *gin.Context) (uuid.UUID, bool) {
 }
 func writeError(c *gin.Context, err error) {
 	switch {
-	case errors.Is(err, promptapp.ErrTemplateInvalid), errors.Is(err, application.ErrFrozenTemplateInvalid):
+	case errors.Is(err, promptapp.ErrTemplateInvalid):
 		httpapi.WriteProblem(c, 422, "template_invalid", nil)
-	case errors.Is(err, promptapp.ErrTemplateChanged), errors.Is(err, application.ErrFrozenTemplateChanged):
+	case errors.Is(err, promptapp.ErrTemplateChanged):
 		httpapi.WriteProblem(c, 409, "template_changed", nil)
-	case errors.Is(err, promptapp.ErrTemplateContextUnavailable), errors.Is(err, application.ErrFrozenTemplateContextUnavailable):
+	case errors.Is(err, promptapp.ErrTemplateContextUnavailable):
 		httpapi.WriteProblem(c, 409, "context_unavailable", nil)
 	case errors.Is(err, application.ErrSubmissionUnresolved):
 		httpapi.WriteProblem(c, 409, "submission_unresolved", nil)
@@ -606,7 +606,7 @@ func writeError(c *gin.Context, err error) {
 		httpapi.WriteProblem(c, 409, "submission_epoch_conflict", nil)
 	case errors.Is(err, application.ErrSubmissionAccepted):
 		httpapi.WriteProblem(c, 409, "submission_already_accepted", nil)
-	case errors.Is(err, promptdomain.ErrReferenceUnavailable), errors.Is(err, application.ErrFrozenReferenceUnavailable):
+	case errors.Is(err, promptdomain.ErrReferenceUnavailable):
 		httpapi.WriteProblem(c, 422, "reference_unavailable", nil)
 	case errors.Is(err, application.ErrPendingConsumption):
 		httpapi.WriteProblem(c, 409, "consumption_pending", nil)
@@ -638,7 +638,7 @@ func writeError(c *gin.Context, err error) {
 		httpapi.WriteProblem(c, 409, "state_conflict", nil)
 	case errors.Is(err, application.ErrConfirmationTargetUnavailable):
 		httpapi.WriteProblem(c, 409, "target_unavailable", nil)
-	case errors.Is(err, application.ErrFrozenCompilerUnsupported), errors.Is(err, application.ErrInvalidFreeQuote), errors.Is(err, application.ErrInvalidBatchFreeQuote), errors.Is(err, application.ErrInvalidConfirmSingleQuote), errors.Is(err, application.ErrInvalidConfirmBatchQuote), errors.Is(err, application.ErrInvalidPublicQuery), errors.Is(err, application.ErrInvalidWorkflowControl):
+	case errors.Is(err, application.ErrInvalidFreeQuote), errors.Is(err, application.ErrInvalidBatchFreeQuote), errors.Is(err, application.ErrInvalidConfirmSingleQuote), errors.Is(err, application.ErrInvalidConfirmBatchQuote), errors.Is(err, application.ErrInvalidPublicQuery), errors.Is(err, application.ErrInvalidWorkflowControl):
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 	default:
 		httpapi.LogDependencyError(c, err)

@@ -17,9 +17,6 @@ import (
 const unavailableArgonHash = "$argon2id$v=19$m=19456,t=2,p=1$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 
 func (a *Auth) loginEmail(ctx context.Context, email, password string, persistent bool, source string) (AuthResult, error) {
-	if a.activation != nil {
-		return AuthResult{}, ErrSessionActivation
-	}
 	return a.loginEmailPrepared(ctx, email, password, persistent, source, nil)
 }
 
@@ -176,9 +173,6 @@ func (a *Auth) StartPasswordReset(ctx context.Context, email, source string) (Re
 
 // CompletePasswordReset consumes a bound proof and revokes all old sessions atomically.
 func (a *Auth) CompletePasswordReset(ctx context.Context, token, password, confirmation string) error {
-	if a.passwordResets != nil {
-		return ErrPasswordChangeUnavailable
-	}
 	return a.completePasswordResetPrepared(ctx, token, password, confirmation, nil)
 }
 

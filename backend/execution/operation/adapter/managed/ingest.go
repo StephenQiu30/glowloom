@@ -11,7 +11,6 @@ import (
 	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/writefence"
 )
 
 // IngestStore is the operation-owned authority and frozen result boundary.
@@ -109,7 +108,7 @@ func (a *IngestActivities) ingestResult(ctx context.Context, identity applicatio
 		return a.store.IngestManagedText(ctx, identity)
 	}
 	if a.media == nil {
-		return writefence.ErrUnavailable
+		return errors.New("media ingest unavailable")
 	}
 	return a.media.IngestArtifacts(ctx, identity, *result, d)
 }

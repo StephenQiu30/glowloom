@@ -127,11 +127,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	if err := identityruntime.ConfigureSessionSecurity(emailAuth, cfg, sessions); err != nil {
 		return nil, fmt.Errorf("configure session security: %w", err)
 	}
-	revocations, err := identityruntime.NewPublicSessionRevocations(emailAuth, sessions.Revocations, time.Now)
-	if err != nil {
-		return nil, fmt.Errorf("configure durable session revocation: %w", err)
-	}
-	auth, registerSelf, err := identityruntime.RegisterSelf(database, emailAuth, cfg, subjectObjects.Registry(), api, time.Now, revocations)
+	auth, registerSelf, err := identityruntime.RegisterSelf(database, emailAuth, cfg, subjectObjects.Registry(), api, time.Now)
 	if err != nil {
 		return nil, fmt.Errorf("configure self account services: %w", err)
 	}

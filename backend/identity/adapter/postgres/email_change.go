@@ -49,15 +49,7 @@ func (s *EmailChangeStore) EmailChangeTransaction(ctx context.Context, a applica
 		if err := tx.Raw(`SELECT * FROM identity.user_session WHERE id=?`, a.SessionID).Scan(&session).Error; err != nil {
 			return err
 		}
-		if s.source {
-			if err := requireOpenAccountHead(tx, u.ID); err != nil {
-				return err
-			}
-		}
 		return run(&emailChangeTx{emailAuthTx: base, user: u, session: session})
-	}
-	if s.source {
-		return identityWriterTransaction(ctx, s.db, runTx)
 	}
 	return s.db.WithContext(ctx).Transaction(runTx)
 }

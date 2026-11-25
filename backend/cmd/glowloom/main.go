@@ -53,7 +53,7 @@ func run() error {
 			return fmt.Errorf("usage: glowloom partitions ensure")
 		}
 	default:
-		roleFlag := flag.String("role", string(app.RoleAPI), "process role: api|worker|relay|all")
+		roleFlag := flag.String("role", string(app.RoleAll), "process role: all|api|worker|relay")
 		queuesFlag := flag.String("queues", "", "worker task queues: auto|flow|media|provider|agent.codex (auto matches all-role selection; default: flow)")
 		flag.Parse()
 		if flag.NArg() != 0 {

@@ -36,7 +36,7 @@ printf '%s\n' '[glowloom-dev] Build succeeded; starting current source.' >&2
 exec /tmp/glowloom-dev/glowloom "$@"
 ENTRYPOINT
 ENTRYPOINT ["/usr/local/bin/glowloom-dev-entrypoint"]
-CMD ["--role=api"]
+CMD ["--role=all"]
 
 FROM golang:1.26.11-alpine AS build
 ARG GOPROXY="https://goproxy.cn,direct"
@@ -61,7 +61,7 @@ ENV TMPDIR=/work
 USER 65532:65532
 EXPOSE 8080 8081 8082
 ENTRYPOINT ["/usr/local/bin/glowloom"]
-CMD ["--role=api"]
+CMD ["--role=all"]
 
 # Compose reuses middleware on the Docker host. Keep the port bridges in the
 # application container and run the build-stage binary without a source mount.
@@ -87,6 +87,6 @@ ENTRYPOINT
 USER 65532:65532
 EXPOSE 18080
 ENTRYPOINT ["/usr/local/bin/glowloom-compose-entrypoint"]
-CMD ["--role=api"]
+CMD ["--role=all"]
 
 FROM runtime AS production

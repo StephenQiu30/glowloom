@@ -35,10 +35,9 @@ type EmailChangeStore interface {
 
 // EmailChange owns one session-bound pair of mailbox proofs.
 type EmailChange struct {
-	auth   *Auth
-	store  EmailChangeStore
-	now    func() time.Time
-	source *EmailChangeSource
+	auth  *Auth
+	store EmailChangeStore
+	now   func() time.Time
 }
 
 // NewEmailChange injects existing identity proof and encrypted mail dependencies.
@@ -199,9 +198,6 @@ func (s *EmailChange) Verify(ctx context.Context, a Principal, op uuid.UUID, sid
 
 // Complete changes only credentials, preserving all resource ownership and memberships.
 func (s *EmailChange) Complete(ctx context.Context, a Principal, op uuid.UUID, revision int64) error {
-	if s.source != nil {
-		return ErrPasswordChangeUnavailable
-	}
 	return s.completePrepared(ctx, a, op, revision, nil)
 }
 

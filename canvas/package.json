@@ -16,6 +16,8 @@
     "check:editor": "prettier --check editor tsconfig.editor.json"
   },
   "dependencies": {
+    "@grpc/grpc-js": "^1.14.7",
+    "@grpc/proto-loader": "^0.8.1",
     "@nestjs/common": "12.3.3",
     "@nestjs/core": "12.3.3",
     "@nestjs/platform-fastify": "12.3.3",
@@ -75,26 +77,26 @@
     "editor"
   ],
   "peerDependencies": {
+    "@tiptap/extension-collaboration": "3.32.0",
     "@tiptap/extension-placeholder": "3.32.0",
-    "react": "19.2.8",
-    "react-dom": "19.2.8",
-    "next": "16.3.6",
-    "swr": "^2.5.1",
-    "lucide-react": "^1.48.0",
-    "three": "0.186.1",
-    "file-saver": "^2.0.5",
-    "mediabunny": "1.62.1",
-    "motion": "^13.4.5",
-    "zustand": "^5.0.15",
-    "cn": "^0.4.0",
     "@tiptap/markdown": "3.32.0",
     "@tiptap/react": "3.32.0",
-    "@tiptap/extension-collaboration": "3.32.0",
     "@tiptap/suggestion": "3.32.0",
+    "@types/file-saver": "^2.0.7",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/three": "0.186.0",
-    "@types/file-saver": "^2.0.7"
+    "cn": "^0.4.0",
+    "file-saver": "^2.0.5",
+    "lucide-react": "^1.48.0",
+    "mediabunny": "1.62.1",
+    "motion": "^13.4.5",
+    "next": "16.3.6",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "swr": "^2.5.1",
+    "three": "0.186.1",
+    "zustand": "^5.0.15"
   },
   "peerDependenciesMeta": {
     "@tiptap/extension-placeholder": {

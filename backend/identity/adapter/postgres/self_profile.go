@@ -94,19 +94,11 @@ func (s *SelfProfileStore) ProfileTransaction(ctx context.Context, actor applica
 		if err != nil {
 			return err
 		}
-		if s.source {
-			if _, err := readOpenSessionAuthorities(tx, actor); err != nil {
-				return err
-			}
-		}
 		state := &selfProfileTx{db: tx, user: u}
 		if s.avatars != nil {
 			state.avatars = s.avatars(tx)
 		}
 		return run(state)
-	}
-	if s.source {
-		return identityWriterTransaction(ctx, s.db, runTx)
 	}
 	return s.db.WithContext(ctx).Transaction(runTx)
 }

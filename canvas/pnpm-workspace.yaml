@@ -1,3 +1,5 @@
+allowBuilds:
+  protobufjs: false
 # Browser peers are supplied by frontend. The collaboration service installs
 # only its own runtime dependencies, including in production containers.
 autoInstallPeers: false

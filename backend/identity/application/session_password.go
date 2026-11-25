@@ -35,9 +35,6 @@ func (a *Auth) ReauthenticateCurrent(ctx context.Context, actor Principal, passw
 
 // ChangePasswordCurrent rotates credentials and this device atomically.
 func (a *Auth) ChangePasswordCurrent(ctx context.Context, actor Principal, epoch int64, current, next, confirmation string) (AuthResult, error) {
-	if a.passwordChanges != nil {
-		return AuthResult{}, ErrPasswordChangeUnavailable
-	}
 	if !a.emailReady() {
 		return AuthResult{}, ErrRegistrationUnavailable
 	}

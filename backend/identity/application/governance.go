@@ -102,7 +102,6 @@ type Governance struct {
 	store     GovernanceStore
 	protector ProofProtector
 	now       func() time.Time
-	source    *GovernanceSource
 }
 
 // NewGovernance injects the atomic store, encrypted proof protector and clock.
@@ -136,9 +135,6 @@ func (s *Governance) notify(tx GovernanceTx, recipient, template string, now tim
 	return tx.EnqueueMail(QueuedMail{EventID: id, Template: template, Recipient: recipient, KeyID: s.protector.KeyID(), EncryptedPayload: sealed, CreatedAt: now, ExpiresAt: now.Add(48 * time.Hour)})
 }
 func (s *Governance) mutateUser(ctx context.Context, actor Principal, target uuid.UUID, revision int64, reason string, change UserGovernanceChange) error {
-	if s.source != nil && change.Action != "unlock" && change.Action != "profile_reset" {
-		return ErrPasswordChangeUnavailable
-	}
 	return s.mutateUserPrepared(ctx, actor, target, revision, reason, change, nil)
 }
 

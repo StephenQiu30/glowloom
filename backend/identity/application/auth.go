@@ -54,11 +54,6 @@ type AuthTx interface {
 type Auth struct {
 	now                func() time.Time
 	email              *emailRuntime
-	registration       *RegistrationPreparationCoordinator
-	activation         *SessionActivations
-	sessionRevocations *PublicSessionRevocations
-	passwordChanges    *PasswordChanges
-	passwordResets     *PasswordResets
 	security           *sessionSecurity
 	legacyUpgradeUntil time.Time
 }
@@ -132,9 +127,6 @@ func (a *Auth) Logout(ctx context.Context, token string, id uuid.UUID) error {
 
 // ChangePassword rotates this device and revokes all previous credential sessions.
 func (a *Auth) ChangePassword(ctx context.Context, token string, revision int64, current, password, confirmation string) (AuthResult, error) {
-	if a.passwordChanges != nil {
-		return AuthResult{}, ErrPasswordChangeUnavailable
-	}
 	if password != confirmation {
 		return AuthResult{}, domain.ErrInvalidProfile
 	}

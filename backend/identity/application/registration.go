@@ -316,13 +316,6 @@ func (a *Auth) VerifyRegistration(ctx context.Context, id uuid.UUID, flow, code 
 
 // CompleteRegistration creates an account after proof and exact terms-version checks.
 func (a *Auth) CompleteRegistration(ctx context.Context, input CompleteRegistrationInput) (uuid.UUID, error) {
-	if a.registration != nil {
-		if !a.emailReady() {
-			return uuid.Nil, ErrRegistrationUnavailable
-		}
-		input.DisplayName = strings.TrimSpace(input.DisplayName)
-		return a.completePreparedRegistration(ctx, input)
-	}
 	if !a.registrationReady() {
 		return uuid.Nil, ErrRegistrationUnavailable
 	}

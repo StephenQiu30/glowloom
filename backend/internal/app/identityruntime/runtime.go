@@ -57,7 +57,7 @@ func NewMailDelivery(store identityapp.MailDeliveryStore, cfg config.Config, now
 }
 
 // RegisterSelf installs public invitation preview and composes authenticated account services.
-func RegisterSelf(database *gorm.DB, auth *identityapp.Auth, cfg config.Config, registry *objectstorage.Registry, public *gin.RouterGroup, now func() time.Time, durable *identityapp.PublicSessionRevocations) (*http.EmailAuthHandler, func(*gin.RouterGroup), error) {
+func RegisterSelf(database *gorm.DB, auth *identityapp.Auth, cfg config.Config, registry *objectstorage.Registry, public *gin.RouterGroup, now func() time.Time) (*http.EmailAuthHandler, func(*gin.RouterGroup), error) {
 	if registry == nil || cfg.ObjectStorage == nil {
 		return nil, nil, objectstorage.ErrUnavailable
 	}
@@ -67,9 +67,6 @@ func RegisterSelf(database *gorm.DB, auth *identityapp.Auth, cfg config.Config, 
 	}
 	sessions := http.NewSessionDirectoryHandler(identityapp.NewSessionDirectory(pgidentity.NewSessionDirectoryStore(database), now), strings.HasPrefix(cfg.PublicOrigin, "https://"))
 	handler := http.NewEmailAuthHandler(auth, cfg.PublicOrigin, strings.HasPrefix(cfg.PublicOrigin, "https://")).WithSessionRevocation(sessions.Revoke).WithSessionPolicy(http.SessionHTTPPolicy{V2Enabled: cfg.IdentitySessionV2Enabled, LegacyUpgradeUntil: cfg.IdentityLegacyUpgradeUntil})
-	if durable != nil {
-		handler.WithPublicSessionRevocations(durable)
-	}
 	governanceStore := pgidentity.NewGovernanceStore(database, func(tx *gorm.DB) identityapp.TeamGovernance { return pgworkspace.NewTeamGovernance(tx) })
 	governance := identityapp.NewGovernance(governanceStore, protector, now)
 	invitations := http.NewInvitationHandler(governance)
@@ -87,11 +84,7 @@ func RegisterSelf(database *gorm.DB, auth *identityapp.Auth, cfg config.Config, 
 		mediahttp.NewAvatarHandler(avatarService, avatarQuery, resolveMediaActor).Register(group)
 		logos := pgmedia.NewProviderLogoStore(database, mediawire.NewAvatarActorAccess)
 		mediahttp.NewProviderLogoHandler(mediaapp.NewRoutedProviderLogoService(logos, routedObjects, now), mediaapp.NewProviderLogoQuery(logos, routedObjects, now, cfg.ObjectStorage.Access.PreviewTTL), resolveMediaActor).Register(group)
-		if durable == nil {
-			sessions.Register(group)
-		} else {
-			sessions.RegisterRead(group)
-		}
+		sessions.Register(group)
 		http.NewPlatformDirectoryHandler(identityapp.NewPlatformDirectory(pgidentity.NewPlatformDirectoryStore(database), protector, now)).Register(group)
 		exportStore := pgidentity.NewDirectoryExportStore(database, mediawire.NewIdentityExportLedger)
 		var exportService *identityapp.DirectoryExport
