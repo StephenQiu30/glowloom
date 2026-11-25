@@ -9,9 +9,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/providerhttp"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/providerhttp"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
 )
 
 func TestNativeSDKRequestsStaySingleAndBounded(t *testing.T) {

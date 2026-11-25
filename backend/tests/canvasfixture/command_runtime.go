@@ -8,7 +8,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/yjsruntime"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/adapter/yjsruntime"
 )
 
 // CommandRuntime starts the built production Canvas HTTP boundary on an ephemeral

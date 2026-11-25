@@ -13,9 +13,9 @@ import (
 	"strconv"
 	"testing"
 
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
-	"github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/videodepth"
-	toolapp "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/videodepth"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/application"
 )
 
 func depthTestVideo(t *testing.T, rate, duration string) *mediaapp.Downloaded {

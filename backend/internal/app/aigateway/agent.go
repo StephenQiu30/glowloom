@@ -9,15 +9,15 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	evidencepg "github.com/StephenQiu30/glowloom-server/backend/creation/evidence/adapter/postgres"
-	workspacepg "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
-	pg "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/application"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	agentpg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
 	agent "github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
+	evidencepg "github.com/StephenQiu30/glowloom-server/backend/internal/creation/evidence/adapter/postgres"
+	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/postgres"
+	pg "github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 var errProjectMemoryChanged = errors.New("project memory changed")

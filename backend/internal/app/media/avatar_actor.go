@@ -6,8 +6,8 @@ import (
 
 	"gorm.io/gorm"
 
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 // NewAvatarActorAccess retains the original transaction-bound Identity authority.

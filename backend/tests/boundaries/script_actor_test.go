@@ -13,7 +13,7 @@ import (
 // This slice checks Script's actor contract; its Media ownership ports have a
 // separate migration and must not be reported as a complete executable closure.
 func TestScriptOwnsActorAndProjectPorts(t *testing.T) {
-	root := filepath.Join(serviceLayoutRoot(t), "creation", "script")
+	root := filepath.Join(serviceLayoutRoot(t), "internal", "creation", "script")
 	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -30,7 +30,7 @@ func TestScriptOwnsActorAndProjectPorts(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			for _, owner := range []string{"identity", "internal/app"} {
+			for _, owner := range []string{"internal/identity", "internal/app"} {
 				prefix := "github.com/StephenQiu30/glowloom-server/backend/" + owner
 				if target == prefix || strings.HasPrefix(target, prefix+"/") {
 					t.Errorf("Script must consume its own actor port: %s imports %s", path, target)

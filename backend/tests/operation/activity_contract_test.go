@@ -7,8 +7,8 @@ import (
 	"reflect"
 	"testing"
 
-	catalogworkflow "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/task"
-	workflow "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/task"
+	catalogworkflow "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/adapter/task"
+	workflow "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/task"
 )
 
 type activityExample struct {

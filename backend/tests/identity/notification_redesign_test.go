@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/uuid"
 
-	pg "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
-	app "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	pg "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // Decode through the public JSON contract so this regression also catches fields

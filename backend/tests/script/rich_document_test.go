@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/extract"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/adapter/extract"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/domain"
 )
 
 func TestRichDocumentHTMLPreservesSourceEditingSemantics(t *testing.T) {

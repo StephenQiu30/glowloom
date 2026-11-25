@@ -20,9 +20,9 @@ import (
 
 	"github.com/google/uuid"
 
-	project "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/editproject"
-	toolapp "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
-	tool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/domain"
+	project "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/editproject"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/application"
+	tool "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/domain"
 )
 
 func projectFixture(t *testing.T) (tool.FrozenExport, map[uuid.UUID]string) {

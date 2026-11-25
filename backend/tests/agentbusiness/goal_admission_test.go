@@ -11,14 +11,14 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
-	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
-	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
-	gateway "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
-	operationhttp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/http"
-	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
 	agentpg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	agentwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/agent"
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
+	gateway "github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/domain"
+	operationhttp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/http"
+	operationdomain "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/domain"
 )
 
 // Decode the public JSON shape so the RED test also detects an ignored contract.

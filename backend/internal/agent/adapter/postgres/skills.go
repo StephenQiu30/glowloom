@@ -9,8 +9,8 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	skill "github.com/StephenQiu30/glowloom-server/backend/internal/skill/domain"
 )
 

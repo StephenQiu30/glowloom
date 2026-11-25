@@ -18,6 +18,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpclient"
 )
 
 const (
@@ -114,13 +116,17 @@ func NewSecureDownloader(policy DownloadPolicy) (*SecureDownloader, error) {
 	}
 	d := &SecureDownloader{allowed: allowed, acceptedMIME: accepted, resolver: resolver, maxBytes: maxBytes, allowTestLoopback: policy.AllowTestLoopbackTLS}
 	transport := &http.Transport{Proxy: nil, DisableKeepAlives: true, TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: policy.TLSRootCAs}, ResponseHeaderTimeout: 30 * time.Second, DialContext: d.dialChecked}
-	d.client = &http.Client{Transport: transport, Timeout: downloadTimeout, CheckRedirect: func(req *http.Request, via []*http.Request) error {
-		if len(via) > maxRedirects {
-			return ErrUnsafeResultURL
-		}
-		req.Header.Del("Referer")
-		return d.validateURL(req.URL)
-	}}
+	d.client = httpclient.NewHTTPClient(
+		httpclient.WithTransport(transport),
+		httpclient.WithTimeout(downloadTimeout),
+		httpclient.WithCheckRedirect(func(req *http.Request, via []*http.Request) error {
+			if len(via) > maxRedirects {
+				return ErrUnsafeResultURL
+			}
+			req.Header.Del("Referer")
+			return d.validateURL(req.URL)
+		}),
+	)
 	return d, nil
 }
 
@@ -170,18 +176,8 @@ func (d *SecureDownloader) permittedIP(ip net.IP, host string) bool {
 	if d.allowTestLoopback && addr.IsLoopback() && net.ParseIP(host) != nil {
 		return true
 	}
-	if !addr.IsGlobalUnicast() || addr.IsPrivate() || addr.IsLoopback() || addr.IsLinkLocalUnicast() || addr.IsLinkLocalMulticast() {
-		return false
-	}
-	for _, prefix := range reservedPrefixes {
-		if prefix.Contains(addr) {
-			return false
-		}
-	}
-	return true
+	return httpclient.IsPublicAddr(addr)
 }
-
-var reservedPrefixes = []netip.Prefix{netip.MustParsePrefix("100.64.0.0/10"), netip.MustParsePrefix("192.0.0.0/24"), netip.MustParsePrefix("192.0.2.0/24"), netip.MustParsePrefix("198.18.0.0/15"), netip.MustParsePrefix("198.51.100.0/24"), netip.MustParsePrefix("203.0.113.0/24"), netip.MustParsePrefix("240.0.0.0/4"), netip.MustParsePrefix("2001:db8::/32")}
 
 // Download verifies the final body, declared MIME, byte bound and actual SHA.
 // Error messages omit remote URLs, which may contain signed query credentials.

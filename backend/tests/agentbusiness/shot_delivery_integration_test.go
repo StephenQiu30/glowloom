@@ -8,23 +8,23 @@ import (
 	"testing"
 	"time"
 
-	gateway "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
-	operationhttp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/http"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/aigateway"
+	gateway "github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/domain"
+	operationhttp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/http"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
-	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
-	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
-	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	agentwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/agent"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/storageoperator"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
-	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
+	operationdomain "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/domain"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/storagefixture"
 )
 

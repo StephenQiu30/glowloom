@@ -9,8 +9,8 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	billingapp "github.com/StephenQiu30/glowloom-server/backend/execution/billing/application"
-	billingdomain "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
+	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/application"
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/domain"
 )
 
 func TestReserveInTransactionPreservesBudgetAndLedger(t *testing.T) {

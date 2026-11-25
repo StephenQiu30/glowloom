@@ -7,12 +7,12 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 type assetAccess struct{ tx *gorm.DB }

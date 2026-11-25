@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application/source"
 
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 
@@ -17,17 +17,17 @@ import (
 
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
 
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/postgres"
 
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 
-	pgmediatool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/postgres"
+	pgmediatool "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/postgres"
 )
 
 type projectWorkGuard struct {

@@ -1,8 +1,8 @@
 package canvas_test
 
 import (
-	promptapp "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 func promptActor(actor identityapp.Principal) promptapp.Actor {

@@ -11,11 +11,11 @@ import (
 
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
-	toolapp "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
-	tooldomain "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/application"
+	tooldomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/domain"
 )
 
 type routedDepthClaim struct {

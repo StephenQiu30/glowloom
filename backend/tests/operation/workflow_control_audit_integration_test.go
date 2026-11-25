@@ -6,9 +6,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	auditevent "github.com/StephenQiu30/glowloom-server/backend/internal/audit/adapter/event"
 	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
 	pginbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/postgres"
 	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 )

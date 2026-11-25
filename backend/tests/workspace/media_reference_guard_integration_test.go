@@ -10,12 +10,12 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application/source"
 
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/domain"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 func workspaceReferenceFixture(t *testing.T) (context.Context, *gorm.DB, identityapp.Principal, uuid.UUID) {

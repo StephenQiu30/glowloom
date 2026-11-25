@@ -11,11 +11,11 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/postgres"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 type avatarReferenceTestOwners struct{ tx *gorm.DB }

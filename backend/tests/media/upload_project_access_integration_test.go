@@ -9,8 +9,8 @@ import (
 
 	"github.com/google/uuid"
 
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/postgres"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 func TestUploadProjectCleanupSurvivesRevocationAndArchive(t *testing.T) {

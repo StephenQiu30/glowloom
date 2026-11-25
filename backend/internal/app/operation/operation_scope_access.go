@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 
-	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application/source"
 
 	promptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/prompt"
 
@@ -16,21 +16,21 @@ import (
 
 	subjectwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/subject"
 
-	pgprompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/adapter/postgres"
+	pgprompt "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/adapter/postgres"
 
-	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspace "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application"
 
-	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/postgres"
+	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/adapter/postgres"
 
-	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
+	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/application"
 
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/postgres"
 
-	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	operation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
 
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 type operationProjectAccess struct {

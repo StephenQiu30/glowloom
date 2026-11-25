@@ -9,13 +9,13 @@ import (
 
 	"gorm.io/gorm"
 
-	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/objects"
-	pgscript "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/postgres"
-	scriptapp "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
+	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/adapter/objects"
+	pgscript "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/adapter/postgres"
+	scriptapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/application"
+	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
-	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/media/adapter/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 var characterReferences func(*gorm.DB) scriptapp.CharacterReferences

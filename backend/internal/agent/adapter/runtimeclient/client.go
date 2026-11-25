@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpclient"
 )
 
 // RuntimeClient wraps the gRPC (preferred) or HTTP transport to the independent Agent runtime.
@@ -35,7 +37,10 @@ func New(origin, token string) (*RuntimeClient, error) {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.MaxConnsPerHost = 32
 	transport.ResponseHeaderTimeout = 15 * time.Second
-	httpClient := &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	httpClient := httpclient.NewHTTPClient(
+		httpclient.WithTransport(transport),
+		httpclient.WithNoTimeout(),
+	)
 	client, err := NewClient(strings.TrimRight(origin, "/"), WithHTTPClient(httpClient), WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
 		req.Header.Set("Authorization", "Bearer "+token)
 		req.Header.Set("X-Agent-Audience", "agent")

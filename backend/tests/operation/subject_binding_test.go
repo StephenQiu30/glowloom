@@ -13,9 +13,9 @@ import (
 
 	"github.com/google/uuid"
 
-	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/providerhttp"
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/providerhttp"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
 )
 
 type subjectNoDispatchTransport struct{ t *testing.T }

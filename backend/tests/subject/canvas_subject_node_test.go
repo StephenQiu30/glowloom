@@ -8,13 +8,13 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	canvaspg "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/postgres"
-	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
-	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
-	subjectapp "github.com/StephenQiu30/glowloom-server/backend/creation/subject/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/subject/domain"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	subjectwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/subject"
+	canvaspg "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/adapter/postgres"
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
+	subjectapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/subject/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/subject/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
 )
 

@@ -11,11 +11,11 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	scriptevent "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/event"
-	pgscript "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/postgres"
-	script "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	scriptevent "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/adapter/event"
+	pgscript "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/adapter/postgres"
+	script "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/application"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/postgres"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 )
 

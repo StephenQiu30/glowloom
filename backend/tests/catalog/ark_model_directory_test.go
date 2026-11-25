@@ -12,10 +12,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	catalogapp "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/providerhttp"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/providerhttp"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 func arkDirectoryConfig(t *testing.T) domain.ProviderConfig {

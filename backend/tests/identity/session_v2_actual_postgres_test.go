@@ -14,10 +14,10 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/identity/adapter/sessiontoken"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
-	"github.com/StephenQiu30/glowloom-server/backend/identity/domain"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/sessiontoken"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 

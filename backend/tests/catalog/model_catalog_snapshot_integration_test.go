@@ -8,10 +8,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
-	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/postgres"
-	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
+	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/adapter/postgres"
+	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 type catalogProjectRead func(context.Context, identity.Principal, uuid.UUID) error

@@ -11,11 +11,11 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/identity/domain"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/postgres"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 

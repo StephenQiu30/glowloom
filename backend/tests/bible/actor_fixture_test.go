@@ -4,11 +4,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
-	app "github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
-	workspacepg "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	biblewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/bible"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/creation/bible/application"
+	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/postgres"
+	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 func bibleActor(actor identityapp.Principal) app.Actor { return biblewire.Actor(actor) }

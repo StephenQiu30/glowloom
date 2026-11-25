@@ -16,16 +16,16 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
 
-	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application/source"
 
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/postgres"
 
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 
 	redisrealtime "github.com/StephenQiu30/glowloom-server/backend/internal/infra/realtime/adapter/redis"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/infra/realtime/adapter/sse"

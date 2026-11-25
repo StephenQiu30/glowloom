@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
 )
 
 func draftNode(t *testing.T, kind string) domain.Node {

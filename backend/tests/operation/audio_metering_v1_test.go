@@ -9,8 +9,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
 )
 
 func TestCharacterCountV1UsesExactCharactersAndPreservesHistoricalBlocks(t *testing.T) {

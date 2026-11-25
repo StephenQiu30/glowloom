@@ -22,21 +22,21 @@ import (
 	"sync"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/storageoperator"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/storagefixture"
 
 	"gorm.io/gorm"
 
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 
-	billingpg "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/managed"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	billingpg "github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/managed"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 
 	"testing"
 	"time"
@@ -45,9 +45,9 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/task"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/task"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 

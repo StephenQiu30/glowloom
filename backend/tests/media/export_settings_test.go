@@ -6,11 +6,11 @@ import (
 	"strings"
 	"testing"
 
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
-	project "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/editproject"
-	exportff "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/ffmpeg"
-	app "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
-	tool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/domain"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	project "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/editproject"
+	exportff "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/ffmpeg"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/application"
+	tool "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/domain"
 )
 
 func TestTimelineExportSettingsFreezeAutoDimensionsAndDestination(t *testing.T) {

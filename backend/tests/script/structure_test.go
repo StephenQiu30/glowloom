@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/domain"
 )
 
 func manualStructure() domain.StructureDocument {

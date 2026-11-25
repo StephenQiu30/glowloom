@@ -11,16 +11,16 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	subject "github.com/StephenQiu30/glowloom-server/backend/creation/subject/application"
-	subjectdomain "github.com/StephenQiu30/glowloom-server/backend/creation/subject/domain"
-	pg "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/application"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	subjectwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/subject"
+	subject "github.com/StephenQiu30/glowloom-server/backend/internal/creation/subject/application"
+	subjectdomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/subject/domain"
+	pg "github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	platform "github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
-	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 // VoiceJobs is a project-free consumer of the same immutable AI sale and ledger.

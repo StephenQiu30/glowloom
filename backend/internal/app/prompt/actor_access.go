@@ -8,9 +8,9 @@ import (
 
 	"gorm.io/gorm"
 
-	promptapp "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/application"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // SessionAccess binds legacy exact-session checks to the caller's content Tx.

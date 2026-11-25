@@ -5,14 +5,14 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	scriptapp "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
-	workspacepg "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
-	toolapp "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
+	scriptapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/application"
+	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/postgres"
+	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/application"
 )
 
 func identityScriptActor(actor identityapp.Principal) scriptapp.Actor { return scriptwire.Actor(actor) }

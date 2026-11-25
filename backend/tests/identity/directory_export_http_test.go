@@ -10,8 +10,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
-	"github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 func TestDirectoryExportHTTPStrictFiltersAndMetadata(t *testing.T) {

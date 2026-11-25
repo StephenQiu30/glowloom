@@ -16,13 +16,13 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediahttp "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/http"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
-	mediahttp "github.com/StephenQiu30/glowloom-server/backend/media/adapter/http"
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
-	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 func libraryPersonalFixture(t *testing.T, db *gorm.DB, objects *objectstorage.Client, actor identityapp.Principal, name string, data []byte) mediaapp.PersonalUploadResult {

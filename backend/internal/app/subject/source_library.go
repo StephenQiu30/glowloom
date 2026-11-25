@@ -6,12 +6,12 @@ import (
 
 	"gorm.io/gorm"
 
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
-	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
-	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/postgres"
+	workspace "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 type personalSourceActor struct{ db *gorm.DB }

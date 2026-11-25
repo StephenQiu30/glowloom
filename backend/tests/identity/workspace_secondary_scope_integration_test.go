@@ -13,19 +13,19 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
-	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application/source"
 
-	workspaceevent "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/event"
+	workspaceevent "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/event"
 
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/postgres"
 
-	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspace "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application"
 
-	domain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+	domain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/domain"
 
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 
 	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"

@@ -9,10 +9,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application/source"
 
-	http "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/adapter/http"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
+	http "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/adapter/http"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/application"
 )
 
 type scopeFailureStore struct {

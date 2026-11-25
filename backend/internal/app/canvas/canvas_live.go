@@ -6,22 +6,22 @@ import (
 	"errors"
 	"net/http"
 
-	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application/source"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 
-	canvaslive "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/websocket"
+	canvaslive "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/adapter/websocket"
 
-	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
 
-	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/domain"
 
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
+	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // SocketAuthority authenticates a canvas socket and resolves its creation scope.

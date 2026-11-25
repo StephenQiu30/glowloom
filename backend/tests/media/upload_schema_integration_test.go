@@ -9,8 +9,8 @@ import (
 
 	"go.opentelemetry.io/otel/trace/noop"
 
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
 )
 
 func TestMediaUploadSchemaPersistsReceiptAndReplay(t *testing.T) {

@@ -7,12 +7,12 @@ import (
 
 	"github.com/google/uuid"
 
-	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application/source"
 
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/domain"
 
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/identity/domain"
+	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 func TestProjectLifecyclePreparationBlocksCopyDuringRecovery(t *testing.T) {

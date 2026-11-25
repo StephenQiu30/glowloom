@@ -15,15 +15,15 @@ import (
 	"testing"
 	"time"
 
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 
 	"github.com/google/uuid"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/identity/domain"
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
-	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 type videoLinkReceiptFixture struct {

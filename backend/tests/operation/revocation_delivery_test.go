@@ -10,9 +10,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	catalogevent "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/event"
-	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
-	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	catalogevent "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/adapter/event"
+	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/application"
+	operation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
 	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 )

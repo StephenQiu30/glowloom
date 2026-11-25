@@ -6,12 +6,12 @@ import (
 
 	"github.com/google/uuid"
 
-	canvaspg "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/postgres"
-	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
-	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
-	promptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
+	canvaspg "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/adapter/postgres"
+	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
+	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // ResolveCanvasSubject expands only the exact saved local input in the authorized project.

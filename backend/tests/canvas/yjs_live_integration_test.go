@@ -12,8 +12,8 @@ import (
 	"github.com/coder/websocket/wsjson"
 	"github.com/google/uuid"
 
-	live "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/websocket"
-	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	live "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/adapter/websocket"
+	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 )
 

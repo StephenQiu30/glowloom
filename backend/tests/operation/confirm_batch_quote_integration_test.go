@@ -10,11 +10,11 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	billingdomain "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/domain"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/postgres"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 func TestConfirmBatchQuoteCommitsSelectedReservationsAndOneBatchEvent(t *testing.T) {

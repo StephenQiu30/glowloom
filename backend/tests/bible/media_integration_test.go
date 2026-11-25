@@ -13,21 +13,21 @@ import (
 	"testing"
 	"time"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
-	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/media/adapter/objectstorage"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pg "github.com/StephenQiu30/glowloom-server/backend/creation/bible/adapter/postgres"
-	app "github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
-	workspacepg "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+	pg "github.com/StephenQiu30/glowloom-server/backend/internal/creation/bible/adapter/postgres"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/creation/bible/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/bible/domain"
+	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/postgres"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 type bibleLibraryAccess struct {

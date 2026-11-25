@@ -12,9 +12,9 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // This double deliberately performs no external object writes.

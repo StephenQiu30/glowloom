@@ -13,22 +13,22 @@ import (
 
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 
-	tooltask "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/task"
+	tooltask "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/taskfixture"
 
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
-	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
-	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	project "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/editproject"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/application"
+	tool "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/domain"
 	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
-	project "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/editproject"
-	toolapp "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
-	tool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
 )
 

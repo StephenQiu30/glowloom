@@ -10,8 +10,8 @@ import (
 
 	"github.com/google/uuid"
 
-	subjecttask "github.com/StephenQiu30/glowloom-server/backend/creation/subject/adapter/task"
-	subject "github.com/StephenQiu30/glowloom-server/backend/creation/subject/application"
+	subjecttask "github.com/StephenQiu30/glowloom-server/backend/internal/creation/subject/adapter/task"
+	subject "github.com/StephenQiu30/glowloom-server/backend/internal/creation/subject/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 )
 

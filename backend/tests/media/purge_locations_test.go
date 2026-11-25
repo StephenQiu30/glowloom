@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/uuid"
 
-	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
-	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
+	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 type locatedPurgeIO struct {

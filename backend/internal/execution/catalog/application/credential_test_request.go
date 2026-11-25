@@ -1,0 +1,84 @@
+package application
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/google/uuid"
+
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+)
+
+// ErrCredentialTestKeyReused rejects reuse of a test request for another credential.
+var ErrCredentialTestKeyReused = errors.New("credential test request key reused")
+
+// CredentialTestAccepted reports scheduling, never successful provider credentials.
+type CredentialTestAccepted struct {
+	Kind         string     `json:"kind,omitempty"`
+	ModelID      *uuid.UUID `json:"model_id,omitempty"`
+	TestID       uuid.UUID  `json:"test_id"`
+	CheckID      uuid.UUID  `json:"check_id"`
+	EventID      uuid.UUID  `json:"event_id"`
+	ProviderID   uuid.UUID  `json:"provider_id"`
+	CredentialID uuid.UUID  `json:"credential_id"`
+	Accepted     bool       `json:"accepted"`
+}
+
+// CredentialTestRequestStore records the authorized request, receipt, and Outbox.
+type CredentialTestRequestStore interface {
+	RequestCredentialTest(context.Context, identityapp.Principal, CredentialTestRequest) (CredentialTestAccepted, error)
+}
+
+// RequestCredentialTestCommand schedules the existing credential test workflow.
+type RequestCredentialTestCommand struct{ store CredentialTestRequestStore }
+
+// NewRequestCredentialTestCommand injects the transaction that authorizes scheduling.
+func NewRequestCredentialTestCommand(store CredentialTestRequestStore) *RequestCredentialTestCommand {
+	return &RequestCredentialTestCommand{store: store}
+}
+
+// Execute accepts only administrators and derives a stable test identity.
+func (c *RequestCredentialTestCommand) Execute(ctx context.Context, actor identityapp.Principal, providerID, credentialID uuid.UUID, key string) (CredentialTestAccepted, error) {
+	if credentialID == uuid.Nil {
+		return CredentialTestAccepted{}, ErrInvalidCredentialTest
+	}
+	return c.execute(ctx, actor, providerID, credentialID, uuid.Nil, key, "")
+}
+
+// ExecuteReachability schedules a key-free address probe.
+func (c *RequestCredentialTestCommand) ExecuteReachability(ctx context.Context, actor identityapp.Principal, providerID uuid.UUID, key string) (CredentialTestAccepted, error) {
+	return c.execute(ctx, actor, providerID, uuid.Nil, uuid.Nil, key, "reachability")
+}
+
+// ExecuteModel validates one selected model using a real provider request.
+func (c *RequestCredentialTestCommand) ExecuteModel(ctx context.Context, actor identityapp.Principal, providerID, credentialID, modelID uuid.UUID, key string) (CredentialTestAccepted, error) {
+	if modelID == uuid.Nil || credentialID == uuid.Nil {
+		return CredentialTestAccepted{}, ErrInvalidCredentialTest
+	}
+	return c.execute(ctx, actor, providerID, credentialID, modelID, key, "model_access")
+}
+
+// ExecuteDiscovery schedules a directory-only read with the existing saved credential.
+func (c *RequestCredentialTestCommand) ExecuteDiscovery(ctx context.Context, actor identityapp.Principal, providerID, credentialID uuid.UUID, key string) (CredentialTestAccepted, error) {
+	if credentialID == uuid.Nil {
+		return CredentialTestAccepted{}, ErrInvalidCredentialTest
+	}
+	return c.execute(ctx, actor, providerID, credentialID, uuid.Nil, key, "discovery")
+}
+
+func (c *RequestCredentialTestCommand) execute(ctx context.Context, actor identityapp.Principal, providerID, credentialID, modelID uuid.UUID, key, kind string) (CredentialTestAccepted, error) {
+	if err := requireAdmin(actor); err != nil {
+		return CredentialTestAccepted{}, err
+	}
+	requestID, err := uuid.Parse(key)
+	if c == nil || c.store == nil || err != nil || requestID == uuid.Nil || requestID.String() != key || providerID == uuid.Nil {
+		return CredentialTestAccepted{}, ErrInvalidCredentialTest
+	}
+	request := CredentialTestRequest{Kind: kind, ModelID: modelID, TestID: uuid.NewSHA1(requestID, []byte(actor.ID.String()+actor.OrgID.String()+providerID.String()+credentialID.String())), ProviderID: providerID, CredentialID: credentialID, ActorID: actor.ID, OrgID: actor.OrgID, RequestID: key}
+	result, err := c.store.RequestCredentialTest(ctx, actor, request)
+	if err != nil {
+		return CredentialTestAccepted{}, fmt.Errorf("request credential test: %w", err)
+	}
+	return result, nil
+}

@@ -11,9 +11,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	handler "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
-	pg "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
-	app "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	handler "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
+	pg "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 

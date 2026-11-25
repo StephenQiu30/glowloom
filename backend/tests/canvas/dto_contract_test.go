@@ -10,10 +10,10 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
 )
 

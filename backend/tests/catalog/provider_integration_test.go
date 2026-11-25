@@ -13,9 +13,9 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 

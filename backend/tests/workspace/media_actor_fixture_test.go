@@ -5,8 +5,8 @@ import (
 
 	"github.com/google/uuid"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
-	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 // This fixture preserves Workspace's original caller contract at the explicit

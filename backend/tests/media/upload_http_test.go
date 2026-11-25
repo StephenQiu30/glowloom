@@ -17,13 +17,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/identity/domain"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
+	mediahttp "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/http"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
-	mediahttp "github.com/StephenQiu30/glowloom-server/backend/media/adapter/http"
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 func uploadHTTPRouter(repo *uploadRepoFake, prober mediaapp.Prober) *gin.Engine {

@@ -1,0 +1,272 @@
+package providerhttp
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/application"
+	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+)
+
+// VolcengineSpeechDriver implements the communication strategy for Volcengine OpenSpeech
+// (Doubao Speech / Seed-TTS and Omni Audio).
+type VolcengineSpeechDriver struct{}
+
+func init() {
+	RegisterDriver(&VolcengineSpeechDriver{}, "volcengine_speech")
+}
+
+// Submit sends generation input using this adapter's provider protocol.
+func (d *VolcengineSpeechDriver) Submit(ctx context.Context, c *Client, input application.GenerationRequest, key string) (application.GenerationResult, error) {
+	if input.ModelID == "seed-audio-1.0" {
+		return c.submitOmniAudio(ctx, input, key)
+	}
+	return c.submitSpeech(ctx, input, key)
+}
+
+// Query reads provider progress or reports that polling is unsupported.
+func (d *VolcengineSpeechDriver) Query(_ context.Context, _ *Client, _ catalogdomain.ProviderConfig, _, _ string) (application.GenerationResult, error) {
+	return unknownResult(), nil
+}
+
+// Probe performs the configured provider credential check.
+func (d *VolcengineSpeechDriver) Probe(_ context.Context, _ *Client, config catalogdomain.ProviderConfig, _ string) ProbeResult {
+	if config.Validate() != nil {
+		return ProbeResult{Auth: "unknown", Adapter: "unsupported", Discovery: "unsupported", Candidates: []catalogapp.ModelCandidate{}}
+	}
+	return ProbeResult{Auth: "unknown", Adapter: "ok", Discovery: "unsupported", Candidates: []catalogapp.ModelCandidate{}}
+}
+
+// ProbeModelDefaultParams applies this adapter's model-probe parameter defaults.
+func (d *VolcengineSpeechDriver) ProbeModelDefaultParams(capability string) map[string]any {
+	if capability == "audio.generate" {
+		return map[string]any{"speaker": "zh_female_vv_uranus_bigtts"}
+	}
+	return nil
+}
+
+// submitSpeech is deliberately separate from Ark's Bearer/JSON protocol. A speech
+// Key is sent only to the pinned speech origin, never to a discovered endpoint.
+func (c *Client) submitSpeech(ctx context.Context, input application.GenerationRequest, key string) (application.GenerationResult, error) {
+	strictTerminal := input.StrictSpeechTerminal || input.RequireSpeechTerminalUsage
+	rejected := application.GenerationResult{Outcome: application.ProviderOutcomeNotSubmitted, ErrorCode: "invalid_provider_request"}
+	if input.Config.Validate() != nil || !validKey(key) || input.ModelID != "seed-tts-2.0" || input.Capability != "audio.generate" || input.Mode != "text2audio" || input.OutputCount != 1 || len(input.References) != 0 || input.EndpointTag != "" || strings.TrimSpace(input.Prompt) == "" || len(input.Prompt) > 16384 {
+		return rejected, nil
+	}
+	requestID := input.ProviderRequestID
+	if requestID == "" {
+		requestID = uuid.NewString()
+	} else if id, err := uuid.Parse(requestID); err != nil || id == uuid.Nil || id.String() != requestID {
+		return rejected, nil
+	}
+	speaker := "zh_female_vv_uranus_bigtts"
+	audio := map[string]any{"format": "mp3", "sample_rate": 24000}
+	for field, value := range input.Params {
+		switch field {
+		case "speaker":
+			var ok bool
+			speaker, ok = value.(string)
+			if !ok || len(speaker) == 0 || len(speaker) > 128 {
+				return rejected, nil
+			}
+			for _, r := range speaker {
+				allowed := r == '_' || r == '-' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9'
+				if !allowed {
+					return rejected, nil
+				}
+			}
+		case "speech_rate", "loudness_rate":
+			raw, err := json.Marshal(value)
+			var rate int
+			if err != nil || json.Unmarshal(raw, &rate) != nil || rate < -50 || rate > 100 {
+				return rejected, nil
+			}
+			audio[field] = rate
+		default:
+			return rejected, nil
+		}
+	}
+	timeout, cancel := context.WithTimeout(ctx, time.Duration(input.Config.TimeoutSeconds)*time.Second)
+	defer cancel()
+	endpoint := input.Config.BaseURL + "/tts/unidirectional"
+	if strictTerminal {
+		endpoint += "/sse"
+	}
+	response, err := c.resty.R().
+		SetContext(timeout).
+		SetHeaders(map[string]string{
+			"Content-Type":                          "application/json",
+			"X-Api-Key":                             key,
+			"X-Api-Resource-Id":                     input.ModelID,
+			"X-Api-Request-Id":                      requestID,
+			"X-Control-Require-Usage-Tokens-Return": "*",
+		}).
+		SetBody(map[string]any{"req_params": map[string]any{"text": input.Prompt, "speaker": speaker, "audio_params": audio}}).
+		SetResponseBodyLimit(64 << 20).
+		Post(endpoint)
+	if err != nil {
+		return unknownResult(), nil
+	}
+	if response.StatusCode() < 200 || response.StatusCode() >= 300 {
+		return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: safeHTTPError(response.StatusCode())}, nil
+	}
+	data := response.Bytes()
+	if strictTerminal {
+		if !strings.HasPrefix(strings.ToLower(response.Header().Get("Content-Type")), "text/event-stream") {
+			return unknownResult(), nil
+		}
+		var err error
+		data, err = speechSSEFrames(data)
+		if err != nil {
+			return unknownResult(), nil
+		}
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	output := []byte{}
+	var usage json.RawMessage
+	finished := false
+	for {
+		var chunk struct {
+			Code  *int            `json:"code"`
+			Data  string          `json:"data"`
+			Usage json.RawMessage `json:"usage"`
+		}
+		var raw json.RawMessage
+		err := decoder.Decode(&raw)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if input.RequireSpeechTerminalUsage {
+			if _, err := audioReceiptObject(raw); err != nil {
+				return unknownResult(), nil
+			}
+		}
+		if err == nil {
+			err = json.Unmarshal(raw, &chunk)
+		}
+		if err != nil || chunk.Code == nil || finished {
+			return unknownResult(), nil
+		}
+		if *chunk.Code == 20000000 {
+			if chunk.Data != "" {
+				return unknownResult(), nil
+			}
+			if len(chunk.Usage) > 0 {
+				usage = safeSpeechUsage(chunk.Usage)
+			}
+			if input.RequireSpeechTerminalUsage && (len(chunk.Usage) == 0 || len(usage) == 0 || string(usage) == `{"text_words":0}`) {
+				return unknownResult(), nil
+			}
+			finished = true
+			continue
+		}
+		if *chunk.Code != 0 {
+			if len(output) > 0 {
+				return unknownResult(), nil
+			}
+			return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: "invalid_parameters"}, nil
+		}
+		if chunk.Data != "" {
+			part, err := base64.StdEncoding.Strict().DecodeString(chunk.Data)
+			if err != nil || len(output)+len(part) > 32<<20 {
+				return unknownResult(), nil
+			}
+			output = append(output, part...)
+		}
+		if len(chunk.Usage) > 0 {
+			usage = safeSpeechUsage(chunk.Usage)
+		}
+	}
+	// Historical HTTP receipts allow code=0 plus a clean EOF. The versioned
+	// character contract requires an explicit complete SSE terminal and usage.
+	if strictTerminal && !finished {
+		return unknownResult(), nil
+	}
+	if len(output) == 0 || http.DetectContentType(output) != "audio/mpeg" {
+		return unknownResult(), nil
+	}
+	logID := response.Header().Get("X-Tt-Logid")
+	if len(logID) > 256 || strings.ContainsAny(logID, "\r\n\x00") {
+		logID = ""
+	}
+	terminalCode := 0
+	if finished {
+		terminalCode = 20000000
+	}
+	return application.GenerationResult{Outcome: application.ProviderOutcomeCompleted, State: application.ProviderTaskSucceeded, ProviderTerminalCode: terminalCode, ProviderLogID: logID, Audio: []application.GeneratedAudio{{Bytes: output, MediaType: "audio/mpeg"}}, Usage: usage}, nil
+}
+
+func safeSpeechUsage(raw json.RawMessage) json.RawMessage {
+	if _, err := audioReceiptObject(raw); err != nil {
+		return nil
+	}
+	var value struct {
+		TextWords *int64 `json:"text_words"`
+	}
+	if json.Unmarshal(raw, &value) != nil || value.TextWords == nil || *value.TextWords < 0 {
+		return nil
+	}
+	result, _ := json.Marshal(map[string]int64{"text_words": *value.TextWords})
+	return result
+}
+
+// speechSSEFrames retains only complete SSE data events. A partial last event,
+// malformed JSON or a bare EOF can never prove the paid synthesis completed.
+func speechSSEFrames(data []byte) ([]byte, error) {
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	scanner.Buffer(make([]byte, 4096), 64<<20)
+	var output bytes.Buffer
+	var event []string
+	flush := func() error {
+		if len(event) == 0 {
+			return nil
+		}
+		raw := strings.Join(event, "\n")
+		if !json.Valid([]byte(raw)) {
+			return errors.New("invalid speech event")
+		}
+		output.WriteString(raw)
+		output.WriteByte('\n')
+		event = nil
+		return nil
+	}
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" {
+			if err := flush(); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		if strings.HasPrefix(line, ":") {
+			continue
+		}
+		field, value, found := strings.Cut(line, ":")
+		if !found {
+			return nil, errors.New("invalid speech event")
+		}
+		value = strings.TrimPrefix(value, " ")
+		switch field {
+		case "data":
+			event = append(event, value)
+		case "event", "id", "retry":
+		default:
+			return nil, errors.New("invalid speech event")
+		}
+	}
+	if scanner.Err() != nil || len(event) > 0 {
+		return nil, errors.New("incomplete speech event")
+	}
+	return output.Bytes(), nil
+}

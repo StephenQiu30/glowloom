@@ -10,7 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
 )
 
 type pinnedStageFactory struct {

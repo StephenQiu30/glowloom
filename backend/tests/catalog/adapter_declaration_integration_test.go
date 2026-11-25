@@ -7,16 +7,16 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	cataloghttp "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/http"
+	cataloghttp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/adapter/http"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/credentialschema"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/adapter/credentialschema"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 

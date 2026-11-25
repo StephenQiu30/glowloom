@@ -10,14 +10,14 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	promptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
-	pg "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/application"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
-	operationhttp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/http"
-	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
+	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/domain"
+	pg "github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/domain"
+	operationhttp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/http"
+	operation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 )
 

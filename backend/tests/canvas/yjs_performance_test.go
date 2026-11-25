@@ -13,9 +13,9 @@ import (
 
 	"github.com/google/uuid"
 
-	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
 )
 

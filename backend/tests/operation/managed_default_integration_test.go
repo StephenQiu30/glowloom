@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
 )
 
 func TestManagedPlatformDefaultOnlyFillsAbsentProjectChoice(t *testing.T) {

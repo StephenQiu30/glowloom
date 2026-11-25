@@ -6,7 +6,7 @@ import (
 
 	"go.uber.org/zap"
 
-	tool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
+	tool "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/application"
 )
 
 // StartExportLaunchCleanup uses the API lifetime and bounded receipt cleanup,

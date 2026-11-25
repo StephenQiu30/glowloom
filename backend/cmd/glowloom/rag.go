@@ -14,8 +14,8 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
-	ep "github.com/StephenQiu30/glowloom-server/backend/creation/evidence/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/aigateway"
+	ep "github.com/StephenQiu30/glowloom-server/backend/internal/creation/evidence/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )

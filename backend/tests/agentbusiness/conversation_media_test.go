@@ -11,9 +11,9 @@ import (
 
 	"github.com/google/uuid"
 
-	prompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
-	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/domain"
+	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 type multimediaCatalog struct{ maxImages int }

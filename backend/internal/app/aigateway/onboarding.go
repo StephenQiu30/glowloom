@@ -9,10 +9,10 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pg "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/application"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	pg "github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 )
 

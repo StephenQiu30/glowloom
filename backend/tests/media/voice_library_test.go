@@ -5,7 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 func TestReferenceVoiceValidation(t *testing.T) {

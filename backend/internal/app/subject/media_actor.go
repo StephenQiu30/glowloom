@@ -1,8 +1,8 @@
 package subject
 
 import (
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
-	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 func sourceMediaActor(actor identity.Principal) media.Actor {

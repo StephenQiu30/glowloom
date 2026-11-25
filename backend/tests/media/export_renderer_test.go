@@ -15,10 +15,10 @@ import (
 
 	"github.com/google/uuid"
 
-	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
-	exportff "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/ffmpeg"
-	tool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/domain"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	exportff "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/ffmpeg"
+	tool "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/domain"
 )
 
 func TestTimelineRendererCreatesActualCompositionAndBurnedChinese(t *testing.T) {

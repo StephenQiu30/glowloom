@@ -13,9 +13,10 @@ import (
 
 	"github.com/google/uuid"
 
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpclient"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 // ProbeReceipt contains public evidence only. SentinelKey is intentionally
@@ -124,19 +125,16 @@ func Probe(ctx context.Context, cfg config.ObjectStorageConfig, profileID, senti
 	if err != nil {
 		return result, err
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, grant.URL, nil)
-	if err != nil {
-		return result, errors.New("storage probe signed request invalid")
-	}
 	// A redirect must not move an access-bearing URL to another origin.
-	client := &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	response, err := client.Do(request)
+	client := httpclient.NewResty(
+		httpclient.WithTimeout(30*time.Second),
+		httpclient.WithResponseBodyLimit(int64(len(data))),
+	)
+	response, err := client.R().SetContext(ctx).Get(grant.URL)
 	if err != nil {
 		return result, errors.New("storage probe signed request failed")
 	}
-	actual, readErr = io.ReadAll(io.LimitReader(response.Body, int64(len(data)+1)))
-	closeErr = response.Body.Close()
-	if response.StatusCode != http.StatusOK || readErr != nil || closeErr != nil || !bytes.Equal(actual, data) || !time.Now().Before(grant.ExpiresAt) {
+	if response.StatusCode() != http.StatusOK || !bytes.Equal(response.Bytes(), data) || !time.Now().Before(grant.ExpiresAt) {
 		return result, errors.New("storage probe signed read not proved")
 	}
 	publicJSON, err := json.Marshal(result)

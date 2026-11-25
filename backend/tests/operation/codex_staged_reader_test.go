@@ -12,9 +12,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	"github.com/StephenQiu30/glowloom-server/backend/media/adapter/staged"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/staged"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 func TestM1StagedIngestReaderRejectsUnverifiedImage(t *testing.T) {

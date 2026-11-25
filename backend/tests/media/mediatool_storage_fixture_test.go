@@ -6,11 +6,11 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
-	toolpg "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/postgres"
-	toolflow "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/workflow"
-	toolapp "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	toolpg "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/postgres"
+	toolflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/workflow"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/application"
 )
 
 // mediatoolFixtureDB activates the explicit task-owned storage configuration.

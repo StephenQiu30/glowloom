@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
 )
 
 func TestCanvasSplitBatchesShareSavedConcurrencyAndReleaseOnlySettledSlots(t *testing.T) {

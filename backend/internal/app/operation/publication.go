@@ -6,10 +6,10 @@ import (
 
 	"github.com/google/uuid"
 
-	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/media/adapter/objectstorage"
-	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
+	operation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
+	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 type publicationSigner struct {

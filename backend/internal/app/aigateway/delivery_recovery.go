@@ -13,13 +13,13 @@ import (
 
 	"github.com/google/uuid"
 
-	subject "github.com/StephenQiu30/glowloom-server/backend/creation/subject/application"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
-	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	subject "github.com/StephenQiu30/glowloom-server/backend/internal/creation/subject/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/domain"
+	operation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	platform "github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
-	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 // deliveryInput prefers our exact original after responsibility was frozen. A

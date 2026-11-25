@@ -3,9 +3,9 @@ package media
 import (
 	"errors"
 
-	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application/source"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 // Actor projects only authenticated reference facts at the legacy composition boundary.

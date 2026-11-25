@@ -11,17 +11,17 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
-	pggateway "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
-	operationhttp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/http"
-	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/aigateway"
+	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
+	pggateway "github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/domain"
+	operationhttp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/http"
+	operation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	operationdomain "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/domain"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 func TestStoryboardQuoteAndConfirmationRetainStableShot(t *testing.T) {

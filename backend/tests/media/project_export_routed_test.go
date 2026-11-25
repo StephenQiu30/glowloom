@@ -12,16 +12,16 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
-	objects "github.com/StephenQiu30/glowloom-server/backend/media/adapter/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
-	flow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
-	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
-	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
-	editproject "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/editproject"
-	pgtool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/postgres"
-	toolflow "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/workflow"
-	tool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
-	tooldomain "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/domain"
+	objects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	flow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	editproject "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/editproject"
+	pgtool "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/postgres"
+	toolflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/workflow"
+	tool "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/application"
+	tooldomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/domain"
 )
 
 func TestProjectArtifactRoutedPostgresAndNativeCOS(t *testing.T) {

@@ -7,10 +7,10 @@ import (
 
 	"github.com/google/uuid"
 
-	pgprompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/adapter/postgres"
-	prompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	pgprompt "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/adapter/postgres"
+	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 type conversationPromptSource struct{ store *pgprompt.DraftStore }

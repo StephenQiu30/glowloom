@@ -12,10 +12,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	cataloghttp "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/http"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	cataloghttp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/adapter/http"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 type declarationSaveStore struct {

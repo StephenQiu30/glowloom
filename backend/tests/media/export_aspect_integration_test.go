@@ -9,9 +9,9 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
-	exportapp "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	exportapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/application"
 )
 
 func TestTimelineAutoVideoExportRejectsBeforeJobCreation(t *testing.T) {

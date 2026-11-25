@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
 	canvaswire "github.com/StephenQiu30/glowloom-server/backend/internal/app/canvas"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
 )
 
 func TestCanvasInformationScopedLedgerPaginationAndMetadata(t *testing.T) {

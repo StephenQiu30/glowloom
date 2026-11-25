@@ -5,7 +5,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
 )
 
 func TestDirectorBodyProfileRoundTrip(t *testing.T) {

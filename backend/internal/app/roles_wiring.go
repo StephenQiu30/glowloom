@@ -6,16 +6,16 @@ import (
 	"strings"
 	"time"
 
-	evidencepg "github.com/StephenQiu30/glowloom-server/backend/creation/evidence/adapter/postgres"
-	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/objects"
-	scripttask "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/task"
-	workspacetask "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/task"
-	operationtask "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/task"
 	agentwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/agent"
+	evidencepg "github.com/StephenQiu30/glowloom-server/backend/internal/creation/evidence/adapter/postgres"
+	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/adapter/objects"
+	scripttask "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/adapter/task"
+	workspacetask "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/task"
+	operationtask "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/task"
 	maintenancetask "github.com/StephenQiu30/glowloom-server/backend/internal/infra/maintenance/adapter/task"
+	mediatask "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/task"
+	tooltask "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
-	mediatask "github.com/StephenQiu30/glowloom-server/backend/media/adapter/task"
-	tooltask "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/task"
 
 	catalogwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/catalog"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
@@ -27,19 +27,25 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 
-	operationstaging "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/staging"
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	identityevent "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/event"
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	auditevent "github.com/StephenQiu30/glowloom-server/backend/internal/audit/adapter/event"
 	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
+	operationstaging "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/staging"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	identityevent "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/event"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	kafkainbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/kafka"
 	pginbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/postgres"
 	maintenanceapp "github.com/StephenQiu30/glowloom-server/backend/internal/infra/maintenance/application"
 	pgoutbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/adapter/postgres"
 	redisrealtime "github.com/StephenQiu30/glowloom-server/backend/internal/infra/realtime/adapter/redis"
 	realtime "github.com/StephenQiu30/glowloom-server/backend/internal/infra/realtime/application"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediastaged "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/staged"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	toolproject "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/editproject"
+	toolff "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/ffmpeg"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/kafkaconn"
@@ -47,12 +53,6 @@ import (
 	kafkaoutbox "github.com/StephenQiu30/glowloom-server/backend/internal/platform/outbox/kafka"
 	pgoutboxrelay "github.com/StephenQiu30/glowloom-server/backend/internal/platform/outbox/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/redisconn"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
-	mediastaged "github.com/StephenQiu30/glowloom-server/backend/media/adapter/staged"
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
-	toolproject "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/editproject"
-	toolff "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/ffmpeg"
-	toolapp "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
 )
 
 func provideWorkerTrace(ctx context.Context, cfg config.Config, logger *zap.Logger) (trace.TracerProvider, func(), error) {
@@ -81,8 +81,7 @@ func buildBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Conne
 	handlers := map[string]taskruntime.Handler{}
 	concurrency := 4
 	switch queue {
-	case "agent.codex", "provider":
-		// The legacy queue name remains a deployment alias for the same Go Execution worker.
+	case "provider":
 		if err := catalogwire.RegisterProvider(ctx, handlers, dbConn.DB, cfg); err != nil {
 			return nil, err
 		}

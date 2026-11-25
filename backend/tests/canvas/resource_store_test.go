@@ -12,13 +12,13 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 func seedCanvasMedia(t *testing.T, db *gorm.DB, project uuid.UUID, kind string) uuid.UUID {

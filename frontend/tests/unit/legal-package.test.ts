@@ -4,7 +4,7 @@ import { expect, it } from "vitest";
 it("public downloads and the server registration package have identical immutable hashes", async () => {
   const server = JSON.parse(
     await readFile(
-      "../backend/identity/adapter/http/legal/manifest.json",
+      "../backend/internal/identity/adapter/http/legal/manifest.json",
       "utf8",
     ),
   );

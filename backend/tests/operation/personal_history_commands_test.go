@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/uuid"
 
-	app "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 type historyCommandStore struct {

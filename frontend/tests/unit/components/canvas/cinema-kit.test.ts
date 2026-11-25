@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import backendCatalog from "../../../../../backend/creation/prompt/domain/cinema_catalog.json";
+import backendCatalog from "../../../../../backend/internal/creation/prompt/domain/cinema_catalog.json";
 import {
   cinemaCatalog,
   readCinemaKit,

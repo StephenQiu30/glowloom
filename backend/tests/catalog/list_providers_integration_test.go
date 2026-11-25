@@ -12,10 +12,10 @@ import (
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	catalogapp "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )

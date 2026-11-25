@@ -5,11 +5,11 @@ import (
 
 	"gorm.io/gorm"
 
-	promptpg "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/adapter/postgres"
-	workspacepg "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	identitypg "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
 	promptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/prompt"
+	promptpg "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/adapter/postgres"
+	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/postgres"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application"
+	identitypg "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
 )
 
 func preferenceStore(db *gorm.DB) *promptpg.Store {

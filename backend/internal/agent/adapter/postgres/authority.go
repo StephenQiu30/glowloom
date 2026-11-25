@@ -10,9 +10,9 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // Store persists Go-owned Agent authority, grants and permanent business receipts.

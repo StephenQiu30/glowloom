@@ -7,12 +7,12 @@ import (
 
 	"github.com/google/uuid"
 
-	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/postgres"
-	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
-	media "github.com/StephenQiu30/glowloom-server/backend/media/domain"
+	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/adapter/postgres"
+	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 

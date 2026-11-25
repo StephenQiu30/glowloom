@@ -10,11 +10,11 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediahttp "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/http"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
-	mediahttp "github.com/StephenQiu30/glowloom-server/backend/media/adapter/http"
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 func personalUploadRouter(t *testing.T, db *gorm.DB, actor identityapp.Principal, objects *uploadObjectsFake) *gin.Engine {

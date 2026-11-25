@@ -12,11 +12,11 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediahttp "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/http"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
-	mediahttp "github.com/StephenQiu30/glowloom-server/backend/media/adapter/http"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
-	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
 )
 
 func purgeRouter(db *gorm.DB, actor identityapp.Principal) *gin.Engine {

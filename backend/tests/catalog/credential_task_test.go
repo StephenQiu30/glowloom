@@ -12,8 +12,8 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 
-	catalogflow "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/task"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
+	catalogflow "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/adapter/task"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/domain"
 )
 
 func TestCredentialTaskSealsAgentBoundaryAndRecordsOnlySuccess(t *testing.T) {

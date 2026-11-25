@@ -5,9 +5,9 @@ import (
 
 	"github.com/google/uuid"
 
-	pgscript "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/postgres"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
+	pgscript "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/adapter/postgres"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 type scriptWorkGuard struct{ store *pgscript.SourceStore }

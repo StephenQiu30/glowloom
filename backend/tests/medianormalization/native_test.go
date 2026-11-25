@@ -16,8 +16,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/StephenQiu30/glowloom-server/backend/media/processing/adapter/ffmpeg"
-	"github.com/StephenQiu30/glowloom-server/backend/media/processing/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/processing/adapter/ffmpeg"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/processing/application"
 )
 
 func nativeWebM(t *testing.T, codec, duration string, extra ...string) []byte {

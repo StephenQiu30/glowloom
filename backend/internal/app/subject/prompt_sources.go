@@ -5,10 +5,10 @@ import (
 
 	"github.com/google/uuid"
 
-	prompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	promptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/prompt"
+	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // The retained monolith maps Prompt's minimum reference here while preserving

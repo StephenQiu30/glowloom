@@ -10,9 +10,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	canvashttp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/http"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	canvashttp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/adapter/http"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 func TestAssetCanvasCursorBindsIdentityScopeAndEveryQueryDimension(t *testing.T) {

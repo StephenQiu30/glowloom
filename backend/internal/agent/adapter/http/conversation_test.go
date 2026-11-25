@@ -9,15 +9,15 @@ import (
 	"strings"
 	"testing"
 
-	prompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
+	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/domain"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/runtimeclient"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 type conversationStore struct {

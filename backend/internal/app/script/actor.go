@@ -6,11 +6,11 @@ import (
 
 	"github.com/google/uuid"
 
-	scriptapp "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
-	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	scriptapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/application"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/postgres"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application/source"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 // Actor projects the original authenticated identity without copying roles.

@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
 )
 
 func batchNode(imageID *uuid.UUID) domain.Node {

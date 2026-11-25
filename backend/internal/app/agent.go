@@ -6,9 +6,9 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/aigateway"
 
-	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
-	script "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
-	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
+	script "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/application"
+	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"

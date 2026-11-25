@@ -4,18 +4,18 @@ import (
 	"encoding/json"
 	"testing"
 
-	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
+	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/domain"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
-	gatewayapp "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/application"
-	gateway "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
-	operationhttp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/http"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/aigateway"
+	gatewayapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/application"
+	gateway "github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/domain"
+	operationhttp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/http"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // Metadata-only consumer fixture: real frozen quote and ledger admission, then

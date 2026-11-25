@@ -3,20 +3,20 @@ package app
 import (
 	"gorm.io/gorm"
 
-	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
-	pgbilling "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
-	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/postgres"
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/settlement"
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/task"
 	biblewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/bible"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
 	workspacewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/workspace"
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
+	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/adapter/postgres"
+	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/adapter/postgres"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/settlement"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/task"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 func init() {

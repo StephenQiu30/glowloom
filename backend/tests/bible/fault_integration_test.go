@@ -8,10 +8,10 @@ import (
 
 	"github.com/google/uuid"
 
-	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application/source"
 
-	app "github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/creation/bible/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/bible/domain"
 )
 
 func TestBiblePGExactlyOneFaultsRollbackContentReceiptAndWorkspace(t *testing.T) {

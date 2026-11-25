@@ -9,14 +9,14 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	scriptpostgres "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/postgres"
-	script "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
-	scriptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
 	agentpostgres "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
+	scriptpostgres "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/adapter/postgres"
+	script "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/application"
+	scriptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/domain"
 )
 
 // ScriptSourceDocument accepts canonical authored content, without accepting

@@ -10,10 +10,10 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/identity/adapter/credentialproof"
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
-	"github.com/StephenQiu30/glowloom-server/backend/identity/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/credentialproof"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 func deletionCode(t *testing.T, tx *gorm.DB, op uuid.UUID) string {

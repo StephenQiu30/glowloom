@@ -11,9 +11,9 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/postgres"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // This fixture is opt-in and must point at a fresh, agent-owned disposable DB.

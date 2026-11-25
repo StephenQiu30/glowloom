@@ -10,11 +10,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/paramvalidation"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/pricevalidation"
-	catalogapp "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/adapter/paramvalidation"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/adapter/pricevalidation"
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )

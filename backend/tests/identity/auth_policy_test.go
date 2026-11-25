@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 type policyStore bool

@@ -18,16 +18,16 @@ import (
 
 	"gorm.io/gorm"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	gatewayhttp "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/adapter/http"
-	pg "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/adapter/provider"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
+	gatewayhttp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/adapter/http"
+	pg "github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/adapter/provider"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/domain"
 )
 
 type keyFixture struct{}

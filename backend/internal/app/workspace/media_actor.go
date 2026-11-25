@@ -5,9 +5,9 @@ import (
 
 	"github.com/google/uuid"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
-	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 // Legacy composition retains Workspace's caller contract and Media's own Actor.

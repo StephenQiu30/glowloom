@@ -43,9 +43,6 @@ func run() error {
 	}
 	var role app.Role
 	var queues string
-	if len(os.Args) > 1 && os.Args[1] == "admin" {
-		return fmt.Errorf("legacy administrator bootstrap was removed; use glowloom identity")
-	}
 	partitions := len(os.Args) > 1 && os.Args[1] == "partitions"
 	switch {
 	case partitions:
@@ -54,7 +51,7 @@ func run() error {
 		}
 	default:
 		roleFlag := flag.String("role", string(app.RoleAll), "process role: all|api|worker|relay")
-		queuesFlag := flag.String("queues", "", "worker task queues: auto|flow|media|provider|agent.codex (auto matches all-role selection; default: flow)")
+		queuesFlag := flag.String("queues", "", "worker task queues: auto|flow|media|provider (default: flow)")
 		flag.Parse()
 		if flag.NArg() != 0 {
 			return fmt.Errorf("unexpected command: %q", flag.Arg(0))

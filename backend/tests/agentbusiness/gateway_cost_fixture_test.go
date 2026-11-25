@@ -11,12 +11,12 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	gatewaypg "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/adapter/postgres"
-	gatewayapp "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/application"
-	gateway "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	agentpg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
+	gatewaypg "github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/adapter/postgres"
+	gatewayapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/application"
+	gateway "github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 const creditMicros int64 = 100000

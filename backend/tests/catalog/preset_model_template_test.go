@@ -9,8 +9,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/presetvalidation"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/adapter/presetvalidation"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/domain"
 )
 
 func presetTextTemplate() domain.PresetModelTemplate {

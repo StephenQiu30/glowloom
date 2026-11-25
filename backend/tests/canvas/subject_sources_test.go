@@ -7,11 +7,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
-	promptapp "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
-	promptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
+	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/application"
+	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 type canvasSubjectSources struct {

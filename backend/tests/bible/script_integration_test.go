@@ -9,18 +9,18 @@ import (
 	"time"
 
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pg "github.com/StephenQiu30/glowloom-server/backend/creation/bible/adapter/postgres"
-	app "github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
-	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/objects"
-	scriptpg "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/postgres"
-	scriptapp "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
-	scriptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
+	pg "github.com/StephenQiu30/glowloom-server/backend/internal/creation/bible/adapter/postgres"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/creation/bible/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/bible/domain"
+	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/adapter/objects"
+	scriptpg "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/adapter/postgres"
+	scriptapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/application"
+	scriptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 

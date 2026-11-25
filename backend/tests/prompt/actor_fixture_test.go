@@ -5,11 +5,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	promptpg "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/adapter/postgres"
-	promptapp "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	promptpg "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/adapter/postgres"
+	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/domain"
+	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 func testPromptActor(actor identity.Principal) promptapp.Actor {

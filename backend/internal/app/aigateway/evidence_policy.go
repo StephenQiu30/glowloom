@@ -9,10 +9,10 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	evidencepg "github.com/StephenQiu30/glowloom-server/backend/creation/evidence/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
+	evidencepg "github.com/StephenQiu30/glowloom-server/backend/internal/creation/evidence/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 )
 

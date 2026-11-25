@@ -15,10 +15,10 @@ import (
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/extract"
-	scriptapp "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/adapter/extract"
+	scriptapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/domain"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 func inputFile(t *testing.T, data []byte, mime string) *mediaapp.Downloaded {

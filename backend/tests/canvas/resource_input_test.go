@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
 
 	"github.com/google/uuid"
 
-	promptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
+	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/domain"
 )
 
 func TestResourceInputSeparatesPromptFromResult(t *testing.T) {

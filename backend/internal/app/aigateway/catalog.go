@@ -9,11 +9,11 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
-	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
+	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/application"
+	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // Catalog projects the new immutable model contracts for existing presentation consumers.

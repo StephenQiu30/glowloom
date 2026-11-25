@@ -8,9 +8,9 @@ import (
 
 	"github.com/google/uuid"
 
-	prompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
+	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/domain"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
 )
 
 const textComposerJSON = `{"schemaVersion":1,"document":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"参考😀"},{"type":"reference","attrs":{"referenceId":"image-one"}},{"type":"reference","attrs":{"referenceId":"image-one"}}]}]},"references":[{"id":"image-one","source":{"kind":"pending_upload","clientUploadId":"upload-one","uploadAttemptId":"attempt-one"},"bindingGeneration":1,"mediaKind":"image","role":"reference_image","order":0}],"modelVersion":null,"mode":null,"params":{},"labelState":{"highWater":{"image":1,"video":0,"audio":0,"subject":0},"allocations":{"image-one":{"labelKind":"image","ordinal":1}}}}`

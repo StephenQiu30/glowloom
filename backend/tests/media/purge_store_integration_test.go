@@ -11,8 +11,8 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
-	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 type purgeTestReferences struct{ tx *gorm.DB }

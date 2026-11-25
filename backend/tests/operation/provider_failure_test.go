@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
 )
 
 func TestOperationTaskNormalizesProviderFailureCode(t *testing.T) {

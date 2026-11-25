@@ -1,0 +1,330 @@
+package postgres
+
+import (
+	"context"
+	"errors"
+	"time"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+)
+
+func (s *PurgeStore) workerActor(tx *gorm.DB, id uuid.UUID) (application.Actor, error) {
+	var row struct {
+		ActorID, OrgID uuid.UUID
+	}
+	read := tx.Table("media.purge_job").Select("actor_id", "org_id").Where("id = ?", id).Take(&row)
+	if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+		return application.Actor{}, application.ErrNotFound
+	}
+	if read.Error != nil {
+		return application.Actor{}, read.Error
+	}
+	return application.Actor{ID: row.ActorID, OrgID: row.OrgID}, nil
+}
+
+func (s *PurgeStore) withLease(ctx context.Context, lease application.PurgeLease, ended bool, consume func(*gorm.DB, purgeJobRow, libraryRow, application.LibraryProjectFacts) error) error {
+	if s == nil || s.db == nil || lease.Fence == uuid.Nil {
+		return application.ErrUnavailable
+	}
+	execution, err := uuid.Parse(lease.Work.ExecutionID)
+	if err != nil || execution == uuid.Nil {
+		return domain.ErrPurgeConflict
+	}
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
+		if err := s.requireCurrentActor(tx, lease.Actor); err != nil {
+			return err
+		}
+		facts, err := s.access(ctx, tx, lease.Actor, lease.Scope, true)
+		if err != nil {
+			return err
+		}
+		library, err := readLibrary(tx, lease.Actor, lease.Scope, true)
+		if err != nil {
+			return err
+		}
+		row, err := s.readJob(tx, lease.Actor, lease.Work.JobID, true)
+		if err != nil {
+			return err
+		}
+		if row.Attempt != lease.Work.Attempt || row.WorkerFence == nil || *row.WorkerFence != lease.Fence || row.ExecutionID == nil || *row.ExecutionID != execution || row.LeaseUntil == nil || !row.LeaseUntil.After(s.clock()) || row.ProcessEnded != ended || row.scope().Kind != lease.Scope.Kind || !sameScopeProject(row.ProjectID, lease.Scope.ProjectID) {
+			return domain.ErrPurgeConflict
+		}
+		return consume(tx, row, library, facts)
+	})
+}
+
+// ClaimPurge refuses any unended prior process even when its lease has expired.
+func (s *PurgeStore) ClaimPurge(ctx context.Context, work application.PurgeWorkID) (application.PurgeLease, error) {
+	var result application.PurgeLease
+	if s == nil || s.db == nil {
+		return result, application.ErrUnavailable
+	}
+	execution, err := uuid.Parse(work.ExecutionID)
+	if err != nil || execution == uuid.Nil || work.JobID == uuid.Nil || work.Attempt < 1 {
+		return result, domain.ErrPurgeConflict
+	}
+	err = taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
+		actor, err := s.workerActor(tx, work.JobID)
+		if err != nil {
+			return err
+		}
+		if err := s.requireCurrentActor(tx, actor); err != nil {
+			return err
+		}
+		row, err := s.readJob(tx, actor, work.JobID, false)
+		if err != nil {
+			return err
+		}
+		if _, err := s.access(ctx, tx, actor, row.scope(), true); err != nil {
+			return err
+		}
+		if _, err := readLibrary(tx, actor, row.scope(), true); err != nil {
+			return err
+		}
+		row, err = s.readJob(tx, actor, work.JobID, true)
+		if err != nil {
+			return err
+		}
+		if row.Attempt != work.Attempt {
+			return domain.ErrPurgeConflict
+		}
+		result = application.PurgeLease{Work: work, Actor: actor, Scope: row.scope(), ItemCount: row.ItemCount, StartedAt: s.clock().UTC()}
+		result.Job, err = purgeView(tx, row)
+		if err != nil {
+			return err
+		}
+		if row.Status == domain.PurgeStatusSucceeded || row.Status == domain.PurgeStatusPartialFailed || row.Status == domain.PurgeStatusFailed || row.Status == domain.PurgeStatusCancelled {
+			result.Done = true
+			return nil
+		}
+		if !row.ProcessEnded || row.ExecutionUnconfirmed || row.Status != domain.PurgeStatusQueued && row.Status != domain.PurgeStatusCancelRequested {
+			return domain.ErrPurgeConflict
+		}
+		result.Fence = uuid.New()
+		return updateOne(tx, "media.purge_job", map[string]any{"id": row.ID, "revision": row.Revision}, map[string]any{"status": domain.PurgeStatusRunning, "stage": domain.PurgeStageVerifying, "worker_fence": result.Fence, "execution_id": execution, "lease_until": s.clock().Add(45 * time.Second).UTC(), "process_ended": false, "revision": row.Revision + 1, "updated_at": s.clock().UTC()}, application.ErrLibraryConflict)
+	})
+	return result, err
+}
+
+// HeartbeatPurge renews only the current authorized physical owner.
+func (s *PurgeStore) HeartbeatPurge(ctx context.Context, lease application.PurgeLease) error {
+	return s.withLease(ctx, lease, false, func(tx *gorm.DB, row purgeJobRow, _ libraryRow, _ application.LibraryProjectFacts) error {
+		return updateOne(tx, "media.purge_job", map[string]any{"id": row.ID, "worker_fence": lease.Fence}, map[string]any{"lease_until": s.clock().Add(45 * time.Second).UTC(), "updated_at": s.clock().UTC()}, application.ErrLibraryConflict)
+	})
+}
+
+type purgeItemRow struct {
+	JobID       uuid.UUID
+	ItemIndex   int
+	ItemID      uuid.UUID
+	AssetID     *uuid.UUID
+	Frozen      []byte
+	Status      domain.PurgeItemStatus
+	FailureCode *string
+}
+
+func (purgeItemRow) TableName() string { return "media.purge_item" }
+
+func readPurgeItem(tx *gorm.DB, id uuid.UUID, index int) (purgeItemRow, application.FrozenPurgeItem, error) {
+	var row purgeItemRow
+	var frozen application.FrozenPurgeItem
+	if index < 0 || index > 199 {
+		return row, frozen, application.ErrNotFound
+	}
+	read := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("job_id = ? AND item_index = ?", id, index).Take(&row)
+	if read.Error != nil {
+		if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+			return row, frozen, application.ErrUnavailable
+		}
+		return row, frozen, read.Error
+	}
+	if strictCopyMedia(row.Frozen, &frozen) != nil || frozen.ItemID != row.ItemID || frozen.CatalogRevision < 1 || len(frozen.Renditions) > 16 {
+		return row, frozen, application.ErrUnavailable
+	}
+	if frozen.Asset != nil {
+		objects := []application.PurgeObject{{ObjectKey: frozen.Asset.ObjectKey}}
+		for _, r := range frozen.Renditions {
+			objects = append(objects, application.PurgeObject{ObjectKey: r.ObjectKey})
+		}
+		if err := loadPurgeLocations(tx, id, index, objects); err != nil {
+			return row, frozen, err
+		}
+		if objects[0].Location != nil {
+			frozen.Asset.ObjectLocation = objects[0].Location
+		}
+		for i := range frozen.Renditions {
+			if objects[i+1].Location != nil {
+				frozen.Renditions[i].ObjectLocation = objects[i+1].Location
+			}
+		}
+	}
+	return row, frozen, nil
+}
+
+func validatePurgeItem(tx *gorm.DB, row purgeJobRow, frozen application.FrozenPurgeItem) error {
+	var item struct {
+		Revision     int64
+		CatalogState domain.LibraryItemState
+		PurgedAt     *time.Time
+	}
+	read := tx.Model(&libraryItemRow{}).Select("revision", "catalog_state", "purged_at").
+		Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND library_id = ?", frozen.ItemID, row.LibraryID).Take(&item)
+	if read.Error != nil {
+		if errors.Is(read.Error, gorm.ErrRecordNotFound) {
+			return domain.ErrPurgeConflict
+		}
+		return read.Error
+	}
+	if item.PurgedAt != nil || item.Revision != frozen.CatalogRevision || item.CatalogState != domain.LibraryItemStateTrashed {
+		return domain.ErrPurgeConflict
+	}
+	if frozen.Asset == nil {
+		return nil
+	}
+	if frozen.Asset.Validate() != nil || !frozen.Asset.IsDelete || frozen.Asset.ID != frozen.ItemID ||
+		row.ProjectID != nil && (frozen.Asset.ProjectID != *row.ProjectID || frozen.Asset.Personal != nil) ||
+		row.ProjectID == nil && (frozen.Asset.ProjectID != uuid.Nil || frozen.Asset.Personal == nil || frozen.Asset.Personal.OrgID != row.OrgID || frozen.Asset.Personal.ActorID != row.ActorID) {
+		return application.ErrObjectMismatch
+	}
+	var actual assetRow
+	read = tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", frozen.Asset.ID).Take(&actual)
+	if read.Error != nil {
+		return read.Error
+	}
+	if err := actual.loadLocation(tx); err != nil {
+		return err
+	}
+	if !equalCopyMedia(actual.domain(), *frozen.Asset) || !actual.IsDelete {
+		return application.ErrObjectMismatch
+	}
+	var rends []renditionRow
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("media_asset_id = ? AND is_delete = ?", frozen.Asset.ID, false).Order("kind").Order("id").Find(&rends).Error; err != nil {
+		return err
+	}
+	if len(rends) != len(frozen.Renditions) {
+		return application.ErrObjectMismatch
+	}
+	byID := make(map[uuid.UUID]domain.Rendition, len(rends))
+	for _, r := range rends {
+		if err := r.loadLocation(tx); err != nil {
+			return err
+		}
+		byID[r.ID] = r.domain()
+	}
+	for _, r := range frozen.Renditions {
+		if !equalCopyMedia(r, byID[r.ID]) {
+			return application.ErrObjectMismatch
+		}
+	}
+	return nil
+}
+
+// StartPurgeItem rechecks current ownership and reference readers before I/O.
+func (s *PurgeStore) StartPurgeItem(ctx context.Context, lease application.PurgeLease, index int) (bool, error) {
+	done := false
+	err := s.withLease(ctx, lease, false, func(tx *gorm.DB, row purgeJobRow, library libraryRow, facts application.LibraryProjectFacts) error {
+		state, frozen, err := readPurgeItem(tx, row.ID, index)
+		if err != nil {
+			return err
+		}
+		if state.Status == domain.PurgeItemStatusBlocked || state.Status == domain.PurgeItemStatusSucceeded || state.Status == domain.PurgeItemStatusCancelled {
+			done = true
+			return nil
+		}
+		if row.CancellationRequested {
+			var err error
+			done, err = s.cancelPendingItem(ctx, tx, row, lease.Actor, index, library, facts)
+			if err != nil || done {
+				return err
+			}
+		}
+		if err := validatePurgeItem(tx, row, frozen); err != nil {
+			return err
+		}
+		if err := s.requirePurgeUnreferenced(ctx, tx, lease.Actor, row, frozen); err != nil {
+			return err
+		}
+
+		return updateOne(tx, "media.purge_item", map[string]any{"job_id": row.ID, "item_index": index, "status": []domain.PurgeItemStatus{domain.PurgeItemStatusQueued, domain.PurgeItemStatusRunning, domain.PurgeItemStatusNeedsReconciliation}}, map[string]any{"status": domain.PurgeItemStatusRunning, "failure_code": nil}, application.ErrLibraryConflict)
+	})
+	return done, err
+}
+
+// EndPurgePhysical proves only cessation under the original fence. Revoking the
+// creator does not prevent this fact; it grants no read or destructive access.
+func (s *PurgeStore) EndPurgePhysical(ctx context.Context, lease application.PurgeLease) error {
+	if s == nil || s.db == nil || lease.Fence == uuid.Nil {
+		return application.ErrUnavailable
+	}
+	execution, err := uuid.Parse(lease.Work.ExecutionID)
+	if err != nil {
+		return domain.ErrPurgeConflict
+	}
+	return taskruntime.Transaction(ctx, s.db, func(tx *gorm.DB) error {
+		var row purgeJobRow
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND actor_id = ? AND org_id = ? AND attempt = ? AND worker_fence = ? AND execution_id = ?", lease.Work.JobID, lease.Actor.ID, lease.Actor.OrgID, lease.Work.Attempt, lease.Fence, execution).Take(&row).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return application.ErrLibraryConflict
+			}
+			return err
+		}
+		return updateOne(tx, "media.purge_job", map[string]any{"id": row.ID, "revision": row.Revision}, map[string]any{"process_ended": true, "execution_unconfirmed": false, "revision": row.Revision + 1, "updated_at": s.clock().UTC()}, application.ErrLibraryConflict)
+	})
+}
+
+// FailPurgeItem keeps even a known corrupt source occupied until explicit
+// reconciliation. It never restores a partially deleted original as readable.
+func (s *PurgeStore) FailPurgeItem(ctx context.Context, lease application.PurgeLease, index int, code string) error {
+	return s.withLease(ctx, lease, false, func(tx *gorm.DB, row purgeJobRow, library libraryRow, facts application.LibraryProjectFacts) error {
+		state, _, err := readPurgeItem(tx, row.ID, index)
+		if err != nil {
+			return err
+		}
+		if state.Status == domain.PurgeItemStatusSucceeded || state.Status == domain.PurgeItemStatusBlocked || state.Status == domain.PurgeItemStatusCancelled {
+			return domain.ErrPurgeConflict
+		}
+		if code == domain.PurgeFailureCancelled && row.CancellationRequested {
+			done, err := s.cancelPendingItem(ctx, tx, row, lease.Actor, index, library, facts)
+			if err != nil {
+				return err
+			}
+			if done {
+				return nil
+			}
+		}
+		if err := updateOne(tx, "media.purge_item", map[string]any{"job_id": row.ID, "item_index": index}, map[string]any{"status": domain.PurgeItemStatusNeedsReconciliation, "failure_code": code}, application.ErrLibraryConflict); err != nil {
+			return err
+		}
+		return updateOne(tx, "media.purge_job", map[string]any{"id": row.ID}, map[string]any{"needs_reconciliation": true, "revision": row.Revision + 1, "updated_at": s.clock().UTC()}, application.ErrLibraryConflict)
+	})
+}
+
+// requirePurgeUnreferenced runs after validatePurgeItem has locked the original.
+// Avatar owners retain references after account/team deletion and do not grant access.
+func (s *PurgeStore) requirePurgeUnreferenced(ctx context.Context, tx *gorm.DB, actor application.Actor, row purgeJobRow, frozen application.FrozenPurgeItem) error {
+	if frozen.Asset == nil {
+		return nil
+	}
+	if s.references == nil || s.references(tx) == nil {
+		return application.ErrUnavailable
+	}
+	project := uuid.Nil
+	if row.ProjectID != nil {
+		project = *row.ProjectID
+	}
+	used, err := s.references(tx).HasMediaReferences(ctx, actor, project, frozen.Asset.ID)
+	if err != nil {
+		return err
+	}
+	if used {
+		return domain.ErrPurgeConflict
+	}
+	return nil
+}

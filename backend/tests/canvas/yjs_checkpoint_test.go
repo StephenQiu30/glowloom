@@ -11,8 +11,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
-	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
+	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
 )
 

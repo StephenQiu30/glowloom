@@ -10,11 +10,11 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
-	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/paramvalidation"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application/source"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/adapter/paramvalidation"
 
-	catalogapp "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/application"
 )
 
 func insertVoiceCatalogCapability(ctx context.Context, t *testing.T, database *gorm.DB) {

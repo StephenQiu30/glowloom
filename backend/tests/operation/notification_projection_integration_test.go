@@ -14,9 +14,9 @@ import (
 	"github.com/twmb/franz-go/pkg/kmsg"
 	"gorm.io/gorm"
 
-	identityevent "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/event"
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	identityevent "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/event"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	kafkainbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/kafka"
 	pginbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/postgres"
 	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"

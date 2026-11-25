@@ -9,8 +9,8 @@ import (
 
 	"github.com/google/uuid"
 
-	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/domain"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
 )
 
 func TestPrepareFreeQuotePricesAndFreezesValidatedPrompt(t *testing.T) {

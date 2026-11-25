@@ -12,13 +12,13 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
-	pgbilling "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
-	billingdomain "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/task"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/adapter/postgres"
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/domain"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/postgres"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/task"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/domain"
 )
 
 func seedDispatchCall(t *testing.T, database *gorm.DB, dispatchRequired bool) (application.ProviderDispatchIdentity, *pgoperation.Store) {

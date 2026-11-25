@@ -19,16 +19,16 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 
-	pgbilling "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/staging"
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/task"
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/staging"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/task"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/domain"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/staged"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/media/adapter/staged"
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
 )
 
 func TestOperationTaskResumesAfterWorkerRestartOnLocalServices(t *testing.T) {

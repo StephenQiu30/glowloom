@@ -9,10 +9,10 @@ import (
 
 	"github.com/google/uuid"
 
-	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
+	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 const maxStoryboardTargets = 6

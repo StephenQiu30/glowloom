@@ -7,18 +7,18 @@ import (
 	"testing"
 	"time"
 
-	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/media/adapter/objectstorage"
+	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pg "github.com/StephenQiu30/glowloom-server/backend/creation/bible/adapter/postgres"
-	app "github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
-	scriptpg "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/postgres"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	pg "github.com/StephenQiu30/glowloom-server/backend/internal/creation/bible/adapter/postgres"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/creation/bible/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/bible/domain"
+	scriptpg "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/adapter/postgres"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 func bibleClosedHistoryDB(t *testing.T) (*gorm.DB, *gorm.DB) {

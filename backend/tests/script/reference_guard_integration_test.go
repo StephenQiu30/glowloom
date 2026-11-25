@@ -14,11 +14,11 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/extract"
-	pg "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/postgres"
-	app "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/adapter/extract"
+	pg "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/adapter/postgres"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 func scriptReferenceDB(t *testing.T) (*gorm.DB, *gorm.DB) {

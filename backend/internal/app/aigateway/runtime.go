@@ -3,22 +3,22 @@ package aigateway
 
 import (
 	"context"
-	"net/http"
 	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/credentialseal"
-	gatewayhttp "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/adapter/http"
-	pg "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/adapter/provider"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/application"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
-	identitypg "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/adapter/credentialseal"
+	gatewayhttp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/adapter/http"
+	pg "github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/adapter/provider"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/domain"
+	identitypg "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpclient"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
@@ -78,7 +78,7 @@ func New(database *gorm.DB, cfg config.Config) (*Runtime, error) {
 			return nil, err
 		}
 		r.Keys = keys
-		r.Provider = provider.New(keys, &http.Client{}).WithMediaReferences(r.mediaReferences)
+		r.Provider = provider.New(keys, httpclient.NewHTTPClient(httpclient.WithTimeout(180*time.Second))).WithMediaReferences(r.mediaReferences)
 	}
 	if cfg.CredentialPublicKeyPEM != "" || cfg.CredentialPublicKeyFile != "" {
 		public, err := cfg.CredentialPublicBytes()

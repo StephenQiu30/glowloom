@@ -17,10 +17,10 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	pg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 var reset sync.Once

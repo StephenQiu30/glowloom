@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	task "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/task"
+	task "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/taskfixture"
 

@@ -9,31 +9,31 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application/source"
 
-	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/postgres"
+	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/adapter/postgres"
 
-	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
 
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/postgres"
 
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application"
 
-	pgbilling "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
+	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/adapter/postgres"
 
-	billingapp "github.com/StephenQiu30/glowloom-server/backend/execution/billing/application"
-	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/postgres"
+	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/application"
+	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/adapter/postgres"
 
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/postgres"
 
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
 
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 )
 
 func workspaceRequestScope(tx *gorm.DB) workspaceapp.RequestScopeResolver {

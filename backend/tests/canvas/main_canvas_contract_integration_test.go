@@ -9,10 +9,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	canvashttp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/http"
-	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+	canvashttp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/adapter/http"
+	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
 )
 
 func TestMainCanvasProjectsCurrentNameAndRejectsDirectMutation(t *testing.T) {

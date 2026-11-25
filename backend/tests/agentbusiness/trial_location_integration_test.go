@@ -9,9 +9,9 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/trialtask"
-	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/trialtask"
+	operation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 func TestTrialRealPGFreezesOriginalOutputBeforeQueueAndNeverRepinsReplay(t *testing.T) {

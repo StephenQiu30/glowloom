@@ -6,12 +6,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	app "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/application"
+	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 func scriptActor(actor identityapp.Principal) app.Actor { return scriptwire.Actor(actor) }

@@ -13,20 +13,20 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
-	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
-	"github.com/StephenQiu30/glowloom-server/backend/identity/adapter/credentialproof"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application/source"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/credentialproof"
 
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 
-	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 func purgeScopeFixture(t *testing.T) (*gorm.DB, identity.Principal, uuid.UUID, uuid.UUID, media.PurgeWorkID) {

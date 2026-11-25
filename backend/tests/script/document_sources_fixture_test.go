@@ -5,9 +5,9 @@ import (
 
 	"github.com/google/uuid"
 
-	app "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 type scriptDocumentSources struct{ sources *mediaapp.DocumentSources }

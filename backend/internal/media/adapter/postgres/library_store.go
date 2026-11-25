@@ -1,0 +1,171 @@
+package postgres
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
+)
+
+// LibraryProjectAccessFactory binds the workspace consumer to the same transaction.
+type LibraryProjectAccessFactory func(*gorm.DB) application.LibraryProjectAccess
+
+// LibraryStore owns catalog metadata and permanent commands, not media execution.
+type LibraryStore struct {
+	scopeAuthority
+	db      *gorm.DB
+	project LibraryProjectAccessFactory
+	clock   func() time.Time
+}
+
+// NewLibraryStore explicitly injects workspace authorization and its clock.
+func NewLibraryStore(db *gorm.DB, project LibraryProjectAccessFactory, clock func() time.Time) *LibraryStore {
+	if clock == nil {
+		clock = time.Now
+	}
+	return &LibraryStore{db: db, project: project, clock: clock}
+}
+
+type libraryRow struct {
+	ID              uuid.UUID
+	Kind            string
+	OrgID           uuid.UUID
+	ProjectID       *uuid.UUID
+	PersonalActorID *uuid.UUID
+	Revision        int64
+	UpdateTime      time.Time
+}
+
+func (libraryRow) TableName() string { return "media.library" }
+
+func (s *LibraryStore) authorize(ctx context.Context, tx *gorm.DB, actor application.Actor, scope domain.LibraryScope, write bool) (application.LibraryProjectFacts, error) {
+	if scope.Kind == domain.LibraryPersonal {
+		return application.LibraryProjectFacts{}, s.requirePersonal(tx, actor, write)
+	}
+	if s.project == nil {
+		return application.LibraryProjectFacts{}, application.ErrUnavailable
+	}
+	access := s.project(tx)
+	if access == nil {
+		return application.LibraryProjectFacts{}, application.ErrUnavailable
+	}
+	facts, err := access.Authorize(ctx, actor, *scope.ProjectID, write)
+	if err != nil {
+		return application.LibraryProjectFacts{}, err
+	}
+	if facts.ProjectID != *scope.ProjectID || facts.OrgID != actor.OrgID || facts.Revision < 1 {
+		return application.LibraryProjectFacts{}, application.ErrUnavailable
+	}
+	return facts, nil
+}
+
+func readLibrary(tx *gorm.DB, actor application.Actor, scope domain.LibraryScope, write bool) (libraryRow, error) {
+	id, err := scope.Identity(actor.OrgID, actor.ID)
+	if err != nil {
+		return libraryRow{}, err
+	}
+	var row libraryRow
+	query := tx.Where("id = ?", id)
+	if write {
+		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
+	} else {
+		query = query.Clauses(clause.Locking{Strength: "SHARE"})
+	}
+	err = query.Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return libraryRow{ID: id, Kind: string(scope.Kind), OrgID: actor.OrgID, ProjectID: scope.ProjectID}, nil
+	}
+	if err != nil {
+		return libraryRow{}, fmt.Errorf("read media library: %w", err)
+	}
+	if row.ID != id || row.Kind != string(scope.Kind) || row.OrgID != actor.OrgID || row.Revision < 0 ||
+		scope.Kind == domain.LibraryProject && (row.ProjectID == nil || *row.ProjectID != *scope.ProjectID || row.PersonalActorID != nil) ||
+		scope.Kind == domain.LibraryPersonal && (row.ProjectID != nil || row.PersonalActorID == nil || *row.PersonalActorID != actor.ID) {
+		return libraryRow{}, application.ErrUnavailable
+	}
+	return row, nil
+}
+
+type libraryFolderRow struct {
+	ID          uuid.UUID
+	LibraryID   uuid.UUID
+	LibraryKind string
+	ParentID    *uuid.UUID
+	Name        string
+	NameKey     string
+	Position    int64
+	Style       string
+	Theme       string
+	Revision    int64
+	CreateTime  time.Time
+	UpdateTime  time.Time
+}
+
+func (libraryFolderRow) TableName() string { return "media.library_folder" }
+
+func libraryFolders(tx *gorm.DB, id uuid.UUID, write bool) ([]domain.LibraryFolder, error) {
+	query := tx.Where("library_id = ?", id).Order("id").Limit(4097)
+	if write {
+		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
+	} else {
+		query = query.Clauses(clause.Locking{Strength: "SHARE"})
+	}
+	var rows []libraryFolderRow
+	if err := query.Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("read media library folders: %w", err)
+	}
+	if len(rows) > 4096 {
+		return nil, application.ErrUnavailable
+	}
+	folders := make([]domain.LibraryFolder, 0, len(rows))
+	for _, row := range rows {
+		folder := domain.LibraryFolder{ID: row.ID, LibraryID: row.LibraryID, Kind: domain.LibraryKind(row.LibraryKind), ParentID: row.ParentID, Name: row.Name, Position: row.Position, Style: row.Style, Theme: row.Theme, Revision: row.Revision, CreatedAt: row.CreateTime, UpdatedAt: row.UpdateTime}
+		if folder.Validate() != nil {
+			return nil, application.ErrUnavailable
+		}
+		folders = append(folders, folder)
+	}
+	// Validate every existing ancestry. A corrupt tree is never presented as a
+	// valid partial tree or silently repaired by an unrelated command.
+	if len(folders) != 0 && domain.ValidateLibraryFolderPlacement(folders[0], folders) != nil {
+		return nil, application.ErrUnavailable
+	}
+	return folders, nil
+}
+
+func (s *LibraryStore) read(ctx context.Context, actor application.Actor, scope domain.LibraryScope, consume func(*gorm.DB, libraryRow) error) error {
+	if s == nil || s.db == nil {
+		return application.ErrUnavailable
+	}
+	if scope.Validate() != nil {
+		return domain.ErrInvalidLibrary
+	}
+	return db.ReadSnapshot(ctx, s.db, func(tx *gorm.DB) error {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
+			return err
+		}
+		if _, err := s.authorize(ctx, tx, actor, scope, false); err != nil {
+			return err
+		}
+		row, err := readLibrary(tx, actor, scope, false)
+		if err != nil {
+			return err
+		}
+		return consume(tx, row)
+	})
+}
+
+// NewScopedLibraryStore binds live scope authority explicitly.
+func NewScopedLibraryStore(db *gorm.DB, project LibraryProjectAccessFactory, clock func() time.Time, scopes ScopeAccessFactory) *LibraryStore {
+	s := NewLibraryStore(db, project, clock)
+	s.scopeAuthority = scopeAuthority{scopes: scopes}
+	return s
+}

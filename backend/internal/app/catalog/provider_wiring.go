@@ -6,11 +6,11 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/credentialschema"
-	catalogapp "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/providerhttp"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/aigateway"
 	subjectwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/subject"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/adapter/credentialschema"
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/providerhttp"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 )

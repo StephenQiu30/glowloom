@@ -7,9 +7,9 @@ import (
 
 	"github.com/google/uuid"
 
-	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
-	prompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
+	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
+	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/domain"
 )
 
 func TestYjsOptionalConfigProjectionPreservesPresenceThroughSaveAndClear(t *testing.T) {

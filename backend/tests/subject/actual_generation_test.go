@@ -9,31 +9,31 @@ import (
 	"testing"
 	"time"
 
-	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application/source"
 
-	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/postgres"
+	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/adapter/postgres"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	billingdomain "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/catalogfixture"
 
-	pgprompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/adapter/postgres"
+	pgprompt "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/adapter/postgres"
 
-	prompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
+	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/application"
 
-	promptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
+	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/domain"
 
-	subject "github.com/StephenQiu30/glowloom-server/backend/creation/subject/application"
+	subject "github.com/StephenQiu30/glowloom-server/backend/internal/creation/subject/application"
 
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/postgres"
 
-	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	operation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
 
-	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
+	operationdomain "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/domain"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 
 	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
 
@@ -41,7 +41,7 @@ import (
 
 	subjectwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/subject"
 
-	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 type actualSubjectGeneration struct {

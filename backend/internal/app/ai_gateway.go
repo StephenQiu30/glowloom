@@ -4,8 +4,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
-	gatewayhttp "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/aigateway"
+	gatewayhttp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 )
 

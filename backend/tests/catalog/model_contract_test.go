@@ -10,10 +10,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/paramvalidation"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/presetvalidation"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/pricevalidation"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/adapter/paramvalidation"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/adapter/presetvalidation"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/adapter/pricevalidation"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/domain"
 )
 
 func TestAdminCandidateDoesNotInventReviewFacts(t *testing.T) {

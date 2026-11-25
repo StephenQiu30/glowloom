@@ -6,11 +6,11 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
-	billingpg "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
-	billingapp "github.com/StephenQiu30/glowloom-server/backend/execution/billing/application"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
+	billingpg "github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/adapter/postgres"
+	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 type informationUsage struct{ tx *gorm.DB }

@@ -4,24 +4,24 @@ import (
 	"context"
 	"errors"
 
-	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application/source"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/postgres"
 
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application"
 
-	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/domain"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 // mediaLibraryProjectAccess retains workspace's project lock in the library

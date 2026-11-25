@@ -8,7 +8,7 @@ import (
 )
 
 func TestIdentityStorageDoesNotCompileOtherBusinessOwners(t *testing.T) {
-	command := exec.CommandContext(t.Context(), "go", "list", "-deps", "./identity/adapter/postgres")
+	command := exec.CommandContext(t.Context(), "go", "list", "-deps", "./internal/identity/adapter/postgres")
 	command.Dir = filepath.Join("..", "..")
 	output, err := command.CombinedOutput()
 	if err != nil {
@@ -16,7 +16,7 @@ func TestIdentityStorageDoesNotCompileOtherBusinessOwners(t *testing.T) {
 	}
 	const module = "github.com/StephenQiu30/glowloom-server/backend/"
 	for _, dependency := range strings.Fields(string(output)) {
-		for _, owner := range []string{"creation", "media", "execution"} {
+		for _, owner := range []string{"internal/creation", "internal/media", "internal/execution"} {
 			if strings.HasPrefix(dependency, module+owner+"/") {
 				t.Errorf("identity storage imports business owner %q: %s", owner, dependency)
 			}

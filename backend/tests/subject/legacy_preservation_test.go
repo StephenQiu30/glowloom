@@ -10,12 +10,12 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	bible "github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
-	prompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
-	promptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
-	subject "github.com/StephenQiu30/glowloom-server/backend/creation/subject/application"
 	biblewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/bible"
 	subjectwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/subject"
+	bible "github.com/StephenQiu30/glowloom-server/backend/internal/creation/bible/domain"
+	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/application"
+	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/domain"
+	subject "github.com/StephenQiu30/glowloom-server/backend/internal/creation/subject/application"
 )
 
 // This is legacy read compatibility, not a migration: a location with no image

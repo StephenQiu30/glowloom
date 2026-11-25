@@ -11,11 +11,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
-	billingpg "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/managed"
-	task "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/task"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	billingpg "github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/managed"
+	task "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/task"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 )
 

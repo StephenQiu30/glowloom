@@ -3,8 +3,8 @@ package agentbusiness_test
 import (
 	"testing"
 
-	script "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
+	script "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 )
 

@@ -6,11 +6,11 @@ import (
 	"net/url"
 	"strings"
 
-	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
-	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	workflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
-	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/domain"
+	operation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	workflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 // GatewayResultDownloads is a bounded read-only result transport. URL and original

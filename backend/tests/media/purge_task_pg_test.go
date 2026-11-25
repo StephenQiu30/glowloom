@@ -4,12 +4,12 @@ import (
 	"testing"
 	"time"
 
-	currenttask "github.com/StephenQiu30/glowloom-server/backend/media/adapter/task"
+	currenttask "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/taskfixture"
 
 	"github.com/google/uuid"
 
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 func TestMediaPurgeActualDatabasePrivateObjectsAndUnknownRecovery(t *testing.T) {

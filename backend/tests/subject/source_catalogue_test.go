@@ -3,7 +3,7 @@ package subject_test
 import (
 	"testing"
 
-	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 func TestSubjectCatalogueQuerySupportsRealUpscaleWithoutOwnerOverrides(t *testing.T) {

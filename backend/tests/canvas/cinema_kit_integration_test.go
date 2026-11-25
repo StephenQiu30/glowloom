@@ -7,11 +7,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
-	promptpg "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/adapter/postgres"
-	prompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
 	promptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/prompt"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
+	promptpg "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/adapter/postgres"
+	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
 )
 

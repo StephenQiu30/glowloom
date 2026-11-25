@@ -8,13 +8,13 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	promptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
-	pggateway "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
-	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
+	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/domain"
+	pggateway "github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/domain"
+	operation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	operationdomain "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 func submission(row creationRow) (operation.Submission, error) {

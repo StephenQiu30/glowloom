@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/modelgateway"
+	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/domain"
 )
 
 func TestChatAllowsBoundedVideoFrameProjection(t *testing.T) {

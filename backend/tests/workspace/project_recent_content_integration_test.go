@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application"
 )
 
 func TestRecentContentMissingActivityUsesSameEffectiveTimeEverywhere(t *testing.T) {

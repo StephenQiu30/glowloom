@@ -14,12 +14,12 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
-	pgsubject "github.com/StephenQiu30/glowloom-server/backend/creation/subject/adapter/postgres"
-	subject "github.com/StephenQiu30/glowloom-server/backend/creation/subject/application"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	pgsubject "github.com/StephenQiu30/glowloom-server/backend/internal/creation/subject/adapter/postgres"
+	subject "github.com/StephenQiu30/glowloom-server/backend/internal/creation/subject/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
-	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 type voiceReadinessAccess struct{ owner subject.VoiceOwner }

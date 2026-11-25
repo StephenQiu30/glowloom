@@ -8,8 +8,8 @@ import (
 )
 
 // ResolveWorkerQueues expands auto to the queues used by the combined role.
-// Provider tasks require configured signing capability; Codex remains opt-in.
-// An empty request preserves the existing standalone worker's flow-only default.
+// Provider tasks require configured signing capability.
+// An empty request preserves the standalone worker's flow-only default.
 func ResolveWorkerQueues(value string, cfg config.Config) (string, error) {
 	if value == "auto" {
 		value = "flow,media"
@@ -25,14 +25,9 @@ func WorkerQueue(value string) (string, error) {
 	if value == "" {
 		return "flow", nil
 	}
-	var flow, media, provider, codex bool
+	var flow, media, provider bool
 	for _, item := range strings.Split(value, ",") {
 		switch strings.TrimSpace(item) {
-		case "agent.codex":
-			if codex {
-				return "", fmt.Errorf("%w: duplicate worker queue %q", ErrRoleNotAvailable, item)
-			}
-			codex = true
 		case "flow":
 			if flow {
 				return "", fmt.Errorf("%w: duplicate worker queue %q", ErrRoleNotAvailable, item)
@@ -61,9 +56,6 @@ func WorkerQueue(value string) (string, error) {
 	}
 	if provider {
 		selected = append(selected, "provider")
-	}
-	if codex {
-		selected = append(selected, "agent.codex")
 	}
 	return strings.Join(selected, ","), nil
 }

@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/domain"
 )
 
 func validQuotedOperation() domain.Operation {

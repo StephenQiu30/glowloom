@@ -16,10 +16,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	scripthttp "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/http"
-	app "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	scripthttp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/adapter/http"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )

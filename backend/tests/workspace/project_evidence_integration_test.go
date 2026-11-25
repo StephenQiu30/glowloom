@@ -12,12 +12,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/evidence"
-	evidencepg "github.com/StephenQiu30/glowloom-server/backend/creation/evidence/adapter/postgres"
 	agent "github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	agentwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/agent"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/evidence"
+	evidencepg "github.com/StephenQiu30/glowloom-server/backend/internal/creation/evidence/adapter/postgres"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 func TestProjectEvidenceHTTPResolvesOnlyCurrentProjectSources(t *testing.T) {

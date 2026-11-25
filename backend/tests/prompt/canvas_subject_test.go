@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/domain"
 )
 
 func TestCanvasSubjectDraftCompilation(t *testing.T) {

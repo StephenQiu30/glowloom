@@ -6,10 +6,10 @@ import (
 
 	"golang.org/x/sync/semaphore"
 
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/processing/adapter/ffmpeg"
+	processingapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/processing/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
-	"github.com/StephenQiu30/glowloom-server/backend/media/processing/adapter/ffmpeg"
-	processingapp "github.com/StephenQiu30/glowloom-server/backend/media/processing/application"
 )
 
 const defaultNormalizationConcurrency int64 = 2

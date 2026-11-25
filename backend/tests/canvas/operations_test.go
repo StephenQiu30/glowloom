@@ -6,8 +6,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
-	promptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
+	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/domain"
 )
 
 func raw(v string) json.RawMessage { return json.RawMessage(v) }

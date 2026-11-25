@@ -13,15 +13,15 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application/source"
 
-	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/http"
+	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/http"
 
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/postgres"
 
-	app "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 
 	workspacewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/workspace"
 
@@ -30,9 +30,9 @@ import (
 	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 func styleLibraryService(db *gorm.DB) *app.StyleLibrary {

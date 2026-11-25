@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 
-	"github.com/StephenQiu30/glowloom-server/backend/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 func TestReferenceVisualsDecodeActualImageAndBoundOutput(t *testing.T) {

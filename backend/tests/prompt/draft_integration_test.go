@@ -11,9 +11,9 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	promptpg "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/adapter/postgres"
-	promptapp "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
+	promptpg "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/adapter/postgres"
+	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/domain"
 )
 
 type draftAccess struct{ tx *gorm.DB }

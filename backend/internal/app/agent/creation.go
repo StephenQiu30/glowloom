@@ -10,19 +10,19 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pgbible "github.com/StephenQiu30/glowloom-server/backend/creation/bible/adapter/postgres"
-	bible "github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
-	bibledomain "github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
-	pgscript "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/postgres"
-	script "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
-	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/aigateway"
 	biblewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/bible"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
+	pgbible "github.com/StephenQiu30/glowloom-server/backend/internal/creation/bible/adapter/postgres"
+	bible "github.com/StephenQiu30/glowloom-server/backend/internal/creation/bible/application"
+	bibledomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/bible/domain"
+	pgscript "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/adapter/postgres"
+	script "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/application"
+	operationdomain "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // commandSchema derives nested business argument fields from the consumed Go

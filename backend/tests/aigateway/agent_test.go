@@ -12,11 +12,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/application"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
 	agentpg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
 	agent "github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/aigateway"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/domain"
 )
 
 func TestAgentThreeProtocolsToolHistoryOriginalRecoveryAndSingleBudgetProjection(t *testing.T) {

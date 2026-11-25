@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/domain"
 )
 
 func TestPriceAggregatesBeforeRoundingAndRejectsInvalidUsage(t *testing.T) {

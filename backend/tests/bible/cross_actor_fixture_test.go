@@ -5,13 +5,13 @@ import (
 
 	"github.com/google/uuid"
 
-	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
-	scriptapp "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
-	workspacepg "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
+	scriptapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/application"
+	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/postgres"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 func bibleScriptAccess(access *workspacepg.ProjectContentAccessStore) scriptapp.ProjectAccess {

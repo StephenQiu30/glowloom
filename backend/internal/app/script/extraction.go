@@ -6,11 +6,11 @@ import (
 
 	"golang.org/x/sync/semaphore"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/document/adapter/native"
-	document "github.com/StephenQiu30/glowloom-server/backend/creation/document/application"
-	app "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/document/adapter/native"
+	document "github.com/StephenQiu30/glowloom-server/backend/internal/creation/document/application"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/application"
+	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
-	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 const defaultExtractionConcurrency int64 = 2

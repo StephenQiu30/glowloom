@@ -8,10 +8,10 @@ import (
 
 	"github.com/google/uuid"
 
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
-	toolapp "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
-	tooldomain "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/domain"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/application"
+	tooldomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/domain"
 )
 
 func depthJobFrozen() tooldomain.FrozenDepth {

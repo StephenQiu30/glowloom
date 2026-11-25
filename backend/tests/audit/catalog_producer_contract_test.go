@@ -25,7 +25,7 @@ func TestCatalogMutationAuditProducerConsumerContract(t *testing.T) {
 	if !ok {
 		t.Fatal("locate source contract test")
 	}
-	files, err := filepath.Glob(filepath.Join(filepath.Dir(source), "..", "..", "execution", "catalog", "adapter", "postgres", "*.go"))
+	files, err := filepath.Glob(filepath.Join(filepath.Dir(source), "..", "..", "internal", "execution", "catalog", "adapter", "postgres", "*.go"))
 	if err != nil {
 		t.Fatal(err)
 	}

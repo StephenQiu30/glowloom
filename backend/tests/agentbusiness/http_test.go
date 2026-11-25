@@ -19,13 +19,13 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	agenthttp "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/http"
 	agentpg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/runtimeclient"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 const businessToken = "business-only-test-token-00000000000000"

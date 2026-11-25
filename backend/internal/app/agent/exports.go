@@ -7,14 +7,14 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
 	agentapp "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
-	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
-	pgtool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/postgres"
-	mediatool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
+	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	pgtool "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/postgres"
+	mediatool "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/application"
 )
 
 func exportStore(tx *gorm.DB) *pgtool.Store {

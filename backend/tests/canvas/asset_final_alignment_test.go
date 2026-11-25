@@ -6,12 +6,12 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/postgres"
-	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	canvaswire "github.com/StephenQiu30/glowloom-server/backend/internal/app/canvas"
 	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
+	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/adapter/postgres"
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 func assetFinalTeam(t *testing.T, db *gorm.DB, actor identity.Principal, project uuid.UUID) (identity.Principal, uuid.UUID) {

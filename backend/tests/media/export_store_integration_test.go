@@ -12,12 +12,12 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
-	toolapp "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
-	tooldomain "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/domain"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/application"
+	tooldomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/domain"
 )
 
 func TestExportDurableCancelGateRejectsChangedReplayAndForeignRead(t *testing.T) {

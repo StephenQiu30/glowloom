@@ -8,22 +8,22 @@ import (
 	"testing"
 	"time"
 
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 
-	copytask "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/task"
+	copytask "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/taskfixture"
 
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
-	copyevent "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/event"
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
+	copyevent "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/event"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/kafkaconn"
 	outapp "github.com/StephenQiu30/glowloom-server/backend/internal/platform/outbox"
 	outkafka "github.com/StephenQiu30/glowloom-server/backend/internal/platform/outbox/kafka"
 	outpg "github.com/StephenQiu30/glowloom-server/backend/internal/platform/outbox/postgres"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
 )
 

@@ -6,12 +6,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	catalogapp "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
-	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/trial"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/application"
+	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/trial"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )
 

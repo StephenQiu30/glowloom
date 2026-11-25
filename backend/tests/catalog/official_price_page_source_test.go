@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/pricesync"
-	catalogapp "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/adapter/pricesync"
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/domain"
 )
 
 func TestOfficialPricePageSourceStoresExactModelRowsForManualReview(t *testing.T) {

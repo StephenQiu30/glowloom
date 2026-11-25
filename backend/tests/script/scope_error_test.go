@@ -9,11 +9,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	http "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/http"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
-	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
+	http "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/adapter/http"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/application"
+	workspace "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application/source"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 type scopeFailureStore struct {

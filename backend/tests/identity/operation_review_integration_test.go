@@ -9,34 +9,34 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application/source"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/postgres"
 
-	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspace "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application"
 
-	pgbilling "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
+	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/adapter/postgres"
 
-	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/providerprobe"
+	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/adapter/providerprobe"
 
-	catalogflow "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/task"
+	catalogflow "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/adapter/task"
 
-	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
+	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/application"
 
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/postgres"
 
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/task"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/task"
 
-	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	operation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
 
-	domain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
+	domain "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/domain"
 
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 type reviewWorkerGate struct{ operationScopeGate }

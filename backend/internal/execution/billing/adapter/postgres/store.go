@@ -1,0 +1,123 @@
+// Package postgres reads project scoped budget and ledger records.
+package postgres
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+)
+
+var (
+	// ErrNotFound hides records outside the current project or organization.
+	ErrNotFound = errors.New("billing record not found")
+	// ErrUnavailable means the store has no database handle.
+	ErrUnavailable = errors.New("billing store unavailable")
+)
+
+// Store keeps the database handle injected by the application composition root.
+type Store struct {
+	db                        *gorm.DB
+	access                    ProjectAccessFactory
+	creditOperationSagaEnable bool
+}
+
+// NewStore injects the caller's database handle.
+func NewStore(db *gorm.DB) *Store { return &Store{db: db} }
+
+// WithCreditOperationSaga routes new operation reservations through the
+// asynchronous credit command ledger.
+func (s *Store) WithCreditOperationSaga(enabled bool) *Store {
+	if s != nil {
+		s.creditOperationSagaEnable = enabled
+	}
+	return s
+}
+
+// FindBudget checks the current account and project owner in the database.
+func (s *Store) FindBudget(ctx context.Context, actor identityapp.Principal, projectID uuid.UUID) (domain.Budget, error) {
+	if s == nil || s.db == nil {
+		return domain.Budget{}, ErrUnavailable
+	}
+	if projectID == uuid.Nil {
+		return domain.Budget{}, ErrNotFound
+	}
+	var budget domain.Budget
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := s.requireProject(tx, actor, projectID, false); err != nil {
+			return err
+		}
+		var owner string
+		if err := tx.Raw(`SELECT infra.runtime_owner()`).Scan(&owner).Error; err != nil {
+			return err
+		}
+		var result *gorm.DB
+		if owner == "execution" {
+			// Current scope/project/organization permission was checked above through
+			// the injected Creation authority. Only local budget facts are read here.
+			result = tx.Raw(`SELECT id,project_id,limit_micros,reserved_micros,settled_micros,is_overrun,revision FROM billing.budget WHERE project_id=? AND NOT is_delete`, projectID).Scan(&budget)
+		} else {
+			result = tx.Raw(`
+			SELECT b.id, b.project_id, b.limit_micros, b.reserved_micros,
+			       b.settled_micros, b.is_overrun, b.revision
+			FROM billing.budget AS b
+			JOIN workspace.project AS p ON p.id = b.project_id
+			WHERE b.project_id = ?::uuid AND p.org_id = ?::uuid
+			  AND NOT b.is_delete AND NOT p.is_delete
+		`, projectID.String(), actor.OrgID.String()).Scan(&budget)
+		}
+		if result.Error != nil {
+			return fmt.Errorf("read budget: %w", result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return ErrNotFound
+		}
+		return budget.Validate()
+	})
+	if err != nil {
+		return domain.Budget{}, fmt.Errorf("find budget: %w", err)
+	}
+	return budget, nil
+}
+
+// FindLedgerEntry always scopes the ID by both project and current organization.
+func (s *Store) FindLedgerEntry(ctx context.Context, actor identityapp.Principal, projectID, entryID uuid.UUID) (domain.LedgerEntry, error) {
+	if s == nil || s.db == nil {
+		return domain.LedgerEntry{}, ErrUnavailable
+	}
+	if projectID == uuid.Nil || entryID == uuid.Nil {
+		return domain.LedgerEntry{}, ErrNotFound
+	}
+	var entry domain.LedgerEntry
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := s.requireProject(tx, actor, projectID, false); err != nil {
+			return err
+		}
+		result := tx.Raw(`
+			SELECT l.id, l.project_id, l.entry_type, l.amount_micros,
+			       l.operation_id, l.episode_id, l.shot_id, l.model_key, l.region,
+			       l.orig_currency, l.orig_amount_micros, l.fx_rate::text AS fx_rate,
+			       l.note, l.create_time, l.create_by
+			FROM billing.ledger_entry AS l
+			JOIN workspace.project AS p ON p.id = l.project_id
+			WHERE l.id = ?::uuid AND l.project_id = ?::uuid AND p.org_id = ?::uuid
+			  AND NOT l.is_delete AND NOT p.is_delete
+		`, entryID.String(), projectID.String(), actor.OrgID.String()).Scan(&entry)
+		if result.Error != nil {
+			return fmt.Errorf("read ledger entry: %w", result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return ErrNotFound
+		}
+		return nil
+	})
+	if err != nil {
+		return domain.LedgerEntry{}, fmt.Errorf("find ledger entry: %w", err)
+	}
+	return entry, nil
+}

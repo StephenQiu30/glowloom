@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
 )
 
 func TestM1ReceiptRecovery(t *testing.T) {

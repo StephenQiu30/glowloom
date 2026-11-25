@@ -8,14 +8,14 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	gatewaydomain "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
-	operationhttp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/http"
-	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/aigateway"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
+	gatewaydomain "github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/domain"
+	operationhttp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/http"
+	operation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // WithGateway installs the only paid generation and funds authority for Agent tools.

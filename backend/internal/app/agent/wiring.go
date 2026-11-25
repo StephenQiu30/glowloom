@@ -5,17 +5,16 @@ import (
 	"encoding/json"
 	"time"
 
-	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/evidence"
-	script "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
-	workspacepg "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
-	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/evidence"
+	script "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/application"
+	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/postgres"
+	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	agenthttp "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/http"
 	pg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
@@ -23,6 +22,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/aigateway"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // Boundary owns the business services and formal command adapters.

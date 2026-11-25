@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/providerhttp"
 	agent "github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
+	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/providerhttp"
 )
 
 var errInput = errors.New("invalid model transcript")

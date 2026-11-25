@@ -12,16 +12,16 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
-	objects "github.com/StephenQiu30/glowloom-server/backend/media/adapter/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
-	flow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
-	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
-	"github.com/StephenQiu30/glowloom-server/backend/media/domain"
-	toolff "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/ffmpeg"
-	pgtool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/postgres"
-	toolflow "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/workflow"
-	tool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
-	tooldomain "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/domain"
+	objects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	flow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	toolff "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/ffmpeg"
+	pgtool "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/postgres"
+	toolflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/workflow"
+	tool "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/application"
+	tooldomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/domain"
 )
 
 func TestRoutedTimelineExportRealPostgresNativeCOSAndFFmpeg(t *testing.T) {

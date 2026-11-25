@@ -8,9 +8,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/identity/adapter/credentialproof"
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/identityruntime"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/credentialproof"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 )
 

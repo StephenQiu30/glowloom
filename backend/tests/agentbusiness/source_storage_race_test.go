@@ -10,12 +10,12 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	script "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
-	scriptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
 	agentapp "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
-	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	script "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/application"
+	scriptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/domain"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 type finishGate struct {

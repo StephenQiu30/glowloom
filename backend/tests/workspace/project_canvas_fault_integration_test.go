@@ -8,15 +8,15 @@ import (
 	"testing"
 	"time"
 
-	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application/source"
 
 	"github.com/google/uuid"
 
 	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
 
-	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
 
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application"
 )
 
 func TestCreationRecoveryDoesNotWaitForCreationAdvisoryLock(t *testing.T) {

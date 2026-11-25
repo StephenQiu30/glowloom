@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
-	"github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/videodepth"
-	toolapp "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/videodepth"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/application"
 )
 
 func TestDepthNativeFixedSourceRejectsModifiedAndHiddenExecutable(t *testing.T) {
@@ -17,7 +17,7 @@ func TestDepthNativeFixedSourceRejectsModifiedAndHiddenExecutable(t *testing.T) 
 	if base == "" {
 		t.Skip("actual fixed public VDA bundle was not configured")
 	}
-	manifestFile := filepath.Join("..", "..", "media", "mediatool", "adapter", "videodepth", "source_manifest.json")
+	manifestFile := filepath.Join("..", "..", "internal", "media", "mediatool", "adapter", "videodepth", "source_manifest.json")
 	manifestBytes, err := os.ReadFile(manifestFile)
 	if err != nil {
 		t.Fatal(err)

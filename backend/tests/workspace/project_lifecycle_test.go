@@ -8,10 +8,10 @@ import (
 
 	"github.com/google/uuid"
 
-	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/identity/domain"
 	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/domain"
+	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	inboxapp "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 )
 

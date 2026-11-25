@@ -20,8 +20,8 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
 
-	bibleapp "github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	bibleapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/bible/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"

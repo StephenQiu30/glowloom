@@ -9,13 +9,13 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/application"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
-	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	operationwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/operation"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 	subjectwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/subject"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/domain"
+	operation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 func (r *Runtime) referenceFact(ctx context.Context, tx *gorm.DB, a identity.Principal, p uuid.UUID, ref domain.Reference) (domain.Reference, operation.ProjectMediaObject, error) {

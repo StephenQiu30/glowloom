@@ -5,8 +5,8 @@ import (
 
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
-	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/postgres"
+	workspace "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application"
 )
 
 func provideCopyWorkerScopeAccess(tx *gorm.DB) workspace.WorkerScopeResolver {

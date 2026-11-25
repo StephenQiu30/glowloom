@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	gatewayapp "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/application"
+	gatewayapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/application"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"

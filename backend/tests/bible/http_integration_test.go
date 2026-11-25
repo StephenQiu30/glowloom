@@ -11,8 +11,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	biblehttp "github.com/StephenQiu30/glowloom-server/backend/creation/bible/adapter/http"
-	app "github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
+	biblehttp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/bible/adapter/http"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/creation/bible/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 

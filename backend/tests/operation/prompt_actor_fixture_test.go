@@ -6,11 +6,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	pgprompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/adapter/postgres"
-	prompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	pgprompt "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/adapter/postgres"
+	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/domain"
+	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 func operationPromptActor(actor identity.Principal) prompt.Actor {

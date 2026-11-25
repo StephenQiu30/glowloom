@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 func TestMediaTransferActualProjectToPersonalCreatesIndependentOriginalAndRenditions(t *testing.T) {

@@ -10,11 +10,11 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pgbilling "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
-	billingapp "github.com/StephenQiu30/glowloom-server/backend/execution/billing/application"
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
+	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/adapter/postgres"
+	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/application"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/domain"
 )
 
 func TestWorkflowFinalizationRollbackAndReplay(t *testing.T) {

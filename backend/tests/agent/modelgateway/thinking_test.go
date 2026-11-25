@@ -9,8 +9,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/modelgateway"
+	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/domain"
 )
 
 func TestChatMapsOnlyExplicitDisabledThinkingForArk(t *testing.T) {

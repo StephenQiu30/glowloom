@@ -11,10 +11,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
-	gatewayapp "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/application"
-	gateway "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
 	pg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
+	gatewayapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/application"
+	gateway "github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/domain"
 )
 
 // Bind a completed asynchronous tool receipt to the real, still-held AI request.

@@ -13,13 +13,13 @@ import (
 
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 
 	"github.com/google/uuid"
 
-	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
 	canvaswire "github.com/StephenQiu30/glowloom-server/backend/internal/app/canvas"
+	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
 )
 
 func TestCanvasAssetPersonalFavoritesCASPartialReplayAndCollection(t *testing.T) {

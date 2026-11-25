@@ -14,10 +14,10 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	subject "github.com/StephenQiu30/glowloom-server/backend/creation/subject/application"
-	subjectdomain "github.com/StephenQiu30/glowloom-server/backend/creation/subject/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
-	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	subject "github.com/StephenQiu30/glowloom-server/backend/internal/creation/subject/application"
+	subjectdomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/subject/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 type files struct {

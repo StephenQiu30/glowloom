@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	operationhttp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/http"
+	operationhttp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/http"
 )
 
 func TestEditorHTTPRejectsMixedInlineIntentEvenWhenEmpty(t *testing.T) {

@@ -5,16 +5,16 @@ import (
 
 	"gorm.io/gorm"
 
-	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/postgres"
-	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
+	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/adapter/postgres"
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	pgtool "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/videodepth"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
-	pgtool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/videodepth"
-	toolapp "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
 )
 
 func provideMediaToolSourceWithAccess(tx *gorm.DB, scopes pgmedia.ScopeAccessFactory) toolapp.SavedMediaSourceReader {

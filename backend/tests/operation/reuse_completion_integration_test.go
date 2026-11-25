@@ -11,13 +11,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
-	billingpg "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
-	billingapp "github.com/StephenQiu30/glowloom-server/backend/execution/billing/application"
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	billingpg "github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/adapter/postgres"
+	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/application"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 func completedReuseDelivery(t *testing.T, db *gorm.DB, moderation string, unattributed bool) (identityapp.Principal, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID) {

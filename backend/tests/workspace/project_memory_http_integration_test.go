@@ -11,13 +11,13 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
-	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/http"
-	workspacepg "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
-	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	agent "github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	agentwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/agent"
+	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
+	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/http"
+	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/postgres"
+	workspace "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 func memoryRouter(db *gorm.DB, actor identity.Principal) *gin.Engine {

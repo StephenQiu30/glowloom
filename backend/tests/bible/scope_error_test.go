@@ -10,12 +10,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application/source"
 
-	http "github.com/StephenQiu30/glowloom-server/backend/creation/bible/adapter/http"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
+	http "github.com/StephenQiu30/glowloom-server/backend/internal/creation/bible/adapter/http"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/bible/application"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 
 	biblewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/bible"
 )

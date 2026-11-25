@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 )
 
 func TestPublicVideoLinkDownloadsActualTLSVideoAndRejectsPrivateRedirect(t *testing.T) {

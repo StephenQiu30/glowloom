@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/domain"
 )
 
 func bibleCopySnapshot(digest string) *domain.ProjectCopyBibleSnapshot {

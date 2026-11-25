@@ -17,7 +17,7 @@ import (
 
 	mediawire "github.com/StephenQiu30/glowloom-server/backend/internal/app/media"
 
-	tooltask "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/task"
+	tooltask "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/task"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/taskfixture"
 
 	canvasfixture "github.com/StephenQiu30/glowloom-server/backend/tests/canvasfixture"
@@ -26,21 +26,21 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	canvasapp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
-	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	toolhttp "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/http"
+	toolpg "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/videodepth"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/application"
+	tooldomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
-	toolhttp "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/http"
-	toolpg "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/videodepth"
-	toolapp "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
-	tooldomain "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/domain"
 )
 
 type depthHTTPFixture struct {

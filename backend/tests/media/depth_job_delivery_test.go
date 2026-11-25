@@ -6,14 +6,14 @@ import (
 	"errors"
 	"testing"
 
-	current "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/task"
+	current "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/task"
 
 	"github.com/google/uuid"
 
 	inboxpg "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/postgres"
 	inboxapp "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
-	toolevent "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/event"
-	toolapp "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
+	toolevent "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/event"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/application"
 )
 
 type depthDeliveryRecorder struct {

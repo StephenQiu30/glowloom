@@ -8,8 +8,8 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
-	"github.com/StephenQiu30/glowloom-server/backend/identity/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 )
 

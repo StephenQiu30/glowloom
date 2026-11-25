@@ -13,19 +13,27 @@ import (
 	"strings"
 	"time"
 
-	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
+	"resty.dev/v3"
+
+	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/fetch"
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpclient"
 )
 
 // GeneratedVideos preserves the existing legacy supplier transfer contract.
 // Processing policy belongs to Media; native Execution uses owned artifact staging.
-type GeneratedVideos struct{ client *http.Client }
+type GeneratedVideos struct{ client *resty.Client }
 
 // NewGeneratedVideos constructs the actual legacy bridge with redirects disabled.
 func NewGeneratedVideos() *GeneratedVideos {
-	return &GeneratedVideos{client: &http.Client{Timeout: 5 * time.Minute, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
+	return &GeneratedVideos{
+		client: httpclient.NewResty(
+			httpclient.WithTimeout(5*time.Minute),
+			httpclient.WithResponseBodyLimit(512<<20),
+		),
+	}
 }
 
 // Read fetches only the original approved content URL and delegates video probing.
@@ -39,21 +47,14 @@ func (v *GeneratedVideos) Read(ctx context.Context, c catalog.ProviderConfig, ta
 		if raw != c.BaseURL+"/videos/"+taskID+"/content?index=0" || strings.ContainsAny(taskID, "/?#\\") {
 			return nil, 0, mediaflow.ErrUnsafeResultURL
 		}
-		request, e := http.NewRequestWithContext(ctx, http.MethodGet, raw, nil)
-		if e != nil {
-			return nil, 0, mediaflow.ErrUnsafeResultURL
-		}
-		request.Header.Set("Authorization", "Bearer "+key)
-		response, e := v.client.Do(request)
-		if e != nil {
+		response, e := v.client.R().
+			SetContext(ctx).
+			SetHeader("Authorization", "Bearer "+key).
+			Get(raw)
+		if e != nil || response.StatusCode() != http.StatusOK {
 			return nil, 0, mediaflow.ErrResultUnavailable
 		}
-		data, readErr := io.ReadAll(io.LimitReader(response.Body, (512<<20)+1))
-		closeErr := response.Body.Close()
-		if response.StatusCode != http.StatusOK || readErr != nil || closeErr != nil || len(data) > 512<<20 {
-			return nil, 0, mediaflow.ErrResultUnavailable
-		}
-		downloaded, err = generatedTempArtifact(data, "video/mp4")
+		downloaded, err = generatedTempArtifact(response.Bytes(), "video/mp4")
 	} else {
 		u, e := url.Parse(raw)
 		if e != nil || u.Scheme != "https" || u.User != nil || u.Port() != "" || (!strings.HasSuffix(u.Hostname(), ".tos-cn-beijing.volces.com") && !catalog.ValidCreationResultURL(c.AdapterKey, raw)) {

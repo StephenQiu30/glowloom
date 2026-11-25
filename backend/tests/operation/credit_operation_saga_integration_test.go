@@ -9,14 +9,14 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
-	billingevent "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/event"
-	billingpg "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
-	billingapp "github.com/StephenQiu30/glowloom-server/backend/execution/billing/application"
-	operationpg "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
-	operationflow "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/task"
-	operationapp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	billingevent "github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/adapter/event"
+	billingpg "github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/adapter/postgres"
+	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/application"
+	operationpg "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/postgres"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/task"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/domain"
 	inboxapp "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 )
 

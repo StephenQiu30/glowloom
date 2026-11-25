@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/domain"
 )
 
 func quotedSnapshotItem(projectID uuid.UUID, amount int64) pgoperation.QuoteItem {

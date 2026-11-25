@@ -13,7 +13,7 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	billingapp "github.com/StephenQiu30/glowloom-server/backend/execution/billing/application"
+	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/kafkaconn"
 	outboxapp "github.com/StephenQiu30/glowloom-server/backend/internal/platform/outbox"

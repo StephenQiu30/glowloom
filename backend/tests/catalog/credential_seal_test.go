@@ -15,7 +15,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/credentialseal"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/adapter/credentialseal"
 )
 
 func testCredentialKey(t *testing.T) (*rsa.PrivateKey, []byte) {

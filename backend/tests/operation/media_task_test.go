@@ -8,11 +8,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	task "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/task"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
+	task "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/task"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/domain"
+	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
-	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 type reviewProbe struct {

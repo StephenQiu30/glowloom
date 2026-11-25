@@ -8,10 +8,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
-	pg "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
+	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
+	pg "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/domain"
 )
 
 func TestStoryboardQuoteLegacyStoreRechecksShotBeforeReserve(t *testing.T) {

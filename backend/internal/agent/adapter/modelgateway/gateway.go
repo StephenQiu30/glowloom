@@ -12,16 +12,16 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	billingpg "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
-	billing "github.com/StephenQiu30/glowloom-server/backend/execution/billing/application"
-	billingdomain "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
-	catalog "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
-	opstore "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/postgres"
-	op "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
 	agentpg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
 	agentapp "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	agent "github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
+	billingpg "github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/adapter/postgres"
+	billing "github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/application"
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/domain"
+	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/domain"
+	opstore "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/postgres"
+	op "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	operation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/domain"
 )
 
 // Unsealer opens an encrypted catalog credential for its exact owning identity.

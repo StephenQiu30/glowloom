@@ -19,9 +19,9 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
-	canvaspg "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/postgres"
-	workspacepg "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	canvaspg "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/adapter/postgres"
+	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application"
 	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 

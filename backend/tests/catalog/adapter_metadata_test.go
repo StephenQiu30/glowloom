@@ -10,11 +10,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/credentialschema"
-	cataloghttp "github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/http"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/application"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/providerhttp"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/adapter/credentialschema"
+	cataloghttp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/adapter/http"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/providerhttp"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 type metadataAccess struct {

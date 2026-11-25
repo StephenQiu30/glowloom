@@ -10,9 +10,9 @@ import (
 
 	"github.com/google/uuid"
 
-	identityevent "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/event"
-	pg "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
-	app "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	identityevent "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/event"
+	pg "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	pginbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/postgres"
 	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 	realtime "github.com/StephenQiu30/glowloom-server/backend/internal/infra/realtime/application"

@@ -22,7 +22,7 @@ func TestResolveWorkerQueuesPreservesCombinedRoleSelection(t *testing.T) {
 		{name: "old worker default", want: "flow"},
 		{name: "explicit queues are canonical", value: "media,flow", want: "flow,media"},
 		{name: "explicit provider is not silently removed", value: "provider", want: "provider"},
-		{name: "codex remains opt in", value: "agent.codex", want: "agent.codex"},
+		{name: "provider explicit", value: "provider", want: "provider"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			got, err := app.ResolveWorkerQueues(test.value, test.cfg)

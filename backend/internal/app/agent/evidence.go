@@ -9,11 +9,11 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/evidence"
-	evidencepg "github.com/StephenQiu30/glowloom-server/backend/creation/evidence/adapter/postgres"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/evidence"
+	evidencepg "github.com/StephenQiu30/glowloom-server/backend/internal/creation/evidence/adapter/postgres"
 )
 
 const searchableEvidenceKinds = `["brief","decision","canvas_node","storyboard_shot","script_source","scene","script_line","character","location","prop","media","transcript"]`

@@ -9,16 +9,16 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	canvashttp "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/adapter/http"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
-	operationhttp "github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/http"
-	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/http"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	canvashttp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/adapter/http"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
+	operationhttp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/http"
+	operation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	operationdomain "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/domain"
+	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
-	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 // StoryboardGeneration reuses the operation authority for quote and delivery.

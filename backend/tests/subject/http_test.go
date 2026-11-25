@@ -12,10 +12,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	subjecthttp "github.com/StephenQiu30/glowloom-server/backend/creation/subject/adapter/http"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/subject/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/subject/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	subjecthttp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/subject/adapter/http"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/subject/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/subject/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 func TestSubjectHTTPRejectsUnknownAndAmbiguousQuery(t *testing.T) {

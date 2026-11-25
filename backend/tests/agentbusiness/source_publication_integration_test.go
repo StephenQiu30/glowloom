@@ -16,20 +16,20 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/objects"
+	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/adapter/objects"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
-	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
 
-	sourcepostgres "github.com/StephenQiu30/glowloom-server/backend/creation/script/adapter/postgres"
-	script "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
-	scriptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
 	agentapp "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	agentwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/agent"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
 	scriptwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/script"
+	sourcepostgres "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/adapter/postgres"
+	script "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/application"
+	scriptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/domain"
 )
 
 type sourceBytes struct {

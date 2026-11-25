@@ -10,9 +10,9 @@ import (
 
 	agentapp "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
-	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
-	mediatool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
-	tooldomain "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/domain"
+	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	mediatool "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/application"
+	tooldomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/domain"
 )
 
 func shotReceipts(tx *gorm.DB, s domain.Scope) *gorm.DB {

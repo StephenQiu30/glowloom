@@ -1,0 +1,191 @@
+package postgres
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"math"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
+	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/application"
+	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+)
+
+// CreateBatchFreeQuote preserves request order, excludes only invalid items,
+// and commits valid snapshots and the idempotency result in one transaction.
+func (s *Store) CreateBatchFreeQuote(ctx context.Context, actor identityapp.Principal, input application.CreateBatchFreeQuoteInput) (application.CreateBatchFreeQuoteResult, error) {
+	if s == nil || s.db == nil {
+		return application.CreateBatchFreeQuoteResult{}, ErrUnavailable
+	}
+	if err := input.Validate(); err != nil {
+		return application.CreateBatchFreeQuoteResult{}, err
+	}
+	fingerprint, err := batchQuoteRequestFingerprint(input)
+	if err != nil {
+		return application.CreateBatchFreeQuoteResult{}, err
+	}
+	requestID := uuid.MustParse(input.RequestID)
+	var result application.CreateBatchFreeQuoteResult
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := s.requireProject(tx, actor, input.ProjectID, true); err != nil {
+			return err
+		}
+		if err := lockQuoteRequest(tx, actor, requestID); err != nil {
+			return err
+		}
+		project, err := lockFreeQuoteProject(tx, actor, input.ProjectID)
+		if err != nil {
+			return err
+		}
+		stored, found, err := readQuoteRequest(tx, actor, requestID, fingerprint)
+		if err != nil {
+			return err
+		}
+		if found {
+			if err := json.Unmarshal(stored, &result); err != nil {
+				return fmt.Errorf("decode stored batch quote: %w", err)
+			}
+			if len(result.Items) != len(input.Items) || result.ExpiresAt.IsZero() {
+				return fmt.Errorf("decode stored batch quote: invalid result shape")
+			}
+			return nil
+		}
+		now := time.Now().UTC()
+		batchScope, err := readBatchQuoteSourceScope(tx, input, project)
+		if err != nil {
+			return err
+		}
+		result = application.CreateBatchFreeQuoteResult{
+			ExpiresAt: now.Add(15 * time.Minute),
+			Items:     make([]application.BatchFreeQuoteItemResult, len(input.Items)),
+		}
+		valid := make([]QuoteItem, 0, len(input.Items))
+		type orderedDemand struct {
+			id string
+			billingapp.WalletDemand
+		}
+		demands := make([]orderedDemand, 0, len(input.Items))
+		resultIndices := make([]int, 0, len(input.Items))
+		for index, requested := range input.Items {
+			result.Items[index] = application.BatchFreeQuoteItemResult{
+				ModelKey: requested.ModelKey, Mode: requested.Mode,
+			}
+			item, modelKey, itemErr := s.prepareFreeQuoteItem(ctx, tx, actor, application.CreateFreeQuoteInput{
+				ProjectID: input.ProjectID, RequestID: input.RequestID,
+				FreeQuoteItemInput: requested,
+			}, project, now)
+			if itemErr != nil {
+				code, recoverable := batchQuoteItemError(itemErr)
+				if !recoverable {
+					return fmt.Errorf("prepare batch quote item %d: %w", index, itemErr)
+				}
+				result.Items[index].ErrorCode = code
+				continue
+			}
+			amount := *item.Operation.QuoteMicros
+			result.Items[index].ModelKey = modelKey
+			if amount > math.MaxInt64-result.TotalMicros {
+				return application.ErrQuoteAmountOverflow
+			}
+			result.TotalMicros += amount
+			operationID := item.Operation.ID
+			result.Items[index].OperationID = &operationID
+			result.Items[index].QuoteMicros = &amount
+			result.Items[index].QuoteDetail = item.Operation.QuoteDetail
+			result.Items[index].ReusedFromID = item.Operation.ReusedFromID
+			result.Items[index].Region = *item.Operation.Region
+			result.Items[index].PromptPreparation = item.PromptPreparation
+			if item.PromptPreparation != nil {
+				result.Items[index].FinalPrompt = *item.Inputs[0].TextValue
+			}
+			ready, err := commercialPriceReady(tx, item.Operation.PriceRuleVersionID)
+			if err != nil {
+				return err
+			}
+			demands = append(demands, orderedDemand{item.Operation.ID.String(), billingapp.WalletDemand{
+				ModelKey: modelKey, Micros: amount, CommercialPriceReady: ready, ReusedResult: item.Operation.ReusedFromID != nil,
+			}})
+			resultIndices = append(resultIndices, index)
+			valid = append(valid, item)
+		}
+		budget, err := s.billingStore(tx).FindBudget(ctx, actor, input.ProjectID)
+		if err != nil {
+			return err
+		}
+		result.AvailableMicros, err = budget.AvailableMicros()
+		if err != nil {
+			return err
+		}
+		if len(valid) > 0 {
+			slices.SortFunc(demands, func(a, b orderedDemand) int { return strings.Compare(a.id, b.id) })
+			ordered := make([]billingapp.WalletDemand, len(demands))
+			for i := range demands {
+				ordered[i] = demands[i].WalletDemand
+			}
+			walletBlock, err := walletQuoteBlock(s.billingStore(tx).CheckWalletQuoteInTransaction(tx, input.ProjectID, ordered, actor.ScopeID))
+			if err != nil {
+				return err
+			}
+			for i := range valid {
+				if err := annotateWalletQuote(&valid[i], walletBlock); err != nil {
+					return err
+				}
+				result.Items[resultIndices[i]].QuoteDetail = valid[i].Operation.QuoteDetail
+			}
+			batchID := uuid.New()
+			for index := range valid {
+				valid[index].Operation.BatchID = &batchID
+			}
+			batch := domain.Batch{
+				ID: batchID, ProjectID: input.ProjectID, Kind: "mixed",
+				Scope: batchScope, Status: domain.BatchStatusQuoted,
+				TotalCount: int32(len(valid)), QuoteTotalMicros: result.TotalMicros,
+			}
+			if err := s.withDB(tx).CreateQuoteSnapshot(ctx, actor, &batch, valid); err != nil {
+				return err
+			}
+			result.BatchID = &batchID
+			result.Confirmable = result.AvailableMicros >= result.TotalMicros && walletBlock == ""
+		}
+		return insertQuoteRequest(tx, actor, requestID, fingerprint, result)
+	})
+	if err != nil {
+		return application.CreateBatchFreeQuoteResult{}, fmt.Errorf("create batch free quote transaction: %w", err)
+	}
+	return result, nil
+}
+
+func batchQuoteItemError(err error) (string, bool) {
+	switch {
+	case errors.Is(err, promptapp.ErrTemplateInvalid):
+		return "template_invalid", true
+	case errors.Is(err, promptapp.ErrTemplateChanged):
+		return "template_changed", true
+	case errors.Is(err, promptapp.ErrTemplateContextUnavailable):
+		return "context_unavailable", true
+	case errors.Is(err, application.ErrFreeQuoteModelMissing):
+		return "model_unavailable", true
+	case errors.Is(err, application.ErrInvalidFreeQuote),
+		errors.Is(err, application.ErrFreeQuoteInputNotReady),
+		errors.Is(err, application.ErrInvalidFingerprint),
+		errors.Is(err, application.ErrInvalidPricingInput):
+		return "input_not_ready", true
+	case errors.Is(err, application.ErrInvalidPricingRule),
+		errors.Is(err, application.ErrUnsupportedPriceCoefficient),
+		errors.Is(err, application.ErrQuoteAmountOverflow):
+		return "price_unavailable", true
+	default:
+		return "", false
+	}
+}
+
+var _ application.BatchFreeQuoteCreator = (*Store)(nil)

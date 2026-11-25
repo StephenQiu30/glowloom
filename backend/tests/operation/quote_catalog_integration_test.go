@@ -5,16 +5,16 @@ import (
 	"testing"
 	"time"
 
-	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application/source"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
-	billingdomain "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/domain"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 func TestReadCurrentQuoteCatalogTracksPublishedVersionsAndAvailability(t *testing.T) {

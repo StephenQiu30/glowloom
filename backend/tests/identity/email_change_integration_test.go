@@ -10,10 +10,10 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/identity/adapter/credentialproof"
-	pg "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
-	app "github.com/StephenQiu30/glowloom-server/backend/identity/application"
-	"github.com/StephenQiu30/glowloom-server/backend/identity/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/credentialproof"
+	pg "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 func changeCode(t *testing.T, tx *gorm.DB, op uuid.UUID, side string) string {

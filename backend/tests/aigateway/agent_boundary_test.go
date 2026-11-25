@@ -11,10 +11,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	agent "github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	agentwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/agent"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/aigateway"
+	operation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 )
 

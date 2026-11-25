@@ -3,19 +3,19 @@ package agent
 import (
 	"errors"
 
-	bible "github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
-	bibledomain "github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
-	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/application"
-	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
-	script "github.com/StephenQiu30/glowloom-server/backend/creation/script/application"
-	scriptdomain "github.com/StephenQiu30/glowloom-server/backend/creation/script/domain"
-	subject "github.com/StephenQiu30/glowloom-server/backend/creation/subject/application"
-	gateway "github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
-	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
-	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
-	mediatool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
+	bible "github.com/StephenQiu30/glowloom-server/backend/internal/creation/bible/application"
+	bibledomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/bible/domain"
+	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/application"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
+	script "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/application"
+	scriptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/script/domain"
+	subject "github.com/StephenQiu30/glowloom-server/backend/internal/creation/subject/application"
+	gateway "github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/domain"
+	operation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	operationdomain "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/domain"
+	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	mediatool "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/application"
 )
 
 func businessError(err error) error {

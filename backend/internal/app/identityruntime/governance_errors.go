@@ -3,12 +3,12 @@ package identityruntime
 import (
 	"errors"
 
-	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application/source"
 
-	workspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application"
+	workspace "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
-	"github.com/StephenQiu30/glowloom-server/backend/identity/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 // mapCreationGovernanceError preserves the mixed root's existing HTTP outcomes

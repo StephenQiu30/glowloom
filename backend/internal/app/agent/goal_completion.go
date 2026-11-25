@@ -8,9 +8,9 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
 	agentapp "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
+	operation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/domain"
 )
 
 func deliverySpec(in ShotDeliveryInput) domain.GoalDeliverySpec {

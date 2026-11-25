@@ -12,7 +12,7 @@ import (
 
 func TestPromptOwnsItsActorAndDoesNotImportIdentityImplementation(t *testing.T) {
 	root := serviceLayoutRoot(t)
-	for _, directory := range []string{"creation/prompt/application", "creation/prompt/adapter/postgres", "creation/prompt/adapter/http"} {
+	for _, directory := range []string{"internal/creation/prompt/application", "internal/creation/prompt/adapter/postgres", "internal/creation/prompt/adapter/http"} {
 		err := filepath.WalkDir(filepath.Join(root, directory), func(path string, entry fs.DirEntry, walkErr error) error {
 			if walkErr != nil {
 				return walkErr
@@ -29,7 +29,7 @@ func TestPromptOwnsItsActorAndDoesNotImportIdentityImplementation(t *testing.T) 
 				if err != nil {
 					return err
 				}
-				if strings.HasPrefix(target, "github.com/StephenQiu30/glowloom-server/backend/identity/") {
+				if strings.HasPrefix(target, "github.com/StephenQiu30/glowloom-server/backend/internal/identity/") {
 					t.Errorf("Prompt owns its actor and private authority boundary; implementation import remains in %s: %s", path, target)
 				}
 			}

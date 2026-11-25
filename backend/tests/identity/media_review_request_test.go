@@ -11,14 +11,14 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
-	media "github.com/StephenQiu30/glowloom-server/backend/media/application"
-	md "github.com/StephenQiu30/glowloom-server/backend/media/domain"
-	pgtool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/postgres"
-	tool "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/application"
-	td "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/domain"
+	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	md "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	pgtool "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/postgres"
+	tool "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/application"
+	td "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/domain"
 )
 
 type reviewScopeSource struct{ asset uuid.UUID }

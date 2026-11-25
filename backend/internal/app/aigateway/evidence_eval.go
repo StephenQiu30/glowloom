@@ -10,10 +10,10 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/evidence"
-	ep "github.com/StephenQiu30/glowloom-server/backend/creation/evidence/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/gateway/domain"
 	scopewire "github.com/StephenQiu30/glowloom-server/backend/internal/app/scope"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/evidence"
+	ep "github.com/StephenQiu30/glowloom-server/backend/internal/creation/evidence/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/domain"
 )
 
 // EvidenceCase pins independently annotated source versions. An empty expected list denotes no answer.

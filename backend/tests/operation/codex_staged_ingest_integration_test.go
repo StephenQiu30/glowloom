@@ -5,19 +5,19 @@ import (
 	"errors"
 	"testing"
 
-	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/media/adapter/objectstorage"
+	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/codex"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/adapter/staging"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/media/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/media/adapter/staged"
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/codex"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/staging"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/staged"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 func TestM1StagedIngestPrivateImageCreatesOneCandidate(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/domain"
 )
 
 func reservationBudget(limit, reserved, settled int64) domain.Budget {

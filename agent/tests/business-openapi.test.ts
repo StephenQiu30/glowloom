@@ -33,7 +33,7 @@ it('generates and verifies the internal Go business client', () => {
         '-g',
         'business_swagger.go',
         '-d',
-        'internal/agent/adapter/http,internal/agent/domain,internal/agent/application,execution/operation/domain,creation/canvas/domain,media/mediatool/domain',
+        'internal/agent/adapter/http,internal/agent/domain,internal/agent/application,internal/execution/operation/domain,internal/creation/canvas/domain,internal/media/mediatool/domain',
         '--parseInternal',
         '--tags',
         'business',

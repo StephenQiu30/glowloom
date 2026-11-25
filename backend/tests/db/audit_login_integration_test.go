@@ -12,11 +12,11 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
-	identitypg "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	pgaudit "github.com/StephenQiu30/glowloom-server/backend/internal/audit/adapter/postgres"
 	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/audit/domain"
+	identitypg "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/tests/identityfixture"
 )

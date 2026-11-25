@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	pgbilling "github.com/StephenQiu30/glowloom-server/backend/execution/billing/adapter/postgres"
+	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/adapter/postgres"
 )
 
 func TestWalletEntryPartitionMovesDefaultRowsBeforeAttach(t *testing.T) {

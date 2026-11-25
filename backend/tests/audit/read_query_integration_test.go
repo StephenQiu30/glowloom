@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"

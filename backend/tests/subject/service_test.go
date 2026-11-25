@@ -8,9 +8,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/subject/application"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/subject/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/subject/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/subject/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 func TestSubjectSaveIsAtomicAndReplaysOnlyAfterAuthorization(t *testing.T) {

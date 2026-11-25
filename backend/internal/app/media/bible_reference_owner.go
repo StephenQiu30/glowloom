@@ -5,11 +5,11 @@ import (
 
 	"github.com/google/uuid"
 
-	pgbible "github.com/StephenQiu30/glowloom-server/backend/creation/bible/adapter/postgres"
-	bibleapp "github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/adapter/postgres"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
+	pgbible "github.com/StephenQiu30/glowloom-server/backend/internal/creation/bible/adapter/postgres"
+	bibleapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/bible/application"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/postgres"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 // These legacy adapters retain the caller's existing request or worker policy

@@ -6,11 +6,11 @@ import (
 
 	"github.com/google/uuid"
 
-	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/media/adapter/workflow"
-	mediadomain "github.com/StephenQiu30/glowloom-server/backend/media/domain"
-	exportff "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/adapter/ffmpeg"
-	exportdomain "github.com/StephenQiu30/glowloom-server/backend/media/mediatool/domain"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	exportff "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/adapter/ffmpeg"
+	exportdomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/mediatool/domain"
 )
 
 func TestTimelineExplicitAspectsRenderAndProbeActualVideoAndProxy(t *testing.T) {

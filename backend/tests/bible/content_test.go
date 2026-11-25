@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/creation/bible/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/bible/domain"
 )
 
 func characterContent() domain.CharacterContent {

@@ -31,13 +31,13 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	prompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	agenthttp "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/http"
 	pg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/runtimeclient"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
+	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // fixtureInputs uses the production draft codec while pinning a deterministic

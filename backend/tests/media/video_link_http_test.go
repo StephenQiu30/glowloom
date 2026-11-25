@@ -9,12 +9,12 @@ import (
 	"testing"
 	"time"
 
-	mediahttp "github.com/StephenQiu30/glowloom-server/backend/media/adapter/http"
+	mediahttp "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/glowloom-server/backend/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 type videoLinkImportFixture func(context.Context, application.Actor, uuid.UUID, uuid.UUID, application.VideoLinkRequest) (application.PersonalUploadResult, error)

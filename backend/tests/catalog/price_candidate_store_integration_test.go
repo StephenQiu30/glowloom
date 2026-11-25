@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/postgres"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/adapter/pricesync"
-	"github.com/StephenQiu30/glowloom-server/backend/execution/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/adapter/pricesync"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 

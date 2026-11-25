@@ -10,8 +10,8 @@ import (
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	pg "github.com/StephenQiu30/glowloom-server/backend/identity/adapter/postgres"
-	app "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	pg "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 

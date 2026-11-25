@@ -1,8 +1,8 @@
 package projectcopy
 
 import (
-	bibleapp "github.com/StephenQiu30/glowloom-server/backend/creation/bible/application"
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	bibleapp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/bible/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 func projectCopyBibleActor(actor identityapp.Principal) bibleapp.Actor {

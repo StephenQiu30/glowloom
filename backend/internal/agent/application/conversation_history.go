@@ -6,8 +6,8 @@ import (
 
 	"github.com/google/uuid"
 
-	prompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
+	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // ConversationSourceReader checks current read authority for the draft's referenced sources.

@@ -17,16 +17,16 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	canvas "github.com/StephenQiu30/glowloom-server/backend/creation/canvas/domain"
-	"github.com/StephenQiu30/glowloom-server/backend/creation/evidence"
-	workspacesource "github.com/StephenQiu30/glowloom-server/backend/creation/workspace/application/source"
-	billing "github.com/StephenQiu30/glowloom-server/backend/execution/billing/domain"
-	operation "github.com/StephenQiu30/glowloom-server/backend/execution/operation/application"
-	operationdomain "github.com/StephenQiu30/glowloom-server/backend/execution/operation/domain"
-	identity "github.com/StephenQiu30/glowloom-server/backend/identity/application"
 	agentpg "github.com/StephenQiu30/glowloom-server/backend/internal/agent/adapter/postgres"
 	agent "github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	agentwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/agent"
+	canvas "github.com/StephenQiu30/glowloom-server/backend/internal/creation/canvas/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/evidence"
+	workspacesource "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/application/source"
+	billing "github.com/StephenQiu30/glowloom-server/backend/internal/execution/billing/domain"
+	operation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
+	operationdomain "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/domain"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 type agentEvalCase struct {

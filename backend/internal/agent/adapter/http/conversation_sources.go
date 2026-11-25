@@ -3,9 +3,9 @@ package http
 import (
 	"github.com/gin-gonic/gin"
 
-	prompt "github.com/StephenQiu30/glowloom-server/backend/creation/prompt/domain"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/agent/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
+	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/domain"
 )
 
 // WithInputSources injects current resource authority for every model egress.

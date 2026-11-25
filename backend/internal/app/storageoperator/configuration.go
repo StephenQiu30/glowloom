@@ -5,8 +5,8 @@ package storageoperator
 import (
 	"sort"
 
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/media/application"
 )
 
 // Configuration binds the normalized public configuration and credential source

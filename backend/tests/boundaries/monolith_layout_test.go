@@ -17,39 +17,48 @@ func serviceLayoutRoot(t *testing.T) string {
 	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
 }
 
-func TestMonolithLayoutHasSingleEntrypointAndNoRetiredMicroservices(t *testing.T) {
+func TestMonolithLayoutHasSingleEntrypointAndInternalDomains(t *testing.T) {
 	root := serviceLayoutRoot(t)
 
 	for _, mustExist := range []string{
 		"go.mod",
+		"buf.yaml",
+		"buf.gen.yaml",
 		"cmd/glowloom/main.go",
 		"internal/app/compose.go",
+		"internal/creation",
+		"internal/execution",
+		"internal/identity",
+		"internal/media",
+		"internal/agent",
+		"internal/gen/canvas",
+		"internal/gen/agent",
 		"db/schema.sql",
 		"db/data.sql",
 	} {
 		if _, err := os.Stat(filepath.Join(root, mustExist)); err != nil {
-			t.Errorf("missing required monolith file %s: %v", mustExist, err)
+			t.Errorf("missing required monolith path %s: %v", mustExist, err)
 		}
 	}
 
 	for _, mustNotExist := range []string{
 		"gateway",
-		"creation/main.go",
-		"creation/app",
-		"creation/Dockerfile",
-		"creation/cmd",
-		"media/main.go",
-		"media/app",
-		"media/Dockerfile",
-		"identity/main.go",
-		"identity/app",
+		"creation",
+		"execution",
+		"identity",
+		"media",
 		"internal/platform/writefence",
 		"internal/platform/artifactrpc",
+		"internal/platform/serviceauth",
+		"internal/platform/temporalconn",
 		"internal/app/wire.go",
 		"internal/app/wire_gen.go",
+		"internal/app/codexruntime",
+		"internal/app/aitrial",
+		"tests/temporalconn",
 	} {
 		if _, err := os.Stat(filepath.Join(root, mustNotExist)); !os.IsNotExist(err) {
-			t.Errorf("retired microservice or archived Wire path still present: %s", mustNotExist)
+			t.Errorf("retired microservice, legacy compat, or top-level domain path still present: %s", mustNotExist)
 		}
 	}
 
