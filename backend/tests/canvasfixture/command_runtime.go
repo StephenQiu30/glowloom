@@ -19,7 +19,7 @@ func CommandRuntime(t testing.TB) *yjsruntime.Client {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.CommandContext(t.Context(), "node", "--input-type=module", "-e", `import {buildApp}from'./dist/http/app.js';const s=await buildApp({token:'isolated-agent-command-runtime-token'});await s.listen(0,'127.0.0.1');console.log(s.getHttpServer().address().port);`)
+	cmd := exec.CommandContext(t.Context(), "node", "--input-type=module", "-e", `import {buildApp}from'./dist/transport/app.js';const s=await buildApp({token:'isolated-agent-command-runtime-token'});await s.listen(0,'127.0.0.1');console.log(s.getHttpServer().address().port);`)
 	cmd.Dir = root
 	pipe, err := cmd.StdoutPipe()
 	if err != nil {

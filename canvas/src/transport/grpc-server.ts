@@ -1,9 +1,10 @@
-import { timingSafeEqual } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as grpc from "@grpc/grpc-js";
 import * as protoLoader from "@grpc/proto-loader";
 import { computeCandidate } from "../runtime/candidate.js";
+import { buildExpectedBearer, verifyBearerToken } from "./auth.js";
+import { classifyRuntimeError, ConcurrencyGate } from "./concurrency.js";
 
 const maxMessageBytes = 16 * 1024 * 1024;
 
@@ -37,9 +38,8 @@ function verifyToken(
   expected: Buffer,
 ): Partial<grpc.StatusObject> | null {
   const values = metadata.get("authorization");
-  const raw = typeof values[0] === "string" ? values[0] : "";
-  const actual = Buffer.from(raw);
-  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
+  const raw = typeof values[0] === "string" ? values[0] : undefined;
+  if (!verifyBearerToken(raw, expected)) {
     return {
       code: grpc.status.UNAUTHENTICATED,
       details: "UNAUTHORIZED",
@@ -52,15 +52,15 @@ export async function startGrpcServer({
   address,
   token,
   maxConcurrent = 4,
+  gate,
 }: {
   address: string;
   token: string | undefined;
   maxConcurrent?: number;
+  gate?: ConcurrencyGate;
 }): Promise<CanvasGrpcServer> {
-  if (typeof token !== "string" || Buffer.byteLength(token) < 32) {
-    throw new Error("RUNTIME_TOKEN_REQUIRED");
-  }
-  const expected = Buffer.from(`Bearer ${token}`);
+  const expected = buildExpectedBearer(token);
+  const limiter = gate ?? new ConcurrencyGate(maxConcurrent);
   const packageDef = protoLoader.loadSync(resolveProtoPath(), {
     keepCase: true,
     longs: String,
@@ -76,8 +76,6 @@ export async function startGrpcServer({
     };
   };
 
-  let active = 0;
-
   const makeHandler =
     (action: "initialize" | "prepare" | "rename" | "commands") =>
     async (
@@ -89,7 +87,8 @@ export async function startGrpcServer({
         callback(authErr);
         return;
       }
-      if (active >= maxConcurrent) {
+      const release = limiter.tryAcquire();
+      if (!release) {
         callback(
           Object.assign(new Error("RUNTIME_BUSY"), {
             code: grpc.status.RESOURCE_EXHAUSTED,
@@ -97,7 +96,6 @@ export async function startGrpcServer({
         );
         return;
       }
-      active += 1;
       try {
         const rawJson = call.request.payload_json ?? Buffer.alloc(0);
         if (rawJson.length > maxMessageBytes) {
@@ -138,13 +136,7 @@ export async function startGrpcServer({
           definitive: false,
         });
       } catch (error) {
-        const failure = error && typeof error === "object" ? error : {};
-        const definitive =
-          "definitive" in failure && failure.definitive === true;
-        const code =
-          "code" in failure && typeof failure.code === "string"
-            ? failure.code
-            : "RUNTIME_UNAVAILABLE";
+        const { code, definitive } = classifyRuntimeError(error);
         if (definitive) {
           callback(null, {
             payload_json: Buffer.alloc(0),
@@ -157,7 +149,7 @@ export async function startGrpcServer({
           Object.assign(new Error(code), { code: grpc.status.UNAVAILABLE }),
         );
       } finally {
-        active -= 1;
+        release();
       }
     };
 

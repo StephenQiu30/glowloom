@@ -29,7 +29,7 @@ func yjsRuntimeAddress(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	script := `import {buildApp} from './dist/http/app.js'; const s=await buildApp({token:'isolated-test-runtime-token-32-bytes'});await s.listen(0,'127.0.0.1');console.log(s.getHttpServer().address().port);`
+	script := `import {buildApp} from './dist/transport/app.js'; const s=await buildApp({token:'isolated-test-runtime-token-32-bytes'});await s.listen(0,'127.0.0.1');console.log(s.getHttpServer().address().port);`
 	command := exec.CommandContext(t.Context(), "node", "--input-type=module", "-e", script)
 	command.Dir = root
 	pipe, err := command.StdoutPipe()

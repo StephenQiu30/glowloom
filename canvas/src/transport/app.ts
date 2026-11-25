@@ -1,5 +1,4 @@
 import "reflect-metadata";
-import { timingSafeEqual } from "node:crypto";
 import {
   createServer,
   type IncomingMessage,
@@ -13,6 +12,8 @@ import {
 } from "@nestjs/platform-fastify";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { computeCandidate } from "../runtime/candidate.js";
+import { buildExpectedBearer, verifyBearerToken } from "./auth.js";
+import { classifyRuntimeError, ConcurrencyGate } from "./concurrency.js";
 
 const actions = ["initialize", "prepare", "rename", "commands"] as const;
 const maxBodyBytes = 16 * 1024 * 1024;
@@ -63,15 +64,8 @@ class CanvasController {
         await computeCandidate(request.url.slice(4), input),
       );
     } catch (error) {
-      const failure = error && typeof error === "object" ? error : {};
-      const definitive = "definitive" in failure && failure.definitive === true;
-      return send(reply, definitive ? 422 : 503, {
-        code:
-          "code" in failure && typeof failure.code === "string"
-            ? failure.code
-            : "RUNTIME_UNAVAILABLE",
-        definitive,
-      });
+      const { code, definitive } = classifyRuntimeError(error);
+      return send(reply, definitive ? 422 : 503, { code, definitive });
     }
   }
 }
@@ -82,15 +76,14 @@ class CanvasHttpModule {}
 export async function buildApp({
   token,
   maxConcurrent = 4,
+  gate,
 }: {
   token: string | undefined;
   maxConcurrent?: number;
+  gate?: ConcurrencyGate;
 }): Promise<NestFastifyApplication> {
-  if (typeof token !== "string" || Buffer.byteLength(token) < 32)
-    throw new Error("RUNTIME_TOKEN_REQUIRED");
-
-  const expected = Buffer.from(`Bearer ${token}`);
-  let active = 0;
+  const expected = buildExpectedBearer(token);
+  const limiter = gate ?? new ConcurrencyGate(maxConcurrent);
   const adapter = new FastifyAdapter({
     requestTimeout: 15000,
     exposeHeadRoutes: false,
@@ -107,11 +100,7 @@ export async function buildApp({
   );
   server.addHook("onRequest", async (request, reply) => {
     if (request.method === "GET" && request.url === "/healthz") return;
-    const actual = Buffer.from(request.headers.authorization ?? "");
-    if (
-      actual.length !== expected.length ||
-      !timingSafeEqual(actual, expected)
-    ) {
+    if (!verifyBearerToken(request.headers.authorization, expected)) {
       request.raw.resume();
       return send(reply, 401, { code: "UNAUTHORIZED" });
     }
@@ -122,12 +111,12 @@ export async function buildApp({
       request.raw.resume();
       return send(reply, 404, { code: "NOT_FOUND" });
     }
-    if (active >= maxConcurrent) {
+    const release = limiter.tryAcquire();
+    if (!release) {
       request.raw.resume();
       return send(reply, 503, { code: "BUSY", definitive: false });
     }
-    active++;
-    reply.raw.once("close", () => active--);
+    reply.raw.once("close", release);
   });
 
   const app = await NestFactory.create<NestFastifyApplication>(

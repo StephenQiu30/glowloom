@@ -3,7 +3,7 @@ import test from "node:test";
 import * as Y from "yjs";
 import { randomUUID } from "node:crypto";
 import { computeCandidate, decodeBinary } from "../dist/runtime/candidate.js";
-import { buildApp } from "../dist/http/app.js";
+import { buildApp } from "../dist/transport/app.js";
 import { digest } from "../dist/runtime/admission.js";
 import {
   applyCanvasChanges,

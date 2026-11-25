@@ -1,24 +1,57 @@
-import { buildApp } from "./http/app.js";
-import { startGrpcServer } from "./rpc/server.js";
+import { loadConfig } from "./config.js";
+import { buildApp } from "./transport/app.js";
+import { ConcurrencyGate } from "./transport/concurrency.js";
+import {
+  startGrpcServer,
+  type CanvasGrpcServer,
+} from "./transport/grpc-server.js";
 
-const token = process.env.GLOWLOOM_COLLAB_RUNTIME_TOKEN;
-const app = await buildApp({ token });
-app.enableShutdownHooks(["SIGTERM", "SIGINT"]);
-
-const grpcAddr = process.env.GLOWLOOM_CANVAS_GRPC_ADDR ?? "0.0.0.0:4402";
-const grpcServer = await startGrpcServer({ address: grpcAddr, token });
-
-const shutdown = async () => {
-  await grpcServer.close();
-};
-process.once("SIGTERM", () => {
-  void shutdown();
-});
-process.once("SIGINT", () => {
-  void shutdown();
+const config = loadConfig(process.env);
+const gate = new ConcurrencyGate(config.maxConcurrent);
+const app = await buildApp({
+  token: config.token,
+  maxConcurrent: config.maxConcurrent,
+  gate,
 });
 
-await app.listen(
-  Number(process.env.PORT ?? 4400),
-  process.env.HOST ?? "127.0.0.1",
-);
+let grpcServer: CanvasGrpcServer | undefined;
+let closing: Promise<void> | undefined;
+
+function close(): Promise<void> {
+  closing ??= (async () => {
+    const deadline = setTimeout(() => {
+      process.exit(1);
+    }, 15000);
+    deadline.unref();
+    try {
+      await (grpcServer ? grpcServer.close() : Promise.resolve()).finally(() =>
+        app.close(),
+      );
+    } finally {
+      clearTimeout(deadline);
+    }
+  })();
+  return closing;
+}
+
+function onSignal(): void {
+  void close().catch(() => {
+    process.exitCode = 1;
+  });
+}
+
+process.on("SIGTERM", onSignal);
+process.on("SIGINT", onSignal);
+
+try {
+  await app.listen(config.port, config.host);
+  grpcServer = await startGrpcServer({
+    address: config.grpcAddress,
+    token: config.token,
+    maxConcurrent: config.maxConcurrent,
+    gate,
+  });
+} catch (error) {
+  await close();
+  throw error;
+}

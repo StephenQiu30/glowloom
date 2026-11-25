@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as grpc from "@grpc/grpc-js";
 import * as protoLoader from "@grpc/proto-loader";
-import { startGrpcServer } from "../dist/rpc/server.js";
+import { startGrpcServer } from "../dist/transport/grpc-server.js";
 
 const token = "canvas-grpc-test-token-at-least-32-bytes-long";
 
