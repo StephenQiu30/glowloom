@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { expect, it } from 'vitest';
-import { AuthorizedInput } from '../src/http/session-request.dto.js';
+import { AuthorizedInput } from '../src/transport/session-request-dto.js';
 
 it('validates the frozen ninety-reference envelope with actual document identities', async () => {
   const raw = {

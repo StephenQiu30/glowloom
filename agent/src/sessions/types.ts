@@ -132,6 +132,11 @@ export interface AgentApplication {
     identity: Identity,
     after: string | undefined,
   ): Promise<RuntimeEvent[]>;
+  waitForEvents?(
+    id: string,
+    timeoutMs: number,
+    signal?: AbortSignal,
+  ): Promise<void>;
   stopAccepting(): void;
   close(): Promise<void>;
   listRuns(sessionId: string, query: HistoryInput): Promise<unknown>;

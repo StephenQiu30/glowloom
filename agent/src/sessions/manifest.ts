@@ -1,5 +1,5 @@
-import { executionPolicy } from '../pi-durable/policy.js';
-import { DEFINITION_HASH } from '../pi-durable/definitions.js';
+import { executionPolicy } from '../harness/policy.js';
+import { DEFINITION_HASH, RUNTIME_CONTRACT_VERSION } from '../contract.js';
 import { createHash } from 'node:crypto';
 import type { BusinessTool } from '../business/client.js';
 import { freezeGoalContract, type GoalContract } from '../business/goal.js';
@@ -46,13 +46,21 @@ export function stableId(namespace: string, name: string) {
   const h = hash.toString('hex');
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
+export interface RoleModelRoute {
+  readonly model_key: string;
+  readonly reasoning?: boolean;
+}
+
 export interface FrozenManifest {
   pi_version: '1.5.0';
+  contract_version?: typeof RUNTIME_CONTRACT_VERSION;
   execution_policy: typeof executionPolicy;
   goal_contract: GoalContract;
   definition_hash: string;
   trusted_extensions: { path: string; sha256: string }[];
   model_key: string;
+  reasoning?: boolean;
+  role_models?: Record<string, RoleModelRoute>;
   release_id?: string;
   context_window: number;
   max_tokens: number;
@@ -118,13 +126,19 @@ export function freezeManifest(
     )
   )
     throw new Error('Invalid Skill pins');
+  const roleModels = parseRoleModels(input.role_models);
   const body = {
     pi_version: '1.5.0' as const,
+    contract_version: RUNTIME_CONTRACT_VERSION,
     execution_policy: structuredClone(executionPolicy),
     goal_contract: freezeGoalContract(input.goal_contract),
     definition_hash: DEFINITION_HASH,
     trusted_extensions: [],
     model_key: input.model_key,
+    ...(typeof input.reasoning === 'boolean'
+      ? { reasoning: input.reasoning }
+      : {}),
+    ...(roleModels ? { role_models: roleModels } : {}),
     ...(typeof input.release_id === 'string'
       ? { release_id: input.release_id }
       : {}),
@@ -147,9 +161,39 @@ export function freezeManifest(
   return freeze({ ...body, sha256: canonicalHash(body) });
 }
 
+function parseRoleModels(
+  raw: unknown,
+): Record<string, RoleModelRoute> | undefined {
+  if (raw === undefined) return undefined;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+    throw new Error('Invalid manifest role_models');
+  const out: Record<string, RoleModelRoute> = {};
+  for (const [role, value] of Object.entries(raw)) {
+    if (
+      !value ||
+      typeof value !== 'object' ||
+      Array.isArray(value) ||
+      typeof (value as Record<string, unknown>).model_key !== 'string' ||
+      !(value as Record<string, unknown>).model_key?.toString().trim()
+    )
+      throw new Error(`Invalid role model route for ${role}`);
+    const entry = value as Record<string, unknown>;
+    if (entry.reasoning !== undefined && typeof entry.reasoning !== 'boolean')
+      throw new Error(`Invalid reasoning flag for ${role}`);
+    out[role] = {
+      model_key: String(entry.model_key).trim(),
+      ...(typeof entry.reasoning === 'boolean'
+        ? { reasoning: entry.reasoning }
+        : {}),
+    };
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
 export function hasCurrentDefinitions(manifest: FrozenManifest): boolean {
-  return (
-    manifest.pi_version === '1.5.0' &&
-    manifest.definition_hash === DEFINITION_HASH
-  );
+  if (manifest.pi_version !== '1.5.0') return false;
+  if (manifest.contract_version !== undefined) {
+    return manifest.contract_version === RUNTIME_CONTRACT_VERSION;
+  }
+  return manifest.definition_hash === DEFINITION_HASH;
 }

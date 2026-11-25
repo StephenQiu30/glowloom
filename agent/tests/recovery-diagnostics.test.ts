@@ -2,19 +2,19 @@ import { randomUUID } from 'node:crypto';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { expect, it, vi } from 'vitest';
 import { BusinessClient } from '../src/business/client.js';
-import { SessionStore } from '../src/sessions/persistence/store.js';
-import { SessionRuntime } from '../src/sessions/execution/runtime.js';
+import { SessionStore } from '../src/sessions/session-store.js';
+import { SessionRuntime } from '../src/harness/runtime.js';
 import { SessionService } from '../src/sessions/service.js';
 import { freezeManifest } from '../src/sessions/manifest.js';
 import {
   claimSessionOwner,
   releaseSessionOwner,
-} from '../src/pi-durable/storage/ownership.js';
+} from '../src/storage/ownership.js';
 import {
   RecoveryStore,
   RecoveryKind,
   RecoveryCode,
-} from '../src/sessions/recovery/store.js';
+} from '../src/sessions/recovery-store.js';
 import { testPool } from './storage/database.js';
 import { authorizedText } from './helpers/conversation-input.js';
 

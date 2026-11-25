@@ -12,29 +12,30 @@ import type {
   HistoryInput,
   MessageInput,
 } from './types.js';
-import { AgentError } from './errors.js';
+import { AgentError } from './session-errors.js';
 import { BusinessClient } from '../business/client.js';
 import {
   SessionStore,
   inTransaction,
   runRow,
   type RunRow,
-} from './persistence/store.js';
-import { SessionRuntime } from './execution/runtime.js';
+} from './session-store.js';
+import { SessionRuntime } from '../harness/runtime.js';
 import { freezeManifest } from './manifest.js';
-import { StateDoc } from '../pi-durable/docs.js';
-import { ConversationStore } from './persistence/conversations.js';
-import type { DeliveryOptions } from './execution/delivery.js';
+import { StateDoc } from '../harness/state-doc.js';
+import { ConversationStore } from './conversations.js';
+import type { DeliveryOptions } from '../harness/delivery-verifier.js';
 import { runtimeDefaults } from '../config.js';
 import {
   RecoveryStore,
   RecoveryKind,
   RecoveryCode,
   type RecoveryEvent,
-} from './recovery/store.js';
-import { SessionControls } from './execution/controls.js';
-import { readRunEvents } from './persistence/public-events.js';
-import { RecoveryPump } from './recovery/pump.js';
+} from './recovery-store.js';
+import { SessionControls } from './controls.js';
+import { readRunEvents } from './public-events.js';
+import { RecoveryPump } from './recovery-pump.js';
+import { RunEventBus } from './event-bus.js';
 
 const context = BACKGROUND_CONTEXT;
 
@@ -44,6 +45,7 @@ export class SessionService implements AgentApplication {
   private readonly backoff: RecoveryStore;
   private readonly controls: SessionControls;
   private readonly recovery: RecoveryPump;
+  private readonly eventBus = new RunEventBus();
   private active = new Map<string, SessionRuntime>();
   private opening = new Map<string, Promise<SessionRuntime>>();
   private jobs = new Map<string, Promise<void>>();
@@ -195,6 +197,7 @@ export class SessionService implements AgentApplication {
       this.options.leaseMs,
       {
         ...this.options,
+        onEventCommitted: () => this.eventBus.notify(run.id),
         onCloseFailure: () =>
           this.recovery.failed(
             RecoveryKind.Run,
@@ -311,6 +314,14 @@ export class SessionService implements AgentApplication {
     return readRunEvents(this.pool, run, after);
   }
 
+  waitForEvents(
+    id: string,
+    timeoutMs: number,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    return this.eventBus.waitForUpdate(id, timeoutMs, signal);
+  }
+
   get recoveryStatus() {
     return this.recovery.status;
   }
@@ -326,6 +337,7 @@ export class SessionService implements AgentApplication {
   stopAccepting() {
     this.stopping = true;
     this.recovery.stop();
+    this.eventBus.close();
   }
 
   close(): Promise<void> {

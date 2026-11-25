@@ -1,3 +1,5 @@
+import { currentTraceparent } from '../observability/otel.js';
+
 export class BusinessError extends Error {
   constructor(
     readonly status: number,
@@ -32,10 +34,12 @@ export async function request<T>(
     if (value !== undefined) url.searchParams.set(key, String(value));
   }
   const timeout = AbortSignal.timeout(transport.timeoutMs ?? 10000);
+  const traceparent = currentTraceparent();
   const response = await fetch(url, {
     method: options.method,
     headers: {
       ...options.headers,
+      ...(traceparent ? { traceparent } : {}),
       authorization: `Bearer ${transport.token}`,
       'x-agent-audience': 'agent-business',
     },

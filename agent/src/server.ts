@@ -1,30 +1,20 @@
 import { Pool } from 'pg';
 import { disconnectDatabase } from './database/connection.js';
-import pino from 'pino';
 import { loadConfig } from './config.js';
 import { BusinessClient } from './business/client.js';
 import { SessionService } from './sessions/service.js';
-import { buildApp } from './http/app.js';
-import { startAgentGrpcServer, type AgentGrpcServer } from './rpc/server.js';
+import { buildApp } from './transport/app.js';
+import {
+  startAgentGrpcServer,
+  type AgentGrpcServer,
+} from './transport/grpc-server.js';
+import { createAgentLogger } from './observability/logger.js';
+import { setSpanSink } from './observability/otel.js';
+
 const config = loadConfig(process.env);
-const logger = pino({
-  name: 'agent',
-  level: process.env.GLOWLOOM_LOG_LEVEL ?? 'info',
-  base: { service: 'agent' },
-  redact: {
-    paths: [
-      'req.headers.authorization',
-      'authorization',
-      'serviceToken',
-      'businessToken',
-      'dbDsn',
-      'messages',
-      'goal',
-      'params',
-      'manifest',
-    ],
-    remove: true,
-  },
+const logger = createAgentLogger();
+setSpanSink((span) => {
+  logger.debug({ span }, 'agent.span');
 });
 const pool = new Pool({
   connectionString: config.dbDsn,
@@ -97,6 +87,7 @@ try {
   const grpcAddr = process.env.GLOWLOOM_AGENT_GRPC_ADDR ?? '0.0.0.0:4402';
   grpcServer = await startAgentGrpcServer({
     app,
+    service,
     address: grpcAddr,
     serviceToken: config.serviceToken,
   });

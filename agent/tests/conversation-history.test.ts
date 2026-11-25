@@ -1,8 +1,8 @@
 import { authorizedText } from './helpers/conversation-input.js';
 import { afterAll, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { SessionStore } from '../src/sessions/persistence/store.js';
-import { ConversationStore } from '../src/sessions/persistence/conversations.js';
+import { SessionStore } from '../src/sessions/session-store.js';
+import { ConversationStore } from '../src/sessions/conversations.js';
 import { freezeManifest } from '../src/sessions/manifest.js';
 import { testPool } from './storage/database.js';
 import {
@@ -10,8 +10,8 @@ import {
   type StorageWrite,
 } from '@earendil-works/pi-durable';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
-import { claimSessionOwner } from '../src/pi-durable/storage/ownership.js';
-import { openPostgresStorage } from '../src/pi-durable/storage/postgres.js';
+import { claimSessionOwner } from '../src/storage/ownership.js';
+import { openPostgresStorage } from '../src/storage/postgres.js';
 const pool = testPool();
 afterAll(() => pool.end());
 const manifest = freezeManifest({ model_key: 'fixture', max_micros: 100 }, []);
@@ -324,7 +324,7 @@ it('rolls back public messages together with a refused Storage commit', async ()
 });
 it('backfills retained public events deterministically and can run twice', async () => {
   const { backfillConversationMessages } =
-    await import('../src/sessions/persistence/backfill-messages.js');
+    await import('../src/sessions/backfill-messages.js');
   const { session } = await fixture(),
     rid = randomUUID();
   await claimSessionOwner(pool, session.id, randomUUID(), 30000);

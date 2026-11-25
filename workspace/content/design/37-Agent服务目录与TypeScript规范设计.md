@@ -51,30 +51,33 @@
 
 ### 7.2 目录与依赖
 
+2026-11-25 按 Google TypeScript Style Guide 扁平两层包规范及完整 Agent Harness 工程目标收紧目录组织：所有手写源码位于 `src/<package>/<module>.ts`（最多两层深度，杜绝 `../../` 与 `../../../` 相对路径攀爬），文件名统一 `kebab-case` 且全局无歧义，禁止手写 `index.ts` barrel。
+
 ```text
 agent/
+  prompts/             版本化领域与角色提示词资产（与代码指纹解耦）
   src/
-    server.ts          进程入口，拥有连接池、监听、信号及有界退出
+    server.ts          进程入口，拥有连接池、OTel、HTTP/gRPC 监听、信号及有界退出
     config.ts          环境配置解析和校验
-    http/              Nest 装配、Controller、DTO、鉴权、错误映射、SSE 与 Swagger
-    sessions/          会话与 run 用例及应用接口
-      execution/       Harness 生命周期、审批控制、交付等待和原调用核对
-      recovery/        恢复循环、候选扫描与退避诊断
-      persistence/     会话、运行记录及公开消息和事件读模型
-    pi-durable/        Pi 文档、模型适配、回执和事件投影
-      context/         提示词段、项目快照、记忆修订与检索证据依赖
-      tools/           工具装配、委派、Skill 与受信扩展
-      storage/         Pi 原子批次、记录编码、租约与 owner fencing
-    database/          Prisma 连接、类型化查询编译与数据库类型
-    business/          Go 客户端、请求传输和模型请求转换
+    contract.ts        运行时契约版本（RUNTIME_CONTRACT_VERSION）与构建指纹
+    transport/         统一入站协议层：Nest 装配、Controller、DTO、鉴权、错误映射、SSE、gRPC 与 Swagger
+    sessions/          会话与 run 用例、控制收束、对账、事件总线、恢复泵与公开消息/事件读模型
+    harness/           Harness 生命周期、策略、热 StateDoc、模型流式路由、窗口预算、回执与外环校验器
+    context/           静前动后上下文组装器、Compaction 状态段、项目快照增量/记忆热更新与提示词加载
+    tools/             并行工具注册、多 Agent 委派、Skill 装载、自纠错错误格式化与受信扩展
+    storage/           Pi Durable 官方 Storage 的 PostgreSQL 实现（原子批次、记录编码、租约与 owner fencing）
+    observability/     OpenTelemetry GenAI 追踪、W3C traceparent 透传与 Pino 脱敏日志（叶子包）
+    business/          Go 客户端、请求传输、目标契约与模型请求转换
       generated/       从 Go 内部 Swagger 生成的 TypeScript 请求和类型
+    database/          Prisma 连接、类型化查询编译与数据库类型（叶子包）
+      generated/       Prisma 7 生成客户端
   tests/               单元、合同、Storage 与恢复测试
+  evals/               Agent 行为轨迹与创作质量评测套件（独立于工程单测）
 ```
 
-- Nest 模块随 `http/app.ts` 装配，在边界注册会话应用与 HTTP 生命周期。健康探针随应用装配。会话应用由进程创建，经一个端口注入控制器。
-- `http/` 持有全部入站协议。Controller 调用 `sessions/` 的应用端口，后者协调持久化、Pi 和 Go 客户端。应用与存储层只依赖普通 TypeScript 类型。
-- HTTP 生命周期停止接单并关闭订阅，随后等待会话应用退出。连接池由 `server.ts` 在 HTTP 关闭后释放。Pi Storage 和会话持久化分别拥有执行记录与业务投影。
-- 会话服务保有运行实例和执行槽。恢复循环读取持久候选并调用同一控制和运行入口，审批控制负责决策、暂停和继续的回执顺序；公开事件读取在会话持久化内维护游标验证与降敏。Pi 的项目上下文代码同时拥有证据回执登记和单次模型调用快照冻结。沿[需求22 SRC-ATS-11](../requirement/22-Agent服务目录与TypeScript规范需求.md#src-ats-11)维护目录分工。
+- Nest 模块与 gRPC Server 统一归 `transport/` 装配，共享同一认证与错误边界，直接消费 `sessions/` 应用端口与事件总线；gRPC 事件流直连事件总线与游标读模型，不再通过 `fastify.inject` 缓冲 SSE。
+- 依赖严格单向无环：`transport → sessions → harness → {context, tools, storage} → {business, database, observability}`；`observability/` 与 `database/` 为纯叶子包，不反向依赖任何业务模块。
+- HTTP/gRPC 生命周期停止接单并关闭订阅，随后等待会话应用退出。连接池由 `server.ts` 在传输层关闭后释放。`storage/` 和 `sessions/` 持久化分别拥有 Pi 执行记录与业务投影。
 - Go 请求生成物随 Go 客户端归入 `business/generated/`，用于请求、类型和可重复生成检查。
 
 ### 7.3 HTTP 合同、校验与 Swagger

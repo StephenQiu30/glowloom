@@ -2,8 +2,8 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
-import { computeDefinitionHash } from '../src/pi-durable/definitions.js';
-import { executionPolicy } from '../src/pi-durable/policy.js';
+import { computeDefinitionHash } from '../src/contract.js';
+import { executionPolicy } from '../src/harness/policy.js';
 import { freezeManifest } from '../src/sessions/manifest.js';
 
 it('hashes the complete executable tree and dependency lock reproducibly', async () => {

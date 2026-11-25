@@ -10,10 +10,10 @@ import {
   type BusinessTool,
   type CallReceipt,
 } from '../src/business/client.js';
-import { SessionStore } from '../src/sessions/persistence/store.js';
+import { SessionStore } from '../src/sessions/session-store.js';
 import { freezeManifest } from '../src/sessions/manifest.js';
-import { reconcileInterrupted } from '../src/sessions/execution/reconciliation.js';
-import { SessionRuntime } from '../src/sessions/execution/runtime.js';
+import { reconcileInterrupted } from '../src/sessions/reconciliation.js';
+import { SessionRuntime } from '../src/harness/runtime.js';
 import { testPool } from './storage/database.js';
 
 // Parent HTTP fixture models Go's independent committed call ledger; Agent storage and processes are real.

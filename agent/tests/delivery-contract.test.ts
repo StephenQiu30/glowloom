@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { deliveryOutcome } from '../src/sessions/execution/delivery.js';
+import { deliveryOutcome } from '../src/harness/delivery-verifier.js';
 import { canonicalHash, freezeManifest } from '../src/sessions/manifest.js';
 
 const production = { kind: 'production', required_deliveries: 1 } as const;

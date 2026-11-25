@@ -5,7 +5,7 @@ import {
   type CallReceipt,
   type Grant,
 } from '../src/business/client.js';
-import { completedReceipt } from '../src/pi-durable/receipts.js';
+import { completedReceipt } from '../src/harness/receipts.js';
 const call: CallIdentity = {
   task_id: '1',
   call_id: 'call',

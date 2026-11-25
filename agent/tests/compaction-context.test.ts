@@ -7,19 +7,16 @@ import {
   type Grant,
   type CallReceipt,
 } from '../src/business/client.js';
-import {
-  buildRegistry,
-  type HarnessGate,
-} from '../src/pi-durable/tools/registry.js';
-import { StateDoc } from '../src/pi-durable/docs.js';
-import { createBusinessModels } from '../src/pi-durable/model-provider.js';
-import { PhaseTelemetry } from '../src/pi-durable/telemetry.js';
+import { buildRegistry, type HarnessGate } from '../src/tools/registry.js';
+import { StateDoc } from '../src/harness/state-doc.js';
+import { createBusinessModels } from '../src/harness/model-provider.js';
+import { PhaseTelemetry } from '../src/observability/pi-telemetry.js';
 import { freezeManifest } from '../src/sessions/manifest.js';
 import {
   claimSessionOwner,
   releaseSessionOwner,
-} from '../src/pi-durable/storage/ownership.js';
-import { openPostgresStorage } from '../src/pi-durable/storage/postgres.js';
+} from '../src/storage/ownership.js';
+import { openPostgresStorage } from '../src/storage/postgres.js';
 import { testPool } from './storage/database.js';
 
 it('uses actual official CompactionTask through the business model gate then reinjects typed goal, manifest, Skill, plan and adoption constraints', async () => {

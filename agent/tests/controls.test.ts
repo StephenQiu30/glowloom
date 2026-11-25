@@ -1,7 +1,7 @@
 import { authorizedText } from './helpers/conversation-input.js';
 import { randomUUID } from 'node:crypto';
 import { expect, it, vi } from 'vitest';
-import { SessionRuntime } from '../src/sessions/execution/runtime.js';
+import { SessionRuntime } from '../src/harness/runtime.js';
 import { SessionService } from '../src/sessions/service.js';
 import {
   BusinessClient,
@@ -11,12 +11,12 @@ import {
   type CallReceipt,
 } from '../src/business/client.js';
 import { BACKGROUND_CONTEXT as context } from '@earendil-works/chord/context';
-import { StateDoc } from '../src/pi-durable/docs.js';
+import { StateDoc } from '../src/harness/state-doc.js';
 import {
   RecoveryStore,
   RecoveryKind,
   RecoveryCode,
-} from '../src/sessions/recovery/store.js';
+} from '../src/sessions/recovery-store.js';
 import { testPool } from './storage/database.js';
 
 it.each([

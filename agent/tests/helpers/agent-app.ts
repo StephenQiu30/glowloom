@@ -1,14 +1,15 @@
 import type { AgentApplication } from '../../src/sessions/types.js';
 
-const http: typeof import('../../src/http/app.js') = await import(
-  new URL('../../dist/src/http/app.js', import.meta.url).href
+const http: typeof import('../../src/transport/app.js') = await import(
+  new URL('../../dist/src/transport/app.js', import.meta.url).href
 );
-const openApi: typeof import('../../src/http/openapi.js') = await import(
-  new URL('../../dist/src/http/openapi.js', import.meta.url).href
+const openApi: typeof import('../../src/transport/openapi.js') = await import(
+  new URL('../../dist/src/transport/openapi.js', import.meta.url).href
 );
-const errors: typeof import('../../src/sessions/errors.js') = await import(
-  new URL('../../dist/src/sessions/errors.js', import.meta.url).href
-);
+const errors: typeof import('../../src/sessions/session-errors.js') =
+  await import(
+    new URL('../../dist/src/sessions/session-errors.js', import.meta.url).href
+  );
 
 export const { buildApp } = http;
 export const { createOpenApi } = openApi;

@@ -11,14 +11,14 @@
 
 ## NestJS 与职责
 
-1. 使用[官方 NestJS 模块](https://docs.nestjs.com/modules)和[自定义 Provider](https://docs.nestjs.com/fundamentals/custom-providers)。`server.ts` 负责进程入口。Nest 模块和 Provider 统一在 `http/app.ts` 装配。连接池由进程入口创建和释放。会话服务、Pi、Storage 和 Go 客户端保持普通 TypeScript 类与构造注入。依赖方向由 Controller 到应用端口，再到应用所需的执行和持久化依赖。禁止循环模块和服务定位器。
-2. Controller、DTO、SSE、校验与错误映射统一位于 `http/`，应用接口和会话用例位于 `sessions/`。Controller 调用用例，应用层不读取 Nest/Fastify request/reply。预期错误用 `AgentError` 表达，保留错误因果；Exception Filter 与适配器错误处理保持现有状态和错误结构。
-3. HTTP 的唯一维护位置是功能边界上的 Controller/DTO。运行时验证和 OpenAPI 注解随 DTO 一起维护，并通过合同测试核对。环境与持久化外部数据在各自边界校验。生成文件由工具重生成。切换只交付一套 NestJS 路由、协议和配置。移除旧 HTTP 实现、生成链、兼容转换及回退入口。目录按真实职责组织，避免独立 `contracts/`、`scripts/`、全局 Controller/Service/DAO 分层和纯转发层。
-4. 配置在启动边界读取并校验。连接池、恢复循环和订阅分别有明确的资源所有者。请求路径避免阻塞事件循环，限制请求体、并发、等待和重试。将 `AbortSignal` 传到可取消的调用，收尾等待有界。SSE 断开只关闭订阅。
-5. Pino 日志带排障所需的 request/session/run 标识。脱敏服务令牌、数据库 DSN、提示词、模型输入输出和用户内容。Agent 使用独立 schema 与受限角色，Go 保留身份、预算、审批、模型出站、业务工具和业务数据权威。
-
-6. 普通数据增删改查使用 Prisma；行锁、数据库时钟、条件冲突更新、JSON/窗口与微秒游标等查询使用 Kysely 类型化构建器，并通过同一 Prisma 客户端/事务执行。pg 仅管理连接池与底层传输，不直接执行应用 SQL。禁止完整手写 SQL、业务原生 query/execute 旁路、自动结构同步与迁移执行器；私有查询驱动仅接收构建器编译结果及独立绑定参数。`prisma/schema.prisma` 仅为客户端映射，`src/database/schema.ts` 从生成模型派生构建器类型；结构唯一来源仍为 `backend/db/schema.sql`。只运行 `prisma generate`，不运行 db push/migrate，不读取业务库生成客户端。
-7. 运行实例、执行槽和受理停机归会话服务。控制和交付等待归 `sessions/execution/`，扫描、扫描生命周期和退避归 `sessions/recovery/`，公开事件读取归 `sessions/persistence/`。Pi 工具归 `pi-durable/tools/`，项目快照、记忆与证据依赖归 `pi-durable/context/`。移动参与指纹的文件时清理编译产物，并沿设计37 §7.5 核验发布。
+1. 使用[官方 NestJS 模块](https://docs.nestjs.com/modules)和[自定义 Provider](https://docs.nestjs.com/fundamentals/custom-providers)。`server.ts` 负责进程入口。Nest 模块、Provider 与 gRPC 入站统一位于 `src/transport/`。连接池由进程入口创建和释放。会话服务、Harness、Context、Tools、Storage、Observability 和 Go 客户端保持普通 TypeScript 类与模块级函数，显式构造注入。依赖方向严格单向无环：`transport → sessions → harness → {context, tools, storage} → {business, database, observability}`，禁止循环依赖和服务定位器。
+2. `src/` 遵循 Google TypeScript 扁平两层包组织（`src/<package>/<module>.ts`），跨包相对导入不超过一层 `../<package>/<module>.js`，杜绝 `../../` 与 `../../../` 路径攀爬。所有手写文件名统一 `kebab-case` 且全局无歧义，禁止手写 `index.ts` barrel 与无职责 `common`/`utils`。
+3. Controller、DTO、SSE、gRPC、校验与错误映射统一位于 `transport/`，应用接口、控制收束、恢复与读模型位于 `sessions/`。Controller 与 gRPC Server 调用 `sessions/` 应用端口与事件总线，应用层不读取 Nest/Fastify request/reply，gRPC 流直连事件流而不经 `fastify.inject` 缓冲。预期错误用 `AgentError` 表达，保留错误因果；Exception Filter 与适配器错误处理保持现有状态和错误结构。
+4. HTTP 的唯一维护位置是功能边界上的 Controller/DTO。运行时验证和 OpenAPI 注解随 DTO 一起维护，并通过合同测试核对。环境与持久化外部数据在各自边界校验。生成文件由工具重生成。目录按真实职责组织，避免独立 `contracts/`、`scripts/`、全局 Controller/Service/DAO 分层和纯转发层。
+5. 配置在启动边界读取并校验。连接池、恢复循环和订阅分别有明确的资源所有者。请求路径避免阻塞事件循环，限制请求体、并发、等待和重试。将 `AbortSignal` 传到可取消的调用，收尾等待有界。SSE/gRPC 断开只关闭订阅。
+6. Pino 日志与 OpenTelemetry 追踪归 `observability/`，带排障所需的 request/session/run 与 W3C `traceparent` 标识。脱敏服务令牌、数据库 DSN、提示词、模型输入输出和用户内容。Agent 使用独立 schema 与受限角色，Go 保留身份、预算、审批、模型出站、业务工具和业务数据权威。
+7. 普通数据增删改查使用 Prisma；行锁、数据库时钟、条件冲突更新、JSON/窗口与微秒游标等查询使用 Kysely 类型化构建器，并通过同一 Prisma 客户端/事务执行。pg 仅管理连接池与底层传输，不直接执行应用 SQL。禁止完整手写 SQL、业务原生 query/execute 旁路、自动结构同步与迁移执行器；私有查询驱动仅接收构建器编译结果及独立绑定参数。`prisma/schema.prisma` 仅为客户端映射，`src/database/schema.ts` 从生成模型派生构建器类型；结构唯一来源仍为 `backend/db/schema.sql`。只运行 `prisma generate`，不运行 db push/migrate，不读取业务库生成客户端。
+8. 运行实例、执行槽、控制收束、恢复泵、事件总线与读模型归 `sessions/`；Harness 执行循环、热 `StateDoc`、模型流式路由与外环校验归 `harness/`；静态前缀/增量尾部上下文与记忆热更新归 `context/`；并行工具/委派、Skill 装载与自纠错错误归 `tools/`；Pi Storage 实现归 `storage/`；版本化领域提示词归根级 `prompts/`；行为评测归根级 `evals/`。契约版本与构建指纹在 `src/contract.ts` 解耦维护。移动参与编译的文件时清理 `dist/src` 产物。
 
 ## 接口生成
 
