@@ -1,10 +1,10 @@
 # Agent 服务 Mastra 架构与技术选型设计
 
-状态：已确认架构与选型（依据 [需求33 SRC-AGV2-01 / SRC-AGV2-02](../requirement/33-Agent服务架构重构与技术选型需求.md#src-agv2-01) 与 [研究71](../research/71-2026-11-25-Agent服务架构网关与评测技术选型调研.md)）。本文自 2026-11-25 起作为 `agent/` 服务架构与技术选型的现行唯一技术合同，替代已归档的 [设计32](32-完整创作AgentHarness与Skill多Agent架构设计.md) 中的 Pi Durable 运行时选型与原设计37（NestJS/Fastify/Prisma/双向 OpenAPI 方案，已归档清理，历史见 Git）；既有创作业务需求继续由新架构承接。实施进度与调度只在 [BACKLOG](../../../BACKLOG.md) 维护。
+状态：已确认架构与选型（依据 [需求33 SRC-AGV2-01 / SRC-AGV2-02](../requirement/33-Agent服务架构重构与技术选型需求.md#src-agv2-01) 与 [研究71](../research/71-2026-11-25-Agent服务架构网关与评测技术选型调研.md)）。本文自 2026-11-25 起作为 `agent/` 服务架构与技术选型的现行唯一技术合同，[设计32](32-完整创作AgentHarness与Skill多Agent架构设计.md)维护创作业务合同。实施进度与调度只在 [BACKLOG](../../../BACKLOG.md) 维护。
 
 ## 1. 摘要
 
-当前 `agent/` 服务在演进过程中叠加了 NestJS 12、Fastify 5、Swagger/OpenAPI、`oapi-codegen`、`@umijs/openapi`、通用 `Invoke` HTTP-over-gRPC 隧道、Prisma 7、Kysely 与小众运行时 `@earendil-works/pi-durable`，造成传输层双轨、数据层三套客户端并存、与主流 AI SDK / MCP / Eval 生态割裂等问题。
+重构前的 `agent/` 服务曾叠加 NestJS 12、Fastify 5、Swagger/OpenAPI、`oapi-codegen`、`@umijs/openapi`、通用 `Invoke` HTTP-over-gRPC 隧道、Prisma 7、Kysely 与小众运行时 `@earendil-works/pi-durable`，造成传输层双轨、数据层三套客户端并存、与主流 AI SDK / MCP / Eval 生态割裂等问题。
 
 本设计采用**一步到位全量原地重构**，建立新一代 **Node 24 + TypeScript + Mastra** Agent 服务架构：
 

@@ -190,7 +190,7 @@ SRC-AGH-10 替代 SRC-AGH-04/09 的纯 Go LangGraph、不允许 Node 宿主和 T
 
 ## 5. 来源与追踪
 
-能力分析：[Agent Harness 与 Skill 能力分析](../research/19-2026-11-01-AgentHarness与Skill能力分析.md)。正式链为本文件 → 设计32 → PRD19 → Plan28；场景与需求映射以 PRD19 为接受依据。
+能力分析：[Agent Harness 与 Skill 能力分析](https://github.com/StephenQiu30/glowloom/blob/4b697599a30a4e3b3c11f57b8dd0ed73035503ff/workspace/content/research/19-2026-11-01-AgentHarness%E4%B8%8ESkill%E8%83%BD%E5%8A%9B%E5%88%86%E6%9E%90.md)。正式链为本文件 → 设计32 → PRD19 → Plan28；场景与需求映射以 PRD19 为接受依据。
 
 <a id="src-agh-20"></a>
 
@@ -220,7 +220,7 @@ SRC-AGH-22 用户原文：
 
 > 基于这次源码调研，重新检查我们当前的 Agent 服务和短剧制作流程，明确已有能力、缺口和需要调整的部分，补齐主 Agent、子 Agent、Skill、MCP、费用合同、失败恢复和单镜交付闭环的详细设计及实施顺序，复用现有能力，先不要编写代码。包括我们的agent服务的技术选型内容，以及目录结构的设计等是否合理以及可用
 
-确认范围：重新核查现有代码和[七平台源码调研](../research/39-2026-11-12-AI短剧平台Agent与交付质量源码复核.md)，补充技术选择、目录、执行与制作闭环及依赖顺序。已有实现、设计调整、工程验证、真实供应商和作品接受分别说明，不把已有单镜/生成/资金/导出能力重新列为从零建设。本轮只修改文档；不编写业务代码、不安装新依赖、不迁移数据库、不部署或付费、不提交推送。只读检查与现有本地类型检查/编译用于评估，不扩大为生产验收。
+确认范围：重新核查现有代码和[七平台源码调研](https://github.com/StephenQiu30/glowloom/blob/4b697599a30a4e3b3c11f57b8dd0ed73035503ff/workspace/content/research/39-2026-11-12-AI%E7%9F%AD%E5%89%A7%E5%B9%B3%E5%8F%B0Agent%E4%B8%8E%E4%BA%A4%E4%BB%98%E8%B4%A8%E9%87%8F%E6%BA%90%E7%A0%81%E5%A4%8D%E6%A0%B8.md)，补充技术选择、目录、执行与制作闭环及依赖顺序。已有实现、设计调整、工程验证、真实供应商和作品接受分别说明，不把已有单镜/生成/资金/导出能力重新列为从零建设。本轮只修改文档；不编写业务代码、不安装新依赖、不迁移数据库、不部署或付费、不提交推送。只读检查与现有本地类型检查/编译用于评估，不扩大为生产验收。
 
 执行方案归设计32 §7.17，工程选型与目录归设计37 §7.8～7.10，短剧内容归设计38 §7.11；对应PRD19/24与Plan28/33保持原唯一来源。新增字段、接口及开放策略为设计评审建议，不能冒称均已获产品接受或已有实现。
 
@@ -228,7 +228,7 @@ SRC-AGH-22 用户原文：
 
 ## SRC-AGH-25 先评估上下文、记忆与 RAG 能力
 
-2026-11-23。用户指出“当前还缺少了agentharness 的能力，比如我们rag服务，包括上下文记忆”，并要求“先不要展开实现，先调研分析清楚我们需要具备哪些能力”。本轮先核对现有 pi 执行与上下文，比较可复用做法，列出创作首版所需能力与评审问题。[能力调研](../research/68-2026-11-23-AgentHarness上下文记忆与RAG能力调研.md)
+2026-11-23。用户指出“当前还缺少了agentharness 的能力，比如我们rag服务，包括上下文记忆”，并要求“先不要展开实现，先调研分析清楚我们需要具备哪些能力”。本轮先核对现有 pi 执行与上下文，比较可复用做法，列出创作首版所需能力与评审问题。[能力调研](https://github.com/StephenQiu30/glowloom/blob/4b697599a30a4e3b3c11f57b8dd0ed73035503ff/workspace/content/research/68-2026-11-23-AgentHarness%E4%B8%8A%E4%B8%8B%E6%96%87%E8%AE%B0%E5%BF%86%E4%B8%8ERAG%E8%83%BD%E5%8A%9B%E8%B0%83%E7%A0%94.md)
 
 <a id="src-agh-26"></a>
 
@@ -238,7 +238,7 @@ SRC-AGH-22 用户原文：
 
 > 相对应的我们应该如何设计我们的上下文，如何设计我们的rag，如何设计我们的项目记忆，以及如何做我们的evals，包括应该使用什么合适的技术栈以及对应的组件或者中间件来实现，都是我们当前需要明确的点，并且需要做详尽的调研和分析
 
-延续 SRC-AGH-25 的调研评审范围。产品目标沿用从一句创意到可编辑故事板及一镜可采用样片的已确认流程。新增的记忆发布方式、检索组件、部署条件与评测门槛列为建议。[技术专题](../research/69-2026-11-23-创作Agent上下文与检索技术选型和评测.md) · [架构设计](../design/32-完整创作AgentHarness与Skill多Agent架构设计.md#creative-context-design)
+延续 SRC-AGH-25 的调研评审范围。产品目标沿用从一句创意到可编辑故事板及一镜可采用样片的已确认流程。新增的记忆发布方式、检索组件、部署条件与评测门槛列为建议。[技术专题](https://github.com/StephenQiu30/glowloom/blob/4b697599a30a4e3b3c11f57b8dd0ed73035503ff/workspace/content/research/69-2026-11-23-%E5%88%9B%E4%BD%9CAgent%E4%B8%8A%E4%B8%8B%E6%96%87%E4%B8%8E%E6%A3%80%E7%B4%A2%E6%8A%80%E6%9C%AF%E9%80%89%E5%9E%8B%E5%92%8C%E8%AF%84%E6%B5%8B.md) · [架构设计](../design/32-完整创作AgentHarness与Skill多Agent架构设计.md#creative-context-design)
 
 <a id="src-agh-27"></a>
 
@@ -272,7 +272,7 @@ SRC-AGH-22 用户原文：
 
 > 先将代码代码提交到main并推送，然后开始落实我们的agent服务的设计
 
-用户授权先提交并推送本轮 Agent 相关基线，再启动 Agent 服务设计实施。按 [Plan28 四模块任务](../plan/28-完整创作Agent与Skill多Agent实施计划.md#harness-module-plan)推进，产品规则仍按 [SRC-AGH-27](#src-agh-27) 标记确认与待定。
+用户授权先提交并推送本轮 Agent 相关基线，再启动 Agent 服务设计实施。按 [Plan28 四模块任务](https://github.com/StephenQiu30/glowloom/blob/4b697599a30a4e3b3c11f57b8dd0ed73035503ff/workspace/content/plan/28-%E5%AE%8C%E6%95%B4%E5%88%9B%E4%BD%9CAgent%E4%B8%8ESkill%E5%A4%9AAgent%E5%AE%9E%E6%96%BD%E8%AE%A1%E5%88%92.md#harness-module-plan)推进，产品规则仍按 [SRC-AGH-27](#src-agh-27) 标记确认与待定。
 
 
 <a id="src-agh-29"></a>
@@ -283,7 +283,7 @@ SRC-AGH-22 用户原文：
 
 > 先阅读一下我们的workspace下的相关服务的设计，先对我们的agent服务进行完整，保证我们的项目的上下文以及项目记忆可以完整的落地
 
-沿 [设计32 §7.18](../design/32-完整创作AgentHarness与Skill多Agent架构设计.md#creative-context-design) 和 [Plan28 §11](../plan/28-完整创作Agent与Skill多Agent实施计划.md#harness-module-plan) 实施。复用现行项目成员权限、画布和脚本来源、Pi 会话和 Go 模型受理回执。普通画布的镜头级作用范围依赖稳定镜头身份和写入归属合同。
+沿 [设计32 §7.18](../design/32-完整创作AgentHarness与Skill多Agent架构设计.md#creative-context-design) 和 [Plan28 §11](https://github.com/StephenQiu30/glowloom/blob/4b697599a30a4e3b3c11f57b8dd0ed73035503ff/workspace/content/plan/28-%E5%AE%8C%E6%95%B4%E5%88%9B%E4%BD%9CAgent%E4%B8%8ESkill%E5%A4%9AAgent%E5%AE%9E%E6%96%BD%E8%AE%A1%E5%88%92.md#harness-module-plan) 实施。复用现行项目成员权限、画布和脚本来源、Pi 会话和 Go 模型受理回执。普通画布的镜头级作用范围依赖稳定镜头身份和写入归属合同。
 
 
 <a id="src-agh-30"></a>
@@ -294,7 +294,7 @@ SRC-AGH-22 用户原文：
 
 > 然后对我们的rag服务全面的展开实现
 
-承接 AGH-049、AGH-050 和 [Plan28 的 RAG 任务](../plan/28-完整创作Agent与Skill多Agent实施计划.md#harness-module-plan)。落地当前项目资料检索、引用回源、剧本正文索引及入模时的版本核对。语义向量和重排沿既定评测门槛比较。
+承接 AGH-049、AGH-050 和 [Plan28 的 RAG 任务](https://github.com/StephenQiu30/glowloom/blob/4b697599a30a4e3b3c11f57b8dd0ed73035503ff/workspace/content/plan/28-%E5%AE%8C%E6%95%B4%E5%88%9B%E4%BD%9CAgent%E4%B8%8ESkill%E5%A4%9AAgent%E5%AE%9E%E6%96%BD%E8%AE%A1%E5%88%92.md#harness-module-plan)。落地当前项目资料检索、引用回源、剧本正文索引及入模时的版本核对。语义向量和重排沿既定评测门槛比较。
 
 ## SRC-AGH-31 项目 RAG 采用豆包向量
 

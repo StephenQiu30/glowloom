@@ -5,7 +5,6 @@
 !.agents/skills/workspace-project
 !.agents/skills/workspace-contract
 !.agents/skills/workspace-browser
-!.agents/skills/workspace-handoff
 skills-lock.json
 .env
 .env.*

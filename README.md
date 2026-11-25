@@ -17,11 +17,7 @@
   <a href="BACKLOG.md">当前进展</a>
 </p>
 
-![织光创作页：生成与画布入口、多参考提示词编辑器、模型参数和创作精选](assets/readme/creation-desktop.png)
-
-<p align="center"><sub>创作页本地实拍 · 2026-10-29。展示创作入口与参考内容；精选封面为 AI 生成的静态示例。</sub></p>
-
-> 同仓库独立 `agent` 服务使用 TypeScript、官方 Pi Durable 与 PostgreSQL；Go 提供业务授权、模型和工具。Docker Compose 统一启动应用服务，当前源码不依赖 Temporal 或旧 Agent 实现。完整合同见[设计32](workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md)，工程验证与真实创作接受见 [BACKLOG](BACKLOG.md#pi-durable-migration)。
+> 独立 Agent 服务使用 TypeScript、Mastra 和受限 PostgreSQL，经 gRPC 接收运行请求，模型与业务工具通过 Go 授权调用。见 [Agent 服务设计](workspace/content/design/48-Agent服务Mastra架构与技术选型设计.md)。
 
 ## 在织光中创作
 
@@ -168,9 +164,9 @@ backend/
 | [PROJECT](PROJECT.md) · [AGENTS](AGENTS.md) · [DESIGN](DESIGN.md)                                                                                       | 工程工具链、协作规则与视觉规范 |
 | [BACKLOG](BACKLOG.md)                                                                                                                                   | 当前实施进展、剩余工作和阻塞   |
 
-文档直接维护 Markdown，按原始需求 → design → PRD → Plan 分层，使用[统一模板](workspace/content/templates/00-模板导航.md)。实施状态统一维护在 BACKLOG；设计、工程验证与产品接受分别记录。
+文档直接维护 Markdown，按原始需求 → design → PRD → Plan 分层，使用[统一模板](workspace/content/templates/00-模板导航.md)。当前待办与阻塞见 [BACKLOG](BACKLOG.md)，验收证据见对应计划。
 
-研发知识正文统一在 `workspace/content/`，独立 Workspace 直接采用官方 Fumadocs UI／MDX 和 Meilisearch。1130一个免登录阅读入口，Skill／工作流作为文档保留；不提供旧协作运行器或 TTS。启动与部署见[服务说明](workspace/README.md)，实际验证见[BACKLOG](BACKLOG.md#workspace-20261114)。
+研发知识正文统一在 `workspace/content/`。独立 Workspace 使用 Fumadocs 提供 Markdown 阅读、搜索和源码入口，启动与部署见[服务说明](workspace/README.md)。
 
 默认 CI 包含后端全量 Race、隔离 PostgreSQL 集成与协作运行时测试，以及前端全量 Vitest 和含 TypeScript 检查的生产构建。完整质量门禁见 [PROJECT](PROJECT.md#4-质量门禁)。CI 通过不代表真实邮件、供应商或生产环境已通过验收。
 

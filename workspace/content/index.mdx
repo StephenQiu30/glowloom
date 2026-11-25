@@ -7,7 +7,7 @@ description: 项目知识按 requirement → design → prd → plan 维护当�
 
 ## 领域入口
 
-AI 短剧制作多 Agent 编排：[需求34](requirement/34-AI短剧制作多Agent编排需求.md) → [设计49](design/49-AI短剧制作三层Agent与六阶段Workflow设计.md) → [PRD35](prd/35-AI短剧制作多Agent编排.md) → [Plan44](plan/44-AI短剧制作多Agent编排执行计划.md)。面向 9:16 竖屏 AI 漫剧/动画短剧，参考 Toonflow 与 BeefTV 落地三层 5 角色、六阶段 HITL Workflow、双模式画布副驾驶、2x2 宫格一致性与 5 组 Go MCP 短剧工具集。
+AI 短剧制作多 Agent 编排：[需求34](requirement/34-AI短剧制作多Agent编排需求.md) → [设计49](design/49-AI短剧制作三层Agent与六阶段Workflow设计.md) → [PRD35](prd/35-AI短剧制作多Agent编排.md) → [Plan44](plan/44-AI短剧制作多Agent编排执行计划.md)。面向 9:16 竖屏 AI 漫剧/动画短剧，参考 Toonflow 与 BeefTV 落地三层 5 角色、六阶段 HITL Workflow、双模式画布副驾驶、2x2 宫格一致性与 5 组 Go MCP 短剧工具集。可复查的开源依据见[短剧 Skill 套件调研](research/74-2026-11-25-短剧开源Skill套件完整接入调研.md)。
 
 Agent 服务 Mastra 架构重构：[需求33](requirement/33-Agent服务架构重构与技术选型需求.md) → [设计48](design/48-Agent服务Mastra架构与技术选型设计.md) → [PRD34](prd/34-Agent服务架构重构与技术选型.md) → [Plan43](plan/43-Agent服务Mastra架构重构执行计划.md)，选型依据见[研究71](research/71-2026-11-25-Agent服务架构网关与评测技术选型调研.md)。以 Node 24 + TypeScript + Mastra 原地重建 `agent/`，移除 NestJS/Pi Durable/Prisma，采用强类型 gRPC + Go 内部 MCP + Go 统一渠道 AI 网关 + Kysely/Zod + 双轨 Evals（离线 Scorers + 线上自托管 Langfuse）。
 
@@ -43,6 +43,4 @@ Workspace 知识库：[需求30](requirement/30-Workspace官方Fumadocs接入需
 - [实施计划 (plan)](plan/00-Plan导航.md)：依赖、步骤、任务、验证方法、退出条件、迁移与回退。
 - [技术调研 (research)](research/00-调研导航.md)：可复查的外部事实与选型依据。
 - [部署运维 (operations)](operations/00-部署运维导航.md)：对象存储等基础设施的配置与核验。
-- [研发技能 (skills)](skills/00-Skill导航.md)：项目职责与能力使用说明。
-- [研发工作流 (workflows)](workflows/00-工作流导航.md)：可阅读的协作步骤。
 - [文档模板 (templates)](templates/00-模板导航.md)：各层内容边界与维护规则。
