@@ -1,5 +1,7 @@
 # 完整创作 Agent、Skill 与多 Agent PRD
 
+> **架构更新提示（2026-11-25）**：本 PRD 保留创作 Agent 的产品业务范围与用户验收场景；其底层 Pi Durable / NestJS / Prisma / 双向 OpenAPI 技术架构已过时并由 [PRD34：Agent服务架构重构与技术选型](34-Agent服务架构重构与技术选型.md) 与 [设计48](../design/48-Agent服务Mastra架构与技术选型设计.md) 正式替代。
+
 2026-11-12扩展：需求19 SRC-AGH-16明确主/子Agent、Skill、外部MCP及稳定自动执行；本稿新增AC-AH-23～44、ST-AH-36～65。唯一来源设计仍为[设计32](../design/32-完整创作AgentHarness与Skill多Agent架构设计.md)，对应§7.0、§7.6.9～10及§7.11～15。新增细节为评审稿，本轮仅文档，不将下文原迁移实施授权扩展成MCP代码、连接或消费授权。
 
 状态：已批准实施的迁移产品合同；同仓库独立 TypeScript/Pi Durable 服务、PostgreSQL、Compose、无 Temporal/兼容的方向已确认，具体合同见设计32。唯一来源设计：[设计32](../design/32-完整创作AgentHarness与Skill多Agent架构设计.md)。范围及有效确认见[需求19](../requirement/19-完整创作Agent与Skill多Agent需求.md)，实施步骤见[Plan28](../plan/28-完整创作Agent与Skill多Agent实施计划.md)，当前状态仅见 [BACKLOG](../../../BACKLOG.md)。
@@ -10,7 +12,7 @@
 
 目标在 agent 中使用 TypeScript 和官方 Pi Durable 独立运行；会话、run、计划及子 Agent 状态由 Agent 单独拥有，Go 只保留权限、模型出站、审批、计费、工具与业务数据权威。复用 PostgreSQL 实例，schema/角色隔离，内部 HTTP 通信；统一 Compose 启动，独立构建和重启。项目不再依赖 Temporal，普通业务任务有数据库驱动的 Go 执行器。减少运维依赖的同时，保留完整创作与真实恢复能力。
 
-服务统一命名 agent，目标技术基线由设计32 §7.1.2 唯一维护。NestJS 迁移的接口注解和验收见[设计37](../design/37-Agent服务目录与TypeScript规范设计.md)。
+服务统一命名 agent，现行技术基线与工程规范已切换至[设计48](../design/48-Agent服务Mastra架构与技术选型设计.md)（原设计37已归档清理，历史见 Git）。
 
 ## 2. 完整范围与非目标
 

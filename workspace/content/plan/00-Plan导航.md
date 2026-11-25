@@ -1,5 +1,7 @@
 # 实施计划 Plan 导航
 
+- [Plan43 Agent服务Mastra架构重构](43-Agent服务Mastra架构重构执行计划.md) · 唯一来源 [PRD34](../prd/34-Agent服务架构重构与技术选型.md)；涵盖知识库先行、Schema/Proto 强类型契约更新、Go 统一渠道网关与内部 MCP Server 改造、Mastra 原地重建 `agent/` 及全仓门禁验收。
+
 - [Plan29 统一AI网关验证顺序](29-模型与供应商接入扩展实施计划.md#ai-gateway)：唯一来源PRD20；组件兼容、协议合同、全入口号池、计量账单及真实供应商接受，本轮未执行。
 
 - [Plan42 Go模块化单体架构改造](42-Go模块化单体架构改造执行计划.md) · 唯一来源 [PRD33](../prd/33-Go模块化单体架构改造.md)；涵盖文档与归档优化、微服务入口与围栏回收、Google Go 目录收敛、Kafka 保留与开源组件替换、Go ↔ Canvas/Agent gRPC（方案 A）集成。
@@ -58,7 +60,7 @@ Plan11 是 AI 接入的实施验证与上线手册，维护可复用的验证、
 
 - [27-画布时间线实施计划](27-画布时间线实施计划.md)：唯一来源[PRD18](../prd/18-画布时间线.md)。
 
-- [28-完整创作Agent与Skill多Agent实施计划](28-完整创作Agent与Skill多Agent实施计划.md)。唯一来源为 PRD19；原 Harness 迁移、Skill、多 Agent 与交付之外，新增[上下文、检索、记忆与评测任务](28-完整创作Agent与Skill多Agent实施计划.md#harness-module-plan)。
+- [28-完整创作Agent与Skill多Agent实施计划](28-完整创作Agent与Skill多Agent实施计划.md)（**已归档 / 移出默认搜索**）：历史 Pi Durable / NestJS 实施计划；现行 Agent 重构执行计划见 [Plan43](43-Agent服务Mastra架构重构执行计划.md)。
 
 
 - [29-模型与供应商接入扩展实施计划](29-模型与供应商接入扩展实施计划.md)：唯一来源[PRD20](../prd/20-模型与供应商接入扩展.md)，拆解T-AI-21-01～04，复用原协议/预设与安全边界。

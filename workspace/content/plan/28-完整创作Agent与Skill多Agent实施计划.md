@@ -1,4 +1,10 @@
+---
+archived: true
+---
+
 # 完整创作 Agent、Skill 与多 Agent 实施计划
+
+> **已归档 / 执行计划已过时（2026-11-25）**：本计划对应的 Pi Durable / NestJS / Prisma 实施路径已过时并移出默认搜索；现行 Agent 服务全量原地重构执行计划请见 [Plan43：Agent服务Mastra架构重构执行计划](43-Agent服务Mastra架构重构执行计划.md)。
 
 本轮四模块的执行步骤见[§11 任务与证据](#harness-module-plan)。
 
@@ -86,7 +92,7 @@
 
 ### NestJS 框架切换顺序
 
-按[设计37 §8](../design/37-Agent服务目录与TypeScript规范设计.md#8-实施与验收)记录验收证据。
+按原设计37 §8（已归档清理，历史见 Git；现行验收见[设计48](../design/48-Agent服务Mastra架构与技术选型设计.md#8-实施与验收)）记录验收证据。
 
 1. 从待迁移基线导出 Agent OpenAPI，记录路由、响应和 SSE 行为，生成 Go 客户端并保存可重复比较的基线。记录现有测试清单及生产构建的执行定义指纹。
 2. 锁定 Nest 核心包、Fastify 适配器、Swagger 与 peer。用生产编译输出验证装饰器元数据、离线装配、开发入口和关停，再通过现有用例端口接入实际 HTTP。

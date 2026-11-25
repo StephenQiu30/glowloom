@@ -1,4 +1,10 @@
+---
+archived: true
+---
+
 # Agent Harness 上下文、记忆与 RAG 能力调研
+
+> **已归档 / 历史调研（2026-11-25）**：本文基于 Pi Durable 1.5.0 阶段基线，已移出默认搜索；现行 Mastra 记忆与上下文选型请见 [研究71](71-2026-11-25-Agent服务架构网关与评测技术选型调研.md) 与 [设计48](../design/48-Agent服务Mastra架构与技术选型设计.md)。
 
 2026-11-23。基线为 Glowloom `37eaf7242` 与锁定的 `@earendil-works/pi-durable@1.5.0`。证据来自当前仓库的正常调用链、现有测试源码与官方资料。外部能力按各自产品文档核对，存储选型、效果和开销尚待同一数据集验证。[需求19 用户补充](../requirement/19-完整创作Agent与Skill多Agent需求.md#src-agh-25) · [设计32](../design/32-完整创作AgentHarness与Skill多Agent架构设计.md) · [画布调研67](67-2026-11-23-画布AI对话与故事板竞品调研.md)
 

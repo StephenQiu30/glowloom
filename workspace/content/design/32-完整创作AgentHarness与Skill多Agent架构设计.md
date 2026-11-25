@@ -1,12 +1,18 @@
+---
+archived: true
+---
+
 # 完整创作 Agent Harness、Skill 与多 Agent 架构设计
 
-状态：按用户于 2026-11-04 确认的独立服务方案更新完整设计；HTTP 框架目标按[需求22](../requirement/22-Agent服务目录与TypeScript规范需求.md)调整为 NestJS；具体接口与数据合同为本稿设计决策，不代表代码已实现或产品已验收。已确认：同仓库独立 Agent 服务、TypeScript、官方 Pi Durable、PostgreSQL、Docker Compose 统一启动、不使用 Temporal、不保留旧实现或兼容处理。来源：[需求19 SRC-AGH-12](../requirement/19-完整创作Agent与Skill多Agent需求.md#src-agh-12)。产品接受见 [PRD19](../prd/19-完整创作Agent与Skill多Agent.md)，执行步骤见 [Plan28](../plan/28-完整创作Agent与Skill多Agent实施计划.md)，状态只见 [BACKLOG](../../../BACKLOG.md#pi-durable-migration)。
+> **已归档 / 技术架构已过时（2026-11-25）**：本设计中的 Pi Durable、NestJS/Fastify、Prisma 与双向 OpenAPI 方案已过时并移出默认搜索；现行唯一 Agent 架构与技术选型合同请见 [设计48：Agent服务Mastra架构与技术选型设计](48-Agent服务Mastra架构与技术选型设计.md)（原设计37与需求22已归档清理，历史见 Git）。本文仅作为既有创作业务场景与历史决策参考保留。
+
+状态：历史归档（2026-11-04 至 2026-11-23 Pi Durable 方案）。来源：[需求19 SRC-AGH-12](../requirement/19-完整创作Agent与Skill多Agent需求.md#src-agh-12)。产品接受见 [PRD19](../prd/19-完整创作Agent与Skill多Agent.md)，现行技术合同与执行计划见 [设计48](48-Agent服务Mastra架构与技术选型设计.md) 与 [Plan43](../plan/43-Agent服务Mastra架构重构执行计划.md)。
 
 2026-11-12按[需求19 SRC-AGH-16](../requirement/19-完整创作Agent与Skill多Agent需求.md#src-agh-16)细化主子协作、Skill自动选择、外部MCP、自动推进及稳定性：§7.0、§7.6.9～10、§7.11～15为本轮设计评审稿，对应PRD19新增接受条件。原有已确认技术路线继续有效；本轮不编写代码或执行部署、连接授权和付费验证。
 
 ## 1. 摘要
 
-本次复核阅读入口（SRC-AGH-22）：已有/缺口与详细执行合同见§7.17；技术选择和目录评价见[设计37 §7.8～7.10](37-Agent服务目录与TypeScript规范设计.md#78-本次技术选型评价)；正式制作身份与阶段产物见[设计38 §7.11](38-短剧工作室一致性设计.md#711-源码复核后的制作闭环设计)。实施依赖分别在Plan28 §10和Plan33“本次复核实施依赖”。本轮仅文档，新增决策为评审建议，不重做已落地Nest迁移、原调用、资金或导出引擎。
+本次复核阅读入口（SRC-AGH-22）：已有/缺口与详细执行合同见§7.17；原设计37（已归档清理，历史见 Git）已由[设计48](48-Agent服务Mastra架构与技术选型设计.md)替代；正式制作身份与阶段产物见[设计38 §7.11](38-短剧工作室一致性设计.md#711-源码复核后的制作闭环设计)。实施依赖分别在Plan28 §10和Plan33“本次复核实施依赖”。本轮仅文档，新增决策为评审建议，不重做已落地Nest迁移、原调用、资金或导出引擎。
 
 对话页面、首页/共享参考、全部消息历史及Stop/重试交互由[设计35](35-对话工作台与参考输入一致性设计.md)→PRD22→Plan31细化，扩展本设计的session/run公共合同，不更换执行引擎或Go业务权威；基础Harness迁移仍由本主链承接。
 

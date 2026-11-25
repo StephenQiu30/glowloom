@@ -13,6 +13,7 @@ const docs = defineDocs({
           source.match(/^#\s+(.+)$/m)?.[1] ??
             path.split('/').at(-1)!.replace(/\.md$/, ''),
         ),
+        archived: pageSchema.shape.full.default(false),
       }),
     postprocess: {
       includeProcessedMarkdown: true,
@@ -30,7 +31,14 @@ export const source = loader({
   plugins: [lucideIconsPlugin()],
 });
 
-export const docsLlms = llms(source, {
+export const searchableSource: typeof source = {
+  ...source,
+  getPages(language?: string) {
+    return source.getPages(language).filter((page) => !page.data.archived);
+  },
+};
+
+export const docsLlms = llms(searchableSource, {
   renderPage: async (page) => `# ${page.data.title} (${page.url})
 
 ${await page.data.getText('processed')}`,

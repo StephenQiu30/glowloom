@@ -1,4 +1,10 @@
+---
+archived: true
+---
+
 # Agent Harness 与 Skill 能力分析
+
+> **已归档 / 历史调研（2026-11-25）**：本文为 Pi Durable 阶段调研，已移出默认搜索；现行 Agent 架构与技术选型调研请见 [研究71](71-2026-11-25-Agent服务架构网关与评测技术选型调研.md)。
 
 日期：2026-11-01；2026-11-04 按用户最新确认纠正技术结论。能力来源与有效确认见[需求19](../requirement/19-完整创作Agent与Skill多Agent需求.md)；正式架构唯一见[设计32](../design/32-完整创作AgentHarness与Skill多Agent架构设计.md)，不以本调研作为实现或验收证明。
 
