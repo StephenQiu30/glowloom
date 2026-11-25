@@ -76,6 +76,14 @@ export function ConversationWorkspace({
   }, [c.phase, onLock]);
   const identity = `${options.ownerKey}/${options.projectID}/${options.sessionID ?? options.canvasID ?? "new"}`;
   const hasMessages = c.summaries.length > 0;
+  const workflowRun = c.activeRunID ? c.runMap[c.activeRunID] : undefined;
+  const workflowCompleted =
+    options.workflow &&
+    new Set(
+      workflowRun?.snapshot.events
+        .filter((event) => event.event_type === "workflow.node.completed")
+        .map((event) => event.payload.node_id),
+    ).size;
   const welcome = !embedded && !panel && !options.sessionID && !hasMessages;
   const authorized = options.enabled && options.writable !== false && !c.denied;
   const suggestedSkills =
@@ -149,6 +157,11 @@ export function ConversationWorkspace({
         embedded ? hasMessages && "h-[min(80dvh,900px)]" : "flex-1",
       )}
     >
+      {options.workflow && workflowRun && (
+        <p role="status" className="mb-2 text-sm text-muted-foreground">
+          已完成 {workflowCompleted} / {options.workflow.nodes.length} 个节点
+        </p>
+      )}
       {c.loading && !welcome ? (
         <span role="status" className="sr-only">
           正在读取对话…

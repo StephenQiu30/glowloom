@@ -1,6 +1,7 @@
 package agentbusiness_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -222,7 +223,7 @@ func TestCallReceiptUnknownDoesNotReexecuteOrReserveTwice(t *testing.T) {
 
 func TestSkillVersionsPrivateHashPinnedAndImmediatelyRevoked(t *testing.T) {
 	s, a, _ := fixture(t)
-	input := domain.SkillInput{RequestID: uuid.New(), Name: "storyboard", Version: "1.0.0", Description: "分镜知识", Body: "# Storyboard", Resources: map[string]string{"references/camera.md": "wide / close"}}
+	input := domain.SkillInput{RequestID: uuid.New(), Name: "storyboard", Version: "1.0.0", Description: "分镜知识", Body: "---\nname: storyboard\ndescription: 分镜知识\n---\n\n# Storyboard", Resources: map[string][]byte{"references/camera.md": []byte("wide / close"), "assets/frame.bin": {0, 255, 0}}}
 	installed, err := s.InstallSkill(t.Context(), app.Principal(a.Scope), a.Scope.ProjectID, input)
 	if err != nil {
 		t.Fatal(err)
@@ -242,8 +243,12 @@ func TestSkillVersionsPrivateHashPinnedAndImmediatelyRevoked(t *testing.T) {
 		t.Fatal("resource traversal", err)
 	}
 	content, err := s.ReadSkill(t.Context(), g, installed.SkillID, installed.Version, installed.ResourceHash, "references/camera.md")
-	if err != nil || content.Content != "wide / close" {
+	if err != nil || string(content.Content) != "wide / close" {
 		t.Fatal("resource read", err)
+	}
+	bundle, err := s.ReadSkill(t.Context(), g, installed.SkillID, installed.Version, installed.ResourceHash, "")
+	if err != nil || !bytes.Equal(bundle.Resources["assets/frame.bin"], input.Resources["assets/frame.bin"]) {
+		t.Fatal("binary resource read", err)
 	}
 	if _, err = s.ReadSkill(t.Context(), g, installed.SkillID, installed.Version, "wrong", ""); !errors.Is(err, domain.ErrConflict) {
 		t.Fatal("hash drift", err)

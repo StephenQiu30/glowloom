@@ -1,0 +1,3216 @@
+#!/usr/bin/env python3
+"""Small filesystem lifecycle for short-drama projects.
+
+Creative work lives in project files and skills. This module keeps only the
+mechanical boundaries that earn their cost: project initialization, manifest
+configuration, read-only status/dashboard coordination, handover export, and
+portable text delivery with checksum verification. It does not call networks
+or media services.
+"""
+
+from __future__ import annotations
+
+import argparse
+import contextlib
+import hashlib
+import importlib.util
+import json
+import math
+import os
+import re
+import shutil
+import stat
+import sys
+import unicodedata
+import uuid
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from datetime import datetime, timezone
+from pathlib import Path, PurePosixPath
+from types import ModuleType
+from typing import Any, Iterator
+
+
+MINIMUM_PYTHON = (3, 9)
+if sys.version_info < MINIMUM_PYTHON:
+    raise SystemExit(
+        "short-drama needs Python {}.{} or newer; this interpreter is {}.{}".format(
+            *MINIMUM_PYTHON, sys.version_info.major, sys.version_info.minor
+        )
+    )
+
+PROJECT_FILE = "short-drama.json"
+STATE_FILE = Path(".short-drama/state.json")
+STATE_SCHEMA = "2.0"
+DEFAULT_PROMPT_LANGUAGE = "en"
+LANGUAGE_TAG_RE = re.compile(r"[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*")
+DELIVERY_SUFFIXES = {".md", ".json", ".jsonl"}
+CREATOR_DOCUMENTS = (
+    "剧本.md",
+    "视觉设定.md",
+    "分镜.md",
+    "图片提示词.md",
+    "视频提示词.md",
+)
+# The cut list is written after the media exists, so an episode that never
+# reached editing is complete without one. It travels with a handover when it is
+# there -- without it the next person has to re-cut the film from scratch -- but
+# it is never reported as a missing creator document.
+POST_PRODUCTION_DOCUMENTS = ("剪辑单.md",)
+EXPORT_MEDIA_DIRECTORY = "制作成果"
+EXPORT_SCHEMA = "1.0"
+EPISODE_ID_RE = re.compile(r"EP(?:[0-9]{3}|[1-9][0-9]{3,})")
+WINDOWS_FORBIDDEN_PATH_CHARACTERS = frozenset('<>:"|?*')
+WINDOWS_RESERVED_PATH_STEMS = frozenset(
+    {
+        "con",
+        "prn",
+        "aux",
+        "nul",
+        *(f"com{number}" for number in range(1, 10)),
+        *(f"lpt{number}" for number in range(1, 10)),
+        "com¹",
+        "com²",
+        "com³",
+        "lpt¹",
+        "lpt²",
+        "lpt³",
+    }
+)
+
+CANONICAL_ROOTS = {
+    "inputs": "输入",
+    "development": "项目开发",
+    "bible": "设定集",
+    "episodes": "剧集",
+    "delivery": "交付",
+    "creator-decisions": "创作者决策",
+    "reviews": "审查",
+}
+LEGACY_ROOTS = {role: role for role in CANONICAL_ROOTS}
+ROOT_ROLE_ALIASES: dict[str, str] = {
+    name.casefold(): role
+    for roots in (CANONICAL_ROOTS, LEGACY_ROOTS)
+    for role, name in roots.items()
+}
+LAYOUT_PINNING_ROLES = frozenset(
+    {"development", "bible", "episodes", "delivery", "creator-decisions", "reviews"}
+)
+PROJECT_DIRS = (*CANONICAL_ROOTS.values(), ".short-drama")
+
+AUTHORITY_ROOT_TOKEN = "creator_authority"
+EPISODE_LENGTH_POINTER = "/format/target_seconds_per_episode"
+PACING_POINTER = "/format/pacing"
+# Characters for scripts written without spaces, words for scripts written with
+# them. A project declares the one its dialogue uses, or both when it mixes.
+SPEECH_RATES = ("spoken_characters_per_second", "spoken_words_per_second")
+EPISODE_COUNT_POINTER = "/format/episode_count"
+ASPECT_RATIO_POINTER = "/format/aspect_ratio"
+FORMAT_POINTERS = (
+    EPISODE_LENGTH_POINTER,
+    PACING_POINTER,
+    EPISODE_COUNT_POINTER,
+    ASPECT_RATIO_POINTER,
+)
+# The project rhythm profile: what develop proposes and the creator accepts, so
+# that later stages can do arithmetic on accepted numbers. Only types and ranges
+# are checked here; which values suit a project is the creator's call.
+RHYTHM_PROFILE_FORMS = (
+    "ai_live_action",
+    "live_action",
+    "motion_comic",
+    "2d_dynamic_comic",
+    "stylized_3d",
+    "ink_wash",
+    "chibi",
+    "guoman",
+    "anime",
+    "2d_anime",
+    "实拍",
+    "二维动态漫",
+    "风格化三维",
+    "水墨笔触",
+    "Q版表达",
+    "Q 版表达",
+    "国漫二次元",
+)
+RHYTHM_PROFILE_FIELDS = {
+    "form": "form",
+    "first_hook_seconds": "seconds",
+    "beat_interval_seconds_max": "seconds",
+    "opposed_reversals_per_episode_min": "count",
+    "end_on_peak": "boolean",
+    "reprise_previous_last_beat": "boolean",
+    "vo_share_max": "share",
+    "target_avg_shot_seconds": "seconds",
+    "close_shot_share_min": "share",
+    "first_major_payoff_by_episode": "episode",
+}
+
+class ProjectConflictError(RuntimeError):
+    """A file changed while a guarded operation was in progress."""
+
+
+class PackageBlockedError(RuntimeError):
+    """A requested delivery contains an artifact that is not approved."""
+
+
+class NonPortablePathError(ValueError):
+    """A path would alias or fail on a supported filesystem."""
+
+
+def utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def sha256_bytes(content: bytes) -> str:
+    return hashlib.sha256(content).hexdigest()
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _is_link_or_reparse(details: os.stat_result) -> bool:
+    attributes = getattr(details, "st_file_attributes", 0)
+    reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+    return stat.S_ISLNK(details.st_mode) or bool(attributes & reparse_flag)
+
+
+def _fsync_directory(path: Path) -> None:
+    if os.name == "nt":
+        return
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _atomic_bytes(path: Path, content: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        with temporary.open("xb") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        _fsync_directory(path.parent)
+    finally:
+        with contextlib.suppress(FileNotFoundError):
+            temporary.unlink()
+
+
+def atomic_json(path: Path, document: Mapping[str, Any]) -> None:
+    # allow_nan=False: Python reads and writes bare Infinity/NaN, but they are not
+    # JSON. Writing one produces a manifest that every other reader rejects.
+    encoded = (
+        json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False)
+        + "\n"
+    ).encode("utf-8")
+    _atomic_bytes(path, encoded)
+
+
+def normalize_language_tag(value: str, *, field: str) -> str:
+    tag = value.strip()
+    if not tag:
+        raise ValueError(f"{field} must not be empty")
+    if LANGUAGE_TAG_RE.fullmatch(tag) is None:
+        raise ValueError(f"{field} is not a well-formed language tag: {value!r}")
+    return tag
+
+
+def project_languages(project: Mapping[str, Any]) -> dict[str, str]:
+    format_block = project.get("format")
+    prompt_language = (
+        format_block.get("prompt_language")
+        if isinstance(format_block, Mapping)
+        else None
+    )
+    authority = project.get("creator_authority")
+    production_profile = (
+        authority.get("production_profile")
+        if isinstance(authority, Mapping)
+        else None
+    )
+    choices = (
+        production_profile.get("choices")
+        if isinstance(production_profile, Mapping)
+        else None
+    )
+    video_prompt_language = (
+        choices.get("video_prompt_language") if isinstance(choices, Mapping) else None
+    )
+    return {
+        "language": str(project.get("language") or "zh-CN"),
+        "prompt_language": str(prompt_language or DEFAULT_PROMPT_LANGUAGE),
+        "video_prompt_language": str(
+            video_prompt_language or prompt_language or DEFAULT_PROMPT_LANGUAGE
+        ),
+    }
+
+
+def project_video_model_profile(project: Mapping[str, Any]) -> dict[str, Any]:
+    """Expose the accepted prompt-facing model choices without guessing defaults."""
+    authority = project.get("creator_authority")
+    production_profile = (
+        authority.get("production_profile")
+        if isinstance(authority, Mapping)
+        else None
+    )
+    if (
+        not isinstance(production_profile, Mapping)
+        or production_profile.get("status") != "accepted"
+    ):
+        return {}
+    choices = production_profile.get("choices")
+    if not isinstance(choices, Mapping):
+        return {}
+    fields = (
+        "target_video_model",
+        "video_prompt_dialect",
+        "video_prompt_language",
+        "native_duration_seconds",
+        "supported_generation_modes",
+        "audio_generation",
+        # The creator's choice to pack adjacent short shots into one
+        # generation; it answers the shot-length note below once made.
+        "multi_shot_containers",
+        # How continuation segments are executed when the built-in production
+        # path cannot bind the previous segment's video: asked once, then read.
+        "continuation_route",
+    )
+    return {field: choices[field] for field in fields if field in choices}
+
+
+def project_format(project: Mapping[str, Any]) -> dict[str, Any]:
+    """The episode shape the creator set: count, length and frame.
+
+    Only well-formed values are reported, so a reader can do arithmetic on
+    them without re-validating; anything else in the format block (pacing
+    rates, prompt language) is working detail the status does not repeat.
+    """
+    block = project.get("format")
+    if not isinstance(block, Mapping):
+        return {}
+    result: dict[str, Any] = {}
+    count = block.get("episode_count")
+    if isinstance(count, int) and not isinstance(count, bool) and count > 0:
+        result["episode_count"] = count
+    seconds = block.get("target_seconds_per_episode")
+    if (
+        isinstance(seconds, (int, float))
+        and not isinstance(seconds, bool)
+        and math.isfinite(seconds)
+        and seconds > 0
+    ):
+        result["target_seconds_per_episode"] = seconds
+    ratio = block.get("aspect_ratio")
+    if isinstance(ratio, str) and ratio.strip():
+        result["aspect_ratio"] = ratio.strip()
+    return result
+
+
+def rhythm_profile_problems(profile: Any) -> list[str]:
+    """Type and range problems in a rhythm profile block; empty when usable.
+
+    Fields may be supplied incrementally: only declared non-null fields are
+    checked, while at least one known field must be present.
+    """
+    if not isinstance(profile, Mapping):
+        return ["rhythm_profile must be an object"]
+    problems: list[str] = []
+    for name in sorted(set(profile) - set(RHYTHM_PROFILE_FIELDS) - {"status"}):
+        problems.append(
+            f"rhythm_profile has no field {name}; fields are "
+            f"{', '.join(RHYTHM_PROFILE_FIELDS)}"
+        )
+    declared = [
+        name
+        for name in RHYTHM_PROFILE_FIELDS
+        if name in profile and profile[name] is not None
+    ]
+    if not declared and not problems:
+        problems.append("rhythm_profile must declare at least one field")
+    for name in declared:
+        kind = RHYTHM_PROFILE_FIELDS[name]
+        value = profile[name]
+        number = isinstance(value, (int, float)) and not isinstance(value, bool)
+        whole = isinstance(value, int) and not isinstance(value, bool)
+        if kind == "form":
+            ok = isinstance(value, str) and value in RHYTHM_PROFILE_FORMS
+            expected = " or ".join(RHYTHM_PROFILE_FORMS)
+        elif kind == "boolean":
+            ok = isinstance(value, bool)
+            expected = "true or false"
+        elif kind == "seconds":
+            ok = number and math.isfinite(value) and value > 0
+            expected = "a positive number of seconds"
+        elif kind == "share":
+            ok = number and 0 <= value <= 1
+            expected = "a share between 0 and 1"
+        elif kind == "count":
+            ok = whole and value >= 0
+            expected = "a whole number of 0 or more"
+        else:
+            ok = whole and value >= 1
+            expected = "an episode number of 1 or more"
+        if not ok:
+            problems.append(f"rhythm_profile.{name} must be {expected}, not {value!r}")
+    return problems
+
+
+def project_rhythm_profile(project: Mapping[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """The accepted rhythm profile values and the problems that void them.
+
+    A missing, unset or merely proposed profile is undeclared: nothing
+    downstream checks against it. An accepted profile that no longer passes
+    validation (a hand edit) is reported with its problems and declares
+    nothing either, since arithmetic on a bad value is a wrong number.
+    """
+    authority = project.get("creator_authority")
+    profile = authority.get("rhythm_profile") if isinstance(authority, Mapping) else None
+    if not isinstance(profile, Mapping) or profile.get("status") != "accepted":
+        return {}, []
+    problems = rhythm_profile_problems(profile)
+    if problems:
+        return {}, problems
+    return {
+        name: profile[name]
+        for name in RHYTHM_PROFILE_FIELDS
+        if name in profile and profile[name] is not None
+    }, []
+
+
+def profile_notes(project: Mapping[str, Any]) -> list[str]:
+    """Arithmetic conflicts between accepted settings that no single one shows.
+
+    Each value passes on its own; together they promise something a later
+    stage cannot deliver, and that stage is the first to find out.
+    """
+    notes: list[str] = []
+    rhythm, _ = project_rhythm_profile(project)
+    model = project_video_model_profile(project)
+    native = model.get("native_duration_seconds")
+    shortest = native.get("min") if isinstance(native, Mapping) else None
+    average = rhythm.get("target_avg_shot_seconds")
+    if (
+        isinstance(shortest, (int, float))
+        and isinstance(average, (int, float))
+        and average < shortest
+        and model.get("multi_shot_containers") is not True
+    ):
+        notes.append(
+            f"rhythm_profile.target_avg_shot_seconds {average:g} is below the target "
+            f"model's native minimum of {shortest:g} seconds: most shots will need "
+            "multi-shot containers, or the average must rise"
+        )
+    block = project.get("format")
+    pacing = block.get("pacing") if isinstance(block, Mapping) else None
+    target = block.get("target_seconds_per_episode") if isinstance(block, Mapping) else None
+    rates = pacing if isinstance(pacing, Mapping) else {}
+    action = rates.get("seconds_per_action_paragraph")
+    # The same rule the write stage's estimator applies: a positive speech rate
+    # (per character, per word, or both) and a non-negative action-paragraph
+    # duration.
+    usable = (
+        any(
+            isinstance(speech, (int, float))
+            and not isinstance(speech, bool)
+            and math.isfinite(speech)
+            and speech > 0
+            for speech in (rates.get(name) for name in SPEECH_RATES)
+        )
+        and isinstance(action, (int, float))
+        and not isinstance(action, bool)
+        and math.isfinite(action)
+        and action >= 0
+    )
+    if isinstance(target, (int, float)) and not usable:
+        notes.append(
+            "format.target_seconds_per_episode is set but format.pacing has no usable rates: "
+            "the write stage cannot turn a screenplay into seconds"
+        )
+    return notes
+
+
+def initialize_project(
+    path: Path,
+    *,
+    title: str,
+    language: str,
+    aspect_ratio: str,
+    prompt_language: str = DEFAULT_PROMPT_LANGUAGE,
+    episode_count: int | None = None,
+    target_seconds_per_episode: float | None = None,
+    suite_root: Path | None = None,
+) -> dict[str, Any]:
+    language = normalize_language_tag(language, field="language")
+    prompt_language = normalize_language_tag(prompt_language, field="prompt_language")
+    if not isinstance(aspect_ratio, str) or not re.fullmatch(
+        r"[1-9][0-9]*:[1-9][0-9]*", aspect_ratio.strip()
+    ):
+        raise ValueError("aspect_ratio must be written as width:height, e.g. 16:9")
+    aspect_ratio = aspect_ratio.strip()
+    if episode_count is not None and (
+        isinstance(episode_count, bool)
+        or not isinstance(episode_count, int)
+        or episode_count <= 0
+    ):
+        raise ValueError("episode_count must be a positive integer")
+    if target_seconds_per_episode is not None and (
+        isinstance(target_seconds_per_episode, bool)
+        or not isinstance(target_seconds_per_episode, (int, float))
+        or not math.isfinite(target_seconds_per_episode)
+        or target_seconds_per_episode <= 0
+    ):
+        raise ValueError("target_seconds_per_episode must be a positive number of seconds")
+    root = path.expanduser().resolve()
+    project_path = root / PROJECT_FILE
+    if project_path.exists():
+        raise FileExistsError(f"project already exists: {project_path}")
+
+    root.mkdir(parents=True, exist_ok=True)
+    for relative in PROJECT_DIRS:
+        (root / relative).mkdir(parents=True, exist_ok=True)
+
+    core = suite_root or Path(__file__).resolve().parents[1]
+    project = json.loads(
+        (core / "assets/project-template/short-drama.json").read_text(encoding="utf-8")
+    )
+    project.update(
+        {
+            "project_id": f"SD-{uuid.uuid4().hex[:12].upper()}",
+            "title": title.strip() or "未命名短剧",
+            "language": language,
+            "created_at": utc_now(),
+        }
+    )
+    project["format"]["aspect_ratio"] = aspect_ratio
+    project["format"]["prompt_language"] = prompt_language
+    if episode_count is not None:
+        project["format"]["episode_count"] = episode_count
+    if target_seconds_per_episode is not None:
+        project["format"]["target_seconds_per_episode"] = target_seconds_per_episode
+    state = {
+        "schema_version": STATE_SCHEMA,
+        "project_id": project["project_id"],
+        "project_layout_mode": "auto",
+        "updated_at": utc_now(),
+        "last_action": "initialized",
+        "artifacts": {},
+    }
+    atomic_json(root / STATE_FILE, state)
+    atomic_json(project_path, project)
+    return {"project_root": str(root), "project": project, "state": state}
+
+
+def find_project(start: Path) -> Path:
+    candidate = start.expanduser().resolve()
+    if candidate.is_file():
+        candidate = candidate.parent
+    for directory in (candidate, *candidate.parents):
+        if (directory / PROJECT_FILE).is_file():
+            return directory
+    raise FileNotFoundError(f"no {PROJECT_FILE} found from {start}")
+
+
+def _find_delivery_project(start: Path) -> Path:
+    try:
+        return find_project(start)
+    except FileNotFoundError:
+        pass
+    candidate = start.expanduser().resolve()
+    if candidate.is_file():
+        candidate = candidate.parent
+    for directory in (candidate, *candidate.parents):
+        for role in ("episodes", "delivery"):
+            for roots in (CANONICAL_ROOTS, LEGACY_ROOTS):
+                marker = directory / roots[role]
+                try:
+                    details = os.lstat(marker)
+                except OSError:
+                    continue
+                if not _is_link_or_reparse(details) and stat.S_ISDIR(details.st_mode):
+                    return directory
+    raise FileNotFoundError(f"no {PROJECT_FILE} found from {start}")
+
+
+def _has_nonportable_path_component(parts: tuple[str, ...]) -> bool:
+    for part in parts:
+        stem = part.split(".", 1)[0].casefold()
+        if (
+            part.endswith((" ", "."))
+            or any(ord(character) < 32 or ord(character) == 127 for character in part)
+            or any(character in WINDOWS_FORBIDDEN_PATH_CHARACTERS for character in part)
+            or stem in WINDOWS_RESERVED_PATH_STEMS
+        ):
+            return True
+    return False
+
+
+def _relative_path(value: str | Path, *, allow_operations: bool = False) -> str:
+    raw = str(value).replace("\\", "/")
+    pure = PurePosixPath(raw)
+    if not raw or pure.is_absolute() or any(part in ("", ".", "..") for part in pure.parts):
+        raise ValueError(f"unsafe project-relative path: {value!s}")
+    if _has_nonportable_path_component(pure.parts):
+        raise NonPortablePathError(f"unsafe project-relative path: {value!s}")
+    if not allow_operations and pure.parts[0].casefold() == ".short-drama":
+        raise ValueError("operational state cannot be a publication target")
+    return pure.as_posix()
+
+
+def _portable_path_identity(value: str) -> str:
+    return unicodedata.normalize("NFC", value.casefold())
+
+
+def _validate_existing_path_spelling(root: Path, relative: str, *, label: str) -> None:
+    current = root
+    prefix: list[str] = []
+    parts = PurePosixPath(relative).parts
+    for index, part in enumerate(parts):
+        try:
+            entries = list(os.scandir(current))
+        except (FileNotFoundError, NotADirectoryError):
+            return
+        identity = _portable_path_identity(part)
+        matches = [entry for entry in entries if _portable_path_identity(entry.name) == identity]
+        alias = next((entry.name for entry in matches if entry.name != part), None)
+        if alias is not None:
+            existing = PurePosixPath(*prefix, alias).as_posix()
+            raise NonPortablePathError(
+                f"{label} path spelling aliases an existing path: {relative} conflicts with {existing}"
+            )
+        exact = next((entry for entry in matches if entry.name == part), None)
+        if exact is None or index == len(parts) - 1:
+            return
+        if not exact.is_dir(follow_symlinks=False):
+            return
+        current /= part
+        prefix.append(part)
+
+
+def _validate_path_set(root: Path, relatives: Iterable[str], *, label: str) -> list[str]:
+    normalized: list[str] = []
+    seen: dict[str, str] = {}
+    for value in relatives:
+        relative = _relative_path(value)
+        identity = _portable_path_identity(relative)
+        previous = seen.get(identity)
+        if previous is not None and previous != relative:
+            raise NonPortablePathError(
+                f"{label} paths are not portable aliases: {previous} and {relative}"
+            )
+        if previous is None:
+            seen[identity] = relative
+            normalized.append(relative)
+        _validate_existing_path_spelling(root, relative, label=label)
+    return sorted(normalized)
+
+
+def _root_role(name: str) -> str | None:
+    return ROOT_ROLE_ALIASES.get(name.casefold())
+
+
+def is_protected_project_text(value: str | Path) -> bool:
+    raw = str(value).replace("\\", "/")
+    pure = PurePosixPath(raw)
+    if (
+        not raw
+        or pure.is_absolute()
+        or any(part in ("", ".", "..") for part in pure.parts)
+        or _has_nonportable_path_component(pure.parts)
+    ):
+        return True
+    return (
+        pure.name.casefold() == PROJECT_FILE
+        or pure.parts[0].casefold() == ".short-drama"
+        or _root_role(pure.parts[0]) == "delivery"
+    )
+
+
+def _directory_has_content(path: Path) -> bool:
+    try:
+        details = os.lstat(path)
+        return stat.S_ISLNK(details.st_mode) or (
+            stat.S_ISDIR(details.st_mode) and any(path.iterdir())
+        )
+    except FileNotFoundError:
+        return False
+
+
+def _read_state(root: Path) -> dict[str, Any]:
+    state_path = root / STATE_FILE
+    if not state_path.is_file() or state_path.is_symlink():
+        raise ValueError("project state is missing or unsafe")
+    document = json.loads(state_path.read_text(encoding="utf-8"))
+    if not isinstance(document, dict):
+        raise ValueError("project state must be an object")
+    return _normalize_state(document)
+
+
+def _read_state_if_present(root: Path) -> dict[str, Any]:
+    operations = root / ".short-drama"
+    try:
+        op_details = os.lstat(operations)
+    except FileNotFoundError:
+        op_details = None
+    if op_details is not None and (
+        _is_link_or_reparse(op_details) or not stat.S_ISDIR(op_details.st_mode)
+    ):
+        raise ValueError("project state is missing or unsafe")
+    state_path = root / STATE_FILE
+    try:
+        details = os.lstat(state_path)
+    except FileNotFoundError:
+        project_id: Any = None
+        project_path = root / PROJECT_FILE
+        if project_path.is_file() and not project_path.is_symlink():
+            try:
+                manifest = json.loads(project_path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                manifest = {}
+            if isinstance(manifest, Mapping):
+                project_id = manifest.get("project_id")
+        return _normalize_state(
+            {
+                "schema_version": STATE_SCHEMA,
+                "project_id": project_id or "UNTRACKED",
+                "project_layout_mode": "auto",
+                "last_action": "untracked",
+                "artifacts": {},
+            }
+        )
+    if _is_link_or_reparse(details) or not stat.S_ISREG(details.st_mode):
+        raise ValueError("project state is missing or unsafe")
+    return _read_state(root)
+
+
+def _normalize_state(document: Mapping[str, Any]) -> dict[str, Any]:
+    artifacts_raw = document.get("artifacts", {})
+    if not isinstance(artifacts_raw, Mapping):
+        raise ValueError("state.artifacts must be an object")
+    artifacts: dict[str, Any] = {}
+    for artifact_id, value in artifacts_raw.items():
+        if not isinstance(artifact_id, str) or not isinstance(value, Mapping):
+            raise ValueError("artifact state entries must be objects")
+        if isinstance(value.get("outputs"), list):
+            outputs = [
+                _relative_path(item)
+                for item in value["outputs"]
+                if isinstance(item, str)
+            ]
+            inputs_raw = value.get("inputs", {})
+            if not isinstance(inputs_raw, Mapping):
+                raise ValueError(f"{artifact_id}.inputs must be an object")
+            inputs = {
+                _relative_path(path, allow_operations=True): str(digest)
+                for path, digest in inputs_raw.items()
+                if isinstance(path, str) and isinstance(digest, str)
+            }
+            artifacts[artifact_id] = {
+                "owner": str(value.get("owner") or "unknown"),
+                "outputs": sorted(set(outputs)),
+                "inputs": inputs,
+                "acceptance": value.get("acceptance") if isinstance(value.get("acceptance"), Mapping) else None,
+                "review": value.get("review") if isinstance(value.get("review"), Mapping) else None,
+                "updated_at": value.get("updated_at"),
+            }
+    mode = document.get("project_layout_mode", "auto")
+    if mode not in {"auto", "canonical", "legacy"}:
+        mode = "auto"
+    bindings_raw = document.get("authority")
+    bindings = {
+        str(field): dict(binding)
+        for field, binding in (bindings_raw.items() if isinstance(bindings_raw, Mapping) else [])
+        if isinstance(field, str) and isinstance(binding, Mapping)
+    }
+    return {
+        "schema_version": STATE_SCHEMA,
+        "project_id": document.get("project_id"),
+        "project_layout_mode": mode,
+        "updated_at": document.get("updated_at"),
+        "last_action": document.get("last_action") or "loaded",
+        "artifacts": artifacts,
+        "authority": bindings,
+    }
+
+
+def _save_state(root: Path, state: dict[str, Any], *, action: str) -> None:
+    state["schema_version"] = STATE_SCHEMA
+    state["updated_at"] = utc_now()
+    state["last_action"] = action
+    atomic_json(root / STATE_FILE, state)
+
+
+def _project_layout_from_root(root: Path, state: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    current = state or _read_state(root)
+    recorded = current.get("project_layout_mode", "auto")
+    canonical_roles = sorted(
+        role
+        for role, name in CANONICAL_ROOTS.items()
+        if role in LAYOUT_PINNING_ROLES and _directory_has_content(root / name)
+    )
+    legacy_roles = sorted(
+        role
+        for role, name in LEGACY_ROOTS.items()
+        if role in LAYOUT_PINNING_ROLES and _directory_has_content(root / name)
+    )
+    nonstandard_roots = sorted(
+        entry.name
+        for entry in root.iterdir()
+        if (entry.is_symlink() or entry.is_dir())
+        if (role := _root_role(entry.name)) in LAYOUT_PINNING_ROLES
+        if entry.name not in {CANONICAL_ROOTS[role], LEGACY_ROOTS[role]}
+        if _directory_has_content(entry)
+    )
+    unsafe_roots = sorted(
+        entry.name
+        for entry in root.iterdir()
+        if _root_role(entry.name) in LAYOUT_PINNING_ROLES and entry.is_symlink()
+    )
+    detected = {
+        mode
+        for mode, roles in (("canonical", canonical_roles), ("legacy", legacy_roles))
+        if roles
+    }
+    conflict = bool(nonstandard_roots or unsafe_roots) or len(detected) > 1 or (
+        recorded in {"canonical", "legacy"} and detected and detected != {recorded}
+    )
+    if conflict:
+        mode = "mixed"
+    elif recorded in {"canonical", "legacy"}:
+        mode = str(recorded)
+    elif detected:
+        mode = next(iter(detected))
+    else:
+        mode = "canonical"
+    roots = LEGACY_ROOTS if mode == "legacy" else CANONICAL_ROOTS
+    return {
+        "mode": mode,
+        "pinned": recorded != "auto" or bool(detected),
+        "roots": dict(roots),
+        "nonstandardRoots": nonstandard_roots,
+        "unsafeRoots": unsafe_roots,
+    }
+
+
+def _project_path(root: Path, relative: str, *, create_parent: bool = False) -> Path:
+    root = root.resolve()
+    target = root / relative
+    current = root
+    for part in PurePosixPath(relative).parts[:-1]:
+        current /= part
+        # ``is_symlink`` misses the reparse points that are not name
+        # surrogates, and a Windows creator can make those without any extra
+        # privilege. Ask about the attribute directly instead.
+        try:
+            details = os.lstat(current)
+        except FileNotFoundError:
+            details = None
+        if details is not None and _is_link_or_reparse(details):
+            raise ProjectConflictError(f"project parent cannot be a symlink: {part}")
+        if details is not None and not stat.S_ISDIR(details.st_mode):
+            raise ProjectConflictError(f"project parent is not a directory: {part}")
+        if create_parent and details is None:
+            current.mkdir()
+    try:
+        target_details = os.lstat(target)
+    except (FileNotFoundError, NotADirectoryError):
+        target_details = None
+    if target_details is not None and (
+        _is_link_or_reparse(target_details) or not stat.S_ISREG(target_details.st_mode)
+    ):
+        raise ProjectConflictError(f"project target is not a regular file: {relative}")
+    if not target.parent.resolve().is_relative_to(root):
+        raise ValueError(f"path escapes project root: {relative}")
+    return target
+
+
+def _live_hash(root: Path, relative: str) -> str | None:
+    try:
+        target = _project_path(root, relative)
+    except (OSError, ProjectConflictError, ValueError):
+        return None
+    if not target.is_file():
+        return None
+    return sha256_file(target)
+
+
+@contextlib.contextmanager
+def _lock_handle(handle: Any) -> Iterator[None]:
+    if os.name == "nt":
+        import msvcrt
+
+        handle.seek(0, os.SEEK_END)
+        if handle.tell() == 0:
+            handle.write(b"0")
+            handle.flush()
+        handle.seek(0)
+        locking = getattr(msvcrt, "locking")  # noqa: B009
+        lock = getattr(msvcrt, "LK_LOCK")  # noqa: B009
+        unlock = getattr(msvcrt, "LK_UNLCK")  # noqa: B009
+        locking(handle.fileno(), lock, 1)
+        try:
+            yield
+        finally:
+            handle.seek(0)
+            locking(handle.fileno(), unlock, 1)
+    else:
+        import fcntl
+
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+@contextlib.contextmanager
+def _project_lock(root: Path) -> Iterator[None]:
+    operations = root / ".short-drama"
+    try:
+        details = os.lstat(operations)
+    except FileNotFoundError:
+        details = None
+    if details is not None and (
+        _is_link_or_reparse(details) or not stat.S_ISDIR(details.st_mode)
+    ):
+        raise ProjectConflictError("project operations directory is unsafe")
+    lock_path = operations / "project.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+b") as handle, _lock_handle(handle):
+        yield
+
+
+def _artifact_state_from(
+    record: Mapping[str, Any], live_hash: Callable[[str], str | None]
+) -> str:
+    """Decide one artifact's lifecycle state from the bytes on disk right now.
+
+    The whole lifecycle rests on the two `!= live` comparisons below: an
+    accepted artifact whose bytes were edited behind the tool's back has not
+    been accepted in its current form, and must fall back to `update_needed`.
+
+    This is written once and reached by two callers -- path-based and
+    directory-fd-based -- which differ only in how they hash a file. It used to
+    be two transcriptions of the same rules, with nothing asserting they agreed,
+    and the dashboard renders the fd one.
+    """
+
+    outputs = record.get("outputs", [])
+    if not isinstance(outputs, list) or not outputs:
+        return "draft"
+    live = {path: live_hash(path) for path in outputs if isinstance(path, str)}
+    if len(live) != len(outputs) or any(value is None for value in live.values()):
+        return "update_needed"
+    inputs = record.get("inputs", {})
+    if not isinstance(inputs, Mapping) or any(
+        not isinstance(path, str)
+        or not isinstance(expected, str)
+        or live_hash(path) != expected
+        for path, expected in inputs.items()
+    ):
+        return "update_needed"
+    acceptance = record.get("acceptance")
+    if not isinstance(acceptance, Mapping):
+        return "needs_confirmation"
+    if acceptance.get("decision") == "rejected":
+        return "revise"
+    if acceptance.get("decision") != "accepted" or acceptance.get("outputs") != live:
+        return "update_needed"
+    review = record.get("review")
+    if not isinstance(review, Mapping):
+        return "accepted"
+    if review.get("outputs") != live:
+        return "update_needed"
+    verdict = review.get("verdict")
+    if verdict in {"approve", "approve_with_notes"}:
+        return "approved"
+    if verdict in {"revise", "reject"}:
+        return "revise"
+    return "accepted"
+
+
+def _artifact_state(root: Path, record: Mapping[str, Any]) -> str:
+    return _artifact_state_from(record, lambda path: _live_hash(root, path))
+
+
+def _authority_report(
+    project: Mapping[str, Any], state: Mapping[str, Any]
+) -> dict[str, str]:
+    """Say whether the manifest still holds what each bound decision wrote.
+
+    `configure` records the digest of each bound authority setting it writes to
+    `short-drama.json`. Comparing that against the file turns a hand edit from
+    invisible into reported.
+    """
+    bindings = state.get("authority")
+    if not isinstance(bindings, Mapping):
+        return {}
+    report: dict[str, str] = {}
+    for field, binding in bindings.items():
+        if not isinstance(field, str) or not isinstance(binding, Mapping):
+            continue
+        try:
+            tokens = _authority_tokens(field)
+        except ValueError:
+            report[field] = "not_authority_field"
+            continue
+        missing = object()
+        cursor: Any = project
+        for token in tokens:
+            cursor = cursor.get(token, missing) if isinstance(cursor, Mapping) else missing
+            if cursor is missing:
+                break
+        if cursor is missing:
+            report[field] = "missing"
+            continue
+        digest = hashlib.sha256(
+            json.dumps(cursor, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        ).hexdigest()
+        report[field] = "bound" if digest == binding.get("value_sha256") else "hand_edited"
+    return report
+
+
+def _build_status(
+    *,
+    project: Mapping[str, Any],
+    state: Mapping[str, Any],
+    layout: Mapping[str, Any],
+    project_root: str,
+    artifact_state: Callable[[Mapping[str, Any]], str],
+) -> dict[str, Any]:
+    counts: dict[str, int] = {}
+    artifacts: dict[str, str] = {}
+    # Which stage produced each file. The state already knows; without it every
+    # reader has to guess from the path, and a stage added later reads as
+    # "unrecognised" until someone updates that reader's own list of names.
+    ownership: dict[str, str] = {}
+    records = state.get("artifacts", {})
+    if isinstance(records, Mapping):
+        for artifact_id, record in records.items():
+            if not isinstance(artifact_id, str) or not isinstance(record, Mapping):
+                continue
+            value = artifact_state(record)
+            artifacts[artifact_id] = value
+            counts[value] = counts.get(value, 0) + 1
+            owner = record.get("owner")
+            if not isinstance(owner, str) or not owner:
+                continue
+            for output in record.get("outputs", []) or []:
+                if isinstance(output, str) and output:
+                    ownership[output] = owner
+    languages = project_languages(project)
+    video_model_profile = project_video_model_profile(project)
+    rhythm_profile, rhythm_problems = project_rhythm_profile(project)
+    return {
+        "project_id": project.get("project_id"),
+        "title": project.get("title"),
+        "language": languages["language"],
+        "prompt_language": languages["prompt_language"],
+        "video_prompt_language": languages["video_prompt_language"],
+        "video_model_profile": video_model_profile,
+        "format": project_format(project),
+        "rhythm_profile": rhythm_profile,
+        "rhythm_profile_problems": rhythm_problems,
+        "profile_notes": profile_notes(project),
+        "project_root": project_root,
+        "last_action": state.get("last_action"),
+        "layout": dict(layout),
+        "artifact_states": counts,
+        "artifacts": artifacts,
+        "ownership": ownership,
+        "authority": _authority_report(project, state),
+        "lifecycle": {"artifact_state": counts},
+    }
+
+
+def project_status(path: Path) -> dict[str, Any]:
+    root = find_project(path)
+    project = json.loads((root / PROJECT_FILE).read_text(encoding="utf-8"))
+    if not isinstance(project, dict):
+        raise ValueError("project manifest must be an object")
+    state = _read_state(root)
+    return _build_status(
+        project=project,
+        state=state,
+        layout=_project_layout_from_root(root, state),
+        project_root=str(root),
+        artifact_state=lambda record: _artifact_state(root, record),
+    )
+
+
+def _open_directory_at(directory_fd: int, parts: Iterable[str]) -> int:
+    descriptor = os.dup(directory_fd)
+    try:
+        for part in parts:
+            child = os.open(
+                part,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                dir_fd=descriptor,
+            )
+            os.close(descriptor)
+            descriptor = child
+        return descriptor
+    except Exception:
+        os.close(descriptor)
+        raise
+
+
+def _read_regular_at(directory_fd: int, relative: str) -> bytes:
+    pure = PurePosixPath(relative)
+    parent = _open_directory_at(directory_fd, pure.parts[:-1])
+    descriptor = -1
+    try:
+        descriptor = os.open(
+            pure.name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=parent
+        )
+        details = os.fstat(descriptor)
+        if not stat.S_ISREG(details.st_mode):
+            raise OSError("not a regular file")
+        with os.fdopen(descriptor, "rb") as handle:
+            descriptor = -1
+            return handle.read()
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        os.close(parent)
+
+
+def _directory_has_content_at(directory_fd: int, name: str) -> tuple[bool, bool]:
+    try:
+        descriptor = os.open(
+            name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory_fd
+        )
+    except FileNotFoundError:
+        return False, False
+    except OSError:
+        return True, True
+    try:
+        with os.scandir(descriptor) as entries:
+            return any(True for _ in entries), False
+    finally:
+        os.close(descriptor)
+
+
+def _project_layout_at(directory_fd: int, state: Mapping[str, Any]) -> dict[str, Any]:
+    recorded = state.get("project_layout_mode", "auto")
+    canonical: list[str] = []
+    legacy: list[str] = []
+    unsafe: list[str] = []
+    nonstandard: list[str] = []
+    with os.scandir(directory_fd) as entries:
+        root_entries = list(entries)
+    for entry in root_entries:
+        role = _root_role(entry.name)
+        if role not in LAYOUT_PINNING_ROLES:
+            continue
+        has_content, unsafe_entry = _directory_has_content_at(directory_fd, entry.name)
+        if not has_content:
+            continue
+        if unsafe_entry or entry.is_symlink():
+            unsafe.append(entry.name)
+            continue
+        if entry.name == CANONICAL_ROOTS[role]:
+            canonical.append(role)
+        elif entry.name == LEGACY_ROOTS[role]:
+            legacy.append(role)
+        else:
+            nonstandard.append(entry.name)
+    detected = {mode for mode, values in (("canonical", canonical), ("legacy", legacy)) if values}
+    conflict = bool(unsafe or nonstandard) or len(detected) > 1 or (
+        recorded in {"canonical", "legacy"} and detected and detected != {recorded}
+    )
+    if conflict:
+        mode = "mixed"
+    elif recorded in {"canonical", "legacy"}:
+        mode = str(recorded)
+    elif detected:
+        mode = next(iter(detected))
+    else:
+        mode = "canonical"
+    roots = LEGACY_ROOTS if mode == "legacy" else CANONICAL_ROOTS
+    return {
+        "mode": mode,
+        "pinned": recorded != "auto" or bool(detected),
+        "roots": dict(roots),
+        "nonstandardRoots": sorted(nonstandard),
+        "unsafeRoots": sorted(unsafe),
+    }
+
+
+def project_status_at(directory_fd: int, *, project_root: str) -> dict[str, Any]:
+    project = json.loads(_read_regular_at(directory_fd, PROJECT_FILE).decode("utf-8"))
+    try:
+        raw_state = json.loads(
+            _read_regular_at(directory_fd, STATE_FILE.as_posix()).decode("utf-8")
+        )
+    except FileNotFoundError:
+        raw_state = {
+            "schema_version": STATE_SCHEMA,
+            "project_id": project.get("project_id"),
+            "project_layout_mode": "auto",
+            "last_action": "untracked",
+            "artifacts": {},
+        }
+    if not isinstance(project, dict) or not isinstance(raw_state, dict):
+        raise ValueError("project files must contain objects")
+    state = _normalize_state(raw_state)
+    return _build_status(
+        project=project,
+        state=state,
+        layout=_project_layout_at(directory_fd, state),
+        project_root=project_root,
+        artifact_state=lambda record: _artifact_state_at(directory_fd, record),
+    )
+
+
+def _live_hash_at(directory_fd: int, relative: str) -> str | None:
+    try:
+        return sha256_bytes(_read_regular_at(directory_fd, relative))
+    except (OSError, ValueError):
+        return None
+
+
+def _artifact_state_at(directory_fd: int, record: Mapping[str, Any]) -> str:
+    return _artifact_state_from(record, lambda path: _live_hash_at(directory_fd, path))
+
+
+def project_path_lifecycle_at(
+    directory_fd: int, relative: str
+) -> dict[str, str] | None:
+    """Return the one creator-facing state for a tracked path."""
+
+    normalized = _relative_path(relative, allow_operations=True)
+    try:
+        raw_state = json.loads(
+            _read_regular_at(directory_fd, STATE_FILE.as_posix()).decode("utf-8")
+        )
+    except (FileNotFoundError, UnicodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(raw_state, Mapping):
+        return None
+    state = _normalize_state(raw_state)
+    for record in state["artifacts"].values():
+        if isinstance(record, Mapping) and normalized in record.get("outputs", []):
+            return {"artifact_state": _artifact_state_at(directory_fd, record)}
+    return None
+
+
+# The three functions below are the path-based half of the dashboard contract.
+# Windows has no ``openat``, so the dashboard pins a project root by verified
+# path there instead of by directory descriptor and calls these. They compose
+# the same rules the descriptor twins do -- ``_build_status``,
+# ``_artifact_state_from``, ``_normalize_state`` -- so the two halves cannot
+# drift on what a status or a lifecycle state means; they differ only in how a
+# file is reached.
+
+
+def _read_regular(root: Path, relative: str) -> bytes:
+    """Read one project file, refusing every link and reparse point on the way.
+
+    ``os.lstat`` never follows, so a component swapped for a symlink or a
+    junction is rejected rather than traversed. This is the Windows stand-in
+    for opening each component with ``O_NOFOLLOW``.
+    """
+
+    pure = PurePosixPath(relative)
+    current = root
+    for part in pure.parts[:-1]:
+        current = current / part
+        details = os.lstat(current)
+        if _is_link_or_reparse(details) or not stat.S_ISDIR(details.st_mode):
+            raise ProjectConflictError(f"project parent is unsafe: {part}")
+    target = current / pure.name
+    details = os.lstat(target)
+    if _is_link_or_reparse(details) or not stat.S_ISREG(details.st_mode):
+        raise ProjectConflictError(f"project file is unsafe: {relative}")
+    with open(target, "rb") as handle:
+        return handle.read()
+
+
+def project_status_from_root(root: Path, *, project_root: str) -> dict[str, Any]:
+    """Report status for an already-pinned project root.
+
+    ``project_status`` locates the project first and requires recorded state;
+    this twin takes the root the caller pinned and tolerates a project that has
+    never been tracked, matching ``project_status_at``.
+    """
+
+    project = json.loads(_read_regular(root, PROJECT_FILE).decode("utf-8"))
+    try:
+        raw_state = json.loads(
+            _read_regular(root, STATE_FILE.as_posix()).decode("utf-8")
+        )
+    except FileNotFoundError:
+        raw_state = {
+            "schema_version": STATE_SCHEMA,
+            "project_id": project.get("project_id"),
+            "project_layout_mode": "auto",
+            "last_action": "untracked",
+            "artifacts": {},
+        }
+    if not isinstance(project, dict) or not isinstance(raw_state, dict):
+        raise ValueError("project files must contain objects")
+    state = _normalize_state(raw_state)
+    return _build_status(
+        project=project,
+        state=state,
+        layout=_project_layout_from_root(root, state),
+        project_root=project_root,
+        artifact_state=lambda record: _artifact_state(root, record),
+    )
+
+
+def project_path_lifecycle(root: Path, relative: str) -> dict[str, str] | None:
+    """Return the one creator-facing state for a tracked path."""
+
+    normalized = _relative_path(relative, allow_operations=True)
+    try:
+        raw_state = json.loads(
+            _read_regular(root, STATE_FILE.as_posix()).decode("utf-8")
+        )
+    except (OSError, ProjectConflictError, UnicodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(raw_state, Mapping):
+        return None
+    state = _normalize_state(raw_state)
+    for record in state["artifacts"].values():
+        if isinstance(record, Mapping) and normalized in record.get("outputs", []):
+            return {"artifact_state": _artifact_state(root, record)}
+    return None
+
+
+@contextlib.contextmanager
+def coordinated_project_text_edit(
+    root: Path, relative: str, expected_version: str
+) -> Iterator[None]:
+    normalized = _relative_path(relative)
+    if not re.fullmatch(r"[0-9a-f]{64}", expected_version):
+        raise ValueError("expected version must be a SHA-256 digest")
+    # The descriptor twin opens the operations directory with O_NOFOLLOW. Match
+    # it: a lock taken through a redirected `.short-drama` would leave two
+    # dashboards each believing they hold the project.
+    try:
+        operations = os.lstat(root / ".short-drama")
+    except FileNotFoundError:
+        operations = None
+    if operations is not None and _is_link_or_reparse(operations):
+        raise OSError("project operations directory is unsafe")
+    with _project_lock(root):
+        current = sha256_bytes(_read_regular(root, normalized))
+        if current != expected_version:
+            raise ProjectConflictError("file changed since it was opened")
+        yield
+
+
+def _authority_tokens(field: str) -> list[str]:
+    if not field.startswith("/"):
+        raise ValueError(f"authority pointer must start with /: {field}")
+    tokens = [
+        token.replace("~1", "/").replace("~0", "~") for token in field[1:].split("/")
+    ]
+    if any(not token for token in tokens):
+        raise ValueError(f"authority pointer has an empty pointer segment: {field}")
+    if field not in FORMAT_POINTERS and (
+        tokens[0] != AUTHORITY_ROOT_TOKEN or len(tokens) < 2
+    ):
+        raise ValueError(
+            f"authority pointer must be under /{AUTHORITY_ROOT_TOKEN}/* or "
+            f"{', '.join(FORMAT_POINTERS)}"
+        )
+    if tokens[:2] == [AUTHORITY_ROOT_TOKEN, "decisions_artifact"]:
+        raise ValueError("decisions_artifact is project layout, not a creator choice")
+    return tokens
+
+
+def _authority_value_sha256(value: Any) -> str:
+    return hashlib.sha256(
+        json.dumps(value, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+
+
+def _resolve_manifest_pointer(project: Mapping[str, Any], pointer: str) -> tuple[bool, Any]:
+    try:
+        tokens = _authority_tokens(pointer)
+    except ValueError:
+        return False, None
+    missing = object()
+    cursor: Any = project
+    for token in tokens:
+        cursor = cursor.get(token, missing) if isinstance(cursor, Mapping) else missing
+        if cursor is missing:
+            return False, None
+    return True, cursor
+
+
+def _record_authority_binding(
+    bindings: dict[str, Any],
+    project: Mapping[str, Any],
+    pointer: str,
+    written_val: Any,
+    *,
+    decision: str,
+    set_at: str,
+    pre_report: Mapping[str, str],
+) -> None:
+    child_prefix = f"{pointer}/"
+    for existing_key in list(bindings):
+        if existing_key.startswith(child_prefix):
+            del bindings[existing_key]
+    bindings[pointer] = {
+        "decision": decision,
+        "value_sha256": _authority_value_sha256(written_val),
+        "set_at": set_at,
+    }
+    for anc in list(bindings):
+        if (
+            isinstance(anc, str)
+            and pointer.startswith(f"{anc}/")
+            and pre_report.get(anc) == "bound"
+            and isinstance(bindings.get(anc), dict)
+        ):
+            found, anc_val = _resolve_manifest_pointer(project, anc)
+            if found:
+                bindings[anc]["value_sha256"] = _authority_value_sha256(anc_val)
+                bindings[anc]["set_at"] = set_at
+
+
+CONFIGURE_KEYS = frozenset(
+    {
+        "title",
+        "language",
+        "prompt_language",
+        "aspect_ratio",
+        "episode_count",
+        "target_seconds_per_episode",
+        "pacing",
+        "visual_direction",
+        "production_profile",
+        "rhythm_profile",
+    }
+)
+PACING_KEYS = frozenset(
+    {
+        *SPEECH_RATES,
+        "seconds_per_action_paragraph",
+        "on_screen_text_characters_per_second",
+    }
+)
+
+
+def _normalize_pacing_payload(
+    raw_pacing: Any,
+    existing_pacing: Any = None,
+) -> dict[str, Any]:
+    if (
+        not isinstance(raw_pacing, Mapping)
+        or isinstance(raw_pacing, bool)
+        or not raw_pacing
+    ):
+        raise ValueError("pacing must be an object of named rates")
+    unknown_pacing = sorted(str(key) for key in raw_pacing if key not in PACING_KEYS)
+    if unknown_pacing:
+        raise ValueError(
+            f"pacing has unknown field(s): {', '.join(unknown_pacing)}"
+        )
+    if isinstance(existing_pacing, Mapping):
+        merged_pacing = {
+            **{k: v for k, v in existing_pacing.items() if k in PACING_KEYS},
+            **raw_pacing,
+        }
+    else:
+        merged_pacing = dict(raw_pacing)
+    has_non_null = False
+    for name, rate in merged_pacing.items():
+        if rate is None:
+            continue
+        has_non_null = True
+        if name == "seconds_per_action_paragraph":
+            if (
+                isinstance(rate, bool)
+                or not isinstance(rate, (int, float))
+                or not math.isfinite(rate)
+                or rate < 0
+            ):
+                raise ValueError(
+                    "pacing rate seconds_per_action_paragraph must be a number >= 0"
+                )
+        elif (
+            isinstance(rate, bool)
+            or not isinstance(rate, (int, float))
+            or not math.isfinite(rate)
+            or rate <= 0
+        ):
+            raise ValueError(f"pacing rate {name} must be a positive number")
+    if not has_non_null:
+        raise ValueError("pacing must set at least one non-null rate")
+    return merged_pacing
+PRODUCTION_PROFILE_CHOICE_KEYS = frozenset(
+    {
+        "target_video_model",
+        "video_prompt_dialect",
+        "video_prompt_language",
+        "native_duration_seconds",
+        "supported_generation_modes",
+        "audio_generation",
+        "multi_shot_containers",
+        "continuation_route",
+        "form",
+        "camera",
+        "imagery",
+        "live_action",
+        "realism",
+        "notes",
+    }
+)
+
+
+def _validate_production_profile_updates(raw_prod: Any) -> dict[str, Any]:
+    if not isinstance(raw_prod, Mapping) or isinstance(raw_prod, bool) or not raw_prod:
+        raise ValueError("production_profile must be a non-empty object")
+    if "choices" in raw_prod and set(raw_prod) <= {"choices", "status"}:
+        choices_obj = raw_prod.get("choices")
+        if (
+            not isinstance(choices_obj, Mapping)
+            or isinstance(choices_obj, bool)
+            or not choices_obj
+        ):
+            raise ValueError("production_profile must be a non-empty object")
+        payload = dict(choices_obj)
+        wrapped = True
+    else:
+        payload = dict(raw_prod)
+        wrapped = False
+    if "status" in payload:
+        raise ValueError("production_profile choices must not carry status")
+    unknown = sorted(str(key) for key in payload if key not in PRODUCTION_PROFILE_CHOICE_KEYS)
+    if unknown:
+        raise ValueError(
+            f"production_profile has unknown field(s): {', '.join(unknown)}"
+        )
+    if "video_prompt_language" in payload:
+        raw_vpl = payload["video_prompt_language"]
+        if not isinstance(raw_vpl, str):
+            raise ValueError(
+                "video_prompt_language must be a non-empty BCP 47 language tag"
+            )
+        payload["video_prompt_language"] = normalize_language_tag(
+            raw_vpl, field="video_prompt_language"
+        )
+    if "native_duration_seconds" in payload:
+        nds = payload["native_duration_seconds"]
+        if (
+            not isinstance(nds, Mapping)
+            or isinstance(nds, bool)
+            or set(nds) != {"min", "max"}
+        ):
+            raise ValueError(
+                "native_duration_seconds must be an object with min and max"
+            )
+        raw_min, raw_max = nds.get("min"), nds.get("max")
+        if (
+            isinstance(raw_min, bool)
+            or not isinstance(raw_min, (int, float))
+            or not math.isfinite(float(raw_min))
+            or float(raw_min) <= 0
+        ):
+            raise ValueError("native_duration_seconds.min must be a positive number")
+        if (
+            isinstance(raw_max, bool)
+            or not isinstance(raw_max, (int, float))
+            or not math.isfinite(float(raw_max))
+            or float(raw_max) < float(raw_min)
+        ):
+            raise ValueError(
+                "native_duration_seconds.max must be >= native_duration_seconds.min"
+            )
+        payload["native_duration_seconds"] = {"min": raw_min, "max": raw_max}
+    return {"choices": payload} if wrapped else payload
+
+
+def _merge_choices_block(
+    authority: dict[str, Any], name: str, updates: Mapping[str, Any]
+) -> dict[str, Any]:
+    payload: Mapping[str, Any] = updates
+    if (
+        set(updates) <= {"choices", "status"}
+        and isinstance(updates.get("choices"), Mapping)
+    ):
+        payload = updates["choices"]
+    if not isinstance(payload, Mapping) or not payload:
+        raise ValueError(f"{name} must be a non-empty object")
+    if "status" in payload:
+        raise ValueError(f"{name} choices must not carry status")
+    current = authority.get(name)
+    block = dict(current) if isinstance(current, Mapping) else {}
+    existing = block.get("choices")
+    choices = dict(existing) if isinstance(existing, Mapping) else {}
+    choices.update(payload)
+    block["choices"] = choices
+    block["status"] = "accepted"
+    authority[name] = block
+    return block
+
+
+def configure_project(
+    path: Path,
+    *,
+    title: str | None = None,
+    language: str | None = None,
+    prompt_language: str | None = None,
+    aspect_ratio: str | None = None,
+    episode_count: int | None = None,
+    target_seconds_per_episode: float | None = None,
+    pacing: Mapping[str, Any] | None = None,
+    visual_direction: Mapping[str, Any] | None = None,
+    production_profile: Mapping[str, Any] | None = None,
+    rhythm_profile: Mapping[str, Any] | None = None,
+    updates: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Incrementally update short-drama.json and mark authority blocks accepted."""
+    merged: dict[str, Any] = {}
+    if updates is not None:
+        if not isinstance(updates, Mapping):
+            raise ValueError("configure JSON payload must be an object")
+        unknown = sorted(set(updates) - CONFIGURE_KEYS)
+        if unknown:
+            raise ValueError(f"unsupported configure field(s): {', '.join(unknown)}")
+        merged.update(updates)
+    explicit = {
+        "title": title,
+        "language": language,
+        "prompt_language": prompt_language,
+        "aspect_ratio": aspect_ratio,
+        "episode_count": episode_count,
+        "target_seconds_per_episode": target_seconds_per_episode,
+        "pacing": pacing,
+        "visual_direction": visual_direction,
+        "production_profile": production_profile,
+        "rhythm_profile": rhythm_profile,
+    }
+    for key, value in explicit.items():
+        if value is not None:
+            merged[key] = value
+    if not merged:
+        raise ValueError("configure requires at least one setting")
+
+    root = find_project(path)
+    with _project_lock(root):
+        state = _read_state_if_present(root)
+        project_path = _project_path(root, PROJECT_FILE)
+        project = json.loads(project_path.read_text(encoding="utf-8"))
+        if not isinstance(project, dict):
+            raise ValueError("project manifest must be an object")
+        pre_report = _authority_report(project, state)
+        format_block = project.get("format")
+        if not isinstance(format_block, dict):
+            format_block = {}
+            project["format"] = format_block
+        authority = project.get(AUTHORITY_ROOT_TOKEN)
+        if not isinstance(authority, dict):
+            authority = {}
+            project[AUTHORITY_ROOT_TOKEN] = authority
+
+        bound_pointers: dict[str, Any] = {}
+        updated_fields: list[str] = []
+
+        if "title" in merged:
+            raw_title = merged["title"]
+            if not isinstance(raw_title, str) or not raw_title.strip():
+                raise ValueError("title must be a non-empty string")
+            project["title"] = raw_title.strip()
+            updated_fields.append("title")
+
+        if "language" in merged:
+            raw_lang = merged["language"]
+            if not isinstance(raw_lang, str):
+                raise ValueError("language must be a string")
+            project["language"] = normalize_language_tag(raw_lang, field="language")
+            updated_fields.append("language")
+
+        if "prompt_language" in merged:
+            raw_prompt_lang = merged["prompt_language"]
+            if not isinstance(raw_prompt_lang, str):
+                raise ValueError("prompt_language must be a string")
+            format_block["prompt_language"] = normalize_language_tag(
+                raw_prompt_lang, field="prompt_language"
+            )
+            updated_fields.append("prompt_language")
+
+        if "aspect_ratio" in merged:
+            raw_ratio = merged["aspect_ratio"]
+            if not isinstance(raw_ratio, str) or not re.fullmatch(
+                r"[1-9][0-9]*:[1-9][0-9]*", raw_ratio.strip()
+            ):
+                raise ValueError("aspect_ratio must be written as width:height, e.g. 16:9")
+            format_block["aspect_ratio"] = raw_ratio.strip()
+            bound_pointers[ASPECT_RATIO_POINTER] = format_block["aspect_ratio"]
+            updated_fields.append("aspect_ratio")
+
+        if "episode_count" in merged:
+            raw_count = merged["episode_count"]
+            if (
+                isinstance(raw_count, bool)
+                or not isinstance(raw_count, int)
+                or raw_count <= 0
+            ):
+                raise ValueError("episode_count must be a positive integer")
+            format_block["episode_count"] = raw_count
+            bound_pointers[EPISODE_COUNT_POINTER] = raw_count
+            updated_fields.append("episode_count")
+
+        if "target_seconds_per_episode" in merged:
+            raw_seconds = merged["target_seconds_per_episode"]
+            if (
+                isinstance(raw_seconds, bool)
+                or not isinstance(raw_seconds, (int, float))
+                or not math.isfinite(raw_seconds)
+                or raw_seconds <= 0
+            ):
+                raise ValueError(
+                    "target_seconds_per_episode must be a positive number of seconds"
+                )
+            format_block["target_seconds_per_episode"] = raw_seconds
+            bound_pointers[EPISODE_LENGTH_POINTER] = raw_seconds
+            updated_fields.append("target_seconds_per_episode")
+
+        if "pacing" in merged:
+            merged_pacing = _normalize_pacing_payload(
+                merged["pacing"], format_block.get("pacing")
+            )
+            format_block["pacing"] = merged_pacing
+            bound_pointers[PACING_POINTER] = merged_pacing
+            updated_fields.append("pacing")
+
+        if "visual_direction" in merged:
+            raw_visual = merged["visual_direction"]
+            if not isinstance(raw_visual, Mapping):
+                raise ValueError("visual_direction must be a non-empty object")
+            written_visual = _merge_choices_block(authority, "visual_direction", raw_visual)
+            bound_pointers[f"/{AUTHORITY_ROOT_TOKEN}/visual_direction"] = written_visual
+            updated_fields.append("visual_direction")
+
+        if "production_profile" in merged:
+            validated_prod = _validate_production_profile_updates(
+                merged["production_profile"]
+            )
+            written_prod = _merge_choices_block(
+                authority, "production_profile", validated_prod
+            )
+            bound_pointers[f"/{AUTHORITY_ROOT_TOKEN}/production_profile"] = written_prod
+            updated_fields.append("production_profile")
+
+        if "rhythm_profile" in merged:
+            raw_rhythm = merged["rhythm_profile"]
+            if not isinstance(raw_rhythm, Mapping) or not raw_rhythm:
+                raise ValueError("rhythm_profile must be a non-empty object")
+            rhythm_updates = {k: v for k, v in raw_rhythm.items() if k != "status"}
+            if not rhythm_updates:
+                raise ValueError("rhythm_profile must declare at least one field")
+            current_rhythm = authority.get("rhythm_profile")
+            merged_rhythm = (
+                {**current_rhythm, **rhythm_updates}
+                if isinstance(current_rhythm, Mapping)
+                else dict(rhythm_updates)
+            )
+            merged_rhythm["status"] = "accepted"
+            problems = rhythm_profile_problems(merged_rhythm)
+            if problems:
+                raise ValueError("; ".join(problems))
+            authority["rhythm_profile"] = merged_rhythm
+            bound_pointers[f"/{AUTHORITY_ROOT_TOKEN}/rhythm_profile"] = merged_rhythm
+            updated_fields.append("rhythm_profile")
+
+        atomic_json(project_path, project)
+        bindings = state.get("authority")
+        if not isinstance(bindings, dict):
+            bindings = {}
+            state["authority"] = bindings
+        now = utc_now()
+        for pointer, written_val in bound_pointers.items():
+            _record_authority_binding(
+                bindings,
+                project,
+                pointer,
+                written_val,
+                decision="direct:configure",
+                set_at=now,
+                pre_report=pre_report,
+            )
+        _save_state(root, state, action="configured")
+    return {
+        "project_root": str(root),
+        "updated": updated_fields,
+        "status": project_status(root),
+    }
+
+
+def _replace_directory(source: Path, target: Path) -> None:
+    backup = target.with_name(f".{target.name}.{uuid.uuid4().hex}.old")
+    moved_old = False
+    try:
+        if target.exists():
+            details = os.lstat(target)
+            if _is_link_or_reparse(details) or not stat.S_ISDIR(details.st_mode):
+                raise ProjectConflictError(f"delivery target is unsafe: {target.name}")
+            os.replace(target, backup)
+            moved_old = True
+        os.replace(source, target)
+        _fsync_directory(target.parent)
+        if moved_old:
+            shutil.rmtree(backup)
+    except Exception:
+        if moved_old and backup.exists() and not target.exists():
+            os.replace(backup, target)
+        raise
+
+
+def _require_episode_delivery_path(relative: str, episode: str) -> None:
+    parts = PurePosixPath(relative).parts
+    if (
+        len(parts) < 3
+        or _root_role(parts[0]) != "episodes"
+        or parts[1] != episode
+    ):
+        raise ValueError(f"delivery paths must belong to {episode}: {relative}")
+
+
+def _discover_episode_delivery_paths(
+    root: Path,
+    state: Mapping[str, Any],
+    episode: str,
+    omitted: set[str],
+) -> list[str]:
+    layout = _project_layout_from_root(root, state)
+    if layout["mode"] == "mixed":
+        raise PackageBlockedError("mixed project layouts cannot be packaged")
+    episodes_name = str(layout["roots"]["episodes"])
+    episodes_dir = root / episodes_name
+    try:
+        episodes_details = os.lstat(episodes_dir)
+    except FileNotFoundError:
+        return []
+    if _is_link_or_reparse(episodes_details) or not stat.S_ISDIR(episodes_details.st_mode):
+        raise ProjectConflictError(f"project parent cannot be a symlink: {episodes_name}")
+    episode_dir = episodes_dir / episode
+    try:
+        episode_details = os.lstat(episode_dir)
+    except FileNotFoundError:
+        return []
+    if _is_link_or_reparse(episode_details) or not stat.S_ISDIR(episode_details.st_mode):
+        raise ProjectConflictError(f"project parent cannot be a symlink: {episode}")
+    discovered: list[str] = []
+    for entry in sorted(episode_dir.iterdir(), key=lambda item: item.name):
+        if entry.name.startswith("."):
+            continue
+        details = os.lstat(entry)
+        if _is_link_or_reparse(details):
+            raise ProjectConflictError(
+                f"project target is not a regular file: {episodes_name}/{episode}/{entry.name}"
+            )
+        if not stat.S_ISREG(details.st_mode):
+            continue
+        if PurePosixPath(entry.name).suffix.casefold() not in DELIVERY_SUFFIXES:
+            continue
+        relative = f"{episodes_name}/{episode}/{entry.name}"
+        if relative not in omitted:
+            discovered.append(relative)
+    return _validate_path_set(root, discovered, label="delivery")
+
+
+def build_delivery_package(
+    root: Path,
+    *,
+    episode: str,
+    includes: Iterable[str] | None = None,
+    omissions: Iterable[str] | Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    if EPISODE_ID_RE.fullmatch(episode) is None:
+        raise ValueError("episode must use an EP001-style identifier")
+    root = _find_delivery_project(root)
+    omission_values = omissions.keys() if isinstance(omissions, Mapping) else omissions or []
+    omitted = _validate_path_set(root, omission_values, label="omission")
+    for relative in omitted:
+        _require_episode_delivery_path(relative, episode)
+    explicit_includes: list[str] | None = None
+    if includes is not None:
+        explicit_includes = _validate_path_set(root, includes, label="delivery")
+        if not explicit_includes:
+            raise ValueError("delivery needs at least one included file")
+        if set(explicit_includes).intersection(omitted):
+            raise ValueError("a delivery path cannot be both included and omitted")
+        for relative in explicit_includes:
+            _require_episode_delivery_path(relative, episode)
+
+    with _project_lock(root):
+        state = _read_state_if_present(root)
+        include_paths = (
+            explicit_includes
+            if explicit_includes is not None
+            else _discover_episode_delivery_paths(root, state, episode, set(omitted))
+        )
+        if not include_paths:
+            raise ValueError("delivery needs at least one included file")
+        entries: list[dict[str, str]] = []
+        snapshots: dict[str, bytes] = {}
+        for relative in include_paths:
+            if PurePosixPath(relative).suffix.casefold() not in DELIVERY_SUFFIXES:
+                raise PackageBlockedError(f"delivery source is not text/JSON: {relative}")
+            artifact_id = f"direct:{relative}"
+
+            source = _project_path(root, relative)
+            if not source.exists():
+                raise FileNotFoundError(f"delivery source does not exist: {relative}")
+            data = source.read_bytes()
+            try:
+                data.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise PackageBlockedError(f"delivery source must be UTF-8: {relative}") from exc
+            digest = sha256_bytes(data)
+            snapshots[relative] = data
+            entries.append(
+                {
+                    "artifact_id": artifact_id,
+                    "source": relative,
+                    "path": f"artifacts/{relative}",
+                    "sha256": digest,
+                }
+            )
+
+        layout = _project_layout_from_root(root, state)
+        if layout["mode"] == "mixed":
+            raise PackageBlockedError("mixed project layouts cannot be packaged")
+        delivery_root = str(layout["roots"]["delivery"])
+        parent = root / delivery_root
+        try:
+            parent_details = os.lstat(parent)
+        except FileNotFoundError:
+            parent.mkdir(parents=True)
+        else:
+            if _is_link_or_reparse(parent_details) or not stat.S_ISDIR(
+                parent_details.st_mode
+            ):
+                raise ProjectConflictError("delivery root is unsafe")
+        temporary = parent / f".{episode}.{uuid.uuid4().hex}.tmp"
+        temporary.mkdir()
+        try:
+            for entry in entries:
+                destination = temporary / entry["path"]
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                _atomic_bytes(destination, snapshots[entry["source"]])
+            manifest = {
+                "schema_version": "1.0",
+                "project_id": state.get("project_id"),
+                "episode": episode,
+                "created_at": utc_now(),
+                "files": entries,
+                "omitted": [
+                    {
+                        "source": path,
+                        "reason": (
+                            omissions[path]
+                            if isinstance(omissions, Mapping) and path in omissions
+                            else "creator_omitted"
+                        ),
+                    }
+                    for path in omitted
+                ],
+            }
+            atomic_json(temporary / "manifest.json", manifest)
+            checksum_members = ["manifest.json", *(entry["path"] for entry in entries)]
+            checksums = "".join(
+                f"{sha256_file(temporary / relative)}  {relative}\n"
+                for relative in sorted(checksum_members)
+            )
+            _atomic_bytes(temporary / "checksums.sha256", checksums.encode("utf-8"))
+            target = parent / episode
+            _replace_directory(temporary, target)
+        finally:
+            if temporary.exists():
+                shutil.rmtree(temporary)
+    return {
+        "episode": episode,
+        "delivery_root": f"{delivery_root}/{episode}",
+        "files": entries,
+        "omitted": omitted,
+    }
+
+
+def _delivery_directory(root: Path, episode: str) -> Path:
+    matches: list[Path] = []
+    for name in {CANONICAL_ROOTS["delivery"], LEGACY_ROOTS["delivery"]}:
+        parent = root / name
+        try:
+            parent_details = os.lstat(parent)
+        except FileNotFoundError:
+            continue
+        if _is_link_or_reparse(parent_details) or not stat.S_ISDIR(
+            parent_details.st_mode
+        ):
+            raise ProjectConflictError("delivery root is unsafe")
+        delivery = parent / episode
+        try:
+            details = os.lstat(delivery)
+        except FileNotFoundError:
+            continue
+        if _is_link_or_reparse(details) or not stat.S_ISDIR(details.st_mode):
+            raise ProjectConflictError("delivery package is not a regular directory")
+        matches.append(delivery)
+    if len(matches) != 1:
+        raise FileNotFoundError(f"expected exactly one delivered package for {episode}")
+    return matches[0]
+
+
+def _manifest_problems(
+    delivery: Path,
+    manifest: object,
+    *,
+    episode: str,
+    checksum_paths: set[str],
+    actual: set[str],
+) -> list[str]:
+    problems: list[str] = []
+    if not isinstance(manifest, Mapping):
+        return ["manifest must be an object"]
+    if manifest.get("schema_version") != "1.0":
+        problems.append("manifest schema is invalid")
+    if manifest.get("episode") != episode:
+        problems.append("manifest does not describe this episode")
+    files = manifest.get("files")
+    if not isinstance(files, list):
+        return [*problems, "manifest files must be a list"]
+    manifest_paths: set[str] = set()
+    sources: set[str] = set()
+    for number, entry in enumerate(files, 1):
+        if not isinstance(entry, Mapping) or set(entry) != {
+            "artifact_id",
+            "source",
+            "path",
+            "sha256",
+        }:
+            problems.append(f"manifest file {number} has invalid fields")
+            continue
+        artifact_id = entry.get("artifact_id")
+        source_raw = entry.get("source")
+        path_raw = entry.get("path")
+        digest = entry.get("sha256")
+        if not isinstance(artifact_id, str) or not artifact_id:
+            problems.append(f"manifest file {number} has no artifact id")
+        if not isinstance(source_raw, str) or not isinstance(path_raw, str):
+            problems.append(f"manifest file {number} has an unsafe path")
+            continue
+        try:
+            source = _relative_path(source_raw)
+            relative = _relative_path(path_raw)
+        except ValueError:
+            problems.append(f"manifest file {number} has an unsafe path")
+            continue
+        try:
+            _require_episode_delivery_path(source, episode)
+        except ValueError:
+            problems.append(f"manifest source does not belong to {episode}: {source}")
+        if relative != f"artifacts/{source}":
+            problems.append(f"manifest path does not match its source: {relative}")
+        if relative in manifest_paths:
+            problems.append(f"duplicate manifest path: {relative}")
+        if source in sources:
+            problems.append(f"duplicate manifest source: {source}")
+        manifest_paths.add(relative)
+        sources.add(source)
+        if not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+            problems.append(f"manifest file {number} has an invalid hash")
+            continue
+        if relative not in actual:
+            continue
+        member = delivery / relative
+        try:
+            member_details = os.lstat(member)
+        except OSError:
+            member_details = None
+        if (
+            member_details is not None
+            and not _is_link_or_reparse(member_details)
+            and stat.S_ISREG(member_details.st_mode)
+            and sha256_file(member) != digest
+        ):
+            problems.append(f"manifest hash mismatch: {relative}")
+    expected_manifest_paths = checksum_paths - {"manifest.json"}
+    if manifest_paths != expected_manifest_paths:
+        problems.append("manifest files do not match checksum members")
+
+    omitted = manifest.get("omitted")
+    if not isinstance(omitted, list):
+        problems.append("manifest omissions must be a list")
+    else:
+        for number, entry in enumerate(omitted, 1):
+            if (
+                not isinstance(entry, Mapping)
+                or set(entry) != {"source", "reason"}
+                or not isinstance(entry.get("source"), str)
+                or not isinstance(entry.get("reason"), str)
+                or not str(entry.get("reason")).strip()
+            ):
+                problems.append(f"manifest omission {number} is invalid")
+                continue
+            try:
+                source = _relative_path(str(entry["source"]))
+                _require_episode_delivery_path(source, episode)
+            except ValueError:
+                problems.append(f"manifest omission {number} has an unsafe source")
+    return problems
+
+
+def _same_directory(left: Path, right: Path) -> bool:
+    """Do these two paths name the same directory on disk?
+
+    String comparison is not enough: a case-insensitive volume and a filesystem
+    that stores a different Unicode normalisation both spell one directory two
+    ways, and either spelling would otherwise slip past a containment check.
+    """
+    try:
+        return os.path.samefile(left, right)
+    except OSError:
+        return False
+
+
+def _require_safe_export_destination(destination: Path, root: Path) -> None:
+    """Refuse any destination that would take the project down with it.
+
+    The export replaces its destination directory wholesale, so a destination
+    that is -- or contains -- the project being exported would delete the
+    source. Ancestors matter as much as descendants here.
+    """
+    if destination == root or root in destination.parents:
+        raise ValueError("export destination must live outside the project root")
+    for ancestor in (root, *root.parents):
+        if destination == ancestor or _same_directory(destination, ancestor):
+            raise ValueError(
+                "export destination must not be the project root or any directory containing it"
+            )
+
+
+def _require_replaceable_export(destination: Path) -> None:
+    """Only ever overwrite a directory this command itself produced.
+
+    `--overwrite` removes the destination tree. Without this check a mistyped
+    path turns an ordinary directory into a deletion, and nothing else in this
+    tool can erase a directory outside the project.
+    """
+    if not destination.exists():
+        return
+    details = os.lstat(destination)
+    if _is_link_or_reparse(details) or not stat.S_ISDIR(details.st_mode):
+        raise ProjectConflictError("export destination is not a regular directory")
+    manifest = destination / "manifest.json"
+    try:
+        document = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ValueError(
+            "refusing to overwrite a directory that is not a previous export: "
+            f"{destination}"
+        ) from exc
+    if not isinstance(document, Mapping) or document.get("kind") != "creator_export":
+        raise ValueError(
+            "refusing to overwrite a directory that is not a previous export: "
+            f"{destination}"
+        )
+
+
+def _export_regular_file(source: Path, destination: Path) -> str:
+    """Copy one regular project file into the export tree and return its digest."""
+    details = os.lstat(source)
+    if _is_link_or_reparse(details) or not stat.S_ISREG(details.st_mode):
+        raise ProjectConflictError(f"export source is not a regular file: {source.name}")
+    if "\n" in source.name or "\r" in source.name:
+        # checksums.sha256 is one record per line; such a name cannot be written
+        # in a form any verifier could read back.
+        raise ProjectConflictError(
+            "export source name contains a line break and cannot be checksummed"
+        )
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source, destination)
+    return sha256_file(destination)
+
+
+def _export_episode(
+    episode_directory: Path, target: Path, *, include_media: bool
+) -> tuple[list[dict[str, str]], list[str]]:
+    files: list[dict[str, str]] = []
+    missing: list[str] = []
+    for name in CREATOR_DOCUMENTS:
+        source = episode_directory / name
+        if not source.exists():
+            missing.append(name)
+            continue
+        digest = _export_regular_file(source, target / name)
+        files.append({"path": name, "sha256": digest})
+    for name in POST_PRODUCTION_DOCUMENTS:
+        source = episode_directory / name
+        if not source.exists():
+            continue
+        digest = _export_regular_file(source, target / name)
+        files.append({"path": name, "sha256": digest})
+    media_root = episode_directory / EXPORT_MEDIA_DIRECTORY
+    if include_media and media_root.exists():
+        media_details = os.lstat(media_root)
+        if _is_link_or_reparse(media_details) or not stat.S_ISDIR(media_details.st_mode):
+            # Silently exporting no media reads as "this episode has none".
+            raise ProjectConflictError(
+                f"{EXPORT_MEDIA_DIRECTORY} is not a regular directory: {episode_directory.name}"
+            )
+        for source in sorted(media_root.rglob("*")):
+            if source.is_dir() and not source.is_symlink():
+                continue
+            relative = source.relative_to(episode_directory).as_posix()
+            digest = _export_regular_file(source, target / relative)
+            files.append({"path": relative, "sha256": digest})
+    return files, missing
+
+
+def _export_exclusions(root: Path, episodes_name: str) -> list[str]:
+    """Name every top-level project directory this export did not copy.
+
+    A fixed list lies twice over: it names roots a legacy-layout project does
+    not have, and it stays silent about a published 设定集/ that the handover is
+    missing.
+    """
+    excluded: list[str] = []
+    for entry in sorted(root.iterdir(), key=lambda item: item.name):
+        if entry.name == episodes_name or entry.name == PROJECT_FILE:
+            continue
+        if entry.is_dir() or entry.is_symlink():
+            excluded.append(entry.name)
+    return excluded
+
+
+def _is_portable_windows_path(relative: str) -> bool:
+    for part in PurePosixPath(relative).parts:
+        if any(ord(ch) < 32 or ord(ch) == 127 for ch in part):
+            return False
+        stem = part.split(".")[0].casefold()
+        if stem in WINDOWS_RESERVED_PATH_STEMS:
+            return False
+        if set(part) & WINDOWS_FORBIDDEN_PATH_CHARACTERS:
+            return False
+        if part.endswith((" ", ".")):
+            return False
+    return True
+
+
+def build_creator_export(
+    root: Path,
+    *,
+    out: Path,
+    episodes: Sequence[str] | None = None,
+    include_media: bool = True,
+    include_manifest: bool = True,
+    overwrite: bool = False,
+) -> dict[str, Any]:
+    """Copy the current creator documents and produced media into a handover tree.
+
+    This is a snapshot of what the project holds right now.  It deliberately
+    asserts nothing about review or creator acceptance; when `include_manifest`
+    is enabled (default / `--manifest`), it writes `manifest.json` and
+    `checksums.sha256` so `verify <dir>` can check integrity directly.
+    """
+    root = find_project(root)
+    destination = out.expanduser().resolve()
+    _require_safe_export_destination(destination, root)
+    layout = _project_layout_from_root(root)
+    if layout["mode"] == "mixed":
+        raise PackageBlockedError("mixed project layouts cannot be exported")
+    episodes_root = root / str(layout["roots"]["episodes"])
+    available = sorted(
+        entry.name
+        for entry in episodes_root.iterdir()
+        if entry.is_dir() and not entry.is_symlink()
+        if EPISODE_ID_RE.fullmatch(entry.name)
+    ) if episodes_root.is_dir() and not episodes_root.is_symlink() else []
+    if episodes:
+        selected = []
+        for episode in episodes:
+            if EPISODE_ID_RE.fullmatch(episode) is None:
+                raise ValueError("episode must use an EP001-style identifier")
+            if episode not in available:
+                raise FileNotFoundError(f"episode directory not found: {episode}")
+            if episode not in selected:
+                selected.append(episode)
+    else:
+        selected = available
+    if not selected:
+        raise FileNotFoundError("no episode directory to export")
+    if destination.exists():
+        if not overwrite:
+            raise FileExistsError(f"export destination already exists: {destination}")
+        _require_replaceable_export(destination)
+
+    project = json.loads((root / PROJECT_FILE).read_text(encoding="utf-8"))
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.parent / f".{destination.name}.{uuid.uuid4().hex}.tmp"
+    temporary.mkdir()
+    try:
+        exported: list[dict[str, Any]] = []
+        members: list[dict[str, str]] = []
+        episodes_name = str(layout["roots"]["episodes"])
+        for episode in selected:
+            target = temporary / episodes_name / episode
+            target.mkdir(parents=True)
+            files, missing = _export_episode(
+                episodes_root / episode, target, include_media=include_media
+            )
+            for entry in files:
+                members.append(
+                    {
+                        "path": f"{episodes_name}/{episode}/{entry['path']}",
+                        "sha256": entry["sha256"],
+                    }
+                )
+            exported.append(
+                {"episode": episode, "files": files, "missing_documents": missing}
+            )
+        config_digest = _export_regular_file(
+            root / PROJECT_FILE, temporary / PROJECT_FILE
+        )
+        members.append({"path": PROJECT_FILE, "sha256": config_digest})
+        excluded = _export_exclusions(root, episodes_name)
+        windows_unsafe = sorted(
+            entry["path"]
+            for entry in members
+            if not _is_portable_windows_path(entry["path"])
+        )
+        if include_manifest:
+            manifest = {
+                "schema_version": EXPORT_SCHEMA,
+                "kind": "creator_export",
+                "asserts_approval": False,
+                "project_id": project.get("project_id"),
+                "title": project.get("title"),
+                "created_at": utc_now(),
+                "episodes": exported,
+                "selection": {
+                    "episodes": "all" if not episodes else list(selected),
+                    "available_episodes": list(available),
+                    "include_media": bool(include_media),
+                },
+                "excluded": excluded,
+                "windows_unsafe_paths": windows_unsafe,
+            }
+            atomic_json(temporary / "manifest.json", manifest)
+            checksum_members = ["manifest.json", *(entry["path"] for entry in members)]
+            checksums = "".join(
+                f"{sha256_file(temporary / relative)}  {relative}\n"
+                for relative in sorted(checksum_members)
+            )
+            _atomic_bytes(temporary / "checksums.sha256", checksums.encode("utf-8"))
+        _replace_directory(temporary, destination)
+    finally:
+        if temporary.exists():
+            shutil.rmtree(temporary)
+    result: dict[str, Any] = {
+        "kind": "creator_export",
+        "out": str(destination),
+        "episodes": [entry["episode"] for entry in exported],
+        "files": [entry["path"] for entry in members],
+        "excluded": excluded,
+        "include_media": bool(include_media),
+        "include_manifest": bool(include_manifest),
+        "missing_documents": {
+            entry["episode"]: entry["missing_documents"]
+            for entry in exported
+            if entry["missing_documents"]
+        },
+        "windows_unsafe_paths": windows_unsafe,
+    }
+    if include_manifest:
+        result["manifest"] = "manifest.json"
+        result["checksums"] = "checksums.sha256"
+    return result
+
+
+def _load_creator_checker() -> ModuleType:
+    script = Path(__file__).resolve().with_name("creator_markdown_check.py")
+    spec = importlib.util.spec_from_file_location("project_tool_creator_check", script)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load creator markdown checker: {script}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _episode_skeletons(episode: str, *, title: str | None = None) -> dict[str, str]:
+    suffix = f" · {title.strip()}" if title and title.strip() else ""
+    return {
+        "剧本.md": (
+            f"# {episode}{suffix}\n\n"
+            f"<!-- 待补全：按 `## {episode}-SC001 内|外|内外 · 地点 · 时间` 编写本集场次、动作与台词 -->\n"
+        ),
+        "视觉设定.md": (
+            f"# {episode} 视觉设定\n\n"
+            "- 制作形态：\n"
+            "- 时代背景：\n\n"
+            "<!-- 待补全：按 `## 人物 · <名称>` / `## 造型 · <名称>` / `## 地点 · <名称>` / `## 道具 · <名称>` 补充视觉设定条目 -->\n"
+        ),
+        "分镜.md": (
+            f"# {episode} 分镜\n\n"
+            f"<!-- 待补全：按 `## SHOT-{episode}-001 · <标题>` 编写分镜（含来源、时长、景别/机位、输入参考图、出场设定与 `### 首帧提示词`） -->\n"
+        ),
+        "图片提示词.md": (
+            f"# {episode} 图片提示词\n\n"
+            "<!-- 待补全：按 `## IMG-<ID> · <名称>` 编写设定图/参考图提示词（含用途、参考与 `### 可复制提示词`） -->\n"
+        ),
+        "视频提示词.md": (
+            f"# {episode} 视频提示词\n\n"
+            f"<!-- 待补全：按 `## MOTION-{episode}-001 · <标题>` 编写视频提示词（含分镜、时长、生成方式、输入参考图与 `### 可复制提示词`） -->\n"
+        ),
+    }
+
+
+def scaffold_episode(
+    path: Path,
+    *,
+    episode: str,
+    title: str | None = None,
+    suite_root: Path | None = None,
+) -> dict[str, Any]:
+    """Initialize missing episode skeleton files and emit a deterministic gap checklist.
+
+    Creates a minimal project if `short-drama.json` does not exist yet, creates
+    only missing skeleton files among the five creator documents without ever
+    overwriting existing documents, and inspects existing sections/IDs using
+    the canonical checker patterns (zero heuristic prose guessing).
+    """
+    if EPISODE_ID_RE.fullmatch(episode) is None:
+        raise ValueError("episode must use an EP001-style identifier")
+    project_initialized = False
+    try:
+        root = find_project(path)
+    except FileNotFoundError:
+        initialize_project(
+            path,
+            title=(title or "").strip() or "未命名短剧",
+            language="zh-CN",
+            aspect_ratio="9:16",
+            suite_root=suite_root,
+        )
+        root = path.expanduser().resolve()
+        project_initialized = True
+
+    with _project_lock(root):
+        state = _read_state_if_present(root)
+        layout = _project_layout_from_root(root, state)
+        if layout["mode"] == "mixed":
+            raise PackageBlockedError("mixed project layouts cannot be scaffolded")
+        episodes_name = str(layout["roots"]["episodes"])
+        episodes_dir = root / episodes_name
+        try:
+            episodes_details = os.lstat(episodes_dir)
+        except FileNotFoundError:
+            episodes_dir.mkdir(parents=True)
+        else:
+            if _is_link_or_reparse(episodes_details) or not stat.S_ISDIR(
+                episodes_details.st_mode
+            ):
+                raise ProjectConflictError(
+                    f"project parent cannot be a symlink: {episodes_name}"
+                )
+        episode_dir = episodes_dir / episode
+        try:
+            episode_details = os.lstat(episode_dir)
+        except FileNotFoundError:
+            episode_dir.mkdir()
+        else:
+            if _is_link_or_reparse(episode_details) or not stat.S_ISDIR(
+                episode_details.st_mode
+            ):
+                raise ProjectConflictError(
+                    f"project parent cannot be a symlink: {episode}"
+                )
+
+        skeletons = _episode_skeletons(episode, title=title)
+        created_files: list[str] = []
+        existing_files: list[str] = []
+        texts: dict[str, str] = {}
+        for name in CREATOR_DOCUMENTS:
+            target = _project_path(root, f"{episodes_name}/{episode}/{name}")
+            if target.exists():
+                existing_files.append(name)
+            else:
+                _atomic_bytes(target, skeletons[name].encode("utf-8"))
+                created_files.append(name)
+            texts[name] = target.read_text(encoding="utf-8")
+
+    checker = _load_creator_checker()
+    screenplay = checker._strip_html_comments(checker._normalize_text(texts["剧本.md"]))
+    visual = checker._strip_html_comments(checker._normalize_text(texts["视觉设定.md"]))
+    storyboard = checker._strip_html_comments(
+        checker._normalize_text(texts["分镜.md"]), preserve_copyable=True
+    )
+    images_text = checker._strip_html_comments(
+        checker._normalize_text(texts["图片提示词.md"]), preserve_copyable=True
+    )
+    video = checker._strip_html_comments(
+        checker._normalize_text(texts["视频提示词.md"]), preserve_copyable=True
+    )
+
+    scenes: list[str] = [
+        match.group("scene")
+        for match in checker.FULL_SCENE_HEADING_RE.finditer(screenplay)
+        if match.group("location").strip() and match.group("time").strip()
+    ]
+    visual_entries_raw = checker._visual_entries(visual, [])
+    visual_entries: list[dict[str, str]] = [
+        {"category": entry.category, "name": entry.name}
+        for entry in visual_entries_raw
+    ]
+    shots_map: dict[str, str] = checker._sections(storyboard, "SHOT")
+    images_map: dict[str, str] = checker._sections(images_text, "IMG")
+    motions_map: dict[str, str] = checker._sections(video, "MOTION")
+    groups_map: dict[str, str] = checker._sections(video, "GROUP")
+    music_map: dict[str, str] = checker._sections(video, "MUSIC")
+
+    known_scenes = frozenset(scenes)
+    unfilmed = checker._unfilmed_scenes(storyboard, known_scenes, []) if scenes else {}
+    claimed_scenes: set[str] = set()
+    referenced_images: list[str] = []
+    shots_missing_keyframe: list[str] = []
+    for shot_id, body in shots_map.items():
+        fields = checker._fields(body, owner=shot_id, errors=[])
+        claimed_scenes.update(
+            checker._shot_sources(fields.get("来源", ""), shot_id, known_scenes, [])
+        )
+        for img_id, _, _ in checker.IMG_RE.findall(fields.get("图片提示词项", "")):
+            if img_id not in referenced_images:
+                referenced_images.append(img_id)
+        if checker._copyable_prompt(body, heading=r"首帧提示词") is None:
+            shots_missing_keyframe.append(shot_id)
+
+    motion_shot_by_id: dict[str, str] = {}
+    covered_shots: set[str] = set()
+    for motion_id, body in motions_map.items():
+        fields = checker._fields(body, owner=motion_id, errors=[])
+        shot_id = checker._plain(fields.get("分镜", ""))
+        motion_shot_by_id[motion_id] = shot_id
+        if shot_id:
+            covered_shots.add(shot_id)
+
+    gaps: list[dict[str, str]] = []
+    if not scenes:
+        gaps.append(
+            {
+                "document": "剧本.md",
+                "kind": "missing_scenes",
+                "message": f"剧本.md 还没有可解析的场次标题（示例：## {episode}-SC001 内 · 地点 · 日）",
+            }
+        )
+    if not visual_entries:
+        gaps.append(
+            {
+                "document": "视觉设定.md",
+                "kind": "missing_visual_entries",
+                "message": "视觉设定.md 还没有人物/造型/地点/道具条目（示例：## 人物 · <名称>）",
+            }
+        )
+    if not shots_map:
+        gaps.append(
+            {
+                "document": "分镜.md",
+                "kind": "missing_shots",
+                "message": f"分镜.md 还没有 SHOT 条目（示例：## SHOT-{episode}-001 · <标题>）",
+            }
+        )
+    for scene_id in scenes:
+        if scene_id not in claimed_scenes and scene_id not in unfilmed:
+            gaps.append(
+                {
+                    "document": "分镜.md",
+                    "kind": "unclaimed_scene",
+                    "id": scene_id,
+                    "message": f"场次 {scene_id} 尚未被任何 SHOT 的来源字段承接（或记入未拍场次）",
+                }
+            )
+    for shot_id in shots_missing_keyframe:
+        gaps.append(
+            {
+                "document": "分镜.md",
+                "kind": "missing_keyframe_prompt",
+                "id": shot_id,
+                "message": f"{shot_id} 缺少唯一且非空的 ### 首帧提示词 引用块",
+            }
+        )
+    for img_id in referenced_images:
+        if img_id not in images_map:
+            gaps.append(
+                {
+                    "document": "图片提示词.md",
+                    "kind": "missing_image_prompt",
+                    "id": img_id,
+                    "message": f"分镜引用了 {img_id}，但图片提示词.md 中尚无 ## {img_id} · <名称>",
+                }
+            )
+    if not motions_map:
+        gaps.append(
+            {
+                "document": "视频提示词.md",
+                "kind": "missing_motions",
+                "message": f"视频提示词.md 还没有 MOTION 条目（示例：## MOTION-{episode}-001 · <标题>）",
+            }
+        )
+    for shot_id in shots_map:
+        if shot_id not in covered_shots:
+            expected_motion = "MOTION-" + shot_id[len("SHOT-") :]
+            gaps.append(
+                {
+                    "document": "视频提示词.md",
+                    "kind": "missing_motion_for_shot",
+                    "id": shot_id,
+                    "expected_id": expected_motion,
+                    "message": f"分镜 {shot_id} 尚未在视频提示词.md 中建立对应的 {expected_motion}",
+                }
+            )
+    for motion_id, shot_id in motion_shot_by_id.items():
+        if not shot_id or shot_id not in shots_map:
+            gaps.append(
+                {
+                    "document": "视频提示词.md",
+                    "kind": "orphan_motion",
+                    "id": motion_id,
+                    "message": f"{motion_id} 指向的分镜 {shot_id or '(空)'} 不在分镜.md 中",
+                }
+            )
+
+    validation = checker.validate_episode_with_warnings(
+        episode_dir, root, partial=False
+    )
+    return {
+        "project_root": str(root),
+        "project_initialized": project_initialized,
+        "episode": episode,
+        "episode_dir": f"{episodes_name}/{episode}",
+        "created_files": created_files,
+        "existing_files": existing_files,
+        "inventory": {
+            "scenes": scenes,
+            "visual_entries": visual_entries,
+            "shots": list(shots_map),
+            "images": list(images_map),
+            "motions": list(motions_map),
+            "groups": list(groups_map),
+            "music": list(music_map),
+        },
+        "gaps": gaps,
+        "checker_errors": list(validation.errors),
+        "checker_warnings": list(validation.warnings),
+    }
+
+
+def _scan_verified_directory(
+    directory: Path, *, member_label: str
+) -> tuple[set[str], list[str]]:
+    problems: list[str] = []
+    actual: set[str] = set()
+    for dirpath, dirnames, filenames in os.walk(directory, topdown=True, followlinks=False):
+        parent = Path(dirpath)
+        dirnames.sort()
+        filenames.sort()
+        kept_dirs: list[str] = []
+        for dname in dirnames:
+            dpath = parent / dname
+            relative = dpath.relative_to(directory).as_posix()
+            try:
+                details = os.lstat(dpath)
+            except OSError:
+                problems.append(f"unsupported {member_label} member: {relative}")
+                continue
+            if _is_link_or_reparse(details):
+                problems.append(f"symlink is not allowed: {relative}")
+            elif stat.S_ISDIR(details.st_mode):
+                kept_dirs.append(dname)
+            else:
+                problems.append(f"unsupported {member_label} member: {relative}")
+        dirnames[:] = kept_dirs
+        for fname in filenames:
+            fpath = parent / fname
+            relative = fpath.relative_to(directory).as_posix()
+            try:
+                details = os.lstat(fpath)
+            except OSError:
+                problems.append(f"unsupported {member_label} member: {relative}")
+                continue
+            if _is_link_or_reparse(details):
+                problems.append(f"symlink is not allowed: {relative}")
+            elif stat.S_ISREG(details.st_mode):
+                actual.add(relative)
+            else:
+                problems.append(f"unsupported {member_label} member: {relative}")
+    return actual, problems
+
+
+def _verify_checksums_file(
+    directory: Path,
+    actual: set[str],
+    problems: list[str],
+    *,
+    member_label: str,
+) -> dict[str, str] | None:
+    checksums_path = directory / "checksums.sha256"
+    try:
+        checksums_details = os.lstat(checksums_path)
+    except OSError:
+        checksums_details = None
+    if (
+        checksums_details is None
+        or _is_link_or_reparse(checksums_details)
+        or not stat.S_ISREG(checksums_details.st_mode)
+    ):
+        problems.append("checksums.sha256 is missing or unsafe")
+        return None
+    expected: dict[str, str] = {}
+    for number, line in enumerate(checksums_path.read_text(encoding="utf-8").splitlines(), 1):
+        match = re.fullmatch(r"([0-9a-f]{64})  (.+)", line)
+        if match is None:
+            problems.append(f"invalid checksum line {number}")
+            continue
+        digest, raw = match.groups()
+        try:
+            relative = _relative_path(raw)
+        except ValueError:
+            problems.append(f"unsafe checksum path: {raw}")
+            continue
+        if relative in expected:
+            problems.append(f"duplicate checksum path: {relative}")
+        expected[relative] = digest
+    expected_members = set(expected) | {"checksums.sha256"}
+    for extra in sorted(actual - expected_members):
+        problems.append(f"unexpected {member_label} file: {extra}")
+    for missing in sorted(expected_members - actual):
+        problems.append(f"missing {member_label} file: {missing}")
+    for relative, digest in expected.items():
+        if relative not in actual:
+            continue
+        path = directory / relative
+        try:
+            path_details = os.lstat(path)
+        except OSError:
+            continue
+        if _is_link_or_reparse(path_details) or not stat.S_ISREG(path_details.st_mode):
+            continue
+        if sha256_file(path) != digest:
+            problems.append(f"checksum mismatch: {relative}")
+    return expected
+
+
+def _export_manifest_problems(
+    directory: Path,
+    manifest: object,
+    *,
+    checksum_paths: set[str],
+    actual: set[str],
+) -> tuple[list[str], list[str]]:
+    problems: list[str] = []
+    episode_ids: list[str] = []
+    if not isinstance(manifest, Mapping):
+        return ["manifest must be an object"], episode_ids
+    if manifest.get("kind") != "creator_export":
+        return ["manifest kind is not creator_export"], episode_ids
+    if manifest.get("schema_version") != EXPORT_SCHEMA:
+        problems.append("manifest schema is invalid")
+    episodes = manifest.get("episodes")
+    if not isinstance(episodes, list):
+        return [*problems, "manifest episodes must be a list"], episode_ids
+
+    roots_in_checksums = {
+        PurePosixPath(path).parts[0]
+        for path in checksum_paths
+        if len(PurePosixPath(path).parts) >= 3
+        and _root_role(PurePosixPath(path).parts[0]) == "episodes"
+    }
+    if len(roots_in_checksums) > 1:
+        problems.append("export mixes multiple episode root names")
+    episodes_root = (
+        next(iter(roots_in_checksums))
+        if len(roots_in_checksums) == 1
+        else CANONICAL_ROOTS["episodes"]
+    )
+    manifest_paths: set[str] = set()
+    if PROJECT_FILE in checksum_paths:
+        manifest_paths.add(PROJECT_FILE)
+    else:
+        problems.append(f"missing {PROJECT_FILE} in checksums")
+
+    for index, ep_entry in enumerate(episodes, 1):
+        if not isinstance(ep_entry, Mapping):
+            problems.append(f"manifest episode {index} must be an object")
+            continue
+        ep_id = ep_entry.get("episode")
+        if not isinstance(ep_id, str) or EPISODE_ID_RE.fullmatch(ep_id) is None:
+            problems.append(f"manifest episode {index} has invalid episode id")
+            continue
+        if ep_id in episode_ids:
+            problems.append(f"duplicate manifest episode: {ep_id}")
+        else:
+            episode_ids.append(ep_id)
+        files = ep_entry.get("files")
+        if not isinstance(files, list):
+            problems.append(f"manifest episode {ep_id} files must be a list")
+            continue
+        for file_num, entry in enumerate(files, 1):
+            if not isinstance(entry, Mapping):
+                problems.append(f"manifest episode {ep_id} file {file_num} has invalid fields")
+                continue
+            raw_path = entry.get("path")
+            digest = entry.get("sha256")
+            if not isinstance(raw_path, str):
+                problems.append(f"manifest episode {ep_id} file {file_num} has an unsafe path")
+                continue
+            try:
+                inner = _relative_path(raw_path)
+            except ValueError:
+                problems.append(f"manifest episode {ep_id} file {file_num} has an unsafe path")
+                continue
+            relative = f"{episodes_root}/{ep_id}/{inner}"
+            if relative in manifest_paths:
+                problems.append(f"duplicate manifest path: {relative}")
+            manifest_paths.add(relative)
+            if not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+                problems.append(f"manifest episode {ep_id} file {file_num} has an invalid hash")
+                continue
+            if relative not in actual:
+                continue
+            member = directory / relative
+            try:
+                member_details = os.lstat(member)
+            except OSError:
+                member_details = None
+            if (
+                member_details is not None
+                and not _is_link_or_reparse(member_details)
+                and stat.S_ISREG(member_details.st_mode)
+                and sha256_file(member) != digest
+            ):
+                problems.append(f"manifest hash mismatch: {relative}")
+
+    expected_manifest_paths = checksum_paths - {"manifest.json"}
+    if manifest_paths != expected_manifest_paths:
+        problems.append("manifest files do not match checksum members")
+    return problems, episode_ids
+
+
+def verify_export_directory(directory: Path) -> dict[str, Any]:
+    """Verify an exported handover (or direct package) directory with fail-closed security."""
+    target = directory.expanduser()
+    try:
+        details = os.lstat(target)
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(f"export directory not found: {target}") from exc
+    if _is_link_or_reparse(details) or not stat.S_ISDIR(details.st_mode):
+        raise ProjectConflictError("export directory is not a regular directory")
+    resolved = target.resolve()
+    actual, problems = _scan_verified_directory(resolved, member_label="export")
+    expected = _verify_checksums_file(
+        resolved, actual, problems, member_label="export"
+    )
+    if expected is None:
+        return {
+            "kind": "creator_export",
+            "path": str(resolved),
+            "episodes": [],
+            "status": "tampered",
+            "problems": problems,
+        }
+    manifest_path = resolved / "manifest.json"
+    episode_ids: list[str] = []
+    kind = "creator_export"
+    try:
+        manifest_details = os.lstat(manifest_path)
+        if _is_link_or_reparse(manifest_details) or not stat.S_ISREG(manifest_details.st_mode):
+            raise OSError("unsafe manifest.json")
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if (
+            isinstance(manifest, Mapping)
+            and manifest.get("kind") != "creator_export"
+            and isinstance(manifest.get("episode"), str)
+        ):
+            kind = "delivery_package"
+            ep_name = str(manifest["episode"])
+            episode_ids = [ep_name]
+            problems.extend(
+                _manifest_problems(
+                    resolved,
+                    manifest,
+                    episode=ep_name,
+                    checksum_paths=set(expected),
+                    actual=actual,
+                )
+            )
+        else:
+            manifest_issues, episode_ids = _export_manifest_problems(
+                resolved,
+                manifest,
+                checksum_paths=set(expected),
+                actual=actual,
+            )
+            problems.extend(manifest_issues)
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        problems.append("manifest.json is unreadable")
+    return {
+        "kind": kind,
+        "path": str(resolved),
+        "episodes": episode_ids,
+        "status": "verified" if not problems else "tampered",
+        "problems": problems,
+    }
+
+
+def verify_delivery_package(root: Path, *, episode: str) -> dict[str, Any]:
+    if EPISODE_ID_RE.fullmatch(episode) is None:
+        raise ValueError("episode must use an EP001-style identifier")
+    root = _find_delivery_project(root)
+    delivery = _delivery_directory(root, episode)
+    actual, problems = _scan_verified_directory(delivery, member_label="delivery")
+    expected = _verify_checksums_file(
+        delivery, actual, problems, member_label="delivery"
+    )
+    if expected is None:
+        return {"episode": episode, "status": "tampered", "problems": problems}
+    manifest_path = delivery / "manifest.json"
+    try:
+        manifest_details = os.lstat(manifest_path)
+        if _is_link_or_reparse(manifest_details) or not stat.S_ISREG(manifest_details.st_mode):
+            raise OSError("unsafe manifest.json")
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        problems.extend(
+            _manifest_problems(
+                delivery,
+                manifest,
+                episode=episode,
+                checksum_paths=set(expected),
+                actual=actual,
+            )
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        problems.append("manifest.json is unreadable")
+    return {
+        "episode": episode,
+        "status": "verified" if not problems else "tampered",
+        "problems": problems,
+    }
+
+
+def _lock_at(directory_fd: int) -> Any:
+    try:
+        operations = os.open(
+            ".short-drama",
+            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+            dir_fd=directory_fd,
+        )
+    except FileNotFoundError:
+        with contextlib.suppress(FileExistsError):
+            os.mkdir(".short-drama", 0o700, dir_fd=directory_fd)
+        operations = os.open(
+            ".short-drama",
+            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+            dir_fd=directory_fd,
+        )
+    try:
+        try:
+            descriptor = os.open(
+                "project.lock", os.O_RDWR | os.O_NOFOLLOW, dir_fd=operations
+            )
+        except FileNotFoundError:
+            try:
+                descriptor = os.open(
+                    "project.lock",
+                    os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                    0o600,
+                    dir_fd=operations,
+                )
+            except FileExistsError:
+                descriptor = os.open(
+                    "project.lock", os.O_RDWR | os.O_NOFOLLOW, dir_fd=operations
+                )
+    finally:
+        os.close(operations)
+    return os.fdopen(descriptor, "a+b", buffering=0)
+
+
+@contextlib.contextmanager
+def coordinated_project_text_edit_at(
+    directory_fd: int, relative: str, expected_version: str
+) -> Iterator[None]:
+    normalized = _relative_path(relative)
+    if not re.fullmatch(r"[0-9a-f]{64}", expected_version):
+        raise ValueError("expected version must be a SHA-256 digest")
+    with _lock_at(directory_fd) as handle, _lock_handle(handle):
+        current = sha256_bytes(_read_regular_at(directory_fd, normalized))
+        if current != expected_version:
+            raise ProjectConflictError("file changed since it was opened")
+        yield
+
+
+def _parse_omissions(values: Iterable[str]) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for value in values:
+        path, separator, reason = value.partition("=")
+        result[_relative_path(path)] = reason.strip() if separator and reason.strip() else "creator_omitted"
+    return result
+
+
+def _parse_json_object_file(path: Path | None, *, flag: str) -> dict[str, Any] | None:
+    if path is None:
+        return None
+    resolved = path.expanduser()
+    try:
+        text = resolved.read_text(encoding="utf-8-sig")
+    except OSError as exc:
+        raise ValueError(f"{flag} could not read JSON file {resolved}: {exc}") from exc
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{flag} is not valid JSON: {exc}") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{flag} must decode to a JSON object")
+    return parsed
+
+
+def _parse_json_object_arg(raw: str | None, *, flag: str) -> dict[str, Any] | None:
+    if raw is None:
+        return None
+    if raw.startswith("@"):
+        target = raw[1:]
+        if not target:
+            raise ValueError(f"{flag} @path must name a JSON file")
+        return _parse_json_object_file(Path(target), flag=flag)
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{flag} is not valid JSON: {exc}") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{flag} must decode to a JSON object")
+    return parsed
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage a short-drama filesystem project.")
+    commands = parser.add_subparsers(dest="command", required=True)
+
+    init = commands.add_parser("init", help="Initialize a project without creative content.")
+    init.add_argument("path")
+    init.add_argument("--title", required=True)
+    init.add_argument("--language", default="zh-CN")
+    init.add_argument("--prompt-language", default=DEFAULT_PROMPT_LANGUAGE)
+    init.add_argument("--aspect-ratio", default="9:16")
+    init.add_argument("--episode-count", type=int)
+    init.add_argument("--target-seconds", type=float, dest="target_seconds_per_episode")
+
+    configure = commands.add_parser(
+        "configure",
+        help="Incrementally update short-drama.json and mark authority blocks accepted.",
+    )
+    configure.add_argument("path", nargs="?", default=".")
+    configure.add_argument("--title")
+    configure.add_argument("--language")
+    configure.add_argument("--prompt-language")
+    configure.add_argument("--aspect-ratio")
+    configure.add_argument("--episode-count", type=int)
+    configure.add_argument("--target-seconds", type=float, dest="target_seconds_per_episode")
+    configure.add_argument(
+        "--pacing-json",
+        help="JSON object or @<path> for pacing rates.",
+    )
+    configure.add_argument(
+        "--visual-direction-json",
+        help="JSON object or @<path> for visual_direction choices.",
+    )
+    configure.add_argument(
+        "--production-profile-json",
+        help="JSON object or @<path> for production_profile choices.",
+    )
+    configure.add_argument(
+        "--rhythm-profile-json",
+        help="JSON object or @<path> for rhythm_profile fields.",
+    )
+    configure.add_argument(
+        "--json",
+        dest="json_payload",
+        help="JSON object or @<path> containing any subset of configure fields.",
+    )
+    configure.add_argument(
+        "--json-file",
+        type=Path,
+        dest="json_file",
+        help="Path to a UTF-8 JSON object file containing any subset of configure fields.",
+    )
+
+    scaffold = commands.add_parser(
+        "scaffold-episode",
+        help="Create missing episode skeletons and print a deterministic JSON gap checklist.",
+    )
+    scaffold.add_argument("path", help="Project root (or path inside a project).")
+    scaffold.add_argument("episode", help="Episode identifier such as EP001.")
+    scaffold.add_argument("--title", help="Optional title for project/episode heading.")
+
+    status = commands.add_parser("status", help="Print a creator-safe project summary.")
+    status.add_argument("path", nargs="?", default=".")
+
+    package = commands.add_parser(
+        "package",
+        help="[Deprecated; prefer export --manifest + verify] Package episode text/JSON deliverables.",
+    )
+    package.add_argument("path")
+    package.add_argument("--episode", required=True)
+    package.add_argument(
+        "--include",
+        action="append",
+        default=None,
+        dest="includes",
+        help="Include PATH; omit to package all episode text/JSON files.",
+    )
+    package.add_argument(
+        "--omit", action="append", default=[], dest="omissions",
+        help="Record PATH or PATH=REASON as deliberately omitted.",
+    )
+
+    verify = commands.add_parser(
+        "verify",
+        help="Re-check checksums and manifest of an exported directory or packaged episode.",
+    )
+    verify.add_argument(
+        "path",
+        help="Exported handover directory (without --episode) or project root (with --episode).",
+    )
+    verify.add_argument(
+        "--episode",
+        default=None,
+        help="Verify legacy delivered package 交付/<EP> inside project root.",
+    )
+
+    export = commands.add_parser(
+        "export",
+        help="Copy the current creator documents and produced media for handover.",
+    )
+    export.add_argument("path")
+    export.add_argument("--out", required=True, type=Path)
+    export.add_argument(
+        "--episode",
+        action="append",
+        dest="episodes",
+        help="Export only this episode; repeat for several. Default: every episode.",
+    )
+    export.add_argument(
+        "--no-media",
+        action="store_true",
+        help=f"Skip 剧集/<EP>/{EXPORT_MEDIA_DIRECTORY}/ and export text only.",
+    )
+    export.add_argument(
+        "--manifest",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Write manifest.json and checksums.sha256 into the export directory (default: enabled).",
+    )
+    export.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Replace an existing export directory at --out.",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    # 创作者在终端里直接读输出：中文照原样打印；控制台编码不了时退成 \uXXXX，JSON 仍可解析。
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if reconfigure is not None:
+        reconfigure(errors="backslashreplace")
+    try:
+        if args.command == "init":
+            result = initialize_project(
+                Path(args.path),
+                title=args.title,
+                language=args.language,
+                prompt_language=args.prompt_language,
+                aspect_ratio=args.aspect_ratio,
+                episode_count=args.episode_count,
+                target_seconds_per_episode=args.target_seconds_per_episode,
+            )
+        elif args.command == "configure":
+            if args.json_payload is not None and args.json_file is not None:
+                raise ValueError("use either --json or --json-file, not both")
+            updates = (
+                _parse_json_object_file(args.json_file, flag="--json-file")
+                if args.json_file is not None
+                else _parse_json_object_arg(args.json_payload, flag="--json")
+            )
+            result = configure_project(
+                Path(args.path),
+                title=args.title,
+                language=args.language,
+                prompt_language=args.prompt_language,
+                aspect_ratio=args.aspect_ratio,
+                episode_count=args.episode_count,
+                target_seconds_per_episode=args.target_seconds_per_episode,
+                pacing=_parse_json_object_arg(args.pacing_json, flag="--pacing-json"),
+                visual_direction=_parse_json_object_arg(
+                    args.visual_direction_json, flag="--visual-direction-json"
+                ),
+                production_profile=_parse_json_object_arg(
+                    args.production_profile_json, flag="--production-profile-json"
+                ),
+                rhythm_profile=_parse_json_object_arg(
+                    args.rhythm_profile_json, flag="--rhythm-profile-json"
+                ),
+                updates=updates,
+            )
+        elif args.command == "scaffold-episode":
+            result = scaffold_episode(
+                Path(args.path),
+                episode=args.episode,
+                title=args.title,
+            )
+        elif args.command == "status":
+            result = project_status(Path(args.path))
+        elif args.command == "package":
+            print(
+                "DEPRECATION: `project_tool.py package` is deprecated and will be removed in v2.0; "
+                "prefer `project_tool.py export <project> --out <dir> --manifest` and "
+                "`project_tool.py verify <dir>`.",
+                file=sys.stderr,
+            )
+            result = build_delivery_package(
+                Path(args.path),
+                episode=args.episode,
+                includes=args.includes,
+                omissions=_parse_omissions(args.omissions),
+            )
+        elif args.command == "export":
+            result = build_creator_export(
+                Path(args.path),
+                out=args.out,
+                episodes=args.episodes,
+                include_media=not args.no_media,
+                include_manifest=bool(args.manifest),
+                overwrite=args.overwrite,
+            )
+        else:
+            if args.episode is not None:
+                result = verify_delivery_package(Path(args.path), episode=args.episode)
+            else:
+                result = verify_export_directory(Path(args.path))
+            if result["status"] != "verified":
+                print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+                return 1
+        print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+        return 0
+    except (KeyError, OSError, ValueError, ProjectConflictError, PackageBlockedError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

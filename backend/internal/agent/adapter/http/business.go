@@ -25,7 +25,7 @@ type BusinessHandler struct {
 	token        string
 	skills       SkillStore
 	inputSources app.ConversationSourceReader
-	atomicTool   func(*gin.Context, string, domain.CallInput) (domain.CallReceipt, error)
+	atomicTool   func(context.Context, string, domain.CallInput) (domain.CallReceipt, error)
 }
 
 // NewBusinessHandler injects the business store and installed capabilities.
@@ -34,7 +34,7 @@ func NewBusinessHandler(store app.BusinessStore, capabilities app.Capabilities, 
 }
 
 // WithAtomicTools injects the transaction-bound business tool executor.
-func (h *BusinessHandler) WithAtomicTools(execute func(*gin.Context, string, domain.CallInput) (domain.CallReceipt, error)) *BusinessHandler {
+func (h *BusinessHandler) WithAtomicTools(execute func(context.Context, string, domain.CallInput) (domain.CallReceipt, error)) *BusinessHandler {
 	h.atomicTool = execute
 	return h
 }
@@ -158,7 +158,7 @@ func (h *BusinessHandler) tool(c *gin.Context) {
 			return
 		}
 		if h.atomicTool != nil {
-			out, err := h.atomicTool(c, tool.Descriptor.Name, in)
+			out, err := h.atomicTool(c.Request.Context(), tool.Descriptor.Name, in)
 			send(c, out, err)
 			return
 		}

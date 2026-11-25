@@ -9,15 +9,15 @@ import (
 
 func TestSkillPackageValidationAndHash(t *testing.T) {
 	t.Run("ValidSkillPackage", func(t *testing.T) {
-		resources := map[string]string{
-			"references/camera_angles.md": "特写、中景、远景拍摄标准指南",
-			"prompts/cinematic.txt":       "8k resolution, cinematic lighting",
+		resources := map[string][]byte{
+			"references/camera_angles.md": []byte("特写、中景、远景拍摄标准指南"),
+			"prompts/cinematic.txt":       []byte("8k resolution, cinematic lighting"),
 		}
 		pkg, err := domain.NewSkillPackage(
-			"storyboard_master",
+			"storyboard-master",
 			"1.0.0",
 			"专业分镜设计与机位语言 Skill",
-			"# Storyboard Master\n提供分镜编排专业指导",
+			"---\nname: storyboard-master\ndescription: 专业分镜设计与机位语言 Skill\n---\n\n提供分镜编排专业指导",
 			resources,
 		)
 		if err != nil {
@@ -26,17 +26,17 @@ func TestSkillPackageValidationAndHash(t *testing.T) {
 		if pkg.Hash == "" {
 			t.Fatalf("expected non-empty package hash")
 		}
-		if pkg.Name != "storyboard_master" {
+		if pkg.Name != "storyboard-master" {
 			t.Errorf("unexpected name: %s", pkg.Name)
 		}
 	})
 
 	t.Run("PathTraversalBlocked", func(t *testing.T) {
-		dangerousResources := map[string]string{
-			"../../../../etc/passwd": "malicious content",
+		dangerousResources := map[string][]byte{
+			"../../../../etc/passwd": []byte("malicious content"),
 		}
 		_, err := domain.NewSkillPackage(
-			"bad_skill",
+			"bad-skill",
 			"1.0.0",
 			"恶意技能",
 			"恶意说明",
@@ -49,7 +49,7 @@ func TestSkillPackageValidationAndHash(t *testing.T) {
 
 	t.Run("EmptyContentBlocked", func(t *testing.T) {
 		_, err := domain.NewSkillPackage(
-			"empty_skill",
+			"empty-skill",
 			"1.0.0",
 			"空技能",
 			"   ",

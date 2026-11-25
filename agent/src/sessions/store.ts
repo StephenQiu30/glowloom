@@ -1,6 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { sql, type Kysely } from 'kysely';
 import type { AgentDatabase, RunStatus } from '../database/schema.js';
+import { runIdentifier } from '../skills/run-skills.js';
+import { pinnedSkillSchema, type PinnedSkill } from '../skills/loader.js';
 import { AgentError } from './errors.js';
 import type {
   ApplyDecisionInput,
@@ -22,6 +24,14 @@ export function isTerminalStatus(status: RunStatus): boolean {
   return (
     status === 'completed' || status === 'failed' || status === 'cancelled'
   );
+}
+
+function cursorSequence(cursor: string): string {
+  const sequence = /^(0|[1-9]\d{0,18}):0$/.exec(cursor)?.[1];
+  if (sequence === undefined || BigInt(sequence) > 9223372036854775807n) {
+    throw new AgentError('invalid_cursor', 'Invalid run cursor');
+  }
+  return sequence;
 }
 
 export class SessionStore {
@@ -156,6 +166,10 @@ export class SessionStore {
     input: StartRunInput,
     ownerId: string,
     leaseMs: number,
+    prepareSkills: (
+      runId: string,
+      submissionId: string,
+    ) => Promise<PinnedSkill[]>,
   ): Promise<{
     runId: string;
     submissionId: string;
@@ -180,6 +194,29 @@ export class SessionStore {
 
       if (!session) {
         throw new AgentError('session_not_found', 'Session not found');
+      }
+
+      const workflow = input.manifest.workflow;
+      const source =
+        workflow && typeof workflow === 'object' && 'source' in workflow
+          ? workflow.source
+          : undefined;
+      if (
+        source &&
+        typeof source === 'object' &&
+        'canvasId' in source &&
+        source.canvasId !== session.canvas_id
+      ) {
+        throw new AgentError(
+          'invalid_request',
+          'Skill workflow canvas does not match the session',
+        );
+      }
+      if (workflow && !session.canvas_id) {
+        throw new AgentError(
+          'invalid_request',
+          'A Skill workflow requires a canvas session',
+        );
       }
 
       const existing = await trx
@@ -230,8 +267,38 @@ export class SessionStore {
       }
 
       const nextRev = currentRev + 1;
-      const runId = randomUUID();
-      const submissionId = randomUUID();
+      const runId = runIdentifier(
+        input.sessionId,
+        `run:${input.requestId.toLowerCase()}`,
+      );
+      const submissionId = runIdentifier(runId, 'submission:initial');
+      let skillRevisions: string[];
+      if (input.retryOfRunId) {
+        const original = await trx
+          .selectFrom('agent.service_runs')
+          .select('skill_revisions')
+          .where('id', '=', input.retryOfRunId)
+          .where('session_id', '=', input.sessionId)
+          .executeTakeFirst();
+        if (!original)
+          throw new AgentError('run_not_found', 'Original run not found');
+        skillRevisions = original.skill_revisions;
+      } else {
+        const skills = await prepareSkills(runId, submissionId);
+        skillRevisions = skills.map((skill) => skill.digest);
+        if (skills.length > 0) {
+          await trx
+            .insertInto('agent.skill_revisions')
+            .values(
+              skills.map((skill) => ({
+                digest: skill.digest,
+                bundle: JSON.stringify(skill),
+              })),
+            )
+            .onConflict((conflict) => conflict.column('digest').doNothing())
+            .execute();
+        }
+      }
 
       await trx
         .updateTable('agent.service_sessions')
@@ -251,6 +318,9 @@ export class SessionStore {
           content_hash: contentHash,
           goal: input.goal,
           manifest: input.manifest,
+          skill_revisions: sql<
+            string[]
+          >`CAST(${JSON.stringify(skillRevisions)} AS jsonb)`,
           submission_id: submissionId,
           accepted_revision: nextRev,
           status: 'running',
@@ -269,6 +339,29 @@ export class SessionStore {
         acceptedRevision: nextRev,
         deduplicated: false,
       };
+    });
+  }
+
+  async skillsForRun(runId: string): Promise<PinnedSkill[]> {
+    const run = await this.db
+      .selectFrom('agent.service_runs')
+      .select('skill_revisions')
+      .where('id', '=', runId)
+      .executeTakeFirstOrThrow();
+    if (run.skill_revisions.length === 0) return [];
+    const rows = await this.db
+      .selectFrom('agent.skill_revisions')
+      .selectAll()
+      .where('digest', 'in', run.skill_revisions)
+      .execute();
+    const byDigest = new Map(
+      rows.map((row) => [row.digest, pinnedSkillSchema.parse(row.bundle)]),
+    );
+    return run.skill_revisions.map((digest) => {
+      const skill = byDigest.get(digest);
+      if (!skill || skill.digest !== digest)
+        throw new Error('Pinned Skill revision unavailable');
+      return skill;
     });
   }
 
@@ -298,7 +391,7 @@ export class SessionStore {
         .execute();
 
       return {
-        id: String(nextSeq),
+        id: `${nextSeq}:0`,
         seq: nextSeq,
         runId,
         event: eventType,
@@ -339,7 +432,7 @@ export class SessionStore {
         message_id: messageId,
         run_id: runId,
         conversation_id: 1,
-        sequence: String(nextSeq),
+        sequence: `${nextSeq}:0`,
         part_index: 0,
         kind,
         content,
@@ -371,7 +464,11 @@ export class SessionStore {
       .execute();
   }
 
-  async renewLease(runId: string, ownerId: string, leaseMs: number): Promise<void> {
+  async renewLease(
+    runId: string,
+    ownerId: string,
+    leaseMs: number,
+  ): Promise<void> {
     await this.db
       .updateTable('agent.service_runs')
       .set({
@@ -568,7 +665,11 @@ export class SessionStore {
     limit = 20,
     before?: string,
     through?: string,
-  ): Promise<{ items: PublicMessageView[]; next_cursor?: string; through: string }> {
+  ): Promise<{
+    items: PublicMessageView[];
+    next_cursor?: string;
+    through: string;
+  }> {
     await this.getRun(identity, runId);
     const safeLimit = Math.min(Math.max(limit, 1), 100);
 
@@ -577,12 +678,8 @@ export class SessionStore {
       .selectAll()
       .where('run_id', '=', runId);
 
-    if (before && /^\d+$/.test(before)) {
-      query = query.where('seq', '<', before);
-    }
-    if (through && /^\d+$/.test(through)) {
-      query = query.where('seq', '<=', through);
-    }
+    if (before) query = query.where('seq', '<', cursorSequence(before));
+    if (through) query = query.where('seq', '<=', cursorSequence(through));
 
     const rows = await query
       .orderBy('seq', 'desc')
@@ -594,14 +691,13 @@ export class SessionStore {
       message_id: row.message_id,
       run_id: row.run_id,
       conversation_id: 1,
-      sequence: String(row.seq),
+      sequence: `${row.seq}:0`,
       part_index: row.part_index,
       kind: row.kind,
       content: row.content,
     }));
 
-    const watermark =
-      through ?? (items.length > 0 ? items[items.length - 1]!.sequence : '0');
+    const watermark = through ?? items.at(-1)?.sequence ?? '0:0';
     return { items, through: watermark };
   }
 
@@ -625,7 +721,7 @@ export class SessionStore {
       message_id: row.message_id,
       run_id: row.run_id,
       conversation_id: 1,
-      sequence: String(row.seq),
+      sequence: `${row.seq}:0`,
       part_index: row.part_index,
       kind: row.kind,
       content: row.content,
@@ -643,14 +739,13 @@ export class SessionStore {
       .selectAll()
       .where('run_id', '=', runId);
 
-    if (lastEventId && /^\d+$/.test(lastEventId)) {
-      query = query.where('seq', '>', lastEventId);
-    }
+    if (lastEventId)
+      query = query.where('seq', '>', cursorSequence(lastEventId));
 
     const rows = await query.orderBy('seq', 'asc').execute();
     return {
       events: rows.map((row) => ({
-        id: String(row.seq),
+        id: `${row.seq}:0`,
         seq: Number(row.seq),
         runId: row.run_id,
         event: row.event_type,
@@ -684,7 +779,9 @@ export class SessionStore {
       title: row.title,
       execution_revision: Number(row.execution_revision),
       pinned: row.pinned,
-      ...(row.archived_at ? { archived_at: row.archived_at.toISOString() } : {}),
+      ...(row.archived_at
+        ? { archived_at: row.archived_at.toISOString() }
+        : {}),
       created_at: row.created_at.toISOString(),
       ...(row.last_input_at
         ? { last_input_at: row.last_input_at.toISOString() }
@@ -732,26 +829,27 @@ export class SessionStore {
       state: {
         status: row.status,
         execution_revision: Number(row.accepted_revision),
-        ...(row.workflow_run_id ? { workflow_run_id: row.workflow_run_id } : {}),
+        ...(row.workflow_run_id
+          ? { workflow_run_id: row.workflow_run_id }
+          : {}),
         ...(row.error_code ? { error_code: row.error_code } : {}),
       },
-      snapshot_cursor: lastSeq,
+      snapshot_cursor: `${lastSeq}:0`,
       messages_page: {
         items: messages.map((m) => ({
           message_id: m.message_id,
           run_id: m.run_id,
           conversation_id: 1,
-          sequence: String(m.seq),
+          sequence: `${m.seq}:0`,
           part_index: m.part_index,
           kind: m.kind,
           content: m.content,
         })),
-        through: lastSeq,
+        through: `${messages.at(-1)?.seq ?? '0'}:0`,
       },
       events: events.map((e) => ({
-        id: String(e.seq),
-        event: e.event_type,
-        data: e.payload,
+        event_type: e.event_type,
+        payload: e.payload,
       })),
     };
   }

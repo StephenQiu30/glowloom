@@ -1,16 +1,7 @@
 ---
 name: i2v-motion-prompting
 description: 分级首尾帧图生视频（I2V）、角色固定音色配音、特写按需对口型（LipSync）与显式 Take 采用规范
-allowed_tools:
-  - canvas_read_graph
-  - media_estimate_quote
-  - media_submit_video_i2v
-  - media_submit_tts
-  - media_submit_lipsync
-  - media_get_task
-  - shot_adopt_take
-  - timeline_assemble_adopted_shots
-  - timeline_export_render
+allowed-tools: canvas_read_graph media_estimate_quote media_submit_video_i2v media_submit_tts media_submit_lipsync media_get_task shot_adopt_take timeline_assemble_adopted_shots timeline_export_render
 ---
 
 # I2V Motion & Audio Production Skill

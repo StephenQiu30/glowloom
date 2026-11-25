@@ -5,3 +5,6 @@ coverage/
 pnpm-lock.yaml
 src/database/generated/
 .vitest/
+
+# Upstream Skill suites retain their source bytes and license notices.
+/skills/

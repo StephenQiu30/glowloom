@@ -1,0 +1,4 @@
+interface:
+  display_name: "短剧剪辑"
+  short_description: "编排剪辑单并渲染带字幕、花字、调色接镜与混音的短剧成片，支持可插拔画面文字渲染器"
+  default_prompt: "使用 $short-drama-edit 按分镜和实测音频编排剪辑单，并渲染台词完整、节奏紧实的短剧成片。"

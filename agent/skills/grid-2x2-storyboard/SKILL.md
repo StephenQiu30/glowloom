@@ -1,14 +1,7 @@
 ---
 name: grid-2x2-storyboard
 description: 参考 BeefTV 实践，将同场连续 4 镜编排为单次 2x2 宫格分镜图并自动切分放大落画布，支持单镜独立重抽
-allowed_tools:
-  - script_get_episode
-  - subject_list
-  - canvas_read_graph
-  - media_estimate_quote
-  - media_submit_image
-  - canvas_split_grid_2x2
-  - canvas_upsert_storyboard_nodes
+allowed-tools: script_get_episode subject_list canvas_read_graph media_estimate_quote media_submit_image canvas_split_grid_2x2 canvas_upsert_storyboard_nodes
 ---
 
 # 2x2 Grid Storyboard Skill

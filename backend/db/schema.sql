@@ -7223,6 +7223,7 @@ CREATE TABLE agent.mastra_resources (
     "updatedAt" timestamp NOT NULL DEFAULT now()
 );
 
+-- Workflow storage exported by the locked @mastra/pg WorkflowsPG adapter.
 CREATE TABLE agent.mastra_workflow_snapshot (
     workflow_name text NOT NULL,
     run_id text NOT NULL,
@@ -7230,13 +7231,63 @@ CREATE TABLE agent.mastra_workflow_snapshot (
     snapshot jsonb NOT NULL,
     "createdAt" timestamp NOT NULL DEFAULT now(),
     "updatedAt" timestamp NOT NULL DEFAULT now(),
+    "createdAtZ" timestamptz DEFAULT now(),
+    "updatedAtZ" timestamptz DEFAULT now(),
     PRIMARY KEY (workflow_name, run_id)
 );
 CREATE INDEX mastra_workflow_snapshot_resource_idx ON agent.mastra_workflow_snapshot("resourceId", "updatedAt" DESC);
 
-REVOKE ALL ON agent.mastra_threads, agent.mastra_messages, agent.mastra_resources, agent.mastra_workflow_snapshot FROM PUBLIC;
+CREATE TABLE agent.mastra_workflow_runs (
+    workflow_name text NOT NULL,
+    run_id text NOT NULL,
+    "resourceId" text,
+    "threadId" text,
+    status text NOT NULL,
+    header jsonb NOT NULL,
+    "lastSeq" integer NOT NULL,
+    "startStateSeq" integer NOT NULL,
+    "stateShared" boolean NOT NULL,
+    "stateSeq" integer NOT NULL,
+    "statePatchCount" integer NOT NULL,
+    "statePatchBytes" integer NOT NULL,
+    "stateBytes" integer,
+    "runToken" text NOT NULL,
+    "createdAt" timestamp NOT NULL,
+    "updatedAt" timestamp NOT NULL,
+    "createdAtZ" timestamptz DEFAULT now(),
+    "updatedAtZ" timestamptz DEFAULT now(),
+    PRIMARY KEY (workflow_name, run_id)
+);
+CREATE INDEX mastra_workflow_runs_status_idx ON agent.mastra_workflow_runs(workflow_name, status, "createdAt" DESC);
+CREATE INDEX mastra_workflow_runs_thread_idx ON agent.mastra_workflow_runs("threadId");
+
+CREATE TABLE agent.mastra_workflow_run_entries (
+    workflow_name text NOT NULL,
+    run_id text NOT NULL,
+    seq integer NOT NULL,
+    kind text NOT NULL,
+    step_id text,
+    payload jsonb,
+    first_seq integer,
+    PRIMARY KEY (workflow_name, run_id, seq)
+);
+CREATE INDEX mastra_workflow_run_entries_step_idx ON agent.mastra_workflow_run_entries(workflow_name, run_id, kind, step_id, seq);
+CREATE INDEX mastra_workflow_run_entries_state_base_idx ON agent.mastra_workflow_run_entries((payload ->> 'workflowName'), (payload ->> 'runId')) WHERE kind = 'state-base';
+
+CREATE TABLE agent.mastra_workflow_run_owners (
+    "runId" text PRIMARY KEY,
+    generation bigint NOT NULL,
+    "ownerId" text NOT NULL,
+    "leaseExpiresAt" bigint,
+    "updatedAt" bigint NOT NULL
+);
+
+REVOKE ALL ON agent.mastra_threads, agent.mastra_messages, agent.mastra_resources, agent.mastra_workflow_snapshot,
+    agent.mastra_workflow_runs, agent.mastra_workflow_run_entries, agent.mastra_workflow_run_owners FROM PUBLIC;
 GRANT USAGE ON SCHEMA agent TO glowloom_agent;
-GRANT SELECT, INSERT, UPDATE, DELETE ON agent.mastra_threads, agent.mastra_messages, agent.mastra_resources, agent.mastra_workflow_snapshot TO glowloom_agent;
+GRANT SELECT, INSERT, UPDATE, DELETE ON agent.mastra_threads, agent.mastra_messages, agent.mastra_resources,
+    agent.mastra_workflow_snapshot, agent.mastra_workflow_runs, agent.mastra_workflow_run_entries,
+    agent.mastra_workflow_run_owners TO glowloom_agent;
 
 -- Agent service control metadata (managed by Kysely).
 CREATE TABLE agent.service_sessions (
@@ -7259,6 +7310,13 @@ CREATE TABLE agent.service_sessions (
 CREATE INDEX service_sessions_owner ON agent.service_sessions(actor_id, project_id, created_at DESC, id);
 CREATE INDEX service_sessions_input ON agent.service_sessions(actor_id, project_id, last_input_at DESC, id);
 
+CREATE TABLE agent.skill_revisions (
+    digest text PRIMARY KEY CHECK (digest ~ '^[a-f0-9]{64}$'),
+    bundle jsonb NOT NULL
+);
+REVOKE ALL ON agent.skill_revisions FROM PUBLIC;
+GRANT SELECT, INSERT ON agent.skill_revisions TO glowloom_agent;
+
 CREATE TABLE agent.service_runs (
     id uuid PRIMARY KEY,
     session_id uuid NOT NULL REFERENCES agent.service_sessions(id),
@@ -7266,6 +7324,7 @@ CREATE TABLE agent.service_runs (
     content_hash text NOT NULL,
     goal text NOT NULL,
     manifest jsonb NOT NULL,
+    skill_revisions jsonb NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(skill_revisions) = 'array'),
     submission_id uuid NOT NULL,
     accepted_revision bigint NOT NULL,
     status text NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'running', 'waiting_approval', 'completed', 'failed', 'cancelled')),

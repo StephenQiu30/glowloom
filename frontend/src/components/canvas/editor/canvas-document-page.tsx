@@ -50,6 +50,7 @@ import {
 } from "../hooks/use-canvas-document";
 import { useCanvasSave } from "../hooks/use-canvas-save";
 import { useCanvasGeneration } from "../hooks/use-canvas-generation";
+import { SkillWorkflowControl } from "./skill-workflow-control";
 import { useCanvasWorkflow } from "../hooks/use-canvas-workflow";
 import { CanvasWorkflowControls } from "@/components/canvas-editor/controls/canvas-workflow-controls.tsx";
 import { CreatePersonalProjectDialog } from "../project/personal-projects";
@@ -291,12 +292,27 @@ function CanvasDocumentSession({
       {...controls}
       title={state.baseline.title}
       workflowControl={
-        <CanvasWorkflowControls
-          workflow={workflow}
-          allNodeIds={state.draft.nodes
-            .filter((node) => node.type !== "group")
-            .map((node) => node.id)}
-        />
+        <>
+          <CanvasWorkflowControls
+            workflow={workflow}
+            allNodeIds={state.draft.nodes
+              .filter((node) => node.type !== "group")
+              .map((node) => node.id)}
+          />
+          {scope === "USER" && state.baseline.projectId && (
+            <SkillWorkflowControl
+              graph={state.draft}
+              canvasId={canvasId}
+              projectId={String(state.baseline.projectId)}
+              identity={identity}
+              enabled={
+                enabled && !save.recoveryPending && state.status !== "READ_ONLY"
+              }
+              onEdit={(graph) => save.updateDraft(graph, true)}
+              prepare={save.prepareGeneration}
+            />
+          )}
+        </>
       }
       canDeleteCanvas={!state.baseline.projectId}
       projectCanvas={!!state.baseline.projectId}

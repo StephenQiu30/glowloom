@@ -11,7 +11,6 @@ import (
 	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/creation/workspace/adapter/postgres"
 	media "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 
-	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -159,46 +158,46 @@ func NewBoundary(database *gorm.DB, model app.ModelCapability) *Boundary {
 }
 
 // AtomicTool executes a business tool in the transaction that owns its receipt.
-func (b *Boundary) AtomicTool(c *gin.Context, name string, in domain.CallInput) (domain.CallReceipt, error) {
+func (b *Boundary) AtomicTool(ctx context.Context, name string, in domain.CallInput) (domain.CallReceipt, error) {
 	if name == evidence.SearchTool {
-		return b.searchEvidence(c.Request.Context(), in)
+		return b.searchEvidence(ctx, in)
 	}
 	if name == "script_source_publish" {
-		return b.executeSourcePublication(c.Request.Context(), in)
+		return b.executeSourcePublication(ctx, in)
 	}
 	if name == "media_image_inspect" {
-		return b.executeMediaImage(c.Request.Context(), in)
+		return b.executeMediaImage(ctx, in)
 	}
 	if name == "media_reference_inspect" {
-		return b.executeMediaReference(c.Request.Context(), in)
+		return b.executeMediaReference(ctx, in)
 	}
 	if name == shotDeliveryCreateTool {
-		return b.executeShotDelivery(c.Request.Context(), in)
+		return b.executeShotDelivery(ctx, in)
 	}
 	if name == "canvas_commands" {
-		return b.executeCanvasCommands(c.Request.Context(), in)
+		return b.executeCanvasCommands(ctx, in)
 	}
 	if name == storyboardWriteTool {
-		return b.executeStoryboardWrite(c.Request.Context(), in)
+		return b.executeStoryboardWrite(ctx, in)
 	}
 	for _, binding := range b.bindings {
 		if binding.descriptor.Name != name {
 			continue
 		}
-		return b.Store.ExecuteAtomicTool(c.Request.Context(), name, in, func(tx *gorm.DB, s domain.Scope, key uuid.UUID) (domain.CallResult, error) {
+		return b.Store.ExecuteAtomicTool(ctx, name, in, func(tx *gorm.DB, s domain.Scope, key uuid.UUID) (domain.CallResult, error) {
 			if name == shotDeliveryProposeTool {
-				return b.proposeShotDelivery(c.Request.Context(), tx, s, key, in)
+				return b.proposeShotDelivery(ctx, tx, s, key, in)
 			}
 			if name == "operation_quote" {
-				return b.gatewayQuote(c.Request.Context(), tx, s, key, in)
+				return b.gatewayQuote(ctx, tx, s, key, in)
 			}
 			if name == "operation_propose" {
-				return b.proposeOperation(c.Request.Context(), tx, s, key, in)
+				return b.proposeOperation(ctx, tx, s, key, in)
 			}
 			if name == "operation_confirm" {
-				return b.confirmOperation(c.Request.Context(), tx, s, key, in)
+				return b.confirmOperation(ctx, tx, s, key, in)
 			}
-			out, err := binding.run(c.Request.Context(), tx, s, key, in.Input)
+			out, err := binding.run(ctx, tx, s, key, in.Input)
 			if err != nil {
 				return domain.CallResult{}, businessError(err)
 			}

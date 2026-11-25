@@ -10,7 +10,7 @@ type SkillInput struct {
 	Version     string            `json:"version"`
 	Description string            `json:"description"`
 	Body        string            `json:"body"`
-	Resources   map[string]string `json:"resources"`
+	Resources   map[string][]byte `json:"resources" swaggertype:"object,string"` // Base64 attachments by path
 }
 
 // SkillVersion is the safe metadata projection of a private immutable skill version.
@@ -26,8 +26,9 @@ type SkillVersion struct {
 // SkillContent contains a pinned skill resource and its version metadata.
 type SkillContent struct {
 	SkillVersion
-	ResourcePath string `json:"resource_path"`
-	Content      string `json:"content"`
+	ResourcePath string            `json:"resource_path"`
+	Content      []byte            `json:"content"`
+	Resources    map[string][]byte `json:"resources,omitempty"`
 }
 
 // SkillPin binds execution to an exact skill version and resource hash.

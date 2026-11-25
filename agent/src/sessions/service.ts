@@ -1,12 +1,17 @@
 import { randomUUID } from 'node:crypto';
 import type { Logger } from 'pino';
+import { z } from 'zod';
+import { loadPrivateSkills } from '../skills/run-skills.js';
 import {
   createBusinessMcpClient,
   type BusinessMcpConfig,
 } from '../business/mcp-client.js';
+import { canvasWorkflowSchema } from '../mastra/canvas-workflow.js';
+import { AgentError } from './errors.js';
 import type { AgentTeam } from '../mastra/runtime.js';
 import {
   filterToolsByAllowlist,
+  skillWorkspace,
   type SkillRegistry,
 } from '../skills/loader.js';
 import type { RunEventBus } from './event-bus.js';
@@ -68,10 +73,61 @@ export class SessionService implements AgentApplication {
   }
 
   async startRun(input: StartRunInput): Promise<Record<string, unknown>> {
+    const parsedWorkflow = canvasWorkflowSchema
+      .optional()
+      .safeParse(input.manifest.workflow);
+    if (!parsedWorkflow.success)
+      throw new AgentError(
+        'invalid_request',
+        parsedWorkflow.error.issues.map((issue) => issue.message).join(', '),
+      );
+    const graph = parsedWorkflow.data;
     const admitted = await this.options.store.admitRun(
       input,
       this.ownerId,
       this.options.leaseMs,
+      async (runId, submissionId) => {
+        const names = graph
+          ? [...new Set(graph.nodes.map((node) => node.skill))]
+          : z
+              .array(z.string())
+              .max(32)
+              .optional()
+              .parse(input.manifest.skill_names);
+        const [all, privateSkills] = await Promise.all([
+          this.options.skills.discover(),
+          loadPrivateSkills(
+            this.options.mcpConfig,
+            runId,
+            submissionId,
+            this.options.leaseMs,
+            input.manifest.skills,
+          ),
+        ]);
+        const selected =
+          names === undefined
+            ? privateSkills.length === 0
+              ? all
+              : []
+            : [...new Set(names)].map((name) => {
+                const skill =
+                  privateSkills.find((pkg) => pkg.name === name) ??
+                  all.find((pkg) => pkg.name === name);
+                if (!skill)
+                  throw new AgentError(
+                    'invalid_request',
+                    `Unknown Skill: ${name}`,
+                  );
+                return skill;
+              });
+        const packages = [
+          ...selected,
+          ...privateSkills.filter((pkg) => !selected.includes(pkg)),
+        ];
+        if (new Set(packages.map((pkg) => pkg.name)).size !== packages.length)
+          throw new Error('Duplicate Skill in run');
+        return packages;
+      },
     );
 
     if (!admitted.deduplicated) {
@@ -125,7 +181,11 @@ export class SessionService implements AgentApplication {
     limit?: number,
     before?: string,
     through?: string,
-  ): Promise<{ items: PublicMessageView[]; next_cursor?: string; through: string }> {
+  ): Promise<{
+    items: PublicMessageView[];
+    next_cursor?: string;
+    through: string;
+  }> {
     return this.options.store.listMessages(
       identity,
       runId,
@@ -148,7 +208,11 @@ export class SessionService implements AgentApplication {
   ): Promise<Record<string, unknown>> {
     const recorded = await this.options.store.recordDecision(input);
     if (recorded.deduplicated) {
-      return { decision_id: input.decisionId, applied: true, deduplicated: true };
+      return {
+        decision_id: input.decisionId,
+        applied: true,
+        deduplicated: true,
+      };
     }
 
     if (input.action === 'stop' || input.action === 'cancel') {
@@ -158,7 +222,11 @@ export class SessionService implements AgentApplication {
         root_run_id: input.runId,
         decision_id: input.decisionId,
       });
-      return { decision_id: input.decisionId, applied: true, status: 'cancelled' };
+      return {
+        decision_id: input.decisionId,
+        applied: true,
+        status: 'cancelled',
+      };
     }
 
     if (
@@ -265,13 +333,16 @@ export class SessionService implements AgentApplication {
   private async executeRun(runId: string, input: StartRunInput): Promise<void> {
     const controller = new AbortController();
     this.activeControllers.set(runId, controller);
-    const leaseTimer = setInterval(() => {
-      void this.options.store.renewLease(
-        runId,
-        this.ownerId,
-        this.options.leaseMs,
-      );
-    }, Math.max(2000, Math.floor(this.options.leaseMs / 3)));
+    const leaseTimer = setInterval(
+      () => {
+        void this.options.store.renewLease(
+          runId,
+          this.ownerId,
+          this.options.leaseMs,
+        );
+      },
+      Math.max(2000, Math.floor(this.options.leaseMs / 3)),
+    );
     leaseTimer.unref();
 
     const mcpClient = createBusinessMcpClient(this.options.mcpConfig, {
@@ -312,59 +383,120 @@ export class SessionService implements AgentApplication {
         }
       }
 
-      const selectedSkillNames = Array.isArray(input.manifest.skills)
-        ? input.manifest.skills.filter(
-            (s): s is string => typeof s === 'string',
-          )
-        : [];
-      const skillInstructions =
-        selectedSkillNames.length > 0
-          ? this.options.skills.composeInstructions(selectedSkillNames)
-          : undefined;
+      const packages = await this.options.store.skillsForRun(runId);
+      const workspace = await skillWorkspace(packages);
+      const explicitlySelected =
+        input.manifest.skill_names !== undefined ||
+        (Array.isArray(input.manifest.skills) &&
+          input.manifest.skills.length > 0);
+      const skillInstructions = explicitlySelected
+        ? packages.map((pkg) => pkg.instructions).join('\n\n')
+        : undefined;
 
-      let toolsets: Record<string, unknown> = {};
-      try {
-        const rawTools = await mcpClient.listTools();
-        if (selectedSkillNames.length > 0) {
-          const allowlist =
-            this.options.skills.resolveAllowedTools(selectedSkillNames);
-          toolsets = filterToolsByAllowlist(rawTools, allowlist);
-        } else {
-          toolsets = rawTools;
-        }
-      } catch (error: unknown) {
-        this.options.logger.debug(
-          {
-            runId,
-            err: error instanceof Error ? error.message : String(error),
-          },
-          'Go MCP tool discovery unavailable; continuing with core agent',
-        );
-      }
-
+      const graph = canvasWorkflowSchema
+        .optional()
+        .parse(input.manifest.workflow);
       const modelKey =
         typeof input.manifest.model_key === 'string'
           ? input.manifest.model_key
           : undefined;
-      const producer = await this.options.agentTeam.createScopedProducer(
-        {
-          actorId: input.identity.actorId,
-          orgId: input.identity.orgId ?? input.identity.actorId,
-          scopeId: input.identity.scopeId ?? input.identity.projectId,
-          projectId: input.identity.projectId,
-          runId,
-          ...(input.traceparent ? { traceparent: input.traceparent } : {}),
-        },
-        modelKey,
-        skillInstructions,
-      );
-
-      const response = await producer.generate(input.goal, {
-        maxSteps: 8,
-        ...(Object.keys(toolsets).length > 0 ? { toolsets: { glowloom: toolsets } as never } : {}),
+      const identity = {
+        actorId: input.identity.actorId,
+        orgId: input.identity.orgId ?? input.identity.actorId,
+        scopeId: input.identity.scopeId ?? input.identity.projectId,
+        projectId: input.identity.projectId,
+        runId,
+        ...(input.traceparent ? { traceparent: input.traceparent } : {}),
+      };
+      const rawTools = await mcpClient.listTools().catch((error) => {
+        this.options.logger.warn(
+          {
+            runId,
+            err: error instanceof Error ? error.message : String(error),
+          },
+          'Go MCP tool discovery unavailable',
+        );
+        return {};
       });
+      const assistantText = graph
+        ? await this.options.agentTeam.runCanvasWorkflow(
+            runId,
+            graph,
+            async (node, upstream, signal) => {
+              const skill = packages.find(
+                (candidate) => candidate.name === node.skill,
+              );
+              if (!skill)
+                throw new Error(`Pinned Skill unavailable: ${node.skill}`);
+              const stage = await this.options.agentTeam.createScopedProducer(
+                identity,
+                modelKey,
+                `按以下技能完成当前画布步骤。输出该步骤的实际创作成果。以工具回执确认的状态描述真实执行结果。\n\n${skill.instructions}`,
+                await skillWorkspace([skill]),
+                true,
+              );
+              const toolsets = filterToolsByAllowlist(
+                rawTools,
+                skill.allowedTools,
+              );
+              const context = upstream.map((result) => ({
+                node: result.title,
+                content: result.text,
+              }));
+              const result = await stage.generate(
+                JSON.stringify({
+                  goal: input.goal,
+                  task: node.task,
+                  inputs: context,
+                }),
+                {
+                  maxSteps: 8,
+                  abortSignal: AbortSignal.any([controller.signal, signal]),
+                  ...(Object.keys(toolsets).length > 0
+                    ? { toolsets: { glowloom: toolsets } }
+                    : {}),
+                },
+              );
+              if (!result.text.trim())
+                throw new Error(
+                  `Workflow node produced no artifact: ${node.id}`,
+                );
+              await this.emitDurableEvent(runId, 'workflow.node.completed', {
+                root_run_id: runId,
+                node_id: node.id,
+                skill_digest: skill.digest,
+              });
+              return {
+                nodeId: node.id,
+                title: node.title,
+                skillDigest: skill.digest,
+                text: result.text,
+              };
+            },
+            controller.signal,
+          )
+        : ((
+            await (
+              await this.options.agentTeam.createScopedProducer(
+                identity,
+                modelKey,
+                skillInstructions,
+                workspace,
+              )
+            ).generate(input.goal, {
+              maxSteps: 8,
+              abortSignal: controller.signal,
+              toolsets: {
+                glowloom: explicitlySelected
+                  ? filterToolsByAllowlist(
+                      rawTools,
+                      packages.flatMap((pkg) => pkg.allowedTools),
+                    )
+                  : rawTools,
+              },
+            })
+          ).text ?? '');
 
-      const assistantText = response.text ?? '';
       const msg = await this.options.store.appendPublicMessage(
         runId,
         'assistant',
@@ -372,7 +504,7 @@ export class SessionService implements AgentApplication {
       );
       await this.emitDurableEvent(runId, 'message.completed', {
         root_run_id: runId,
-        message: msg,
+        message_parts: [msg],
       });
       await this.options.store.updateRunStatus(runId, 'completed');
       await this.emitDurableEvent(runId, 'run.completed', {

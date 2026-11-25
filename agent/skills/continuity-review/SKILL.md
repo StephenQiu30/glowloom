@@ -1,12 +1,7 @@
 ---
 name: continuity-review
 description: 监督层只读审校规范，检查剧情连贯性、主体引用覆盖率、服化道一致性与预算合规
-allowed_tools:
-  - script_get_event_graph
-  - script_get_episode
-  - bible_list_assets
-  - subject_list
-  - canvas_read_graph
+allowed-tools: script_get_event_graph script_get_episode bible_list_assets subject_list canvas_read_graph
 ---
 
 # Continuity Review Skill

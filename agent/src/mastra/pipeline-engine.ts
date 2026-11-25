@@ -1,6 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { resourceDirectory } from '../config.js';
 import { createStep, createWorkflow } from '@mastra/core/workflows';
 import { z } from 'zod';
 import { SkillRegistry } from '../skills/loader.js';
@@ -53,15 +53,19 @@ export type DynamicStageExecutor = (params: {
   decisionId?: string;
   previousOutputs: StageExecutionResult[];
   context: Record<string, unknown>;
-}) => Promise<Omit<StageExecutionResult, 'stageId' | 'role' | 'skill' | 'skillInstructionsInjected' | 'allowedTools'>>;
+}) => Promise<
+  Omit<
+    StageExecutionResult,
+    'stageId' | 'role' | 'skill' | 'skillInstructionsInjected' | 'allowedTools'
+  >
+>;
 
 export class PipelineRegistry {
   private readonly pipelines = new Map<string, PipelineDefinition>();
   private readonly dirs: string[];
 
   constructor(dirs?: string[]) {
-    const currentDir = path.dirname(fileURLToPath(import.meta.url));
-    const defaultDir = path.resolve(currentDir, '../../pipelines');
+    const defaultDir = resourceDirectory('pipelines');
     const extraDirs = (process.env.GLOWLOOM_AGENT_PIPELINES_DIRS ?? '')
       .split(',')
       .map((s) => s.trim())
@@ -88,7 +92,10 @@ export class PipelineRegistry {
   }
 
   register(definition: PipelineDefinition): void {
-    this.pipelines.set(definition.id, pipelineDefinitionSchema.parse(definition));
+    this.pipelines.set(
+      definition.id,
+      pipelineDefinitionSchema.parse(definition),
+    );
   }
 
   get(id: string): PipelineDefinition | undefined {
@@ -218,8 +225,7 @@ export function createDynamicPipelineWorkflow(options: {
             rejectedAtStage: currentStage.id,
           };
         }
-        const gateKey =
-          currentStage.approvalGate?.stageKey ?? currentStage.id;
+        const gateKey = currentStage.approvalGate?.stageKey ?? currentStage.id;
         approvals[gateKey] = resumeData.decisionId;
         approvedStageIds[currentStage.id] = resumeData.decisionId;
         setState({

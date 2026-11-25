@@ -1,10 +1,7 @@
 ---
 name: novel-to-event-graph
 description: 将长篇网文、TXT/DOCX 导入文本或故事梗概抽取为结构化章节事件图谱（Event Graph），防止多集改编吃书遗忘
-allowed_tools:
-  - script_get_event_graph
-  - script_upsert_event_graph
-  - bible_list_assets
+allowed-tools: script_get_event_graph script_upsert_event_graph bible_list_assets
 ---
 
 # Novel to Event Graph Skill

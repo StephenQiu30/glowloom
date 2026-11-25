@@ -1,11 +1,7 @@
 ---
 name: vertical-short-drama-script
 description: 面向 9:16 竖屏 AI 漫剧的强反转、黄金 3 秒钩子分集剧本编写规范
-allowed_tools:
-  - script_get_event_graph
-  - script_get_episode
-  - script_save_episode
-  - bible_list_assets
+allowed-tools: script_get_event_graph script_get_episode script_save_episode bible_list_assets
 ---
 
 # Vertical Short-Drama Script Skill

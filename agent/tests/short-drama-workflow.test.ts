@@ -79,7 +79,6 @@ describe('Zero-hardcoding Data-Driven Mastra Pipeline Engine & Dynamic SkillRegi
     skills.register({
       name: 'bgm-emotion-scoring',
       description: 'Dynamically registered BGM scoring skill',
-      tags: ['audio', 'short-drama'],
       allowedTools: ['media_estimate_quote', 'media_submit_tts'],
       instructions: 'Select emotional BGM cues aligned with scene beats.',
     });

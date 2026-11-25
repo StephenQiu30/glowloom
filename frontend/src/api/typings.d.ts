@@ -5522,6 +5522,7 @@ declare namespace API {
     description?: string;
     name?: string;
     request_id?: string;
+    /** Base64 attachments by path */
     resources?: Record<string, any>;
     skill_id?: string;
     version?: string;

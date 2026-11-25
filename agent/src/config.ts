@@ -1,4 +1,12 @@
+import { findPackageJSON } from 'node:module';
+import path from 'node:path';
 import { z } from 'zod';
+
+export function resourceDirectory(name: string): string {
+  const manifest = findPackageJSON('.', import.meta.url);
+  if (!manifest) throw new Error('Cannot locate Agent package');
+  return path.join(path.dirname(manifest), name);
+}
 
 const envSchema = z.object({
   GLOWLOOM_AGENT_HTTP_ADDR: z.string().default('0.0.0.0:4401'),
@@ -90,7 +98,9 @@ export function loadConfig(env: NodeJS.ProcessEnv): AgentConfig {
     leaseMs: parsed.GLOWLOOM_AGENT_LEASE_MS,
     recoveryPollMs: parsed.GLOWLOOM_AGENT_RECOVERY_POLL_MS,
     defaultModel: parsed.GLOWLOOM_AGENT_DEFAULT_MODEL,
-    ...(parsed.GLOWLOOM_REDIS_URL ? { redisUrl: parsed.GLOWLOOM_REDIS_URL } : {}),
+    ...(parsed.GLOWLOOM_REDIS_URL
+      ? { redisUrl: parsed.GLOWLOOM_REDIS_URL }
+      : {}),
     ...(hasLangfuse
       ? {
           langfuse: {

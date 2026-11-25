@@ -1,10 +1,7 @@
 ---
 name: script-breakdown
 description: 将创作者简报或原始小说文本拆解为结构化分集大纲、角色设定与场景清单
-allowed_tools:
-  - read_project_script
-  - read_project_bible
-  - update_project_script
+allowed-tools: read_project_script read_project_bible update_project_script
 ---
 
 # Script Breakdown Skill

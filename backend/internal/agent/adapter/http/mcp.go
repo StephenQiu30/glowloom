@@ -71,18 +71,27 @@ func (h *BusinessHandler) newOfficialMCPServer() *mcp.Server {
 					},
 				}, nil
 			}
-			if tool.Execute == nil {
-				return nil, errors.New("tool executor unavailable")
-			}
 			args := req.Params.Arguments
 			if len(args) == 0 {
 				args = json.RawMessage(`{}`)
 			}
 			callID := uuid.New()
-			if caller.runID != uuid.Nil {
-				callID = caller.runID
+			var result domain.CallResult
+			var execErr error
+			if h.atomicTool != nil {
+				_, grant, err := h.executionGrant(ctx, caller.runID, caller.scope)
+				if err != nil {
+					return nil, err
+				}
+				in := domain.CallInput{Grant: grant, Input: args,
+					Call: domain.CallIdentity{TaskID: caller.runID.String(), CallID: callID.String(), CheckpointID: grant.SubmissionID.String(), Attempt: 1, ContractVersion: tool.Descriptor.ContractVersion, InputHash: domain.Hash(args)}}
+				receipt, err := h.atomicTool(ctx, tool.Descriptor.Name, in)
+				result, execErr = receipt.CallResult, err
+			} else if h.store == nil && tool.Execute != nil {
+				result, execErr = tool.Execute(ctx, caller.scope, callID, args)
+			} else {
+				return nil, errors.New("tool executor unavailable")
 			}
-			result, execErr := tool.Execute(ctx, caller.scope, callID, args)
 			if execErr != nil {
 				return &mcp.CallToolResult{
 					IsError: true,

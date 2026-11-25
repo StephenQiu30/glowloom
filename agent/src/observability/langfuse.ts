@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { resourceDirectory } from '../config.js';
 import { Langfuse } from 'langfuse';
 import { LangfuseExporter } from '@mastra/langfuse';
 import type { Logger } from 'pino';
@@ -28,9 +28,7 @@ export class PromptRegistry {
     private readonly logger: Logger,
     promptsDir?: string,
   ) {
-    const currentDir = path.dirname(fileURLToPath(import.meta.url));
-    this.promptsDir =
-      promptsDir ?? path.resolve(currentDir, '../../prompts');
+    this.promptsDir = promptsDir ?? resourceDirectory('prompts');
     if (config) {
       this.client = new Langfuse({
         baseUrl: config.baseUrl,

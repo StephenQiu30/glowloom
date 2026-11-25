@@ -90,6 +90,7 @@ export const terminalStatuses = new Set([
   "completed",
   "failed",
   "stopped",
+  "cancelled",
   "rejected",
 ]);
 export function draftText(draft: PromptDraft) {

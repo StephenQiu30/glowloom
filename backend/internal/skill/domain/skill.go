@@ -3,15 +3,17 @@ package domain
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"path/filepath"
+	"path"
 	"regexp"
-	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"go.yaml.in/yaml/v3"
 )
 
 // Skill errors classify invalid packages and unavailable skill resources.
@@ -20,9 +22,10 @@ var (
 	ErrSkillPathTraversal = errors.New("path traversal detected in skill resource path")
 	ErrSkillNotFound      = errors.New("skill not found")
 	ErrSkillEmptyContent  = errors.New("skill SKILL.md cannot be empty")
+	ErrSkillMetadata      = errors.New("invalid SKILL.md frontmatter")
 )
 
-var skillNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{1,63}$`)
+var skillNamePattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
 // SkillPackage represents an immutable, versioned skill bundle.
 type SkillPackage struct {
@@ -31,14 +34,14 @@ type SkillPackage struct {
 	Version     string            `json:"version"`
 	Description string            `json:"description"`
 	SkillMD     string            `json:"skill_md"`
-	Resources   map[string]string `json:"resources,omitempty"` // relative_path -> text content
+	Resources   map[string][]byte `json:"resources,omitempty"` // relative path -> original bytes
 	Hash        string            `json:"hash"`
 	CreatedAt   time.Time         `json:"created_at"`
 }
 
 // NewSkillPackage constructs and validates a new SkillPackage, computing its cryptographic hash.
-func NewSkillPackage(name, version, description, skillMD string, resources map[string]string) (*SkillPackage, error) {
-	if !skillNamePattern.MatchString(name) {
+func NewSkillPackage(name, version, description, skillMD string, resources map[string][]byte) (*SkillPackage, error) {
+	if len(name) > 64 || !skillNamePattern.MatchString(name) {
 		return nil, fmt.Errorf("%w: %q", ErrSkillInvalidName, name)
 	}
 	if strings.TrimSpace(skillMD) == "" {
@@ -48,21 +51,45 @@ func NewSkillPackage(name, version, description, skillMD string, resources map[s
 		version = "1.0.0"
 	}
 
-	cleanResources := make(map[string]string, len(resources))
+	cleanResources := make(map[string][]byte, len(resources))
 	for relPath, content := range resources {
 		// Strict path traversal defense
-		cleaned := filepath.Clean(relPath)
-		if strings.HasPrefix(cleaned, "..") || filepath.IsAbs(cleaned) || strings.Contains(relPath, "../") || strings.Contains(relPath, `..\`) {
+		cleaned := path.Clean(relPath)
+		if cleaned != relPath || cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") || path.IsAbs(cleaned) || strings.ContainsAny(relPath, "\\\x00") || relPath == "SKILL.md" {
 			return nil, fmt.Errorf("%w: %q", ErrSkillPathTraversal, relPath)
 		}
 		cleanResources[cleaned] = content
+	}
+
+	if !utf8.ValidString(skillMD) || strings.ContainsRune(skillMD, 0) {
+		return nil, ErrSkillMetadata
+	}
+	lines := strings.Split(strings.ReplaceAll(skillMD, "\r\n", "\n"), "\n")
+	if lines[0] != "---" {
+		return nil, ErrSkillMetadata
+	}
+	end := 1
+	for end < len(lines) && lines[end] != "---" {
+		end++
+	}
+	var meta struct {
+		Name        string `yaml:"name"`
+		Description string `yaml:"description"`
+	}
+	if end == len(lines) || yaml.Unmarshal([]byte(strings.Join(lines[1:end], "\n")), &meta) != nil ||
+		meta.Name != name || strings.TrimSpace(meta.Description) == "" || utf8.RuneCountInString(meta.Description) > 1024 ||
+		strings.TrimSpace(strings.Join(lines[end+1:], "\n")) == "" {
+		return nil, ErrSkillMetadata
+	}
+	if description != "" && description != meta.Description {
+		return nil, ErrSkillMetadata
 	}
 
 	pkg := &SkillPackage{
 		ID:          uuid.New(),
 		Name:        name,
 		Version:     version,
-		Description: description,
+		Description: meta.Description,
 		SkillMD:     skillMD,
 		Resources:   cleanResources,
 		CreatedAt:   time.Now().UTC(),
@@ -74,18 +101,14 @@ func NewSkillPackage(name, version, description, skillMD string, resources map[s
 
 // ComputeHash generates a deterministic SHA256 checksum over the package contents.
 func (p *SkillPackage) ComputeHash() string {
-	resKeys := make([]string, 0, len(p.Resources))
-	for k := range p.Resources {
-		resKeys = append(resKeys, k)
-	}
-	sort.Strings(resKeys)
-
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "%s|%s|%s|%s|", p.Name, p.Version, p.Description, p.SkillMD)
-	for _, k := range resKeys {
-		fmt.Fprintf(&sb, "%s:%s|", k, p.Resources[k])
-	}
-
-	sum := sha256.Sum256([]byte(sb.String()))
+	// JSON object keys are sorted by the encoder and byte values are base64.
+	data, _ := json.Marshal(struct {
+		Name        string
+		Version     string
+		Description string
+		Body        string
+		Files       map[string][]byte
+	}{p.Name, p.Version, p.Description, p.SkillMD, p.Resources})
+	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
 }

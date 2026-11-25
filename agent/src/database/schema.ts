@@ -18,11 +18,23 @@ export interface ServiceSessionsTable {
   title: string;
   request_id: string;
   content_hash: string;
-  execution_revision: ColumnType<string, string | number | bigint, string | number | bigint>;
+  execution_revision: ColumnType<
+    string,
+    string | number | bigint,
+    string | number | bigint
+  >;
   created_at: ColumnType<Date, Date | string | undefined, never>;
-  last_input_at: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
+  last_input_at: ColumnType<
+    Date | null,
+    Date | string | null | undefined,
+    Date | string | null
+  >;
   pinned: ColumnType<boolean, boolean | undefined, boolean>;
-  archived_at: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
+  archived_at: ColumnType<
+    Date | null,
+    Date | string | null | undefined,
+    Date | string | null
+  >;
 }
 
 export interface ServiceRunsTable {
@@ -32,18 +44,31 @@ export interface ServiceRunsTable {
   content_hash: string;
   goal: string;
   manifest: Record<string, unknown>;
+  skill_revisions: string[];
   submission_id: string;
-  accepted_revision: ColumnType<string, string | number | bigint, string | number | bigint>;
+  accepted_revision: ColumnType<
+    string,
+    string | number | bigint,
+    string | number | bigint
+  >;
   status: RunStatus;
   lease_owner: string | null;
-  lease_until: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
+  lease_until: ColumnType<
+    Date | null,
+    Date | string | null | undefined,
+    Date | string | null
+  >;
   workflow_run_id: string | null;
   error_code: string | null;
   input: Record<string, unknown> | null;
   retry_of_run_id: string | null;
   created_at: ColumnType<Date, Date | string | undefined, never>;
   updated_at: ColumnType<Date, Date | string | undefined, Date | string>;
-  completed_at: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
+  completed_at: ColumnType<
+    Date | null,
+    Date | string | null | undefined,
+    Date | string | null
+  >;
 }
 
 export interface ServiceRunEventsTable {
@@ -81,10 +106,18 @@ export interface RecoveryBackoffTable {
   attempts: number;
   code: string | null;
   next_attempt_at: ColumnType<Date, Date | string | undefined, Date | string>;
-  parked_at: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
+  parked_at: ColumnType<
+    Date | null,
+    Date | string | null | undefined,
+    Date | string | null
+  >;
 }
 
 export interface AgentDatabase {
+  'agent.skill_revisions': {
+    digest: string;
+    bundle: ColumnType<unknown, string, never>;
+  };
   'agent.service_sessions': ServiceSessionsTable;
   'agent.service_runs': ServiceRunsTable;
   'agent.service_run_events': ServiceRunEventsTable;

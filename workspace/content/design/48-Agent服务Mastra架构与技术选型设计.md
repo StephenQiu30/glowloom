@@ -174,6 +174,8 @@ flowchart LR
 3. **声明式 Skill 与安全边界**：
    - Skill 由声明式指令（`SKILL.md` / Langfuse Prompt 片段）+ 允许绑定的 MCP 工具白名单 + 可选 Workflow 模板组成，按任务意图动态装配。
    - `agent/` 容器内**禁止执行任何动态代码或第三方脚本**；所有写操作、媒体处理与外部集成统一经 Go MCP 走受控执行器。
+   - 内置包和由 `GLOWLOOM_AGENT_SKILLS_DIRS` 挂载的可信目录在受理时发现，保留完整原始字节。私有发布版本由 Go 按项目授权加载。Agent 按内容摘要挂载只读 Mastra Workspace，正文与附件一起固定。重提同一请求及从原运行重试时复用已固定的内容。
+   - 运行及版本保存在 `agent` schema。画布流程会固定提交的节点、连线和画布来源修订，每个节点绑定 Skill 摘要并记录完成事件。
 
 ### 7.7 可观测性、Prompt 治理与双轨 Evals（已确认）
 

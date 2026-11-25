@@ -60,9 +60,8 @@ export interface RunView {
     through: string;
   };
   events: Array<{
-    id: string;
-    event: string;
-    data: Record<string, unknown>;
+    event_type: string;
+    payload: Record<string, unknown>;
   }>;
 }
 
@@ -136,7 +135,11 @@ export interface AgentApplication {
     limit?: number,
     before?: string,
     through?: string,
-  ): Promise<{ items: PublicMessageView[]; next_cursor?: string; through: string }>;
+  ): Promise<{
+    items: PublicMessageView[];
+    next_cursor?: string;
+    through: string;
+  }>;
   getMessage(
     identity: Identity,
     runId: string,

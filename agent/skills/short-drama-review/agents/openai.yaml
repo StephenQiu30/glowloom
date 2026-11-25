@@ -1,0 +1,4 @@
+interface:
+  display_name: "短剧审查"
+  short_description: "按软门禁分级审查原著拆解、大纲、剧本、视觉设定、连戏、提示词与成片并给出实据"
+  default_prompt: "使用 $short-drama-review 审查我指定的短剧稿件、提示词或成片素材，给出位置明确、有凭有据的结论与返修建议。"

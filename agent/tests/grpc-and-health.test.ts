@@ -117,13 +117,17 @@ describe('AgentRuntime strongly-typed gRPC and minimal HTTP health servers', () 
         manifest: {},
         execution_available: true,
         state: { status: 'completed', execution_revision: 1 },
-        snapshot_cursor: '1',
+        snapshot_cursor: '1:0',
         messages_page: { items: [], through: '1' },
         events: [],
       };
     },
     async getCurrentSubmission() {
-      return { active_run: null, latest_accepted: null, unresolved_run_ids: [] };
+      return {
+        active_run: null,
+        latest_accepted: null,
+        unresolved_run_ids: [],
+      };
     },
     async getSubmission() {
       return { root_run_id: 'run-1' };
@@ -145,7 +149,10 @@ describe('AgentRuntime strongly-typed gRPC and minimal HTTP health servers', () 
     async applyDecision(input) {
       return { decision_id: input.decisionId, applied: true };
     },
-    async listRunEventsAfter(_id, runId): Promise<{
+    async listRunEventsAfter(
+      _id,
+      runId,
+    ): Promise<{
       events: RunEvent[];
       terminal: boolean;
     }> {
@@ -207,42 +214,56 @@ describe('AgentRuntime strongly-typed gRPC and minimal HTTP health servers', () 
       CreateSession(
         req: Record<string, unknown>,
         md: grpc.Metadata,
-        cb: (err: grpc.ServiceError | null, res?: { status_code: number; payload_json: Buffer }) => void,
+        cb: (
+          err: grpc.ServiceError | null,
+          res?: { status_code: number; payload_json: Buffer },
+        ) => void,
       ): void;
       StreamRunEvents(
         req: Record<string, unknown>,
         md: grpc.Metadata,
-      ): grpc.ClientReadableStream<{ id: string; event: string; data_json: Buffer }>;
+      ): grpc.ClientReadableStream<{
+        id: string;
+        event: string;
+        data_json: Buffer;
+      }>;
       close(): void;
     };
 
     try {
-      const unauthErr = await new Promise<grpc.ServiceError | null>((resolve) => {
-        client.CreateSession(
-          { identity: { actor_id: 'a', project_id: 'p' }, request_id: 'r1', title: 'T' },
-          new grpc.Metadata(),
-          (err) => resolve(err),
-        );
-      });
+      const unauthErr = await new Promise<grpc.ServiceError | null>(
+        (resolve) => {
+          client.CreateSession(
+            {
+              identity: { actor_id: 'a', project_id: 'p' },
+              request_id: 'r1',
+              title: 'T',
+            },
+            new grpc.Metadata(),
+            (err) => resolve(err),
+          );
+        },
+      );
       expect(unauthErr?.code).toBe(grpc.status.UNAUTHENTICATED);
 
       const md = new grpc.Metadata();
       md.set('authorization', `Bearer ${serviceToken}`);
       md.set('x-agent-audience', 'agent');
 
-      const created = await new Promise<{ status_code: number; payload_json: Buffer }>(
-        (resolve, reject) => {
-          client.CreateSession(
-            {
-              identity: { actor_id: 'actor-1', project_id: 'proj-1' },
-              request_id: 'req-1',
-              title: 'Episode 1',
-            },
-            md,
-            (err, res) => (err || !res ? reject(err) : resolve(res)),
-          );
-        },
-      );
+      const created = await new Promise<{
+        status_code: number;
+        payload_json: Buffer;
+      }>((resolve, reject) => {
+        client.CreateSession(
+          {
+            identity: { actor_id: 'actor-1', project_id: 'proj-1' },
+            request_id: 'req-1',
+            title: 'Episode 1',
+          },
+          md,
+          (err, res) => (err || !res ? reject(err) : resolve(res)),
+        );
+      });
       expect(created.status_code).toBe(200);
       expect(JSON.parse(created.payload_json.toString('utf8')).title).toBe(
         'Episode 1',

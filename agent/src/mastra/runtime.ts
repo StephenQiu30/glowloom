@@ -1,5 +1,10 @@
 import { Mastra } from '@mastra/core';
 import { Agent } from '@mastra/core/agent';
+import {
+  createCanvasWorkflow,
+  type CanvasStageRunner,
+  type CanvasWorkflow,
+} from './canvas-workflow.js';
 import type { MastraModelConfig } from '@mastra/core/llm';
 import { Memory } from '@mastra/memory';
 import type { PostgresStore } from '@mastra/pg';
@@ -11,6 +16,7 @@ import {
 } from '../business/gateway-provider.js';
 import type { PromptRegistry } from '../observability/langfuse.js';
 import { SkillRegistry } from '../skills/loader.js';
+import type { Workspace } from '@mastra/core/workspace';
 import {
   createDynamicPipelineWorkflow,
   PipelineRegistry,
@@ -37,10 +43,18 @@ export interface AgentTeam {
   assetDirector: Agent;
   production: Agent;
   continuityReviewer: Agent;
+  runCanvasWorkflow(
+    runId: string,
+    graph: CanvasWorkflow,
+    execute: CanvasStageRunner,
+    signal: AbortSignal,
+  ): Promise<string>;
   createScopedProducer(
     identity: RunIdentityHeaders,
     modelKey?: string,
     extraInstructions?: string,
+    workspace?: Workspace,
+    stageOnly?: boolean,
   ): Promise<Agent>;
 }
 
@@ -157,22 +171,60 @@ export async function createMastraRuntime(
     assetDirector,
     production,
     continuityReviewer,
+    async runCanvasWorkflow(runId, graph, execute, signal) {
+      const workflow = createCanvasWorkflow(execute);
+      // The closure is scoped to this invocation. The registered workflow
+      // definitions and unrelated agents cannot observe its tools or skills.
+      workflow.__registerMastra(mastra);
+      const run = await workflow.createRun({ runId });
+      const cancel = () => {
+        void run.cancel().catch(() => undefined);
+      };
+      signal.throwIfAborted();
+      signal.addEventListener('abort', cancel, { once: true });
+      try {
+        const outcome = await run.start({ inputData: { runId, graph } });
+        signal.throwIfAborted();
+        if (outcome.status !== 'success') {
+          throw new Error(`Canvas workflow ended with ${outcome.status}`);
+        }
+        return outcome.result.results
+          .map((result) => `## ${result.title}\n\n${result.text}`)
+          .join('\n\n');
+      } finally {
+        signal.removeEventListener('abort', cancel);
+      }
+    },
     async createScopedProducer(
       identity: RunIdentityHeaders,
       modelKey?: string,
       extraInstructions?: string,
+      workspace?: Workspace,
+      stageOnly?: boolean,
     ): Promise<Agent> {
       const basePrompt = await options.prompts.resolve('producer');
       const instructions = extraInstructions
         ? `${basePrompt}\n\n${extraInstructions}`
         : basePrompt;
       const scopedModel = modelFactory(identity, modelKey);
+      if (stageOnly) {
+        return new Agent({
+          id: 'workflow-stage',
+          name: 'Glowloom Workflow Stage',
+          model: scopedModel,
+          maxRetries: 0,
+          instructions: extraInstructions ?? basePrompt,
+          ...(workspace ? { workspace } : {}),
+        });
+      }
 
       const scopedScriptwriter = new Agent({
         id: 'scriptwriter',
         name: 'Glowloom ScriptAgent',
         instructions: await options.prompts.resolve('scriptwriter'),
         model: scopedModel,
+        maxRetries: 0,
+        ...(workspace ? { workspace } : {}),
         ...(memory ? { memory } : {}),
       });
       const scopedAssetDirector = new Agent({
@@ -180,6 +232,8 @@ export async function createMastraRuntime(
         name: 'Glowloom AssetDirectorAgent',
         instructions: await options.prompts.resolve('asset-director'),
         model: scopedModel,
+        maxRetries: 0,
+        ...(workspace ? { workspace } : {}),
         ...(memory ? { memory } : {}),
       });
       const scopedProduction = new Agent({
@@ -187,6 +241,8 @@ export async function createMastraRuntime(
         name: 'Glowloom ProductionAgent',
         instructions: await options.prompts.resolve('production'),
         model: scopedModel,
+        maxRetries: 0,
+        ...(workspace ? { workspace } : {}),
         ...(memory ? { memory } : {}),
       });
       const scopedReviewer = new Agent({
@@ -194,6 +250,8 @@ export async function createMastraRuntime(
         name: 'Glowloom ContinuityReviewerAgent',
         instructions: await options.prompts.resolve('continuity-reviewer'),
         model: scopedModel,
+        maxRetries: 0,
+        ...(workspace ? { workspace } : {}),
       });
 
       return new Agent({
@@ -201,13 +259,15 @@ export async function createMastraRuntime(
         name: 'Glowloom Producer',
         instructions,
         model: scopedModel,
+        maxRetries: 0,
+        ...(workspace ? { workspace } : {}),
         agents: {
           scriptwriter: scopedScriptwriter,
           assetDirector: scopedAssetDirector,
           production: scopedProduction,
           continuityReviewer: scopedReviewer,
         },
-        workflows: { creativeDeliveryWorkflow, dynamicPipelineWorkflow },
+        workflows: { creativeDeliveryWorkflow },
         ...(memory ? { memory } : {}),
       });
     },

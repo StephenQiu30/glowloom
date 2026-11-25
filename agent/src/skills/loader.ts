@@ -1,182 +1,261 @@
-import { readdir, readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { isUtf8 } from 'node:buffer';
+import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { validateSkillContent } from '@mastra/core/skills';
+import {
+  InMemoryBlobStore,
+  type SkillVersionTree,
+  type StorageBlobEntry,
+} from '@mastra/core/storage';
+import {
+  CompositeVersionedSkillSource,
+  Workspace,
+} from '@mastra/core/workspace';
+import { parse } from 'yaml';
+import { z } from 'zod';
+
+import { resourceDirectory } from '../config.js';
 
 export interface DeclarativeSkill {
   name: string;
   description: string;
-  role?: string;
-  version?: string;
-  tags: string[];
-  allowedTools: string[];
   instructions: string;
-  sourcePath?: string;
+  allowedTools: string[];
 }
 
-function parseFrontmatter(raw: string): {
-  meta: Record<string, string | string[]>;
-  body: string;
-} {
-  const match = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
-  if (!match) {
-    return { meta: {}, body: raw.trim() };
-  }
-  const yamlBlock = match[1] ?? '';
-  const body = (match[2] ?? '').trim();
-  const meta: Record<string, string | string[]> = {};
-  let currentArrayKey: string | undefined;
+const fileSchema = z.object({
+  blobHash: z.string().regex(/^[a-f0-9]{64}$/),
+  size: z.number().int().nonnegative(),
+  mimeType: z.string().optional(),
+  encoding: z.enum(['utf-8', 'base64']).optional(),
+});
 
-  for (const line of yamlBlock.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    if (trimmed.startsWith('- ') && currentArrayKey) {
-      const existing = meta[currentArrayKey];
-      if (Array.isArray(existing)) {
-        existing.push(trimmed.slice(2).trim());
+export const pinnedSkillSchema = z.object({
+  name: z.string(),
+  description: z.string(),
+  instructions: z.string(),
+  allowedTools: z.array(z.string()),
+  digest: z.string().regex(/^[a-f0-9]{64}$/),
+  tree: z.object({ entries: z.record(z.string(), fileSchema) }),
+  blobs: z.array(
+    z.object({
+      hash: z.string(),
+      content: z.string(),
+      size: z.number().int().nonnegative(),
+      mimeType: z.string().optional(),
+      createdAt: z.coerce.date(),
+    }),
+  ),
+});
+export type PinnedSkill = z.infer<typeof pinnedSkillSchema>;
+
+async function readPackage(directory: string) {
+  const files = new Map<string, Buffer>();
+  async function walk(relative: string) {
+    const entries = await readdir(path.join(directory, relative), {
+      withFileTypes: true,
+    });
+    for (const entry of entries) {
+      const file = path.posix.join(relative, entry.name);
+      if (entry.isDirectory()) {
+        await walk(file);
+      } else if (entry.isFile()) {
+        files.set(file, await readFile(path.join(directory, file)));
+      } else {
+        throw new Error(`Unsupported entry in Skill package: ${file}`);
       }
-      continue;
-    }
-    const colon = trimmed.indexOf(':');
-    if (colon <= 0) continue;
-    const key = trimmed.slice(0, colon).trim();
-    const value = trimmed.slice(colon + 1).trim();
-    if (value === '') {
-      meta[key] = [];
-      currentArrayKey = key;
-    } else {
-      meta[key] = value;
-      currentArrayKey = undefined;
     }
   }
-  return { meta, body };
+  await walk('');
+  return files;
 }
 
-async function scanSkillsDirectory(dir: string): Promise<DeclarativeSkill[]> {
-  let entries: string[];
-  try {
-    entries = await readdir(dir);
-  } catch {
-    return [];
+export function pinSkill(
+  name: string,
+  files: ReadonlyMap<string, Buffer>,
+): PinnedSkill {
+  const content = files.get('SKILL.md');
+  if (!content || !isUtf8(content) || content.includes(0))
+    throw new Error(`Missing or invalid UTF-8 SKILL.md: ${name}`);
+  const body = content.toString('utf8');
+  const validation = validateSkillContent({
+    content: body,
+    directoryName: name,
+  });
+  if (!validation.valid || !validation.instructions) {
+    throw new Error(`Invalid Skill ${name}: ${validation.errors.join(', ')}`);
   }
-
-  const found: DeclarativeSkill[] = [];
-  for (const entry of entries.sort()) {
-    const skillFile = path.join(dir, entry, 'SKILL.md');
-    try {
-      const raw = await readFile(skillFile, 'utf8');
-      const { meta, body } = parseFrontmatter(raw);
-      const name = typeof meta.name === 'string' ? meta.name : entry;
-      const description =
-        typeof meta.description === 'string' ? meta.description : '';
-      const allowedTools = Array.isArray(meta.allowed_tools)
-        ? meta.allowed_tools
-        : [];
-      const tags = Array.isArray(meta.tags) ? meta.tags : [];
-      found.push({
-        name,
-        description,
-        ...(typeof meta.role === 'string' ? { role: meta.role } : {}),
-        ...(typeof meta.version === 'string' ? { version: meta.version } : {}),
-        tags,
-        allowedTools,
-        instructions: body,
-        sourcePath: skillFile,
-      });
-    } catch {
-      // Ignore non-skill subdirectories.
+  const meta = z
+    .object({
+      name: z.string(),
+      description: z.string(),
+      'allowed-tools': z.union([z.string(), z.array(z.string())]).optional(),
+    })
+    .parse(
+      parse(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(body)?.[1] ?? ''),
+    );
+  const tools = meta['allowed-tools'];
+  const tree: PinnedSkill['tree'] = { entries: Object.create(null) };
+  const blobs = new Map<string, PinnedSkill['blobs'][number]>();
+  const identities = [];
+  for (const file of [...files.keys()].sort()) {
+    if (
+      file.startsWith('/') ||
+      file.includes('\\') ||
+      file.includes('\0') ||
+      file.split('/').some((part) => !part || part === '.' || part === '..')
+    ) {
+      throw new Error('Invalid Skill resource path');
     }
+    const data = files.get(file);
+    if (!data) throw new Error(`Missing Skill file: ${file}`);
+    const hash = createHash('sha256').update(data).digest('hex');
+    const encoding = isUtf8(data) && !data.includes(0) ? 'utf-8' : 'base64';
+    tree.entries[file] = { blobHash: hash, size: data.length, encoding };
+    blobs.set(hash, {
+      hash,
+      content: data.toString(encoding),
+      size: data.length,
+      createdAt: new Date(0),
+    });
+    identities.push([file, hash]);
   }
-  return found;
+  return {
+    name,
+    description: meta.description,
+    instructions: validation.instructions,
+    allowedTools:
+      typeof tools === 'string'
+        ? tools.split(/\s+/).filter(Boolean)
+        : (tools ?? []),
+    digest: createHash('sha256')
+      .update(JSON.stringify(identities))
+      .digest('hex'),
+    tree,
+    blobs: [...blobs.values()],
+  };
 }
 
-/**
- * Dynamic, hot-reloadable Skill registry modeled after BeefTV's SKILL.md plugin architecture.
- * Supports multiple skill roots (built-in + mounted/external directories) and runtime registration
- * with zero code changes or recompilation.
- */
+export async function skillWorkspace(
+  packages: readonly PinnedSkill[],
+): Promise<Workspace> {
+  const names = new Set<string>();
+  const blobs = new InMemoryBlobStore();
+  const entries = [];
+  for (const pkg of packages) {
+    if (names.has(pkg.name)) throw new Error(`Duplicate Skill: ${pkg.name}`);
+    names.add(pkg.name);
+    const tree: SkillVersionTree = { entries: Object.create(null) };
+    for (const [name, file] of Object.entries(pkg.tree.entries)) {
+      tree.entries[name] = {
+        blobHash: file.blobHash,
+        size: file.size,
+        ...(file.mimeType === undefined ? {} : { mimeType: file.mimeType }),
+        ...(file.encoding === undefined ? {} : { encoding: file.encoding }),
+      };
+    }
+    await blobs.putMany(
+      pkg.blobs.map((file): StorageBlobEntry => ({
+        ...file,
+        mimeType: file.mimeType ?? '',
+      })),
+    );
+    entries.push({ dirName: pkg.name, tree, versionCreatedAt: new Date(0) });
+  }
+  return new Workspace({
+    skills: ['/'],
+    skillSource: new CompositeVersionedSkillSource(entries, blobs),
+  });
+}
+
 export class SkillRegistry {
-  private readonly skills = new Map<string, DeclarativeSkill>();
-  private readonly dirs: string[];
+  private skills = new Map<string, DeclarativeSkill>();
+  private pending: Promise<PinnedSkill[]> | undefined;
+  constructor(
+    private readonly dirs = [
+      resourceDirectory('skills'),
+      ...(process.env.GLOWLOOM_AGENT_SKILLS_DIRS ?? '')
+        .split(',')
+        .map((dir) => dir.trim())
+        .filter(Boolean),
+    ],
+  ) {}
 
-  constructor(dirs?: string[]) {
-    const currentDir = path.dirname(fileURLToPath(import.meta.url));
-    const defaultDir = path.resolve(currentDir, '../../skills');
-    const extraEnvDirs = (process.env.GLOWLOOM_AGENT_SKILLS_DIRS ?? '')
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    this.dirs = dirs ?? [defaultDir, ...extraEnvDirs];
+  discover(): Promise<PinnedSkill[]> {
+    this.pending ??= this.scan().finally(() => {
+      this.pending = undefined;
+    });
+    return this.pending;
+  }
+
+  private async scan(): Promise<PinnedSkill[]> {
+    const packages = new Map<string, PinnedSkill>();
+    for (const dir of this.dirs) {
+      const entries = await readdir(dir, { withFileTypes: true });
+      for (const entry of entries.sort((a, b) =>
+        a.name.localeCompare(b.name),
+      )) {
+        if (entry.name.startsWith('.')) continue;
+        if (entry.isSymbolicLink())
+          throw new Error(`Unsupported Skill symlink: ${entry.name}`);
+        if (!entry.isDirectory()) continue;
+        const directory = path.join(dir, entry.name);
+        const contents = await readdir(directory, { withFileTypes: true });
+        if (!contents.some((file) => file.name === 'SKILL.md')) continue;
+        if (packages.has(entry.name))
+          throw new Error(`Duplicate Skill: ${entry.name}`);
+        packages.set(
+          entry.name,
+          pinSkill(entry.name, await readPackage(directory)),
+        );
+      }
+    }
+    return [...packages.values()];
   }
 
   async reload(): Promise<DeclarativeSkill[]> {
-    this.skills.clear();
-    for (const dir of this.dirs) {
-      const loaded = await scanSkillsDirectory(dir);
-      for (const skill of loaded) {
-        this.skills.set(skill.name, skill);
-      }
-    }
+    const packages = await this.discover();
+    this.skills = new Map(packages.map((pkg) => [pkg.name, pkg]));
     return this.list();
   }
-
   register(skill: DeclarativeSkill): void {
     this.skills.set(skill.name, skill);
   }
-
   get(name: string): DeclarativeSkill | undefined {
     return this.skills.get(name);
   }
-
   list(): DeclarativeSkill[] {
-    return Array.from(this.skills.values());
+    return [...this.skills.values()];
   }
-
-  resolveAllowedTools(skillNames: readonly string[]): string[] {
-    const allowed = new Set<string>();
-    for (const name of skillNames) {
-      const skill = this.skills.get(name);
-      if (!skill) continue;
-      for (const tool of skill.allowedTools) {
-        allowed.add(tool);
-      }
-    }
-    return Array.from(allowed);
+  resolveAllowedTools(names: readonly string[]): string[] {
+    return [
+      ...new Set(names.flatMap((name) => this.get(name)?.allowedTools ?? [])),
+    ];
   }
-
-  composeInstructions(skillNames: readonly string[]): string {
-    const sections: string[] = [];
-    for (const name of skillNames) {
-      const skill = this.skills.get(name);
-      if (!skill) continue;
-      sections.push(
-        `## Active Skill: ${skill.name}\n${skill.description ? `${skill.description}\n\n` : ''}${skill.instructions}`,
-      );
-    }
-    return sections.join('\n\n---\n\n');
+  composeInstructions(names: readonly string[]): string {
+    return names
+      .map((name) => this.get(name)?.instructions)
+      .filter(Boolean)
+      .join('\n\n');
   }
 }
 
-export async function loadDeclarativeSkills(
-  skillsDir?: string,
+export function loadDeclarativeSkills(
+  dir?: string,
 ): Promise<DeclarativeSkill[]> {
-  const registry = new SkillRegistry(skillsDir ? [skillsDir] : undefined);
-  return registry.reload();
+  return new SkillRegistry(dir ? [dir] : undefined).reload();
 }
 
-export function filterToolsByAllowlist<T extends Record<string, unknown>>(
-  tools: T,
+export function filterToolsByAllowlist<T>(
+  tools: Record<string, T>,
   allowedTools: readonly string[],
-): Partial<T> {
-  if (allowedTools.length === 0) {
-    return {};
-  }
+): Record<string, T> {
   const allowSet = new Set(allowedTools);
-  const filtered: Partial<T> = {};
-  for (const [key, value] of Object.entries(tools)) {
-    const bareName = key.includes('_') ? key.slice(key.indexOf('_') + 1) : key;
-    if (allowSet.has(key) || allowSet.has(bareName)) {
-      filtered[key as keyof T] = value as T[keyof T];
-    }
-  }
-  return filtered;
+  return Object.fromEntries(
+    Object.entries(tools).filter(
+      ([key]) =>
+        allowSet.has(key) || allowSet.has(key.replace(/^glowloom_/, '')),
+    ),
+  );
 }

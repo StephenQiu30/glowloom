@@ -178,7 +178,7 @@ func (s *Store) ReadSkill(ctx context.Context, g domain.Grant, id uuid.UUID, ver
 		if row.ResourceHash != hash {
 			return domain.ErrConflict
 		}
-		var bundleResources map[string]string
+		var bundleResources map[string][]byte
 		if json.Unmarshal(row.Resources, &bundleResources) != nil {
 			return domain.ErrInvalid
 		}
@@ -186,17 +186,15 @@ func (s *Store) ReadSkill(ctx context.Context, g domain.Grant, id uuid.UUID, ver
 		if err != nil || bundle.Hash != row.ResourceHash {
 			return domain.ErrConflict
 		}
-		out = domain.SkillContent{SkillVersion: domain.SkillVersion{SkillID: row.SkillID, Name: row.Name, Version: row.Version, Description: row.Description, ResourceHash: row.ResourceHash, Enabled: true}, ResourcePath: resource, Content: row.Body}
+		out = domain.SkillContent{SkillVersion: domain.SkillVersion{SkillID: row.SkillID, Name: row.Name, Version: row.Version, Description: row.Description, ResourceHash: row.ResourceHash, Enabled: true}, ResourcePath: resource, Content: []byte(row.Body)}
 		if resource != "" {
-			var resources map[string]string
-			if json.Unmarshal(row.Resources, &resources) != nil {
-				return domain.ErrInvalid
-			}
-			text, ok := resources[resource]
+			contents, ok := bundleResources[resource]
 			if !ok {
 				return domain.ErrNotFound
 			}
-			out.Content = text
+			out.Content = contents
+		} else {
+			out.Resources = bundleResources
 		}
 		return nil
 	})

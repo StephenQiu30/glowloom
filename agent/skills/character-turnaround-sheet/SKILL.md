@@ -1,14 +1,7 @@
 ---
 name: character-turnaround-sheet
 description: 为漫剧角色生成正/侧/背三视图与场景定妆图，并锁定主体库 subject_id 与专属 voice_id
-allowed_tools:
-  - bible_list_assets
-  - subject_list
-  - media_estimate_quote
-  - media_submit_image
-  - media_get_task
-  - subject_lock_reference
-  - voice_bind_character
+allowed-tools: bible_list_assets subject_list media_estimate_quote media_submit_image media_get_task subject_lock_reference voice_bind_character
 ---
 
 # Character Turnaround Sheet Skill

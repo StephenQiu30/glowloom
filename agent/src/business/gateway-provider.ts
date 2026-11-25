@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import type { MastraModelConfig } from '@mastra/core/llm';
 
 export interface RunIdentityHeaders {
@@ -13,13 +15,6 @@ export interface GatewayProviderConfig {
   businessOrigin: string;
   businessToken: string;
   defaultModel: string;
-}
-
-function normalizeModelId(raw: string): `${string}/${string}` {
-  if (raw.includes('/')) {
-    return raw as `${string}/${string}`;
-  }
-  return `openai/${raw}`;
 }
 
 export function createGatewayModel(
@@ -42,11 +37,15 @@ export function createGatewayModel(
     headers.traceparent = identity.traceparent;
   }
 
-  return {
-    id: normalizeModelId(modelKey ?? config.defaultModel),
-    url: `${config.businessOrigin}/internal/agent-gateway/v1`,
+  return createOpenAICompatible({
+    name: 'glowloom',
+    baseURL: `${config.businessOrigin}/internal/agent-gateway/v1`,
     apiKey: config.businessToken,
     headers,
-    api: 'chat',
-  };
+    fetch: (input, init) => {
+      const outgoing = new Headers(init?.headers);
+      outgoing.set('X-Glowloom-Call-Id', randomUUID());
+      return fetch(input, { ...init, headers: outgoing });
+    },
+  }).chatModel(modelKey ?? config.defaultModel);
 }

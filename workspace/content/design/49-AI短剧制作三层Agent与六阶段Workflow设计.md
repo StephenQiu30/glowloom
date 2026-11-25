@@ -78,6 +78,12 @@ flowchart LR
 
 存放于 `agent/skills/*/SKILL.md`：`novel-to-event-graph`、`vertical-short-drama-script`、`character-turnaround-sheet`、`grid-2x2-storyboard`、`i2v-motion-prompting`、`continuity-review`。
 
+### 7.5 可编辑的开源 Skill 模板
+
+[研究74](../research/74-2026-11-25-短剧开源Skill套件完整接入调研.md)中的两套模板可导入项目画布。模板实例是普通画布组，组内文本节点声明 Skill 名称及任务。用户可编辑、重组和连线，运行时以已保存的节点与连线为准。每个步骤读取固定版本的 Skill，并把直接依赖的结果传给下游。
+
+当前模板交付文本创作结果和节点回执。上游 Node 与 Python 脚本随包保存，确定性校验、媒体生产审批、项目实体写回和渲染需要接入独立执行器及业务回执。
+
 ## 8. 实施与验收
 
 验收标准见 [PRD35](../prd/35-AI短剧制作多Agent编排.md)，执行任务与验证命令见 [Plan44](../plan/44-AI短剧制作多Agent编排执行计划.md)。

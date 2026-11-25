@@ -1,11 +1,7 @@
 ---
 name: storyboard-production
 description: 根据已确认剧本生成分镜提案并在审批通过后提交单镜/批量渲染任务
-allowed_tools:
-  - read_project_script
-  - read_project_bible
-  - read_canvas_snapshot
-  - submit_storyboard_generation
+allowed-tools: read_project_script read_project_bible read_canvas_snapshot submit_storyboard_generation
 ---
 
 # Storyboard Production Skill

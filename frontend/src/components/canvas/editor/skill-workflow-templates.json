@@ -1,0 +1,126 @@
+[
+  {
+    "title": "小说改编与分镜",
+    "nodes": [
+      {
+        "skill": "novel-outline",
+        "title": "改编大纲",
+        "task": "依据原著整理改编大纲、角色、情节点、分集梗概及资产清单。",
+        "after": []
+      },
+      {
+        "skill": "novel-characters",
+        "title": "角色设定",
+        "task": "产出角色档案、造型与声音设定，区分固定锚点和剧情状态。",
+        "after": ["novel-outline"]
+      },
+      {
+        "skill": "character-refs",
+        "title": "角色参考",
+        "task": "设计角色正面锚点、派生视图、参考关系与逐项验收清单。",
+        "after": ["novel-characters"]
+      },
+      {
+        "skill": "novel-art",
+        "title": "场景与道具",
+        "task": "编制场景、道具、空间锚点、底板及各状态参考。",
+        "after": ["novel-outline", "novel-characters"]
+      },
+      {
+        "skill": "novel-script",
+        "title": "分集剧本",
+        "task": "依据大纲、角色与美术设定写出动作、对白、时长与台词册。",
+        "after": ["novel-outline", "novel-characters", "novel-art"]
+      },
+      {
+        "skill": "novel-staging",
+        "title": "开场站位",
+        "task": "为每场确定出场、姿态、位置和朝向，标记缺少场景图的推断。",
+        "after": ["novel-script", "novel-art"]
+      },
+      {
+        "skill": "novel-storyboard",
+        "title": "分镜与制作包",
+        "task": "按确认的站位组织分段、切镜、关键帧、台词、声音和输出批次。",
+        "after": ["novel-staging", "character-refs"]
+      }
+    ]
+  },
+  {
+    "title": "短剧创作与审查",
+    "nodes": [
+      {
+        "skill": "short-drama",
+        "title": "项目与视觉方向",
+        "task": "明确用户目标、集数、画幅、视觉方向和创作边界。",
+        "after": []
+      },
+      {
+        "skill": "short-drama-novel-analyze",
+        "title": "原著分析",
+        "task": "根据输入建立原著索引、伏笔与候选集，没有原著时注明。",
+        "after": ["short-drama"]
+      },
+      {
+        "skill": "short-drama-breakdown",
+        "title": "对标拆解",
+        "task": "依据提供的参考片和证据整理节奏与视听拆解，列出缺失材料。",
+        "after": ["short-drama"]
+      },
+      {
+        "skill": "short-drama-develop",
+        "title": "分集开发",
+        "task": "形成核心冲突、节奏与分集策略，保持来源可定位。",
+        "after": ["short-drama-novel-analyze", "short-drama-breakdown"]
+      },
+      {
+        "skill": "short-drama-write",
+        "title": "剧本",
+        "task": "生成剧本、对白和动作，注明重要台词及预计时长。",
+        "after": ["short-drama-develop"]
+      },
+      {
+        "skill": "short-drama-assets",
+        "title": "视觉设定",
+        "task": "提取人物、场景与道具，记录连戏锁及变体。",
+        "after": ["short-drama-write"]
+      },
+      {
+        "skill": "short-drama-image-prompts",
+        "title": "参考图提示词",
+        "task": "给人物、场景及道具整理参考图提示词与参照关系。",
+        "after": ["short-drama-assets"]
+      },
+      {
+        "skill": "short-drama-storyboard",
+        "title": "分镜与首帧",
+        "task": "分镜逐项关联剧本、视觉设定、出场内容和首帧。",
+        "after": ["short-drama-write", "short-drama-image-prompts"]
+      },
+      {
+        "skill": "short-drama-video-prompts",
+        "title": "镜头视频提示词",
+        "task": "逐镜或分组组织时序、镜头运动、音轨提示、挂图及首尾帧。",
+        "after": ["short-drama-storyboard"]
+      },
+      {
+        "skill": "short-drama-produce",
+        "title": "批次预览",
+        "task": "整理可执行的生成批次、参数、依赖和预检项。请求实际生产前需走正式业务授权。",
+        "after": ["short-drama-video-prompts", "short-drama-image-prompts"]
+      },
+      {
+        "skill": "short-drama-edit",
+        "title": "剪辑与字幕",
+        "task": "整理剪辑单、入出点和字幕对照。标明仍需取得的素材和渲染回执。",
+        "after": ["short-drama-produce", "short-drama-write"]
+      },
+      {
+        "skill": "short-drama-review",
+        "title": "交付审查",
+        "task": "用审查表列出证据、镜头、问题等级和修订要求，明确已审及缺少证据的项目。",
+        "after": ["short-drama-edit", "short-drama-video-prompts"]
+      }
+    ]
+  }
+]

@@ -1,0 +1,4 @@
+interface:
+  display_name: "短剧分镜"
+  short_description: "支持单场轻量起草或正式项目拆镜，输出调度清晰的分镜与首尾帧提示词"
+  default_prompt: "使用 $short-drama-storyboard 快速起草单场分镜，或把定稿剧本和视觉设定拆成正式分镜与首尾帧提示词。"
