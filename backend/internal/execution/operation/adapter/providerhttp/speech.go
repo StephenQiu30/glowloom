@@ -113,15 +113,21 @@ func (c *Client) submitSpeech(ctx context.Context, input application.GenerationR
 			"X-Control-Require-Usage-Tokens-Return": "*",
 		}).
 		SetBody(map[string]any{"req_params": map[string]any{"text": input.Prompt, "speaker": speaker, "audio_params": audio}}).
-		SetResponseBodyLimit(64 << 20).
+		SetResponseDoNotParse(true).
 		Post(endpoint)
 	if err != nil {
 		return unknownResult(), nil
 	}
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode() < 200 || response.StatusCode() >= 300 {
 		return application.GenerationResult{Outcome: application.ProviderOutcomeUnknown, ErrorCode: safeHTTPError(response.StatusCode())}, nil
 	}
-	data := response.Bytes()
+	// Keep transport read errors visible even if the final JSON value is complete.
+	const maxResponseBytes = 64 << 20
+	data, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
+	if err != nil || len(data) > maxResponseBytes {
+		return unknownResult(), nil
+	}
 	if strictTerminal {
 		if !strings.HasPrefix(strings.ToLower(response.Header().Get("Content-Type")), "text/event-stream") {
 			return unknownResult(), nil

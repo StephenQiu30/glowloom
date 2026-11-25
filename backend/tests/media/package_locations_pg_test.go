@@ -36,31 +36,42 @@ func packageLocationDB(t *testing.T) (*gorm.DB, *gorm.DB) {
 	if err != nil || (u.Hostname() != "127.0.0.1" && u.Hostname() != "localhost") || !strings.HasPrefix(strings.TrimPrefix(u.Path, "/"), "glowloom_subject_storage_") {
 		t.Fatal("requires isolated loopback storage database")
 	}
-	owner, err := platformdb.Open(t.Context(), dsn, noop.NewTracerProvider())
+	admin, err := platformdb.Open(t.Context(), dsn, noop.NewTracerProvider())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = admin.Close() })
+	// Closed COS fixture servers can release their ports for reuse. Keep each
+	// test's immutable resource identities in its own database.
+	name := "glowloom_subject_storage_pkg_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	if err := admin.DB.Exec(`CREATE DATABASE ` + name + ` TEMPLATE template0`).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := admin.DB.WithContext(context.WithoutCancel(t.Context())).Exec(`DROP DATABASE ` + name + ` WITH (FORCE)`).Error; err != nil {
+			t.Error("remove exact package storage fixture", err)
+		}
+	})
+	u.Path = "/" + name
+	owner, err := platformdb.Open(t.Context(), u.String(), noop.NewTracerProvider())
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = owner.Close() })
-	var initialized bool
-	if err := owner.DB.Raw(`SELECT to_regclass('media.package_job') IS NOT NULL`).Scan(&initialized).Error; err != nil {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "db", "schema.sql"))
+	if err != nil {
 		t.Fatal(err)
 	}
-	if !initialized {
-		raw, err := os.ReadFile(filepath.Join("..", "..", "db", "schema.sql"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := owner.DB.Exec(string(raw)).Error; err != nil {
-			t.Fatal(err)
-		}
-		routes := pgmedia.NewStorageRoutes(owner.DB)
-		sha := strings.Repeat("c", 64)
-		if _, err := routes.ProveEmptyStorageDeployment(t.Context(), sha); err != nil {
-			t.Fatal(err)
-		}
-		if err := routes.FinalizeStorageSchema(t.Context(), sha); err != nil {
-			t.Fatal(err)
-		}
+	if err := owner.DB.Exec(string(raw)).Error; err != nil {
+		t.Fatal(err)
+	}
+	routes := pgmedia.NewStorageRoutes(owner.DB)
+	sha := strings.Repeat("c", 64)
+	if _, err := routes.ProveEmptyStorageDeployment(t.Context(), sha); err != nil {
+		t.Fatal(err)
+	}
+	if err := routes.FinalizeStorageSchema(t.Context(), sha); err != nil {
+		t.Fatal(err)
 	}
 	q := u.Query()
 	q.Set("options", "-c role=glowloom_app")
