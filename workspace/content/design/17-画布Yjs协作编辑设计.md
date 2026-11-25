@@ -57,7 +57,7 @@ flowchart LR
 
 画布编辑由外部 WebSocket 进入 Go。Go 调用协作运行时计算候选，在事务中接受后再投递。失败时沿原提交身份查证。内部调用绑定文档、epoch、writerTerm、基线 commitSeq、原提交身份和哈希。
 
-协作运行时位于 `canvas/`，使用 TypeScript、NestJS 与 Fastify。Compose 服务名为 `canvas`，Go 通过内部地址 `http://canvas:4400` 调用。前端从 `@glowloom/canvas` 的明确子路径消费共享模块，使用现有 HTTP、WebSocket 和 Yjs 数据合同。
+协作运行时位于 `canvas/`，使用 TypeScript、NestJS 与 Fastify。当前已运行基线为 Go 通过内部 HTTP 地址 `http://canvas:4400` 调用；按 [设计47 §7.4.2](47-Go模块化单体架构与RPC集成设计.md#742-go--canvas-rpc-合同glowloomcanvascanvasruntime)（2026-11-25 架构优化方向），Go 单体与 `canvas/` 之间的内部候选计算将演进为基于 Buf + Protobuf + gRPC 的强类型 RPC（Yjs 更新直接走二进制 `bytes`）。前端仍从 `@glowloom/canvas` 的明确子路径消费共享模块，使用现有 HTTP、WebSocket 和 Yjs 数据合同。
 
 | 位置 | 职责 |
 | --- | --- |

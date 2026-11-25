@@ -4,7 +4,7 @@
 
 ## 1. 摘要
 
-独立 `agent/` 使用 NestJS 装配依赖并承载内部 HTTP/SSE，选择官方 `FastifyAdapter`，复用现有 HTTP 配置与流式响应能力。会话应用仍调用官方 Pi Durable，PostgreSQL 保留既有 schema、角色和执行记录。Go 继续通过现有内部 HTTP 合同访问 Agent，并持有业务权威。
+独立 `agent/` 使用 NestJS 装配依赖并承载内部通信；当前已运行基线为官方 `FastifyAdapter` 的内部 HTTP/SSE，会话应用仍调用官方 Pi Durable，PostgreSQL 保留既有 schema、角色和执行记录。按 [设计47 §7.4.3](47-Go模块化单体架构与RPC集成设计.md#743-go--agent-双向-rpc-合同)（2026-11-25 架构优化方向），Go 单体与 `agent/` 之间的双向内部调用与事件流将演进为基于 Buf + Protobuf + gRPC（含 Server Streaming）的强类型 RPC，替代现有内部双向 OpenAPI 胶水；Go 仍持有业务权威，对外浏览器继续保留标准 SSE。
 
 ## 2. 参与者
 

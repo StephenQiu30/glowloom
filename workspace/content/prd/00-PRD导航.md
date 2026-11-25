@@ -2,11 +2,11 @@
 
 - [PRD20 统一AI网关增补](20-模型与供应商接入扩展.md#ai-gateway)：唯一来源设计33；全入口、三协议、框架、号池、计量与账单CASE-GW-01～08；本轮为文档合同，未实施。
 
+- [PRD33 Go模块化单体架构改造](33-Go模块化单体架构改造.md) · 唯一来源 [设计47](../design/47-Go模块化单体架构与RPC集成设计.md) · [Plan42](../plan/42-Go模块化单体架构改造执行计划.md)；覆盖 Go 单体收敛、Google Go 规范、Kafka 保留、开源组件替换与 Canvas/Agent gRPC（方案 A）集成。
+
 - [PRD32 通知中心与公告管理](32-通知中心与公告管理.md) · 唯一来源 [设计46](../design/46-通知中心与公告管理设计.md) · [Plan41](../plan/41-通知中心与公告管理执行计划.md)；顶部公告、5秒弹窗、本人收件箱、一键已读、管理筛选和启停。
 
-- [PRD30 Go微服务拆分](30-Go微服务拆分.md) · 唯一来源 [设计44](../design/44-Go微服务架构与技术选型设计.md) · [Plan39](../plan/39-Go微服务拆分执行计划.md)；四个业务服务＋轻量 Gateway 的渐进接受，区分首个无状态入口与业务域独立。
-
-- [PRD29 Workspace知识库与研发工作流](29-Workspace知识库与研发工作流.md) · 唯一来源 [设计43](../design/43-Workspace知识库与研发工作流服务设计.md) · [Plan38](../plan/38-Workspace知识库与研发工作流执行计划.md)；迁移、静态知识、Skill、工作流和朗读的15项产品接受，明确export／standalone交付边界。
+- [PRD31 Workspace官方Fumadocs](31-Workspace官方Fumadocs.md) · 唯一来源 [设计45](../design/45-Workspace官方Fumadocs设计.md) · [Plan40](../plan/40-Workspace官方Fumadocs执行计划.md)；已替代的历史 PRD（29、30）已清理删除，历史见 Git。
 
 - [PRD28 日志与创作经营分析](28-日志与创作经营分析.md) · 唯一来源 [设计42](../design/42-日志与创作经营分析设计.md) · [Plan37](../plan/37-日志与创作经营分析执行计划.md)
 

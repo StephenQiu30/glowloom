@@ -9,9 +9,9 @@ description: 项目知识按 requirement → design → prd → plan 维护当�
 
 通知中心与公告管理：[需求31](requirement/31-通知中心与公告管理需求.md) → [设计46](design/46-通知中心与公告管理设计.md) → [PRD32](prd/32-通知中心与公告管理.md) → [Plan41](plan/41-通知中心与公告管理执行计划.md)，事实见[研究57](research/57-2026-11-16-即梦通知中心拆解与设计核对.md)。覆盖顶部公告、5秒消息弹窗、Header一键已读、管理筛选和启停；实现与验证依据Plan41。
 
-Go 微服务架构：[需求29](requirement/29-Go微服务架构需求.md) → [设计44](design/44-Go微服务架构与技术选型设计.md) → [PRD30](prd/30-Go微服务拆分.md) → [Plan39](plan/39-Go微服务拆分执行计划.md)。覆盖已确认的四个 Go 业务边界及轻量入口、数据权限、恢复和 Google Go 工程门禁。
+Go 模块化单体架构：[需求32](requirement/32-Go模块化单体架构改造需求.md) → [设计47](design/47-Go模块化单体架构与RPC集成设计.md) → [PRD33](prd/33-Go模块化单体架构改造.md) → [Plan42](plan/42-Go模块化单体架构改造执行计划.md)。将 Go 后端收敛为遵循 Google Go 规范的模块化单体，保留 Kafka 异步解耦，采用开源稳定组件库，并与 Canvas / Agent 通过标准 gRPC（方案 A）通信。
 
-研发Workspace：[需求28](requirement/28-Workspace知识库与研发工作流需求.md) → [设计43](design/43-Workspace知识库与研发工作流服务设计.md) → [PRD29](prd/29-Workspace知识库与研发工作流.md) → [Plan38](plan/38-Workspace知识库与研发工作流执行计划.md)，依据见[Chat4j与静态知识库调研](research/55-2026-11-14-Chat4j与Workspace静态知识库调研.md)。
+Workspace 知识库：[需求30](requirement/30-Workspace官方Fumadocs接入需求.md) → [设计45](design/45-Workspace官方Fumadocs设计.md) → [PRD31](prd/31-Workspace官方Fumadocs.md) → [Plan40](plan/40-Workspace官方Fumadocs执行计划.md)。已替代的历史方案与一次性阶段验收记录已清理删除（历史可通过 Git 追溯），不干扰现行阅读与搜索上下文。
 
 日志与完整创作经营分析：[需求27](requirement/27-日志与创作经营分析需求.md) → [设计42](design/42-日志与创作经营分析设计.md) → [PRD28](prd/28-日志与创作经营分析.md) → [Plan37](plan/37-日志与创作经营分析执行计划.md)。
 
