@@ -232,7 +232,7 @@ it.skipIf(!dsn)(
     ).toEqual([]);
 
     const templateFile = new URL(
-      '../../frontend/src/components/canvas/editor/skill-workflow-templates.json',
+      '../../frontend/src/components/canvas/skill-workflow/skill-workflow-templates.json',
       import.meta.url,
     );
     const templates = z

@@ -20,18 +20,6 @@ export type CanvasEditorState = {
   viewport: ViewportTransform;
 };
 
-export function toCanvasContentGraph(
-  state: CanvasEditorState,
-  defaults: CanvasContract.CanvasDocumentGraphDTO,
-): CanvasContract.CanvasDocumentGraphDTO {
-  return {
-    ...toCanvasGraph(state),
-    viewport: defaults.viewport,
-    backgroundMode: defaults.backgroundMode,
-    showImageInfo: defaults.showImageInfo,
-  };
-}
-
 export function fromCanvasGraph(
   graph: CanvasContract.CanvasDocumentGraphDTO,
 ): CanvasEditorState {

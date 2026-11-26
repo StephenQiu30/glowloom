@@ -1,7 +1,12 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
-import { SkillWorkflowControl } from "@/components/canvas/editor/skill-workflow-control";
-import type { SkillWorkflow } from "@/components/canvas/editor/skill-workflow-graph";
+import { SkillWorkflowControl } from "@/components/canvas/skill-workflow/skill-workflow-control";
+import type { SkillWorkflow } from "@/components/canvas/skill-workflow/skill-workflow-graph";
+import {
+  serviceDocumentFromEditor,
+  serviceGraph,
+} from "@/components/canvas/service-graph";
+import type { YjsView } from "@/components/canvas/yjs-live-session";
 
 vi.mock("next/dynamic", () => ({
   default: () =>
@@ -11,40 +16,61 @@ vi.mock("next/dynamic", () => ({
 }));
 
 it("imports a starter into the draft and opens the saved graph for execution", async () => {
-  let draft: CanvasContract.CanvasDocumentGraphDTO = {
-    schemaVersion: 2,
-    nodes: [],
-    connections: [],
-  };
   const canvasId = "9f5cd35b-5041-4413-8755-b3f343d2c0b6";
   const projectId = "f083a17b-c878-4cbd-b0fc-d16a10f42dc3";
   const graphHash = "a".repeat(64);
+  const document: API.DocumentDTO = {
+    id: canvasId,
+    project_id: projectId,
+    name: "模板验收",
+    revision: "4",
+    schema_version: 1,
+    operation_version: 1,
+    permissions: { read: true, write: true },
+    nodes: [],
+    edges: [],
+  };
+  let draft = serviceGraph(document, canvasId, projectId);
   const prepare = vi.fn(async () => ({
-    canvasId,
-    projectId,
-    title: "模板验收",
-    revision: "5",
-    projectBindingRevision: "1",
-    commitSeq: "2",
-    schemaVersion: 2,
-    epoch: "d581af59-afaf-4391-aa3b-4ca0dae7e999",
-    graph: { ...draft, connections: [] },
+    document: {
+      ...serviceDocumentFromEditor(document, { ...draft, connections: [] }),
+      revision: "5",
+    },
     graphHash,
-    access: { read: true, edit: true, manage: true },
-    createdAt: "",
-    updatedAt: "",
   }));
+  const client = {
+    getSnapshot: (): YjsView => ({
+      document: draft,
+      dto: document,
+      connected: true,
+      writable: true,
+      dirty: false,
+      migration: false,
+      recovery: [],
+      recoveryRemaining: 0,
+      inputDrafts: {},
+      unsafeToLeave: false,
+      localPersistence: "MEMORY",
+      message: "",
+      phase: "已保存",
+      canUndo: false,
+      canRedo: false,
+    }),
+    canAcceptConnectionGraph: () => true,
+    change: (graph: typeof draft) => {
+      draft = graph;
+    },
+    waitForSavedSnapshot: prepare,
+  };
   const view = () => (
     <SkillWorkflowControl
+      client={client}
       graph={draft}
       canvasId={canvasId}
       projectId={projectId}
       identity="owner"
       enabled
-      onEdit={(graph) => {
-        draft = graph;
-      }}
-      prepare={prepare}
+      saved
     />
   );
   const { rerender } = render(view());

@@ -4,11 +4,6 @@ import type { CanvasGenerationProjection } from "../lib/canvas-generation-projec
 import type { CanvasPendingForms } from "./canvas-recovery.ts";
 import type { NodeTextBinding } from "@glowloom/canvas/model";
 
-export type CanvasPreparedDocument = CanvasContract.CanvasVO & {
-  epoch: string;
-  commitSeq: string;
-};
-
 export type CanvasDocumentIntegration = {
   presenceOverlay?: ReactNode;
   onOpenAssistant?: () => void;

@@ -20,7 +20,7 @@ describe('canvas Skill execution', () => {
   it('discovers every packaged stage and reads the original reference, script, and image', async () => {
     const templateFile = path.resolve(
       resourceDirectory('skills'),
-      '../../frontend/src/components/canvas/editor/skill-workflow-templates.json',
+      '../../frontend/src/components/canvas/skill-workflow/skill-workflow-templates.json',
     );
     const templates = canvasWorkflowSchema.array().parse(
       JSON.parse(await readFile(templateFile, 'utf8')).map(

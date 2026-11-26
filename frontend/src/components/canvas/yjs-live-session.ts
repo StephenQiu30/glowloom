@@ -1013,7 +1013,13 @@ export class CanvasYjsLiveSession {
     return { canvas_id: this.config.canvasID, node_id: nodeID, revision };
   };
 
-  waitForSaved = (check: () => void = () => {}): Promise<API.DocumentDTO> => {
+  waitForSaved = async (check?: () => void): Promise<API.DocumentDTO> => {
+    return (await this.waitForSavedSnapshot(check)).document;
+  };
+
+  waitForSavedSnapshot = (
+    check: () => void = () => {},
+  ): Promise<{ document: API.DocumentDTO; graphHash: string }> => {
     return new Promise((resolve, reject) => {
       let finished = false;
       let requestedRevision = "";
@@ -1024,13 +1030,15 @@ export class CanvasYjsLiveSession {
         () => finish(problem("保存尚未确认，请稍后重试")),
         15000,
       );
-      const finish = (error?: Error, dto?: API.DocumentDTO) => {
+      const finish = (
+        result: Error | { document: API.DocumentDTO; graphHash: string },
+      ) => {
         if (finished) return;
         finished = true;
         clearTimeout(timer);
         unsubscribe();
-        if (error) reject(error);
-        else resolve(structuredClone(dto!));
+        if (result instanceof Error) reject(result);
+        else resolve(result);
       };
       const inspect = () => {
         try {
@@ -1057,10 +1065,11 @@ export class CanvasYjsLiveSession {
             throw problem("请先完成或恢复当前画布编辑，再开始生成");
           if (session.status !== "CLEAN" || session.inFlight || this.draining)
             return;
-          if (this.dto?.revision === session.confirmed.contentRevision) {
-            finish(undefined, this.dto);
-          } else if (requestedRevision !== session.confirmed.contentRevision) {
-            requestedRevision = session.confirmed.contentRevision;
+          const { contentRevision, graphHash } = session.confirmed;
+          if (this.dto && this.dto.revision === contentRevision) {
+            finish({ document: structuredClone(this.dto), graphHash });
+          } else if (requestedRevision !== contentRevision) {
+            requestedRevision = contentRevision;
             this.socket?.send(JSON.stringify({ type: "sync" }));
           }
         } catch (error) {

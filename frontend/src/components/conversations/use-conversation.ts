@@ -56,7 +56,7 @@ export interface ConversationOptions {
   independent?: boolean;
   initialDraft?: PromptDraft;
   goalContract?: API.GoalContract;
-  workflow?: import("@/components/canvas/editor/skill-workflow-graph").SkillWorkflow;
+  workflow?: import("@/components/canvas/skill-workflow/skill-workflow-graph").SkillWorkflow;
   onDraftChange?: (draft: PromptDraft) => void;
   onAccepted?: (sessionID: string) => void;
 }

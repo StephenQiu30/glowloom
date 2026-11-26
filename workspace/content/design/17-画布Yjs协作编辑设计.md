@@ -57,19 +57,19 @@ flowchart LR
 
 画布编辑由外部 WebSocket 进入 Go。Go 调用协作运行时计算候选，在事务中接受后再投递。失败时沿原提交身份查证。内部调用绑定文档、epoch、writerTerm、基线 commitSeq、原提交身份和哈希。
 
-协作运行时位于 `canvas/`，使用 TypeScript、NestJS 与 Fastify。当前已运行基线为 Go 通过内部 HTTP 地址 `http://canvas:4400` 调用；按 [设计47 §7.4.2](47-Go模块化单体架构与RPC集成设计.md#742-go--canvas-rpc-合同glowloomcanvascanvasruntime)（2026-11-25 架构优化方向），Go 单体与 `canvas/` 之间的内部候选计算将演进为基于 Buf + Protobuf + gRPC 的强类型 RPC（Yjs 更新直接走二进制 `bytes`）。前端仍从 `@glowloom/canvas` 的明确子路径消费共享模块，使用现有 HTTP、WebSocket 和 Yjs 数据合同。
+协作运行时独立部署于 `canvas/`。Compose 中 Go 通过 `grpc://canvas:4402` 计算候选，`canvas:4400` 提供健康检查及内部 HTTP 兼容接口。强类型字段及二进制传输的目标见[设计47 §7.4.2](47-Go模块化单体架构与RPC集成设计.md#742-go--canvas-rpc-合同glowloomcanvascanvasruntime)。frontend 从 `@glowloom/canvas` 的明确子路径消费共享模块，浏览器继续使用现有 HTTP、WebSocket 和 Yjs 数据合同。
 
 | 位置 | 职责 |
 | --- | --- |
 | `canvas/src/server.ts` | 进程入口，读取配置、监听并响应关闭信号 |
-| `canvas/src/http/` | Nest 装配、服务身份、请求限额与路由 |
+| `canvas/src/transport/` | Nest HTTP、gRPC、服务身份及请求限额 |
 | `canvas/src/runtime/` | 候选计算、更新准入、提交状态和内部命令 |
 | `canvas/src/document/` | Yjs 文档模型、共享根、富文本 Schema 和投影 |
 | `canvas/src/collaboration/` | 会话、日志、意图和重连恢复 |
 | `canvas/src/protocol/` | 二进制和分帧编解码 |
 | `canvas/types/` | 包导出所用的共享 TypeScript 声明 |
 
-私有 HTTP 依赖运行时。运行时和浏览器会话分别复用文档与编解码。共享包导出只包含浏览器可用的模块。目录规范见 [Canvas 工程规范](../../../canvas/AGENTS.md)。
+私有 HTTP 和 gRPC 共用候选运行时。运行时和浏览器会话分别复用文档与编解码。共享包导出只包含浏览器可用的模块。目录规范见 [Canvas 工程规范](../../../canvas/AGENTS.md)。
 
 浏览器编辑器源码归属见[设计10 §7.1.1](10-画布交互设计.md#711-编辑器源码归属src-can-162026-11-16-已确认)。SRC-CAN-17 的 SQLite/写放大调研见[存储评估](../research/58-2026-11-16-画布存储压力与SQLite适配评估.md)；当前持久权威和接受事务不变，增量/检查点优化尚为建议，不能把本地落盘作为团队已保存。
 

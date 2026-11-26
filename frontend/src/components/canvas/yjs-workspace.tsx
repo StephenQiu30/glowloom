@@ -20,6 +20,7 @@ import { canvasAudioCatalogAcceptsSubjects } from "@/components/canvas-editor/li
 import type { CanvasNodeData } from "@/components/canvas-editor/types/canvas.ts";
 import type { CanvasClipboard } from "@/components/canvas-editor/lib/canvas-clipboard.ts";
 import { CanvasYjsLiveSession } from "./yjs-live-session";
+import { SkillWorkflowControl } from "./skill-workflow/skill-workflow-control";
 import { CanvasGenerationPanel } from "@/components/canvas-editor/nodes/canvas-generation-panel.tsx";
 import { CanvasOperationStatus } from "@/components/canvas-editor/nodes/canvas-operation-status.tsx";
 import { useCanvasOperationTasks } from "./hooks/use-canvas-operation-tasks";
@@ -334,7 +335,8 @@ function CollaborativeEditor({
     },
     [client, projectID, canvasID, completeTask],
   );
-  if (!view.document || !view.dto)
+  const { document: graph, dto } = view;
+  if (!graph || !dto)
     return (
       <CanvasConnectionState
         message={view.message}
@@ -342,14 +344,14 @@ function CollaborativeEditor({
         scopeControl={<SpaceSwitcher compact />}
       />
     );
-  const ordinaryCanvas = view.dto.kind !== "short_drama";
+  const ordinaryCanvas = dto.kind !== "short_drama";
   const conversationOpen = workbench?.open && workbench.assistantOnly;
   return (
     <CanvasMediaContext.Provider
       value={{
         canvasId: canvasID,
         projectId: projectID,
-        bindingRevision: view.dto.revision!,
+        bindingRevision: dto.revision!,
       }}
     >
       <div className="canvas-workspace relative h-dvh">
@@ -381,7 +383,7 @@ function CollaborativeEditor({
             documentIntegration={{
               projectId: projectID,
               getDocumentEpoch: client.getDocumentEpoch,
-              initialState: view.document,
+              initialState: graph,
               viewStateKey: canvasViewKey(
                 actorID,
                 scopeID,
@@ -391,7 +393,7 @@ function CollaborativeEditor({
               mediaContext: {
                 canvasId: canvasID,
                 projectId: projectID,
-                bindingRevision: view.dto.revision!,
+                bindingRevision: dto.revision!,
               },
               mediaEnabled: true,
               assistantOpen: ordinaryCanvas ? !!conversationOpen : undefined,
@@ -413,7 +415,7 @@ function CollaborativeEditor({
                   <StoryboardNodePreview
                     projectID={projectID}
                     storyboard={
-                      view.document?.nodes.find((node) => node.id === nodeID)
+                      graph.nodes.find((node) => node.id === nodeID)
                         ?.serviceData?.config?.storyboard
                     }
                     onOpen={() => openWorkbench("shots")}
@@ -480,7 +482,7 @@ function CollaborativeEditor({
                   {...controls}
                   canvasID={canvasID}
                   projectID={projectID}
-                  title={view.dto!.name ?? "画布"}
+                  title={dto.name ?? "画布"}
                   canDeleteCanvas={false}
                   canRenameCanvas={view.writable && !view.dirty}
                   canSwitchCanvas={!view.unsafeToLeave}
@@ -492,35 +494,51 @@ function CollaborativeEditor({
                   onDeleteProject={() => {}}
                   onRenameProject={() => void openRename()}
                   workflowControl={
-                    ordinaryCanvas ? (
-                      <div
-                        role="group"
-                        aria-label="画布视图"
-                        className="flex shrink-0 items-center gap-1"
-                      >
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          className="hidden sm:inline-flex"
-                          aria-current="page"
+                    <div className="flex shrink-0 items-center gap-1">
+                      {ordinaryCanvas && (
+                        <div
+                          role="group"
+                          aria-label="画布视图"
+                          className="flex shrink-0 items-center gap-1"
                         >
-                          工作流
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="max-sm:size-11"
-                          aria-label="打开故事板"
-                          title="故事板"
-                          onClick={() => openWorkbench("shots")}
-                        >
-                          <Film data-icon="inline-start" />
-                          <span className="max-sm:sr-only">故事板</span>
-                        </Button>
-                      </div>
-                    ) : undefined
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            className="hidden sm:inline-flex"
+                            aria-current="page"
+                          >
+                            工作流
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="max-sm:size-11"
+                            aria-label="打开故事板"
+                            title="故事板"
+                            onClick={() => openWorkbench("shots")}
+                          >
+                            <Film data-icon="inline-start" />
+                            <span className="max-sm:sr-only">故事板</span>
+                          </Button>
+                        </div>
+                      )}
+                      <SkillWorkflowControl
+                        client={client}
+                        graph={graph}
+                        canvasId={canvasID}
+                        projectId={projectID}
+                        identity={`${actorID}/${scopeID}`}
+                        enabled={
+                          view.connected &&
+                          view.writable &&
+                          !view.migration &&
+                          view.recovery.length === 0
+                        }
+                        saved={!view.dirty}
+                      />
+                    </div>
                   }
                   participantsControl={
                     <CanvasParticipants
@@ -572,7 +590,7 @@ function CollaborativeEditor({
             commitSeq={client.commitSeq}
             writable={view.writable && !view.migration}
             boardWritable={view.writable && view.connected && !view.migration}
-            title={view.dto.name ?? "画布"}
+            title={dto.name ?? "画布"}
             saveStatus={view.phase}
             canNavigate={!view.unsafeToLeave}
             open={workbench.open}
@@ -608,7 +626,7 @@ function CollaborativeEditor({
             }}
             onAdopt={adoption.adoptMedia}
             onAdoptText={adoption.adoptText}
-            referenceSources={view.document.nodes.flatMap((node) => {
+            referenceSources={graph.nodes.flatMap((node) => {
               const assetID = node.documentData?.fileReferences?.find(
                 (ref) => ref.purpose === "CONTENT",
               )?.fileId;
@@ -623,7 +641,7 @@ function CollaborativeEditor({
                   ]
                 : [];
             })}
-            subjectSources={canvasSubjectSources(view.document.nodes, canvasID)}
+            subjectSources={canvasSubjectSources(graph.nodes, canvasID)}
           />
         )}
         <FeedbackToast

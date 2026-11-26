@@ -203,6 +203,9 @@ it("persists colorTags through the real live-session Yjs update and authoritativ
   );
   const packet = sockets[0].sent.find((p) => p.type === "yjs_submit")!;
   const body = packet.body as { update: string; payloadHash: string };
+  const graphHash = "b".repeat(64);
+  const settled = vi.fn();
+  const saving = client.waitForSavedSnapshot().then(settled);
   const accepted = new Y.Doc();
   Y.applyUpdate(accepted, Buffer.from(state.state, "base64"));
   Y.applyUpdate(accepted, Buffer.from(body.update, "base64"));
@@ -222,8 +225,10 @@ it("persists colorTags through the real live-session Yjs update and authoritativ
       commitSeq: "1",
       state: Buffer.from(Y.encodeStateAsUpdate(accepted)).toString("base64"),
       document: { ...document, revision: "2" },
+      graphHash,
     },
   });
+  expect(settled).not.toHaveBeenCalled();
   sockets[0].receive({
     type: "yjs_ack",
     op_id: packet.op_id,
@@ -234,12 +239,17 @@ it("persists colorTags through the real live-session Yjs update and authoritativ
       payloadHash: body.payloadHash,
       commitSeq: "1",
       contentRevision: "2",
-      graphHash: state.graphHash,
+      graphHash,
       effect: "VISIBLE_CHANGE",
       update: body.update,
     },
   });
   await vi.waitFor(() => expect(client.getSnapshot().dirty).toBe(false));
+  await saving;
+  expect(settled).toHaveBeenCalledWith({
+    document: { ...document, revision: "2" },
+    graphHash,
+  });
   expect(client.getSnapshot().document?.nodes[0].metadata?.colorTags).toEqual([
     "cyan",
     "purple",

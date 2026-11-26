@@ -1,7 +1,4 @@
-import {
-  fromCanvasGraph,
-  toCanvasContentGraph,
-} from "@/components/canvas-editor/lib/canvas-document-adapter.ts";
+import type { CanvasEditorState } from "@/components/canvas-editor/lib/canvas-document-adapter.ts";
 import { connectCanvasDocument } from "@/components/canvas-editor/lib/canvas-document-connections.ts";
 import { CanvasNodeType } from "@/components/canvas-editor/types/canvas.ts";
 
@@ -25,11 +22,12 @@ export interface SkillWorkflowTemplate {
 const skillHeader = /^@skill ([a-z0-9]+(?:-[a-z0-9]+)*)\r?\n/;
 const stageSpacing = { x: 320, y: 250 };
 
-export function skillGroups(graph: CanvasContract.CanvasDocumentGraphDTO) {
-  const nodes = fromCanvasGraph(graph).nodes;
+export function skillGroups({ nodes }: CanvasEditorState) {
   const groups = new Set(
     nodes.flatMap((node) =>
-      node.metadata?.groupId && skillHeader.test(node.metadata.content ?? "")
+      node.type === CanvasNodeType.Text &&
+      node.metadata?.groupId &&
+      skillHeader.test(node.metadata.content ?? "")
         ? [node.metadata.groupId]
         : [],
     ),
@@ -40,13 +38,13 @@ export function skillGroups(graph: CanvasContract.CanvasDocumentGraphDTO) {
 }
 
 export function createSkillGroup(
-  graph: CanvasContract.CanvasDocumentGraphDTO,
+  graph: CanvasEditorState,
   template: SkillWorkflowTemplate,
 ) {
-  const editor = fromCanvasGraph(graph);
+  const editor: CanvasEditorState = { ...graph, nodes: [], connections: [] };
   const groupId = crypto.randomUUID();
   const startX =
-    Math.max(0, ...editor.nodes.map((node) => node.position.x + node.width)) +
+    Math.max(0, ...graph.nodes.map((node) => node.position.x + node.width)) +
     stageSpacing.x / 2;
   const ids = new Map(
     template.nodes.map((node) => [node.skill, crypto.randomUUID()]),
@@ -92,15 +90,21 @@ export function createSkillGroup(
       linked = connectCanvasDocument(linked, from, to);
     }
   }
-  return toCanvasContentGraph(linked, graph);
+  return {
+    groupId,
+    graph: {
+      ...graph,
+      nodes: [...graph.nodes, ...linked.nodes],
+      connections: [...graph.connections, ...linked.connections],
+    },
+  };
 }
 
 export function compileSkillGroup(
-  graph: CanvasContract.CanvasDocumentGraphDTO,
+  graph: CanvasEditorState,
   groupId: string,
 ): SkillWorkflow {
-  const editor = fromCanvasGraph(graph);
-  const children = editor.nodes.filter(
+  const children = graph.nodes.filter(
     (node) => node.metadata?.groupId === groupId,
   );
   const stageIds = new Set(
@@ -132,7 +136,11 @@ export function compileSkillGroup(
             (edge) =>
               edge.toNodeId === node.id && stageIds.has(edge.fromNodeId),
           )
-          .sort((left, right) => left.order - right.order)
+          .sort(
+            (left, right) =>
+              (left.documentData?.order ?? 0) -
+              (right.documentData?.order ?? 0),
+          )
           .map((edge) => edge.fromNodeId),
       };
     });
