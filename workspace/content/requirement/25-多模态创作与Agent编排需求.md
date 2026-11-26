@@ -1,6 +1,6 @@
 # 多模态创作与 Agent 编排需求
 
-来源日期：2026-11-12，Asia/Shanghai。本文整理本轮用户意图、研究推导、业务规则及验收条件，不是实施授权，也不宣称功能已完成。竞品事实及当前源码依据独立保留在[调研](../research/41-2026-11-12-即梦多模态创作与Agent服务拆解.md)，实施状态与调度仅见 [BACKLOG](https://github.com/StephenQiu30/glowloom/blob/dd1e9c1815fb36ca3a7002e1192b55e67cb323a9/BACKLOG.md#multimodal-agent-20261112)。
+来源日期：2026-11-12，Asia/Shanghai。本文整理本轮用户意图、研究推导、业务规则及验收条件，不是实施授权，也不宣称功能已完成。竞品事实及当前源码依据独立保留在[调研](../research/10-即梦导演台时间线与多模态创作基线调研.md)，实施状态与调度仅见 [BACKLOG](https://github.com/StephenQiu30/glowloom/blob/dd1e9c1815fb36ca3a7002e1192b55e67cb323a9/BACKLOG.md#multimodal-agent-20261112)。
 
 ## 1. 原始需求、确认与适用边界
 

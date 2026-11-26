@@ -19,6 +19,9 @@
 | T-AGV2-04 | P3   | AC-AGV2-02、AC-AGV2-05 | 原地清空重建 `agent/`：初始化 Mastra + Vercel AI SDK + Kysely + Zod + `@grpc/grpc-js` + `@mastra/mcp` + `@mastra/pg`（`disableInit`），实现 `transport/`、`database/`、`business/` 与 `sessions/`（租约锁、事件日志、可插拔 EventBus、恢复泵） | `agent/` 无 NestJS/Fastify/Prisma/Pi Durable 残留；受限 DB 角色冷启动与读写测试通过 |
 | T-AGV2-05 | P4   | AC-AGV2-06、AC-AGV2-07 | 实现 `mastra/`（Producer 主 Agent、专家子 Agent、HITL Workflow `suspend/resume`、分离式 Memory）、声明式 `skills/`、Langfuse OTel/Prompt 集成（带本地兜底）及 `evals/`（Mastra Scorers + Vitest） | 审批跨重启恢复、`Last-Event-ID` 断线重放、轨迹评测与 Langfuse 兜底测试全绿        |
 | T-AGV2-06 | P5   | AC-AGV2-01～07 | 同步 `docker-compose.yml` / `docker-compose.dev.yml` 与 CI 工作流；执行 Go、Agent、Frontend、Canvas 全仓门禁与端到端联调验收                 | 全仓 lint/typecheck/build/race/evals 通过，Compose 健康启动，公开 `/api`/SSE 零破坏 |
+| T-AGV2-07 | P6   | AC-AGV2-08     | **Harness 阶段一（零手写出网 + 协议/缓存/超时/持久预算）**：升级 `business/gateway-provider.ts` 为官方 `@ai-sdk/{openai,anthropic,google,openai-compatible}` 多协议路由并移除手写 `fetch`；迁移 `skills/run-skills.ts` 私有 Skill 拉取至 `AgentBusiness` gRPC/`@mastra/mcp`；新增 `wrapLanguageModel` 中间件实现 Prompt Cache 稳定锚点前移与 PG `service_runs` 派发前原子预算预扣；配置 SDK 原生 `timeout.{totalMs,stepMs,chunkMs}`；同步 `backend/db/schema.sql` 预算列 | `agent/src/` 零出网手写 `fetch/http`；多协议、Cache 锚点、超时与崩溃不重置预算测试全绿 |
+| T-AGV2-08 | P7   | AC-AGV2-09     | **Harness 阶段二（画布分层投影 + 写链 Rebase + 混合异步等待）**：Go/Canvas 补齐基础分页、JSON Pointer 子字段读取、确定性 `operationId` 幂等与标准 MCP Tool `task.wait`（≤25s 长轮询分片）及 Workflow 终态回调；Agent 侧新增 `business/canvas-bridge.ts` 实现 `<40KB` 有界裁剪、`complete: false` 标记、同轮局部写链 Rebase、`canvas_context_changed` 熔断、`<canvas_changes>` 增量摘要与中短任务确定性等待 + 超时 Yield | 大画布分页/下钻、并发 Rebase/熔断、`operationId` 防重扣费与混合等待集成测试全绿 |
+| T-AGV2-09 | P8   | AC-AGV2-09     | **Harness 阶段三（Mock MCP 离线结果态评测门禁）**：在 `agent/evals/` 搭建内存版 Mock MCP 业务模拟器（`sim-business`）与 AI SDK 原生 Mock 模型，落地终态画布/绑定/零重复扣费断言与请求效率预算门禁（覆盖大画布定位、同轮多改、崩溃续跑与长流程） | `pnpm eval` 零模型费、零手写 HTTP 桩全绿，接入 CI PR 必跑门禁 |
 
 ## 3. 验证方法
 

@@ -10,7 +10,7 @@
 
 > 你需要使用 /grill-me 来向我反复确认，我们当前的agent服务应该如何设计，从项目的架构和技术选型开始
 
-来源：2026-11-25 架构与技术选型 `/grill-me` 访谈。对应调研依据见 [研究71](../research/71-2026-11-25-Agent服务架构网关与评测技术选型调研.md)，技术方案见 [设计48](../design/48-Agent服务Mastra架构与技术选型设计.md)，验收范围见 [PRD34](../prd/34-Agent服务架构重构与技术选型.md)，实施计划见 [Plan43](../plan/43-Agent服务Mastra架构重构执行计划.md)。
+来源：2026-11-25 架构与技术选型 `/grill-me` 访谈。对应调研依据见 [研究01](../research/01-Agent服务架构与技术选型调研.md)，技术方案见 [设计48](../design/48-Agent服务Mastra架构与技术选型设计.md)，验收范围见 [PRD34](../prd/34-Agent服务架构重构与技术选型.md)，实施计划见 [Plan43](../plan/43-Agent服务Mastra架构重构执行计划.md)。
 
 <a id="src-agv2-02"></a>
 
@@ -34,6 +34,24 @@
 10. **Skill 与安全边界**：采用**声明式 Skill**（`SKILL.md` / 指令包 + MCP 工具白名单），按任务动态装配给 Mastra Agent/子 Agent；`agent/` 容器内**零脚本执行**，所有副作用与重计算统一经 Go MCP 收口到受控执行器。
 11. **可观测性与 Evals**：采用**分层双轨**——开发与 CI 回归门禁使用 **Mastra 原生 Scorers + Vitest**（工具调用轨迹断言、步数/成本上限、结构化输出 + LLM-as-a-Judge）；线上使用**自托管 Langfuse** 承接 OTel Trace、Prompt 版本管理（带本地兜底缓存）、坏 Case 沉淀 Dataset 与线上采样评分。
 
+<a id="src-agv2-03"></a>
+
+### SRC-AGV2-03（2026-11-26，BeefTV 源码调研复评与零手写出网确认结论）
+
+用户原文：
+
+> 使用 github 调研并参考一下 beeftv 的agent服务的设计思路，我们可以参考他们的设计思路来一轮技术调研和技术选型，不确定的使用 /girllme 向我确定
+> 保持 Mastra + Vercel AI SDK 为主底座 同时我们的网络请求不要手写，同时我们需要先去定需求和明确我们的技术选型应该怎么做
+
+来源：2026-11-26 基于 `glanderness/BeefTV` 源码拆解（[研究01](../research/01-Agent服务架构与技术选型调研.md)）后的 `/grill-me` 逐项确认结论，正式增补为以下有效架构要求：
+
+1. **核心底座维持与复评定案**：保持 **Mastra + Vercel AI SDK** 为主底座，不回退 `@earendil-works/pi-durable`；通过与框架解耦的窄边界层吸收 BeefTV 6 项核心 Harness 能力。
+2. **全部出网零手写 `fetch/http` 红线**：`agent/` 服务中严禁手写底层出网 HTTP/`fetch` 请求或自定义流式代理（包括移除现有 `business/gateway-provider.ts` 中的手写 `fetch` 包装，以及将 `skills/run-skills.ts` 的私有 Skill 拉取迁移至强类型 `AgentBusiness` gRPC 或 `@mastra/mcp`）。LLM 通信统一用 `@ai-sdk/*` 官方 Provider + `wrapLanguageModel` 中间件 + 原生 `timeout.{totalMs,stepMs,chunkMs}`；业务工具与任务等待统一走 `@mastra/mcp`；控制与鉴权统一走 `@grpc/grpc-js`。仅保留极简入站 HTTP 健康探针（`/healthz`、`/readyz`）。
+3. **画布分层协作（有界视图 + 写链 Rebase）**：Go/Canvas 权威层负责 `expectedRevision` CAS、确定性 `operationId` 幂等与基础分页/指针读取；Agent 侧 MCP Tool Wrapper 负责 `<40KB` UTF-8 有界模型视图裁剪（截断字段显式标注 `complete: false` + JSON Pointer 按需下钻）、同轮并行局部写链自动 Rebase、外部并发修改熔断（`canvas_context_changed`）及增量 `<canvas_changes>` 摘要注入。
+4. **多协议透传、Prompt Cache 锚点与派发前持久预算**：激活 `@ai-sdk/openai`（Chat/Responses）、`@ai-sdk/anthropic`、`@ai-sdk/google` 官方 Provider 原生透传；通过 `wrapLanguageModel`（`transformParams`）将 `cache_control` 从易变尾块前移至最后稳定历史块并固定 `providerOptions.anthropic.userId = sessionId`；通过 `wrapLanguageModel`（`wrapGenerate`/`wrapStream`）与 MCP Tool Wrapper 在派发前通过 Kysely 对 PG `service_runs` 原子预扣请求数与工具步数预算（崩溃重启不重置），并启用 SDK 原生 `timeout.{totalMs,stepMs,chunkMs}`。
+5. **混合异步媒体任务等待**：不引入 Temporal / Restate / DBOS；多阶段交付、HITL 付费审批与超长视频任务走 Mastra Workflow `suspend/resume` + Go 终态回调；自由对话内中短耗时任务（15s–120s）走 Go 暴露的标准 MCP Tool `task.wait`（≤25s 分片长轮询 + 进度推送 + 确定性 `operationId` 幂等 + 超时安全 Yield），杜绝 LLM 空轮询与重复扣费。
+6. **结果态与请求效率离线评测门禁**：在 Mastra Scorers + Vitest 基础上引入内存版 Mock MCP 业务模拟器（`sim-business`）与 AI SDK 原生 Mock 模型，零模型费、零手写 HTTP 桩验证画布终态、零重复付费 `operationId`、大画布定位与请求效率预算。
+
 ## 2. 明确要求
 
 | ID          | 要求                                                                     | 确认边界                                                                                             |
@@ -44,7 +62,10 @@
 | FR-AGV2-04  | 落地混合编排（主/子 Agent + Mastra Workflow HITL）与声明式 Skill          | 收费与多阶段审批走 Workflow `suspend/resume`；Skill 仅声明式装配，Agent 容器内禁止执行第三方脚本     |
 | FR-AGV2-05  | 落地分离式记忆、可续传事件流与崩溃恢复                                   | Mastra Memory 与业务真源分离；PG 关键事件日志 + Run 租约锁 + 可插拔内存/Redis 实时总线                |
 | FR-AGV2-06  | 落地“离线 CI 轨迹评测 + 线上 Langfuse 观测与 Prompt 治理”双轨体系        | CI 跑 Mastra Scorers + Vitest；线上对接自托管 Langfuse（OTel Trace / Prompt 管理 / Dataset / 采样）  |
+| FR-AGV2-07  | 落地画布分层有界视图、同轮写链 Rebase 与混合异步媒体任务等待             | Go/Canvas 守 CAS/幂等/分页；Agent MCP Wrapper 做 `<40KB` 裁剪、局部写 Rebase 与 `task.wait` + 超时 Yield |
+| FR-AGV2-08  | 落地原生多协议透传、Prompt Cache 稳定锚点、PG 持久预算与结果态离线评测   | 基于 `@ai-sdk/*` + `wrapLanguageModel` + 原生 `timeout.{stepMs,chunkMs}` + PG 派发前预扣 + Mock MCP 评测 |
 | NFR-AGV2-01 | 严格遵守仓库数据库与工程红线                                             | `backend/db/schema.sql` 唯一结构真源，关闭 `@mastra/pg` 运行时 DDL；遵循 Google Go / Google TS 规范  |
+| NFR-AGV2-02 | 严格执行 `agent/` 出网零手写 `fetch/http` 红线                           | 禁止手写 HTTP/`fetch` 出网代理或客户端（含清理既有 `gateway-provider.ts` / `run-skills.ts` 存量 `fetch`） |
 | BR-AGV2-01  | 保持既有前端公共 `/api`、SSE 对话体验与创作业务能力不回退                | 承接 [需求19](19-完整创作Agent与Skill多Agent需求.md) 的创作业务目标，替代其底层 Pi/NestJS 技术选型   |
 
 ## 3. 需求边界
@@ -70,5 +91,7 @@
 | AC-AGV2-05 | `@mastra/pg` 关闭运行时 DDL，全部框架表与服务表静态声明于 `backend/db/schema.sql` 且通过 DB 门禁     | NFR-AGV2-01             |
 | AC-AGV2-06 | 混合编排（主/子 Agent + Workflow `suspend/resume`）、断线 `Last-Event-ID` 重放与崩溃租约恢复验证通过 | FR-AGV2-04、FR-AGV2-05  |
 | AC-AGV2-07 | Mastra Scorers + Vitest 离线轨迹评测门禁与自托管 Langfuse OTel Trace / Prompt 兜底链路验证通过       | FR-AGV2-06、BR-AGV2-01  |
+| AC-AGV2-08 | `agent/src/` 全部出网零手写 `fetch/http`；多协议原生透传、`wrapLanguageModel` Cache 锚点、原生 `chunkMs` 超时与 PG 派发前原子预算验证通过 | FR-AGV2-08、NFR-AGV2-02 |
+| AC-AGV2-09 | 画布 `<40KB` 分层投影与同轮局部写链 Rebase、`operationId` 防重扣费、混合 `task.wait` 异步等待及 Mock MCP 结果态离线评测全部通过 | FR-AGV2-07、FR-AGV2-08  |
 
 [需求导航](00-需求导航.md) · [设计48](../design/48-Agent服务Mastra架构与技术选型设计.md)

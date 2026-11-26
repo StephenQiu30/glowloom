@@ -12,11 +12,11 @@ description: 项目知识按 requirement → design → prd → plan 维护当�
 
 ## 领域入口
 
-AI 短剧制作多 Agent 编排：[需求34](requirement/34-AI短剧制作多Agent编排需求.md) → [设计49](design/49-AI短剧制作三层Agent与六阶段Workflow设计.md) → [PRD35](prd/35-AI短剧制作多Agent编排.md) → [Plan44](plan/44-AI短剧制作多Agent编排执行计划.md)。面向 9:16 竖屏 AI 漫剧/动画短剧，参考 Toonflow 与 BeefTV 落地三层 5 角色、六阶段 HITL Workflow、双模式画布副驾驶、2x2 宫格一致性与 5 组 Go MCP 短剧工具集。可复查的开源依据见[短剧 Skill 套件调研](research/74-2026-11-25-短剧开源Skill套件完整接入调研.md)。
+AI 短剧制作多 Agent 编排：[需求34](requirement/34-AI短剧制作多Agent编排需求.md) → [设计49](design/49-AI短剧制作三层Agent与六阶段Workflow设计.md) → [PRD35](prd/35-AI短剧制作多Agent编排.md) → [Plan44](plan/44-AI短剧制作多Agent编排执行计划.md)。面向 9:16 竖屏 AI 漫剧/动画短剧，参考 Toonflow 与 BeefTV 落地三层 5 角色、六阶段 HITL Workflow、双模式画布副驾驶、2x2 宫格一致性与 5 组 Go MCP 短剧工具集。可复查的开源依据见[短剧 Skill 套件调研](research/02-短剧开源Skill套件接入调研.md)。
 
-Agent 服务 Mastra 架构重构：[需求33](requirement/33-Agent服务架构重构与技术选型需求.md) → [设计48](design/48-Agent服务Mastra架构与技术选型设计.md) → [PRD34](prd/34-Agent服务架构重构与技术选型.md) → [Plan43](plan/43-Agent服务Mastra架构重构执行计划.md)，选型依据见[研究71](research/71-2026-11-25-Agent服务架构网关与评测技术选型调研.md)。以 Node 24 + TypeScript + Mastra 原地重建 `agent/`，移除 NestJS/Pi Durable/Prisma，采用强类型 gRPC + Go 内部 MCP + Go 统一渠道 AI 网关 + Kysely/Zod + 双轨 Evals（离线 Scorers + 线上自托管 Langfuse）。
+Agent 服务 Mastra 架构重构：[需求33](requirement/33-Agent服务架构重构与技术选型需求.md) → [设计48](design/48-Agent服务Mastra架构与技术选型设计.md) → [PRD34](prd/34-Agent服务架构重构与技术选型.md) → [Plan43](plan/43-Agent服务Mastra架构重构执行计划.md)，选型依据见[研究01](research/01-Agent服务架构与技术选型调研.md)。以 Node 24 + TypeScript + Mastra 原地重建 `agent/`，移除 NestJS/Pi Durable/Prisma，采用强类型 gRPC + Go 内部 MCP + Go 统一渠道 AI 网关 + Kysely/Zod + 双轨 Evals（离线 Scorers + 线上自托管 Langfuse）。
 
-通知中心与公告管理：[需求31](requirement/31-通知中心与公告管理需求.md) → [设计46](design/46-通知中心与公告管理设计.md) → [PRD32](prd/32-通知中心与公告管理.md) → [Plan41](plan/41-通知中心与公告管理执行计划.md)，事实见[研究57](research/57-2026-11-16-即梦通知中心拆解与设计核对.md)。覆盖顶部公告、5秒消息弹窗、Header一键已读、管理筛选和启停；实现与验证依据Plan41。
+通知中心与公告管理：[需求31](requirement/31-通知中心与公告管理需求.md) → [设计46](design/46-通知中心与公告管理设计.md) → [PRD32](prd/32-通知中心与公告管理.md) → [Plan41](plan/41-通知中心与公告管理执行计划.md)。覆盖顶部公告、5秒消息弹窗、Header一键已读、管理筛选和启停；实现与验证依据Plan41。
 
 Go 模块化单体架构：[需求32](requirement/32-Go模块化单体架构改造需求.md) → [设计47](design/47-Go模块化单体架构与RPC集成设计.md) → [PRD33](prd/33-Go模块化单体架构改造.md) → [Plan42](plan/42-Go模块化单体架构改造执行计划.md)。将 Go 后端收敛为遵循 Google Go 规范的模块化单体，保留 Kafka 异步解耦，采用开源稳定组件库，并与 Canvas / Agent 通过标准 gRPC（方案 A）通信。
 
@@ -24,7 +24,7 @@ Workspace 知识库：[需求30](requirement/30-Workspace官方Fumadocs接入需
 
 日志与完整创作经营分析：[需求27](requirement/27-日志与创作经营分析需求.md) → [设计42](design/42-日志与创作经营分析设计.md) → [PRD28](prd/28-日志与创作经营分析.md) → [Plan37](plan/37-日志与创作经营分析执行计划.md)。
 
-模型号池与多供应商路由：[原始需求 26](requirement/26-模型号池与多供应商路由需求.md) · [号池与路由](design/40-模型号池与销售计费设计.md) · [销售定价与结算](design/41-模型销售定价与结算设计.md) · [八个对照项目与计费调研](research/49-2026-11-13-模型号池与多供应商路由调研.md)。
+模型号池与多供应商路由：[原始需求 26](requirement/26-模型号池与多供应商路由需求.md) · [号池与路由](design/40-模型号池与销售计费设计.md) · [销售定价与结算](design/41-模型销售定价与结算设计.md) · [八个对照项目与计费调研](research/06-模型号池与多供应商路由调研.md)。
 
 | 领域             | requirement：需求                                      | design：方案                                          | prd：范围与验收                             | plan：实施                                              |
 | ---------------- | ------------------------------------------------------ | ----------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------- |

@@ -1,6 +1,6 @@
 # Agent 服务 Mastra 架构与技术选型设计
 
-状态：已确认架构与选型（依据 [需求33 SRC-AGV2-01 / SRC-AGV2-02](../requirement/33-Agent服务架构重构与技术选型需求.md#src-agv2-01) 与 [研究71](../research/71-2026-11-25-Agent服务架构网关与评测技术选型调研.md)）。本文自 2026-11-25 起作为 `agent/` 服务架构与技术选型的现行唯一技术合同，[设计32](32-完整创作AgentHarness与Skill多Agent架构设计.md)维护创作业务合同。实施进度与调度只在 [BACKLOG](../../../BACKLOG.md) 维护。
+状态：已确认架构与选型（依据 [需求33 SRC-AGV2-01 / SRC-AGV2-02 / SRC-AGV2-03](../requirement/33-Agent服务架构重构与技术选型需求.md#src-agv2-01) 与 [研究01](../research/01-Agent服务架构与技术选型调研.md)）。本文自 2026-11-25 起作为 `agent/` 服务架构与技术选型的现行唯一技术合同（2026-11-26 增补零手写出网红线、模型中间件治理、画布分层投影、混合异步等待与结果态评测契约），[设计32](32-完整创作AgentHarness与Skill多Agent架构设计.md)维护创作业务合同。实施进度与调度只在 [BACKLOG](../../../BACKLOG.md) 维护。
 
 ## 1. 摘要
 
@@ -142,14 +142,16 @@ flowchart LR
 
 ### 7.4 Go 统一渠道 AI 网关设计（已确认）
 
-参照 [研究71](../research/71-2026-11-25-Agent服务架构网关与评测技术选型调研.md) 对 BeefTV 与 Toonflow 的同赛道拆解，演进 Go 现有 `backend/internal/execution/gateway`（衔接 [设计33](33-多设计模式驱动的模型与供应商接入扩展体系设计.md#ai-gateway)、[设计40](40-模型号池与销售计费设计.md)、[设计41](41-模型销售定价与结算设计.md)）：
+参照 [研究01](../research/01-Agent服务架构与技术选型调研.md) 对 BeefTV 与 Toonflow 的同赛道拆解，演进 Go 现有 `backend/internal/execution/gateway`（衔接 [设计33](33-多设计模式驱动的模型与供应商接入扩展体系设计.md#ai-gateway)、[设计40](40-模型号池与销售计费设计.md)、[设计41](41-模型销售定价与结算设计.md)）：
 
-- **文本 LLM 原生协议透传**：
-  - 暴露内部兼容端点（OpenAI Responses/Chat、Anthropic Messages、Google Gemini GenerateContent），供 Mastra 内的 Vercel AI SDK Provider 直接指定 `baseURL` 调用。
+- **文本 LLM 原生协议透传与零手写出网治理**：
+  - 暴露内部兼容端点（OpenAI Responses/Chat、Anthropic Messages、Google Gemini GenerateContent），供 Mastra 内的 Vercel AI SDK 官方 Provider（`@ai-sdk/openai`、`@ai-sdk/anthropic`、`@ai-sdk/google`、`@ai-sdk/openai-compatible`）按渠道协议直接配置 `baseURL` + `headers` 调用。
+  - **全部出网零手写 `fetch/http` 红线**：`agent/src/` 严禁手写任何出网 `fetch`/`http.request` 代理或客户端（移除现有 `business/gateway-provider.ts` 的 `fetch` 包装，单次调用 ID 交由 Go 网关/OTel 生成；现有 `skills/run-skills.ts` 私有 Skill 拉取迁移至 `AgentBusiness` gRPC 或 `@mastra/mcp`）。
   - **不做破坏性二次协议转译**：原样透传 Prompt Caching 字段、Thinking/Reasoning 块、Tool Call 流式增量与原生 `usage` 统计。
+  - **Prompt Cache 稳定锚点与原生分段超时**（参照 [研究01](../research/01-Agent服务架构与技术选型调研.md)）：通过 Vercel AI SDK 原生 **`wrapLanguageModel`（`LanguageModelMiddleware.transformParams`）** 在结构化消息层将 `providerOptions.anthropic.cacheControl` 从末尾易变摘要块（画布 revision / 动态计划）前移到紧邻的前一个稳定历史块，并固定 `providerOptions.anthropic.userId = sessionId`；流式超时直接使用 SDK v7 原生 **`timeout: { totalMs, stepMs, chunkMs }`**，零自定义流包装器。
   - 请求头携带 `run_id` / `actor_id` / `org_id` / `budget_reservation_id`，Go 网关完成上游 Key 选择、限流与实时用量采集回写 `billing`。
 - **上游渠道弹性配置**：渠道表中任意模型组均可配置直连官方端点、OpenRouter 或自托管 Bifrost 地址，实现按需扩展多上游容灾而不在架构上强绑定外部网关。
-- **多模态异步生成统一收口**：文生图、图生视频、语音合成/克隆等异步任务继续由 Go `execution/gateway` + `operation` 统一处理提交、轮询、COS 落盘与计费，Agent 仅通过 MCP 工具发起与查询。
+- **多模态异步生成统一收口与混合等待**：文生图、图生视频、语音合成/克隆等异步任务继续由 Go `execution/gateway` + `operation` 统一处理提交、轮询、COS 落盘与计费，所有付费提交必须携带确定性 `operationId` 实现崩溃重放防重扣费。多阶段交付、审批与超长队列走 Mastra Workflow `suspend/resume` + Go 终态回调；自由对话内中短耗时即兴生成（15s–120s）由 Go 将 `task.wait`（≤25s 长轮询分片）暴露为标准 MCP Tool，Agent 侧在 MCP Tool Wrapper 内循环调用该 MCP Tool（走 `@mastra/mcp`，零手写 HTTP）并实时推送 `task.progress`，超过阈值安全 Yield，避免消耗 LLM 推理轮次去轮询任务状态。
 
 ### 7.5 持久化、静态 Schema 与控制层（已确认）
 
@@ -159,7 +161,7 @@ flowchart LR
      - **服务控制表**（由 Kysely 管理）：`service_sessions`、`service_runs`（含 `lease_owner`、`lease_until`、`status`、`workflow_run_id`）、`service_run_events`（单调 `seq` 供 `Last-Event-ID` 重放）、`service_control_inbox`（审批/取消幂等收件箱）。
    - 彻底删除旧 Pi Durable 的 `runtime_sessions`、`runtime_records`、`runtime_document_versions`、`runtime_events` 表定义与 `agent/prisma/` 目录。
 2. **并发、流式重放与恢复**：
-   - **同 Session 串行租约**：Kysely 通过行锁（`FOR UPDATE`）与数据库时钟（`clock_timestamp()`）抢占 Run 租约并定期续期；未到期前拒绝重复执行。
+   - **同 Session 串行租约与派发前持久预算**：Kysely 通过行锁（`FOR UPDATE`）与数据库时钟（`clock_timestamp()`）抢占 Run 租约并定期续期；未到期前拒绝重复执行。单轮模型请求数与工具步数上限持久化于 `service_runs`（`max_model_requests` / `used_model_requests` / `max_tool_steps` / `used_tool_steps`），模型请求由 `wrapLanguageModel`（`wrapGenerate` / `wrapStream`）中间件、工具步数由 Mastra `stopWhen` + MCP Tool Wrapper 在**派发前**通过 Kysely 原子预扣，避免进程崩溃重启后重置预算。
    - **分层事件流**：结构化阶段事件（Run 状态、Tool 调用/结果、子 Agent 委派、Workflow 挂起/审批请求、最终消息）同步持久化至 `service_run_events`；高频 Token Delta 经可插拔 EventBus（单实例内存 / 多实例 Redis Pub/Sub）实时推送。客户端带 `last_event_id` 重连时先补 PG 历史，再切实时订阅。
    - **崩溃恢复**：后台 Recovery 扫描租约过期的未终结 Run——关联 Mastra Workflow 且处于可恢复状态者触发 `resume` 或安全转入等待态；普通自由对话 Run 标记为可重试终止并通知前端，避免静默重复扣费。
 
@@ -168,9 +170,10 @@ flowchart LR
 1. **混合编排**：
    - **Producer 主 Agent**：面向用户的总控入口，负责意图理解、上下文汇总、向领域专家子 Agent（编剧、设定、分镜、画布整理等）委派任务，以及调用关键 Workflow。
    - **Mastra Workflow（HITL 与长流程）**：涉及多阶段剧本拆解、批量角色/分镜资产生成、或触发收费多模态生成的链路封装为 Workflow；审批节点调用 `suspend()` 持久化快照并发出审批事件，用户确认后经 `SubmitApproval` RPC 触发 `resume()`。
-2. **记忆与业务真源分离**：
+2. **记忆、画布分层投影与业务真源分离**：
    - Mastra Memory（最近消息窗口 + Working Memory 结构化摘要 + `PgVector` 语义召回）只存储**对话历史与用户创作偏好**。
-   - 剧本、设定集、分镜、画布与媒体资产的权威真源留在 Go 业务库；每次 Run 仅经 `AgentBusiness.GetProjectDigest` 注入轻量摘要，细节由 Agent 通过 Go MCP 工具按需拉取。
+   - 剧本、设定集、分镜、画布与媒体资产的权威真源留在 Go 业务库；每次 Run 仅经 `AgentBusiness.GetProjectDigest` 注入轻量摘要与增量变更 diff，细节由 Agent 通过 Go MCP 工具按需拉取。
+   - **画布读写分层协作**：Go/Canvas 权威层负责 `expectedRevision` CAS、`operationId` 幂等与基础分页/指针读取；Agent 侧 MCP 工具包装层（`business/canvas-bridge.ts`）负责 `<40KB` UTF-8 有界模型视图裁剪（截断字段显式标注 `complete: false` + JSON Pointer 按需下钻）、同轮并行局部写链自动 Rebase 及外部变更熔断（`canvas_context_changed`）。
 3. **声明式 Skill 与安全边界**：
    - Skill 由声明式指令（`SKILL.md` / Langfuse Prompt 片段）+ 允许绑定的 MCP 工具白名单 + 可选 Workflow 模板组成，按任务意图动态装配。
    - `agent/` 容器内**禁止执行任何动态代码或第三方脚本**；所有写操作、媒体处理与外部集成统一经 Go MCP 走受控执行器。
@@ -184,9 +187,10 @@ flowchart LR
    - 系统 Prompt 与角色指令托管在自托管 Langfuse 进行版本化管理与灰度切换，同时在 `agent/prompts/` 保留版本化本地兜底副本与内存 TTL 缓存，确保 Langfuse 不可用时不影响核心对话执行。
    - 线上坏 Case 一键归档至 Langfuse Dataset，并配置异步 Online Evals 采样评分（相关性、指令遵循、幻觉检测）。
 2. **离线开发与 CI 回归门禁（Mastra Scorers + Vitest）**：
-   - `agent/evals/` 使用 **Mastra Scorers + Vitest** 组织三层回归测试：
+   - `agent/evals/` 使用 **Mastra Scorers + Vitest** 结合**内存版 Mock MCP 业务模拟器（`sim-business`）+ AI SDK 原生 Mock 模型**组织四层回归测试（CI 零模型费、零手写 HTTP 桩运行）：
      - **确定性轨迹断言**：验证必调/禁调 MCP 工具顺序、参数 Schema 合法性、未触发越权写操作。
-     - **成本与步数约束**：校验单次任务的迭代步数上限、禁止死循环。
+     - **终态与幂等结果断言**：直接校验最终画布节点/绑定状态、零重复付费 `operationId`、大画布分页定位与并发冲突恢复，不耦合具体工具名或模型名。
+     - **成本与请求效率门禁**：校验单次任务的迭代步数上限、请求次数与返回字节预算，禁止死循环。
      - **LLM-as-a-Judge**：在关键创作质量与审批判断集上执行 Rubric 评分（CI 默认用固定回放/可控预算模型，真实高成本模型按需触发）。
 
 ### 7.8 目标目录结构（设计建议）

@@ -1,4 +1,9 @@
-# 短剧开源 Skill 套件完整接入调研
+# 短剧开源 Skill 套件接入调研
+
+> 观察日期：2026-11-25  
+> 研究对象：`shuohao-skills`（7 个公开 Skill）与 `drama-skills`（12 个公开 Skill）  
+> 关联文档：[需求34](../requirement/34-AI短剧制作多Agent编排需求.md) · [设计32](../design/32-完整创作AgentHarness与Skill多Agent架构设计.md) · [设计49](../design/49-AI短剧制作三层Agent与六阶段Workflow设计.md)  
+> 适用边界：本文记录开源 Skill 套件能力拆解与接入评估，采用与验收以对应需求、设计与 PRD 为准。
 
 核验日期 2026-11-25。研究对象为 `shuohao-skills` 的 7 个公开 Skill 和 `drama-skills` 的 12 个公开 Skill。结论用于评估完整导入、动态加载、业务接线和可编辑工作流，采用与验收以对应需求、设计和 PRD 为准。
 
