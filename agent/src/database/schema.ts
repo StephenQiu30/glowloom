@@ -60,6 +60,10 @@ export interface ServiceRunsTable {
   >;
   workflow_run_id: string | null;
   error_code: string | null;
+  max_model_requests: ColumnType<number, number | undefined, number>;
+  used_model_requests: ColumnType<number, number | undefined, number>;
+  max_tool_steps: ColumnType<number, number | undefined, number>;
+  used_tool_steps: ColumnType<number, number | undefined, number>;
   input: Record<string, unknown> | null;
   retry_of_run_id: string | null;
   created_at: ColumnType<Date, Date | string | undefined, never>;

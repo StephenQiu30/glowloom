@@ -43,8 +43,14 @@ export class RedisEventBus implements RunEventBus {
     redisUrl: string,
     private readonly logger: Logger,
   ) {
-    this.pub = new Redis(redisUrl, { lazyConnect: false, maxRetriesPerRequest: 3 });
-    this.sub = new Redis(redisUrl, { lazyConnect: false, maxRetriesPerRequest: 3 });
+    this.pub = new Redis(redisUrl, {
+      lazyConnect: false,
+      maxRetriesPerRequest: 3,
+    });
+    this.sub = new Redis(redisUrl, {
+      lazyConnect: false,
+      maxRetriesPerRequest: 3,
+    });
     this.sub.on('message', (channel: string, message: string) => {
       if (!channel.startsWith(channelPrefix)) return;
       const runId = channel.slice(channelPrefix.length);

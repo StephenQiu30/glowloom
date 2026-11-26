@@ -2,10 +2,12 @@ import { randomUUID } from 'node:crypto';
 import type { Logger } from 'pino';
 import { z } from 'zod';
 import { loadPrivateSkills } from '../skills/run-skills.js';
+import { wrapMcpToolsetWithHarness } from '../business/canvas-bridge.js';
 import {
   createBusinessMcpClient,
   type BusinessMcpConfig,
 } from '../business/mcp-client.js';
+import type { GatewayProtocol } from '../business/gateway-provider.js';
 import { canvasWorkflowSchema } from '../mastra/canvas-workflow.js';
 import { AgentError } from './errors.js';
 import type { AgentTeam } from '../mastra/runtime.js';
@@ -38,6 +40,8 @@ export interface SessionServiceOptions {
   logger: Logger;
   leaseMs: number;
   recoveryPollMs: number;
+  stepTimeoutMs?: number;
+  chunkTimeoutMs?: number;
 }
 
 export class SessionService implements AgentApplication {
@@ -104,6 +108,15 @@ export class SessionService implements AgentApplication {
           this.options.skills.discover(),
           loadPrivateSkills(
             this.options.mcpConfig,
+            {
+              actorId: input.identity.actorId,
+              orgId: input.identity.orgId ?? input.identity.actorId,
+              scopeId: input.identity.scopeId ?? input.identity.projectId,
+              projectId: input.identity.projectId,
+              sessionId: input.sessionId,
+              runId,
+              ...(input.traceparent ? { traceparent: input.traceparent } : {}),
+            },
             runId,
             submissionId,
             this.options.leaseMs,
@@ -406,15 +419,28 @@ export class SessionService implements AgentApplication {
         typeof input.manifest.model_key === 'string'
           ? input.manifest.model_key
           : undefined;
+      const modelProtocol =
+        typeof input.manifest.model_protocol === 'string'
+          ? (input.manifest.model_protocol as GatewayProtocol)
+          : undefined;
       const identity = {
         actorId: input.identity.actorId,
         orgId: input.identity.orgId ?? input.identity.actorId,
         scopeId: input.identity.scopeId ?? input.identity.projectId,
         projectId: input.identity.projectId,
+        sessionId: input.sessionId,
         runId,
         ...(input.traceparent ? { traceparent: input.traceparent } : {}),
       };
-      const rawTools = await mcpClient.listTools().catch((error) => {
+      const modelOptions = {
+        ...(modelKey ? { modelKey } : {}),
+        ...(modelProtocol ? { protocol: modelProtocol } : {}),
+        reserveModelRequest: () =>
+          this.options.store.reserveModelRequest(runId),
+      };
+      const stepTimeoutMs = this.options.stepTimeoutMs ?? 120_000;
+      const chunkTimeoutMs = this.options.chunkTimeoutMs ?? 45_000;
+      const discoveredTools = await mcpClient.listTools().catch((error) => {
         this.options.logger.warn(
           {
             runId,
@@ -423,6 +449,17 @@ export class SessionService implements AgentApplication {
           'Go MCP tool discovery unavailable',
         );
         return {};
+      });
+      const rawTools = wrapMcpToolsetWithHarness(discoveredTools, {
+        runId,
+        reserveToolStep: () => this.options.store.reserveToolStep(runId),
+        signal: controller.signal,
+        onTaskProgress: async (progress) => {
+          await this.emitDurableEvent(runId, 'task.progress', {
+            root_run_id: runId,
+            ...progress,
+          });
+        },
       });
       const storyboardTargets = input.input?.storyboard_targets;
       const userGoal =
@@ -441,7 +478,7 @@ export class SessionService implements AgentApplication {
                 throw new Error(`Pinned Skill unavailable: ${node.skill}`);
               const stage = await this.options.agentTeam.createScopedProducer(
                 identity,
-                modelKey,
+                modelOptions,
                 `按以下技能完成当前画布步骤。输出该步骤的实际创作成果。以工具回执确认的状态描述真实执行结果。\n\n${skill.instructions}`,
                 await skillWorkspace([skill]),
                 true,
@@ -463,6 +500,9 @@ export class SessionService implements AgentApplication {
                 {
                   maxSteps: 8,
                   abortSignal: AbortSignal.any([controller.signal, signal]),
+                  modelSettings: {
+                    timeout: { stepMs: stepTimeoutMs, chunkMs: chunkTimeoutMs },
+                  } as Record<string, unknown>,
                   ...(Object.keys(toolsets).length > 0
                     ? { toolsets: { glowloom: toolsets } }
                     : {}),
@@ -490,13 +530,16 @@ export class SessionService implements AgentApplication {
             await (
               await this.options.agentTeam.createScopedProducer(
                 identity,
-                modelKey,
+                modelOptions,
                 skillInstructions,
                 workspace,
               )
             ).generate(userGoal, {
               maxSteps: 8,
               abortSignal: controller.signal,
+              modelSettings: {
+                timeout: { stepMs: stepTimeoutMs, chunkMs: chunkTimeoutMs },
+              } as Record<string, unknown>,
               toolsets: {
                 glowloom: explicitlySelected
                   ? filterToolsByAllowlist(

@@ -28,9 +28,7 @@ const shortDramaQualityScorer = createScorer<
   if (!sample || sample.shots.length === 0) return 0;
 
   const boundedReviews = sample.reviewRounds >= 1 && sample.reviewRounds <= 2;
-  const allBoundToSubjects = sample.shots.every(
-    (s) => s.subjectIds.length > 0,
-  );
+  const allBoundToSubjects = sample.shots.every((s) => s.subjectIds.length > 0);
   const allAuthorized = sample.shots.every(
     (s) => Boolean(s.decisionId) || s.manualCanvasRedraw === true,
   );
@@ -87,7 +85,10 @@ describe('Short-Drama Domain Evals (Mastra Scorers)', () => {
         },
       ],
     };
-    const res = await shortDramaQualityScorer.run({ input: good, output: good });
+    const res = await shortDramaQualityScorer.run({
+      input: good,
+      output: good,
+    });
     expect(res.score).toBe(1);
   });
 

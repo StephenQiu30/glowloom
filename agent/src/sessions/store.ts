@@ -791,6 +791,76 @@ export class SessionStore {
     };
   }
 
+  async reserveModelRequest(
+    runId: string,
+  ): Promise<{ allowed: boolean; used: number; max: number }> {
+    const updated = await this.db
+      .updateTable('agent.service_runs')
+      .set({
+        used_model_requests: sql<number>`used_model_requests + 1`,
+        updated_at: sql`clock_timestamp()`,
+      })
+      .where('id', '=', runId)
+      .where(sql<boolean>`used_model_requests < max_model_requests`)
+      .returning(['used_model_requests', 'max_model_requests'])
+      .executeTakeFirst();
+
+    if (updated) {
+      return {
+        allowed: true,
+        used: updated.used_model_requests,
+        max: updated.max_model_requests,
+      };
+    }
+
+    const current = await this.db
+      .selectFrom('agent.service_runs')
+      .select(['used_model_requests', 'max_model_requests'])
+      .where('id', '=', runId)
+      .executeTakeFirst();
+
+    return {
+      allowed: false,
+      used: current?.used_model_requests ?? 0,
+      max: current?.max_model_requests ?? 0,
+    };
+  }
+
+  async reserveToolStep(
+    runId: string,
+  ): Promise<{ allowed: boolean; used: number; max: number }> {
+    const updated = await this.db
+      .updateTable('agent.service_runs')
+      .set({
+        used_tool_steps: sql<number>`used_tool_steps + 1`,
+        updated_at: sql`clock_timestamp()`,
+      })
+      .where('id', '=', runId)
+      .where(sql<boolean>`used_tool_steps < max_tool_steps`)
+      .returning(['used_tool_steps', 'max_tool_steps'])
+      .executeTakeFirst();
+
+    if (updated) {
+      return {
+        allowed: true,
+        used: updated.used_tool_steps,
+        max: updated.max_tool_steps,
+      };
+    }
+
+    const current = await this.db
+      .selectFrom('agent.service_runs')
+      .select(['used_tool_steps', 'max_tool_steps'])
+      .where('id', '=', runId)
+      .executeTakeFirst();
+
+    return {
+      allowed: false,
+      used: current?.used_tool_steps ?? 0,
+      max: current?.max_tool_steps ?? 0,
+    };
+  }
+
   private async buildRunView(row: {
     id: string;
     session_id: string;

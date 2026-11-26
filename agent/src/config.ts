@@ -33,6 +33,39 @@ const envSchema = z.object({
     .max(60000)
     .default(5000),
   GLOWLOOM_AGENT_DEFAULT_MODEL: z.string().default('gpt-4o-mini'),
+  GLOWLOOM_AGENT_GATEWAY_PROTOCOL: z
+    .enum([
+      'openai-compatible',
+      'openai',
+      'openai-responses',
+      'anthropic',
+      'google',
+    ])
+    .default('openai-compatible'),
+  GLOWLOOM_AGENT_STEP_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .min(5000)
+    .max(600000)
+    .default(120000),
+  GLOWLOOM_AGENT_CHUNK_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .min(5000)
+    .max(300000)
+    .default(45000),
+  GLOWLOOM_AGENT_MAX_MODEL_REQUESTS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(200)
+    .default(24),
+  GLOWLOOM_AGENT_MAX_TOOL_STEPS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(200)
+    .default(32),
   GLOWLOOM_REDIS_URL: z.string().optional(),
   LANGFUSE_BASE_URL: z.preprocess(
     (value) =>
@@ -58,6 +91,16 @@ export interface AgentConfig {
   leaseMs: number;
   recoveryPollMs: number;
   defaultModel: string;
+  gatewayProtocol:
+    | 'openai-compatible'
+    | 'openai'
+    | 'openai-responses'
+    | 'anthropic'
+    | 'google';
+  stepTimeoutMs: number;
+  chunkTimeoutMs: number;
+  maxModelRequests: number;
+  maxToolSteps: number;
   redisUrl?: string;
   langfuse?: {
     baseUrl: string;
@@ -102,6 +145,11 @@ export function loadConfig(env: NodeJS.ProcessEnv): AgentConfig {
     leaseMs: parsed.GLOWLOOM_AGENT_LEASE_MS,
     recoveryPollMs: parsed.GLOWLOOM_AGENT_RECOVERY_POLL_MS,
     defaultModel: parsed.GLOWLOOM_AGENT_DEFAULT_MODEL,
+    gatewayProtocol: parsed.GLOWLOOM_AGENT_GATEWAY_PROTOCOL,
+    stepTimeoutMs: parsed.GLOWLOOM_AGENT_STEP_TIMEOUT_MS,
+    chunkTimeoutMs: parsed.GLOWLOOM_AGENT_CHUNK_TIMEOUT_MS,
+    maxModelRequests: parsed.GLOWLOOM_AGENT_MAX_MODEL_REQUESTS,
+    maxToolSteps: parsed.GLOWLOOM_AGENT_MAX_TOOL_STEPS,
     ...(parsed.GLOWLOOM_REDIS_URL
       ? { redisUrl: parsed.GLOWLOOM_REDIS_URL }
       : {}),

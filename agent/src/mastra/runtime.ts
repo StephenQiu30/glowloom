@@ -11,6 +11,7 @@ import type { PostgresStore } from '@mastra/pg';
 import type { Logger } from 'pino';
 import {
   createGatewayModel,
+  type CreateGatewayModelOptions,
   type GatewayProviderConfig,
   type RunIdentityHeaders,
 } from '../business/gateway-provider.js';
@@ -32,7 +33,7 @@ export interface MastraRuntimeOptions {
   logger: Logger;
   defaultModelFactory?: (
     identity: RunIdentityHeaders,
-    modelKey?: string,
+    options?: CreateGatewayModelOptions | string,
   ) => MastraModelConfig;
 }
 
@@ -51,7 +52,7 @@ export interface AgentTeam {
   ): Promise<string>;
   createScopedProducer(
     identity: RunIdentityHeaders,
-    modelKey?: string,
+    modelOptions?: CreateGatewayModelOptions | string,
     extraInstructions?: string,
     workspace?: Workspace,
     stageOnly?: boolean,
@@ -89,8 +90,10 @@ export async function createMastraRuntime(
 
   const modelFactory =
     options.defaultModelFactory ??
-    ((identity: RunIdentityHeaders, modelKey?: string) =>
-      createGatewayModel(options.gatewayConfig, identity, modelKey));
+    ((
+      identity: RunIdentityHeaders,
+      modelOptions?: CreateGatewayModelOptions | string,
+    ) => createGatewayModel(options.gatewayConfig, identity, modelOptions));
 
   const systemIdentity: RunIdentityHeaders = {
     actorId: '00000000-0000-0000-0000-000000000000',
@@ -197,7 +200,7 @@ export async function createMastraRuntime(
     },
     async createScopedProducer(
       identity: RunIdentityHeaders,
-      modelKey?: string,
+      modelOptions?: CreateGatewayModelOptions | string,
       extraInstructions?: string,
       workspace?: Workspace,
       stageOnly?: boolean,
@@ -206,7 +209,7 @@ export async function createMastraRuntime(
       const instructions = extraInstructions
         ? `${basePrompt}\n\n${extraInstructions}`
         : basePrompt;
-      const scopedModel = modelFactory(identity, modelKey);
+      const scopedModel = modelFactory(identity, modelOptions);
       if (stageOnly) {
         return new Agent({
           id: 'workflow-stage',

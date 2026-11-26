@@ -33,6 +33,7 @@ const agentTeam = await createMastraRuntime({
     businessOrigin: config.businessOrigin,
     businessToken: config.businessToken,
     defaultModel: config.defaultModel,
+    protocol: config.gatewayProtocol,
   },
   prompts,
   skills,
@@ -52,6 +53,8 @@ const service = new SessionService({
   logger,
   leaseMs: config.leaseMs,
   recoveryPollMs: config.recoveryPollMs,
+  stepTimeoutMs: config.stepTimeoutMs,
+  chunkTimeoutMs: config.chunkTimeoutMs,
 });
 
 let healthServer: HealthServer | undefined;
@@ -63,7 +66,10 @@ function close(): Promise<void> {
     logger.info('Shutting down Glowloom Mastra Agent service');
     healthServer?.markDraining();
     const deadline = setTimeout(() => {
-      logger.error({ code: 'shutdown_timeout' }, 'Agent shutdown deadline exceeded');
+      logger.error(
+        { code: 'shutdown_timeout' },
+        'Agent shutdown deadline exceeded',
+      );
       process.exit(1);
     }, 30_000);
     deadline.unref();

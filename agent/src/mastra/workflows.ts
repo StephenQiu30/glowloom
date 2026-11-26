@@ -53,7 +53,8 @@ const prepareProposalStep = createStep({
 
 const approvalGateStep = createStep({
   id: 'approval-gate',
-  description: 'Suspend workflow for creator approval before billable execution',
+  description:
+    'Suspend workflow for creator approval before billable execution',
   inputSchema: proposalOutputSchema,
   outputSchema: deliveryOutputSchema,
   suspendSchema: approvalSuspendSchema,
