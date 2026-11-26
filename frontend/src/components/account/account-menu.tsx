@@ -196,7 +196,7 @@ export function AccountMenu({
           disabled={disabled}
           title={name}
         >
-          <AccountAvatar />
+          <AccountAvatar size="sm" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent

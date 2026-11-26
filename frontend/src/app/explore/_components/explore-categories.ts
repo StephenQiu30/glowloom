@@ -4,7 +4,6 @@ type ExploreCategory = {
   kind: "work" | "skill" | "activity";
   scenes: { id: string; label: string }[];
   searchType?: "shortFilm" | "skill";
-  sceneExamples?: boolean;
 };
 
 function scenes(namespace: string, values: [string, string][]) {
@@ -55,7 +54,6 @@ export const exploreCategories: ExploreCategory[] = [
     id: "work.advertising",
     label: "广告营销",
     kind: "work",
-    sceneExamples: true,
     scenes: scenes("advertising", [
       ["brand", "品牌广告"],
       ["social", "社媒营销"],

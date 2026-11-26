@@ -26,9 +26,6 @@ import { PanelLeftIcon } from "lucide-react";
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
-const SIDEBAR_WIDTH = "16rem";
-const SIDEBAR_WIDTH_MOBILE = "18rem";
-const SIDEBAR_WIDTH_ICON = "3rem";
 const SIDEBAR_KEYBOARD_SHORTCUT = "b";
 
 type SidebarContextProps = {
@@ -137,8 +134,8 @@ function SidebarProvider({
         data-slot="sidebar-wrapper"
         style={
           {
-            "--sidebar-width": SIDEBAR_WIDTH,
-            "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
+            "--sidebar-width": "var(--layout-sidebar)",
+            "--sidebar-width-icon": "var(--layout-sidebar-collapsed)",
             ...style,
           } as React.CSSProperties
         }
@@ -201,12 +198,8 @@ function Sidebar({
           data-sidebar="sidebar"
           data-slot="sidebar"
           data-mobile="true"
-          className="w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
-          style={
-            {
-              "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
-            } as React.CSSProperties
-          }
+          className="bg-sidebar p-0 text-sidebar-foreground data-[side=left]:w-(--layout-sidebar-mobile) data-[side=right]:w-(--layout-sidebar-mobile)"
+          showCloseButton={false}
           side={side}
         >
           <SheetHeader className="sr-only">
@@ -499,7 +492,7 @@ const sidebarMenuButtonVariants = cva(
       size: {
         default: "h-8 text-sm",
         workspace:
-          "h-(--control-height) rounded-(--radius-control) gap-(--workspace-navigation-gap) text-[length:var(--workspace-navigation-label-size)] leading-(--workspace-navigation-label-line-height) pointer-coarse:min-h-(--ui-control-size-touch) group-data-[collapsible=icon]:size-9! group-data-[collapsible=icon]:min-h-0 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0! group-data-[collapsible=icon]:[&>span]:hidden",
+          "h-(--sidebar-navigation-row) rounded-(--radius-control) gap-(--workspace-navigation-gap) text-[length:var(--workspace-navigation-label-size)] leading-(--workspace-navigation-label-line-height) pointer-coarse:min-h-(--ui-control-size-touch) group-data-[collapsible=icon]:size-(--sidebar-navigation-row)! group-data-[collapsible=icon]:min-h-0 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0! group-data-[collapsible=icon]:[&>span]:hidden",
         history:
           "h-(--control-height) rounded-(--radius-control) gap-(--workspace-navigation-gap) py-0 text-[length:var(--workspace-navigation-label-size)] leading-(--workspace-navigation-history-line-height) pointer-coarse:min-h-(--ui-control-size-touch) [&>svg]:rounded-md [&>svg]:bg-sidebar-accent [&>svg]:p-[3px]",
         sm: "h-7 text-xs",

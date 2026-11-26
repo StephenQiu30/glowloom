@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { PageLayout } from "@/components/layout/page-layout";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { ContentState } from "@/components/layout/content-state";
 import {
@@ -36,10 +37,22 @@ const SourcePicker = dynamic(() =>
     (module) => module.UnifiedSubjectSourcePicker,
   ),
 );
+const allStyles = "全部";
 const motionStyles = [
-  { title: "产品定格", image: "cobalt-headphones" },
-  { title: "幻境光效", image: "moonlight-whale" },
-  { title: "山野漫游", image: "alpine-road" },
+  { title: "产品定格", image: "cobalt-headphones", category: "产品展示" },
+  { title: "幻境光效", image: "moonlight-whale", category: "视觉特效" },
+  { title: "山野漫游", image: "alpine-road", category: "氛围场景" },
+];
+const motionCategories = [
+  allStyles,
+  ...motionStyles.map((item) => item.category),
+];
+const marketingCategories = [
+  allStyles,
+  "社媒营销",
+  "商品展示",
+  "创意广告",
+  "营销海报",
 ];
 const marketingTemplates = [
   { title: "耳机产品展示", image: "cobalt-headphones", category: "商品展示" },
@@ -128,9 +141,14 @@ function StudioWorkspace({
   >({});
   const [ratio, setRatio] = useState("16:9");
   const [duration, setDuration] = useState(marketing ? "15s" : "10s");
-  const [category, setCategory] = useState("全部");
+  const [category, setCategory] = useState(allStyles);
   const [tool, setTool] = useState<string | null>(null);
   const styles = marketing ? marketingTemplates : motionStyles;
+  const categories = marketing ? marketingCategories : motionCategories;
+  const visibleStyles =
+    category === allStyles
+      ? styles
+      : styles.filter((item) => item.category === category);
   function chooseSource(target: string) {
     if (!actorID) {
       onLogin();
@@ -274,52 +292,53 @@ function StudioWorkspace({
             <h2 id={`${promptID}-templates`}>
               {marketing ? "创作模板" : "参考风格"}
             </h2>
-            {marketing && (
-              <Parameter
-                label="营销模板分类"
-                value={category}
-                values={[
-                  "全部",
-                  "社媒营销",
-                  "商品展示",
-                  "创意广告",
-                  "营销海报",
-                ]}
-                onChange={setCategory}
-              />
-            )}
           </div>
-          <div className="studio-template-grid">
-            {styles
-              .filter(
-                (item) =>
-                  !marketing ||
-                  category === "全部" ||
-                  ("category" in item && item.category === category),
-              )
-              .map((item) => (
-                <Button
-                  variant="asset-card"
-                  size="asset-card"
-                  key={item.title}
-                  type="button"
-                  className="studio-template-card"
-                  onClick={() => {
-                    setStyle(item.title);
-                    document.getElementById(promptID)?.focus();
-                  }}
-                  aria-pressed={style === item.title}
-                >
-                  <span className="studio-template-cover">
-                    <ReferenceCover image={item.image} />
-                  </span>
-                  <span className="resource-card-title">{item.title}</span>
-                </Button>
+          <Tabs
+            value={category}
+            onValueChange={setCategory}
+            className="min-w-0"
+          >
+            <TabsList
+              variant="secondary"
+              aria-label={marketing ? "营销模板分类" : "参考风格分类"}
+            >
+              {categories.map((value) => (
+                <TabsTrigger key={value} value={value}>
+                  {value}
+                </TabsTrigger>
               ))}
-          </div>
-          {marketing && category === "营销海报" && (
-            <ContentState title="暂无营销海报模板" className="min-h-36" />
-          )}
+            </TabsList>
+            <TabsContent value={category}>
+              {visibleStyles.length ? (
+                <div className="studio-template-grid">
+                  {visibleStyles.map((item) => (
+                    <Button
+                      variant="asset-card"
+                      size="asset-card"
+                      key={item.title}
+                      type="button"
+                      className="studio-template-card"
+                      onClick={() => {
+                        setStyle(item.title);
+                        document.getElementById(promptID)?.focus();
+                      }}
+                      aria-pressed={style === item.title}
+                    >
+                      <span className="studio-template-cover">
+                        <ReferenceCover image={item.image} />
+                      </span>
+                      <span className="resource-card-title">{item.title}</span>
+                    </Button>
+                  ))}
+                </div>
+              ) : (
+                <ContentState
+                  title={`暂无${category}模板`}
+                  className="min-h-36"
+                />
+              )}
+            </TabsContent>
+          </Tabs>
         </section>
         {marketing && (
           <section aria-labelledby={`${promptID}-tools`}>

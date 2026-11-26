@@ -8,7 +8,6 @@ import {
   useRef,
   useMemo,
   useSyncExternalStore,
-  type CSSProperties,
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
@@ -240,12 +239,6 @@ export function BasicLayout({
         className="product-shell"
         open={sidebarOpen}
         onOpenChange={setSidebarPreference}
-        style={
-          {
-            "--sidebar-width": "var(--layout-sidebar)",
-            "--sidebar-width-icon": "var(--layout-sidebar-collapsed)",
-          } as CSSProperties
-        }
       >
         <Shell
           screen={screen}

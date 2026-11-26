@@ -5,13 +5,31 @@
   --workspace-navigation-label-line-height: 1.375rem;
   --workspace-navigation-history-line-height: 1.125rem;
   --workspace-navigation-section-line-height: 1.25rem;
-  --workspace-navigation-gap: 0.625rem;
+  --workspace-navigation-gap: 0.5rem;
+  --layout-sidebar: 15rem;
+  --layout-sidebar-collapsed: 4rem;
+  --layout-sidebar-mobile: min(18rem, calc(100dvw - 2rem));
+  --sidebar-navigation-inset: 0.75rem;
+  --sidebar-navigation-row: var(--ui-control-size-standard);
+  --product-toolbar-gap: 0.5rem;
+  --product-toolbar-padding: 0.25rem;
+  --product-toolbar-touch-padding: 0.1875rem;
 
   --ui-control-size-compact: 1.75rem;
   --ui-control-size-standard: 2rem;
   --ui-control-size-default: 2.25rem;
   --ui-control-size-large: 2.5rem;
   --ui-control-size-touch: 2.75rem;
+
+  --ui-tab-gap: calc(var(--spacing) * 1);
+  --ui-tab-padding-inline: calc(var(--spacing) * 3);
+  --ui-tab-radius: var(--radius-control);
+  --ui-tab-hover: var(--surface-2);
+  --ui-tab-selected: var(--secondary);
+  --ui-tab-text: var(--workspace-muted-foreground);
+  --ui-tab-text-selected: var(--workspace-foreground);
+  --secondary-tab-padding-inline: calc(var(--spacing) * 4);
+  --secondary-tab-gap: calc(var(--spacing) * 2);
 
   --ui-motion-duration-fast: 120ms;
   --ui-motion-duration-standard: 150ms;

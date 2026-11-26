@@ -81,7 +81,9 @@ export function CreditPopover({
           }
         >
           <Icon aria-hidden="true" data-icon="inline-start" />
-          <span className={showBalance ? undefined : "max-md:hidden"}>
+          <span
+            className={!showBalance || navigation ? "max-md:hidden" : undefined}
+          >
             {showBalance && wallet?.enabled && wallet.general_credits != null
               ? wallet.general_credits
               : "积分"}

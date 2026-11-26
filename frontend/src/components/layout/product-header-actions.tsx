@@ -2,7 +2,8 @@
 
 import { Toolbar } from "@/components/ui/toolbar";
 import type { ProductAccountActionsProps } from "./product-account-actions";
-import { ProductGlobalActions } from "./product-global-actions";
+import { ProductAccountActions } from "./product-account-actions";
+import { ProductUtilityNavigation } from "./product-utility-navigation";
 import { ProductSearch, type PageSearch } from "./product-search";
 
 export type ProductHeaderActionsProps = ProductAccountActionsProps & {
@@ -19,13 +20,10 @@ export function ProductHeaderActions({
   ...accountProps
 }: ProductHeaderActionsProps) {
   return (
-    <Toolbar className="product-header-actions">
+    <Toolbar density="navigation" className="product-header-actions">
       {showSearch && <ProductSearch search={search} />}
-      <ProductGlobalActions
-        key="account"
-        showUtilities={showUtilities}
-        {...accountProps}
-      />
+      {showUtilities && <ProductUtilityNavigation />}
+      <ProductAccountActions key="account" {...accountProps} />
     </Toolbar>
   );
 }

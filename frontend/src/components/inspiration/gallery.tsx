@@ -194,29 +194,25 @@ function ReferenceGrid({ items }: { items: Preview[] }) {
   );
 }
 
-export function ExploreReferenceExamples({
-  scene,
-  query,
-}: {
-  scene?: string;
-  query: string;
-}) {
-  const matches = (scene ? works : homeWorks).filter(
-    (item) =>
-      (!scene || item.scene === scene) && item.title.includes(query.trim()),
-  );
+const examplesByScene: Record<string, Preview[]> = {
+  "film.visual": [homeWorks[3]],
+  "animation.visual": [homeWorks[2]],
+  "advertising.brand": works.filter((item) => item.scene === "品牌广告"),
+  "advertising.social": works.filter((item) => item.scene === "社媒营销"),
+  "graphic.brand": [homeWorks[0], homeWorks[1]],
+  "commerce.hero": [homeWorks[1]],
+  "commerce.product": [homeWorks[0], homeWorks[1]],
+  "other.inspiration": homeWorks,
+};
+
+export function getExploreReferenceExamples(scene?: string) {
+  return scene ? (examplesByScene[scene] ?? []) : homeWorks;
+}
+
+export function ExploreReferenceExamples({ items }: { items: Preview[] }) {
   return (
-    <section
-      className="inspiration explore-gallery"
-      aria-label={scene ? "广告营销示例作品" : "AI 生成示例"}
-    >
-      <ReferenceGrid items={matches} />
-      {!matches.length && (
-        <ContentState
-          title="没有匹配的示例作品"
-          description="试试其他关键词或场景。"
-        />
-      )}
+    <section className="inspiration explore-gallery" aria-label="AI 生成示例">
+      <ReferenceGrid items={items} />
       <p className="source-caption">AI 生成示例</p>
     </section>
   );

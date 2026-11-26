@@ -7,19 +7,33 @@ import { PageLayout } from "@/components/layout/page-layout";
 import { HeaderNavigation } from "@/components/layout/header-navigation";
 import { ContentState } from "@/components/layout/content-state";
 import { Button } from "@/components/ui/button";
-import { ExploreReferenceExamples } from "@/components/inspiration/gallery";
+import {
+  ExploreReferenceExamples,
+  getExploreReferenceExamples,
+} from "@/components/inspiration/gallery";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { exploreCategories, featuredCategory } from "./explore-categories";
 import { OverflowNavigation } from "./overflow-navigation";
 
-export function ExplorePage({ initialQuery = "" }: { initialQuery?: string }) {
+export function ExplorePage({
+  initialQuery = "",
+  initialCategory,
+}: {
+  initialQuery?: string;
+  initialCategory?: string;
+}) {
   const [search, setSearch] = useState(initialQuery);
   const router = useRouter();
   const featuredTab = useRef<HTMLButtonElement>(null);
-  const [selection, setSelection] = useState({
-    category: featuredCategory.id,
-    scene: "",
+  const [selection, setSelection] = useState(() => {
+    const initial = exploreCategories.find(
+      (item) => item.id === initialCategory,
+    );
+    return {
+      category: initial?.id ?? featuredCategory.id,
+      scene: initial?.scenes[0]?.id ?? "",
+    };
   });
   const category =
     exploreCategories.find((item) => item.id === selection.category) ??
@@ -27,28 +41,30 @@ export function ExplorePage({ initialQuery = "" }: { initialQuery?: string }) {
   const scene = category.scenes.find((item) => item.id === selection.scene);
   const isFeatured = category.id === featuredCategory.id;
   const sceneLabel = category.kind === "skill" ? "技能分类" : "作品场景";
-  const content =
-    isFeatured || (category.sceneExamples && scene) ? (
-      <ExploreReferenceExamples
-        scene={isFeatured ? undefined : scene?.label}
-        query=""
-      />
-    ) : (
-      <ContentState
-        title={`${category.kind === "skill" ? "技能" : category.kind === "activity" ? "活动" : "作品"}尚未开放`}
-        actions={
-          <Button
-            variant="secondary"
-            onClick={() => {
-              setSelection({ category: featuredCategory.id, scene: "" });
-              featuredTab.current?.focus();
-            }}
-          >
-            浏览精选
-          </Button>
-        }
-      />
-    );
+  const examples = isFeatured
+    ? getExploreReferenceExamples()
+    : scene
+      ? getExploreReferenceExamples(scene.id)
+      : [];
+  const content = examples.length ? (
+    <ExploreReferenceExamples items={examples} />
+  ) : (
+    <ContentState
+      title={`${category.kind === "skill" ? "技能" : category.kind === "activity" ? "活动" : "作品"}尚未开放`}
+      description={scene && `当前分类为${scene.label}。`}
+      actions={
+        <Button
+          variant="secondary"
+          onClick={() => {
+            setSelection({ category: featuredCategory.id, scene: "" });
+            featuredTab.current?.focus();
+          }}
+        >
+          浏览精选
+        </Button>
+      }
+    />
+  );
 
   return (
     <PageLayout

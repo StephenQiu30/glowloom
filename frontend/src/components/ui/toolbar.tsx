@@ -6,7 +6,7 @@ export function Toolbar({
   density = "standard",
   ...props
 }: ComponentProps<"div"> & {
-  density?: "standard" | "roomy";
+  density?: "standard" | "navigation" | "roomy";
 }) {
   return (
     <div

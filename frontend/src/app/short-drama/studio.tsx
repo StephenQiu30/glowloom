@@ -72,7 +72,7 @@ function StudioWorkspace() {
         </h1>
         <Card className="gap-0 p-0">
           <Tabs value={mode} onValueChange={setMode} className="min-w-0 gap-0">
-            <Toolbar className="min-w-0 flex-nowrap justify-between px-3 pt-3 md:px-4 md:pt-4">
+            <Toolbar className="min-w-0 flex-wrap justify-between px-3 pt-3 md:px-4 md:pt-4">
               <TabsList aria-label="短剧创作方式">
                 {modes.map(({ id, label, icon: Icon }) => (
                   <TabsTrigger key={id} value={id}>
@@ -85,7 +85,7 @@ function StudioWorkspace() {
                 type="button"
                 variant="ghost"
                 size="toolbar"
-                className="shrink-0"
+                className="ml-auto shrink-0"
                 disabled={createDisabled}
                 onClick={() => (session ? setCreating("canvas") : login())}
               >
@@ -159,7 +159,7 @@ function StudioWorkspace() {
           精选作品
         </h2>
         <Button asChild variant="ghost" size="sm">
-          <Link href="/explore">
+          <Link href="/explore?category=work.drama">
             前往探索 <ArrowUpRight data-icon="inline-end" aria-hidden="true" />
           </Link>
         </Button>

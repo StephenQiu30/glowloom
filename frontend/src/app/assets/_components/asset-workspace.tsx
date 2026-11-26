@@ -235,18 +235,9 @@ function WorkspaceScope({
         className="asset-workspace-tabs gap-6"
       >
         <HeaderNavigation label="资产分类" active={view}>
-          <TabsList
-            variant="workspace"
-            aria-label="资产来源"
-            className="min-w-max"
-          >
+          <TabsList variant="workspace" aria-label="资产来源">
             {sources.map((source) => (
-              <TabsTrigger
-                key={source.id}
-                value={source.id}
-                className="transition-[color,background-color,box-shadow] motion-reduce:transition-none"
-                disabled={locked}
-              >
+              <TabsTrigger key={source.id} value={source.id} disabled={locked}>
                 {source.label}
               </TabsTrigger>
             ))}

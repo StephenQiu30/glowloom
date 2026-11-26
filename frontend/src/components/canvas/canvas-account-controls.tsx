@@ -2,15 +2,11 @@
 
 import { useState } from "react";
 import { Bell } from "lucide-react";
-import { AccountMenu } from "@/components/account/account-menu";
+import { AccountToolbarItems } from "@/components/account/account-toolbar-items";
 import { AccountLogoutDialog } from "@/components/account/account-logout-dialog";
 import { useOptionalSession } from "@/components/auth/session";
-import {
-  CreditPopover,
-  CreditWalletSummary,
-} from "@/components/billing/credit-popover";
+import { CreditWalletSummary } from "@/components/billing/credit-popover";
 import { useCreditWallet } from "@/components/billing/use-credit-wallet";
-import { NotificationBell } from "@/components/notifications/notification-bell";
 import { useNotificationCenter } from "@/components/notifications/notification-provider";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 
@@ -32,20 +28,12 @@ export function CanvasAccountControls({
 
   return (
     <>
-      {!compact && (
-        <>
-          <NotificationBell onLogin={onHome} />
-          <CreditPopover
-            showBalance
-            canvasScopeID={scopeID}
-            canNavigate={canNavigate}
-          />
-        </>
-      )}
-      <AccountMenu
+      <AccountToolbarItems
         actor={session.actor}
+        canvasScopeID={scopeID}
+        onLogin={onHome}
         compact={compact}
-        navigationDisabled={!canNavigate}
+        canNavigate={canNavigate}
         utilityItems={
           compact ? <CanvasAccountUtilities scopeID={scopeID} /> : undefined
         }
