@@ -34,7 +34,11 @@ const envSchema = z.object({
     .default(5000),
   GLOWLOOM_AGENT_DEFAULT_MODEL: z.string().default('gpt-4o-mini'),
   GLOWLOOM_REDIS_URL: z.string().optional(),
-  LANGFUSE_BASE_URL: z.string().url().optional(),
+  LANGFUSE_BASE_URL: z.preprocess(
+    (value) =>
+      typeof value === 'string' && value.trim() === '' ? undefined : value,
+    z.string().url().optional(),
+  ),
   LANGFUSE_PUBLIC_KEY: z.string().optional(),
   LANGFUSE_SECRET_KEY: z.string().optional(),
   GLOWLOOM_LOG_LEVEL: z

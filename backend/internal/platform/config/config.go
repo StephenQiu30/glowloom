@@ -202,7 +202,7 @@ func (c Config) validate() error {
 	}
 	if c.CanvasRuntimeURL != "" || c.CanvasRuntimeToken != "" {
 		endpoint, err := url.Parse(c.CanvasRuntimeURL)
-		if err != nil || endpoint.Host == "" || (endpoint.Scheme != "http" && endpoint.Scheme != "https") || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.Fragment != "" || len(c.CanvasRuntimeToken) < 32 {
+		if err != nil || endpoint.Host == "" || (endpoint.Scheme != "http" && endpoint.Scheme != "https" && endpoint.Scheme != "grpc") || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.Fragment != "" || len(c.CanvasRuntimeToken) < 32 {
 			return fmt.Errorf("%w: invalid internal canvas runtime configuration", ErrInvalid)
 		}
 	}

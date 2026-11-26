@@ -8,20 +8,25 @@ import {
 } from '../src/skills/loader.js';
 
 describe('config, declarative skills, and prompt fallback', () => {
-  it('validates GLOWLOOM_AGENT_* environment variables with Zod', () => {
-    const config = loadConfig({
-      GLOWLOOM_AGENT_DB_DSN: 'postgres://glowloom_agent:secret@127.0.0.1:5432/glowloom',
-      GLOWLOOM_AGENT_SERVICE_TOKEN: 's'.repeat(32),
-      GLOWLOOM_AGENT_BUSINESS_ORIGIN: 'http://backend:18080/',
-      GLOWLOOM_AGENT_BUSINESS_TOKEN: 'b'.repeat(32),
-    });
+  it.each([undefined, '', '  '])(
+    'loads Agent config with an unset or blank Langfuse URL (%j)',
+    (langfuseBaseURL) => {
+      const config = loadConfig({
+        GLOWLOOM_AGENT_DB_DSN:
+          'postgres://glowloom_agent:secret@127.0.0.1:5432/glowloom',
+        GLOWLOOM_AGENT_SERVICE_TOKEN: 's'.repeat(32),
+        GLOWLOOM_AGENT_BUSINESS_ORIGIN: 'http://backend:18080/',
+        GLOWLOOM_AGENT_BUSINESS_TOKEN: 'b'.repeat(32),
+        LANGFUSE_BASE_URL: langfuseBaseURL,
+      });
 
-    expect(config.httpHost).toBe('0.0.0.0');
-    expect(config.httpPort).toBe(4401);
-    expect(config.grpcAddr).toBe('0.0.0.0:4402');
-    expect(config.businessOrigin).toBe('http://backend:18080');
-    expect(config.langfuse).toBeUndefined();
-  });
+      expect(config.httpHost).toBe('0.0.0.0');
+      expect(config.httpPort).toBe(4401);
+      expect(config.grpcAddr).toBe('0.0.0.0:4402');
+      expect(config.businessOrigin).toBe('http://backend:18080');
+      expect(config.langfuse).toBeUndefined();
+    },
+  );
 
   it('loads declarative SKILL.md bundles and filters MCP tools strictly by allowlist', async () => {
     const skills = await loadDeclarativeSkills();

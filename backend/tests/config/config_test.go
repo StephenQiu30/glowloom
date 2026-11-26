@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
@@ -96,6 +97,28 @@ func TestLoadFromEnv(t *testing.T) {
 	want := config.Config{Env: "staging", PublicOrigin: "https://glowloom.example", HTTPAddr: ":9090", WorkerHealthAddr: ":9091", RelayHealthAddr: ":9092", LogLevel: "debug", DBDSN: "postgres://localhost/glowloom", RedisURL: "redis://localhost:6379/1", KafkaBrokers: "localhost:9092", CreditCommandRequestsPerMinute: 120}
 	if !reflect.DeepEqual(cfg, want) {
 		t.Errorf("Load() = %+v, want %+v", cfg, want)
+	}
+}
+
+func TestLoadCanvasRuntimeURL(t *testing.T) {
+	t.Setenv("GLOWLOOM_COLLAB_RUNTIME_TOKEN", strings.Repeat("t", 32))
+
+	for _, endpoint := range []string{"http://canvas:4400", "https://canvas.example.test", "grpc://canvas:4402"} {
+		t.Run(endpoint, func(t *testing.T) {
+			t.Setenv("GLOWLOOM_CANVAS_RUNTIME_URL", endpoint)
+			cfg, err := config.Load()
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+			if cfg.CanvasRuntimeURL != endpoint {
+				t.Errorf("CanvasRuntimeURL = %q, want %q", cfg.CanvasRuntimeURL, endpoint)
+			}
+		})
+	}
+
+	t.Setenv("GLOWLOOM_CANVAS_RUNTIME_URL", "grpcs://canvas:4402")
+	if _, err := config.Load(); !errors.Is(err, config.ErrInvalid) {
+		t.Fatalf("Load() error = %v, want ErrInvalid for unsupported TLS gRPC", err)
 	}
 }
 
