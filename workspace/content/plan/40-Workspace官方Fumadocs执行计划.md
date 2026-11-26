@@ -22,7 +22,7 @@
 
 ## 4. 主工程门禁
 
-在实际 Workspace 目录重新安装依赖并构建，不复用隔离目录的 Next 产物。执行 pnpm lint、pnpm types:check、pnpm format:check、pnpm build。官方搜索同步连接专用 Meilisearch，浏览器只用 docs 的 search-only key。
+在实际 Workspace 目录安装冻结依赖并构建，不复用隔离目录的 Next 产物。执行 `pnpm docs:check`、`pnpm lint`、`pnpm types:check`、`pnpm format:check`、`pnpm build`；搜索通过内置 `/api/search` 提供，无需独立外部搜索服务或密钥同步。
 
 ## 5. 启动与接受
 

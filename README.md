@@ -53,27 +53,22 @@ docker compose up -d --build --wait
 docker compose ps
 ```
 
-| 服务          | 本地地址                                                |
-| ------------- | ------------------------------------------------------- |
-| 前端工作台    | [localhost:1122](http://localhost:1122)                 |
-| Go Gateway    | [127.0.0.1:1123](http://127.0.0.1:1123)，业务后端仅内网 |
-| Workspace     | [localhost:1130/docs](http://localhost:1130/docs)      |
-| Agent         | Compose 内部 `agent:4401`，无宿主端口                   |
-| Media 计算    | Compose 内部 `media:9091`，健康端口 8081，无宿主端口    |
-| Creation 文档 | Compose 内部 `creation:9092`，健康端口 8083，无宿主端口 |
+| 服务       | 本地地址                                                              |
+| ---------- | --------------------------------------------------------------------- |
+| 前端工作台 | [localhost:1122](http://localhost:1122)                               |
+| Go 单体后端 | [127.0.0.1:1123](http://127.0.0.1:1123)（容器内 `:18080`，`--role=all`） |
+| Workspace  | [localhost:1130/docs](http://localhost:1130/docs)                     |
+| Agent      | Compose 内部 `agent:4402`（gRPC）/ `4401`（健康），无宿主端口         |
+| Canvas     | Compose 内部 `canvas:4402`（gRPC）/ `4400`（健康），无宿主端口        |
 
 首次启动成功后，打开工作台；需要私人素材、主体、画布或生成时，使用有效账号登录，并按对象权限访问。容器健康不等于真实生成能力已验收。
 
-`docker-compose.yml` 是应用的基础部署配置，包含 `frontend`、`gateway`、`backend`、`worker`、`relay`、`media`、`creation`、`agent` 和 `canvas`。独立 Media 镜像实际承接 WebM→H264 MP4 规范化，API 通过带身份的 gRPC 字节流调用，不挂载共享文件或透传任意 URL，不自动重试或本地回退。原上传最终权限锁、审阅、对象与资产提交保持原 owner；Media 不连接业务数据库，因此不是整个 Media 域已迁出。前端运行 Next.js standalone 构建，经 Gateway 转发 `/api`。业务 API、持久任务、事件中继各用独立容器、探针与停机生命周期；三者仍复用同一业务镜像、配置与数据库，不是四域已独立。完整启动用 `--wait` 核对所有服务，Gateway 的 readiness 只探测 API，不以 worker 健康作为同步请求准入。Agent 内部调用不经过公开 Gateway。四域独立写入权按[设计44](workspace/content/design/44-Go微服务架构与技术选型设计.md)逐域验收。更新同一业务镜像时一起更新三个运行角色：
+`docker-compose.yml` 是应用的基础部署配置，包含 5 个应用服务：`frontend`、`backend`、`canvas`、`agent` 与 `workspace`（架构合同见 [设计47](workspace/content/design/47-Go模块化单体架构与RPC集成设计.md) 与 [设计48](workspace/content/design/48-Agent服务Mastra架构与技术选型设计.md)）。Go 后端以模块化单体 `backend/cmd/glowloom --role=all` 运行，统一承接公开 HTTP/SSE/WebSocket API、后台任务 Worker、Kafka 事件 Relay 与进程内有界并发的文档提取及 FFmpeg 规范化，通过强类型 gRPC 与 `canvas` / `agent` 通信。更新后端镜像时执行：
 
 ```sh
-docker compose up -d --build --wait backend worker relay
-docker compose logs --tail=100 backend worker relay
+docker compose up -d --build --wait backend
+docker compose logs --tail=100 backend
 ```
-
-更新 Media 计算镜像时使用 `docker compose up -d --build --wait media`。其 `/health/live` 和 `/health/ready` 仅在内部健康端口可达；默认并发 2、临时盘 2100MiB、内存上限 3GiB。未配置远端地址及令牌的非 Compose API 会拒绝 WebM 规范化，其他上传类型保持原路径；只填其中一项会启动失败。独立进程在 `backend/` 下执行 `go run ./media`，必须由环境提供令牌并安装 FFmpeg/ffprobe，不读取业务 `.env`。非 local 部署必须分别为服务端 `GLOWLOOM_MEDIA_TLS_*_FILE` 和客户端 `GLOWLOOM_MEDIA_NORMALIZATION_TLS_*_FILE` 配置完整 mTLS 身份，另设私有 `GLOWLOOM_MEDIA_NORMALIZATION_ADDRESS`；当前 Compose 明确只声明 local 网络，不充当生产 TLS 配置。
-
-Creation 的 TXT/DOCX 提取由独立 `creation` 镜像承接，脚本导入 Worker 和 Agent 文档引用均通过 gRPC 调用。更新使用 `docker compose up -d --build --wait creation`；默认并发 2、临时盘 64MiB、内存上限 1GiB，内部健康端口 8083。源文件上限 20MiB，结果 JSON 上限 32MiB，单次期限 60 秒。它不接入数据库、对象存储或消息队列，也不需要 FFmpeg；最终文档保存、权限复核、任务租约和幂等提交仍由原 owner 负责，不代表 Creation 全域已迁出。Compose 需提供独立 `GLOWLOOM_CREATION_SERVICE_TOKEN`；非 Compose 消费方另设 `GLOWLOOM_CREATION_EXTRACTION_ADDRESS`，两者全空会拒绝提取，部分配置会启动失败。独立进程在 `backend/` 执行 `go run ./creation`，只读自身环境配置；非 local 两端分别要求完整 `GLOWLOOM_CREATION_TLS_*_FILE` 和 `GLOWLOOM_CREATION_EXTRACTION_TLS_*_FILE` mTLS 身份。配置模板见 `.env.example`。
 
 后端已健康时，可单独更新前端：
 
@@ -125,32 +120,25 @@ Go 二进制和 Next.js 构建产物均在镜像构建阶段生成，容器启�
 ## 仓库结构
 
 ```text
-frontend/      Next.js 工作台与交互界面
-backend/       单 Go module；服务 owner、legacy API/worker/relay 与数据库定义
-agent/         独立 TypeScript/Pi Durable 服务与 PostgreSQL Storage
-canvas/ 私有 Yjs 协作运行时
+frontend/      Next.js 工作台与交互界面（含画布编辑器 UI）
+backend/       单 Go module 模块化单体（API / Worker / Relay）与数据库唯一结构定义
+agent/         独立 Node 24 TypeScript / Mastra Agent 服务（gRPC + MCP + Kysely）
+canvas/        纯 Yjs 协作引擎（同构内核 + 无状态 gRPC 候选计算）
 workspace/     官方 Fumadocs 知识库（正文在 content/）
 ```
 
-GitHub 仓库现名为 `StephenQiu30/glowloom`。后端保留根单 Go module `github.com/StephenQiu30/glowloom-server/backend`；legacy 业务命令为 `glowloom`，入口仍为 `backend/cmd/glowloom`。按[设计44 §7.5](workspace/content/design/44-Go微服务架构与技术选型设计.md#75-go-项目结构)，已有实现以服务 owner 归位：
+GitHub 仓库现名为 `StephenQiu30/glowloom`。后端保留根单 Go module `github.com/StephenQiu30/glowloom-server/backend`，唯一入口为 `backend/cmd/glowloom`，按 [设计47](workspace/content/design/47-Go模块化单体架构与RPC集成设计.md) 组织模块化单体目录：
 
 ```text
 backend/
-  gateway/       main.go、app/、proxy/、Dockerfile
-  identity/      domain/、application/、adapter/（无假入口或镜像）
-  creation/      main.go、app/、document/、workspace/、canvas/、script/、bible/、subject/、prompt/、Dockerfile
-  media/         main.go、app/、processing/、domain/、application/、adapter/、mediatool/、Dockerfile
-  execution/     operation/、catalog/、billing/（无假入口或镜像）
-  cmd/glowloom/  尚未切换的业务角色和显式运维入口
-  internal/      platform/、contract/gen/、app/（legacy 全量组合）及暂留跨域/专用包
-  api/proto/     唯一 Go RPC 协议源
+  cmd/glowloom/  模块化单体唯一入口（默认 --role=all）
+  internal/      identity/、creation/、media/、execution/、agent/、skill/、analytics/、observability/、audit/、infra/、platform/、app/、gen/
+  api/proto/     唯一跨服务 gRPC/Protobuf 协议源（Buf 管理）
   tests/         集中行为与工程门禁
   db/            唯一 schema.sql 和公共 data.sql
 ```
 
-参照 Google 官方 microservices-demo 的服务内聚示例，不把它称为唯一 Google 目录标准；不增加 services/cmd/internal 套层、嵌套 internal、facade 或空服务。三个真实入口的 `app` 只保留实际配置/生命周期，不吸入 legacy 数据库 wiring；`internal/{agent,skill,analytics,observability,audit,infra}` 暂留，不假归通用库。目录归位不等于四个业务 owner、授权或资金事务已独立，完整拆分目标及原保护不变。
-
-三个服务镜像分别使用 `backend/gateway/Dockerfile`、`backend/creation/Dockerfile`、`backend/media/Dockerfile`，构建上下文仍为 `backend`；从 backend 执行 `go run ./gateway`、`go run ./creation`、`go run ./media`。构建入口时用 `go build -o <临时目录>/<二进制> ./<入口>`，避免输出名与服务目录冲突。配置只使用当前 `GLOWLOOM_*`，旧环境变量别名已移除；运行资源名称以实际部署为准。
+配置只使用当前 `GLOWLOOM_*`，旧环境变量别名已移除；运行资源名称以实际部署为准。
 
 ## 文档与协作
 

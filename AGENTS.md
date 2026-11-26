@@ -51,9 +51,9 @@
 
 ## Node.js 服务工程规范
 
-独立 NestJS 服务遵循 [Google TypeScript Style Guide](https://google.github.io/styleguide/tsguide.html)。进程入口负责配置、监听和关闭。Nest 装配及入站协议集中在 HTTP 边界，业务逻辑按职责组织并使用普通 TypeScript 模块。各服务的依赖边界与门禁分别见 [Agent 规范](agent/AGENTS.md)和 [Canvas 规范](canvas/AGENTS.md)。
+独立 Node 24 TypeScript 服务遵循 [Google TypeScript Style Guide](https://google.github.io/styleguide/tsguide.html)。进程入口负责配置、监听和优雅关闭，入站协议集中在 `transport/` 边界，业务逻辑按职责组织为普通 TypeScript 模块。各服务的依赖边界与门禁分别见 [Agent 规范](agent/AGENTS.md)、[Canvas 规范](canvas/AGENTS.md) 和 [Workspace 规范](workspace/AGENTS.md)。
 
-NestJS 服务的普通数据库增删改查统一使用 Prisma；行锁、数据库时钟和窗口等必要查询使用类型化查询构建器并绑定同一 Prisma 事务，不手写完整 SQL。ORM 的自动建表、结构同步和运行时迁移必须关闭；结构仍仅由 `backend/db/schema.sql` 维护并按数据库规范离线初始化或变更。Canvas 候选运行时保持无数据库访问的职责边界。
+`agent/` 服务的数据访问统一使用 `@mastra/pg`（显式关闭运行时自动建表 `disableInit: true`）与 `Kysely` + `pg`；结构仍唯一由 `backend/db/schema.sql` 维护并按数据库规范离线初始化或变更，严禁运行时动态 DDL 或自动迁移。`canvas/` 与 `workspace/` 保持无数据库访问的职责边界。
 
 ## 验证与 Git
 

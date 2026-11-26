@@ -8,6 +8,7 @@
     "dev": "next dev --webpack",
     "start": "next start --hostname 127.0.0.1 --port 1130",
     "lint": "eslint .",
+    "docs:check": "node scripts/check-docs.mjs",
     "format:check": "prettier --check .",
     "types:check": "next typegen && tsc --noEmit",
     "test:e2e": "playwright test"

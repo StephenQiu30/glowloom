@@ -1,8 +1,10 @@
 .next
 node_modules
 .source
+.local
 dist
 content/**
 content
 pnpm-lock.yaml
 test-results
+playwright-report
