@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { listAgentSessions } from "@/api/agent";
-import { findCanvasConversation } from "@/components/canvas/storyboard/canvas-conversation";
+import { findCanvasConversation } from "@/components/canvas/assistant/canvas-conversation";
 
 vi.mock("@/api/agent", () => ({ listAgentSessions: vi.fn() }));
 

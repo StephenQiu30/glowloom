@@ -359,7 +359,7 @@ export function DirectorVideoDialog({
                   value={options.camera}
                   disabled={busy}
                   items={[
-                    ["sequence", "按分镜顺序"],
+                    ["sequence", "按镜头顺序"],
                     ...scene.cameras.map((camera): [string, string] => [
                       camera.id,
                       camera.name,

@@ -13,7 +13,7 @@ import (
 
 func TestCanvasAssetSystemTemplatesCreateEditableNonExecutingGraphs(t *testing.T) {
 	catalog, err := domain.SystemAssetTemplates("")
-	if err != nil || len(catalog) != 3 {
+	if err != nil || len(catalog) != 1 {
 		t.Fatal(catalog, err)
 	}
 	for _, template := range catalog {
@@ -54,9 +54,19 @@ func TestCanvasAssetSystemTemplatesCreateEditableNonExecutingGraphs(t *testing.T
 			t.Fatal("template identity reused in another object", err)
 		}
 	}
+	for _, key := range []string{"text-to-image-v1", "storyboard-three-shots-v1"} {
+		legacy, err := domain.SystemAssetTemplateByKey(key)
+		if err != nil || !domain.IsRetiredSystemAssetTemplate(key) {
+			t.Fatal("historical receipt identity unavailable", key, err)
+		}
+		base := domain.Document{ID: uuid.New(), ProjectID: uuid.New(), Kind: legacy.Kind, Revision: 1}
+		if _, err := domain.ApplySystemAssetTemplate(base, key); !errors.Is(err, domain.ErrInvalidCommand) {
+			t.Fatal("retired recipe can still create a graph", key, err)
+		}
+	}
 }
 
-func TestCanvasAssetCreationNormalizesAndRejectsMismatchedTemplate(t *testing.T) {
+func TestCanvasAssetCreationNormalizesLegacyReceiptAndRejectsMismatchedTemplate(t *testing.T) {
 	input, err := application.NormalizeAssetCreation(application.AssetCreationInput{})
 	if err != nil || input.Kind != "canvas" || input.Name != "未命名画布" {
 		t.Fatal(input, err)

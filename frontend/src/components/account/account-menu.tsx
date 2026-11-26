@@ -50,13 +50,45 @@ const platformLinks = [
 ];
 type MenuSection = "账号设置" | "外观" | "平台管理";
 
-function MenuLinks({ links }: { links: typeof accountLinks }) {
+function AccountDestination({
+  href,
+  disabled,
+  className = itemClassName,
+  label,
+  children,
+}: {
+  href: string;
+  disabled: boolean;
+  className?: string;
+  label?: string;
+  children: ReactNode;
+}) {
+  return disabled ? (
+    <DropdownMenuItem disabled className={className} aria-label={label}>
+      {children}
+    </DropdownMenuItem>
+  ) : (
+    <DropdownMenuItem asChild className={className}>
+      <Link href={href} aria-label={label}>
+        {children}
+      </Link>
+    </DropdownMenuItem>
+  );
+}
+
+function MenuLinks({
+  links,
+  disabled,
+}: {
+  links: typeof accountLinks;
+  disabled: boolean;
+}) {
   return (
     <DropdownMenuGroup className="flex flex-col gap-1">
       {links.map(({ label, href }) => (
-        <DropdownMenuItem key={href} asChild className={itemClassName}>
-          <Link href={href}>{label}</Link>
-        </DropdownMenuItem>
+        <AccountDestination key={href} href={href} disabled={disabled}>
+          {label}
+        </AccountDestination>
       ))}
     </DropdownMenuGroup>
   );
@@ -66,12 +98,19 @@ export function AccountMenu({
   actor,
   onLogout,
   disabled = false,
+  navigationDisabled = false,
+  compact,
+  utilityItems,
 }: {
   actor: API.EmailSessionView["actor"];
   onLogout: () => void;
   disabled?: boolean;
+  navigationDisabled?: boolean;
+  compact?: boolean;
+  utilityItems?: ReactNode;
 }) {
   const isMobile = useIsMobile();
+  const inlineSections = compact ?? isMobile;
   const themeSelection = useThemeMenuSelection();
   const themeLabel =
     themeSelection.theme === "light"
@@ -96,7 +135,7 @@ export function AccountMenu({
     });
   }
   function submenu(label: MenuSection, icon: ReactNode, children: ReactNode) {
-    return isMobile ? (
+    return inlineSections ? (
       <DropdownMenuItem
         aria-label={label}
         ref={(node) => {
@@ -153,6 +192,7 @@ export function AccountMenu({
           variant="ghost"
           size="toolbar-icon"
           aria-label="账号菜单"
+          data-notification-trigger={utilityItems ? "" : undefined}
           disabled={disabled}
           title={name}
         >
@@ -161,7 +201,7 @@ export function AccountMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent
         onKeyDown={(event) => {
-          if (isMobile && section && event.key === "ArrowLeft") {
+          if (inlineSections && section && event.key === "ArrowLeft") {
             event.preventDefault();
             leaveSection();
           }
@@ -171,7 +211,7 @@ export function AccountMenu({
         collisionPadding={16}
         className="w-80 max-w-[calc(100vw-2rem)] rounded-xl p-1 duration-150"
       >
-        {isMobile && section ? (
+        {inlineSections && section ? (
           <>
             <DropdownMenuGroup>
               <DropdownMenuItem
@@ -188,9 +228,11 @@ export function AccountMenu({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            {section === "账号设置" ? <MenuLinks links={accountLinks} /> : null}
+            {section === "账号设置" ? (
+              <MenuLinks links={accountLinks} disabled={navigationDisabled} />
+            ) : null}
             {section === "平台管理" && isAdmin ? (
-              <MenuLinks links={platformLinks} />
+              <MenuLinks links={platformLinks} disabled={navigationDisabled} />
             ) : null}
             {section === "外观" ? (
               <div className="account-menu-theme">
@@ -204,48 +246,51 @@ export function AccountMenu({
               <DropdownMenuLabel className="sr-only">
                 当前账号
               </DropdownMenuLabel>
-              <DropdownMenuItem
-                asChild
+              <AccountDestination
+                href="/account"
+                disabled={navigationDisabled}
+                label="个人空间"
                 className="min-h-[72px] gap-3 rounded-lg px-3 py-3"
               >
-                <Link href="/account" aria-label="个人空间">
-                  <AccountAvatar className="size-9" />
-                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <span className="truncate font-medium" title={name}>
-                      {name}
-                    </span>
-                    <span
-                      className="truncate text-xs text-muted-foreground"
-                      title={accountName || undefined}
-                    >
-                      {accountName || "账号信息暂不可用"}
-                    </span>
+                <AccountAvatar className="size-9" />
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span className="truncate font-medium" title={name}>
+                    {name}
                   </span>
-                  <ChevronRight aria-hidden="true" data-icon="inline-end" />
-                </Link>
-              </DropdownMenuItem>
+                  <span
+                    className="truncate text-xs text-muted-foreground"
+                    title={accountName || undefined}
+                  >
+                    {accountName || "账号信息暂不可用"}
+                  </span>
+                </span>
+                <ChevronRight aria-hidden="true" data-icon="inline-end" />
+              </AccountDestination>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup className="flex flex-col gap-1">
-              <DropdownMenuItem asChild className={itemClassName}>
-                <Link href="/billing">
-                  <Coins aria-hidden="true" />
-                  积分与账单
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild className={itemClassName}>
-                <Link href="/analytics">
-                  <LayoutGrid aria-hidden="true" />
-                  我的分析
-                </Link>
-              </DropdownMenuItem>
+              {utilityItems}
+              <AccountDestination href="/billing" disabled={navigationDisabled}>
+                <Coins aria-hidden="true" />
+                积分与账单
+              </AccountDestination>
+              <AccountDestination
+                href="/analytics"
+                disabled={navigationDisabled}
+              >
+                <LayoutGrid aria-hidden="true" />
+                我的分析
+              </AccountDestination>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup className="flex flex-col gap-1">
               {submenu(
                 "账号设置",
                 <Settings aria-hidden="true" />,
-                <MenuLinks links={accountLinks} />,
+                <MenuLinks
+                  links={accountLinks}
+                  disabled={navigationDisabled}
+                />,
               )}
               {submenu(
                 "外观",
@@ -258,7 +303,10 @@ export function AccountMenu({
                 ? submenu(
                     "平台管理",
                     <Shield aria-hidden="true" />,
-                    <MenuLinks links={platformLinks} />,
+                    <MenuLinks
+                      links={platformLinks}
+                      disabled={navigationDisabled}
+                    />,
                   )
                 : null}
             </DropdownMenuGroup>
@@ -266,6 +314,7 @@ export function AccountMenu({
             <DropdownMenuGroup>
               <DropdownMenuItem
                 variant="destructive"
+                disabled={navigationDisabled}
                 onSelect={onLogout}
                 className={itemClassName}
               >

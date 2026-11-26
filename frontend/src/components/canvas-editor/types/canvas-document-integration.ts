@@ -14,6 +14,7 @@ export type CanvasDocumentIntegration = {
   onCursor?: (cursor: { x: number; y: number } | null) => void;
   mediaContext?: import("@/components/canvas/lib/canvas-file-preview").CanvasFilePreviewContext;
   mediaEnabled?: boolean;
+  renderReferenceAssets?: (refreshKey: number) => ReactNode;
   textBinding?: (nodeId: string) => NodeTextBinding | undefined;
   renderToolNode?: (nodeId: string, type: string) => ReactNode;
   renderGenerationPanel?: (
@@ -66,14 +67,6 @@ export type CanvasDocumentIntegration = {
     nodeId: string,
     form: CanvasPendingForms[string] | undefined,
   ) => void;
-  workflow?: {
-    enabled: boolean;
-    agentEnabled?: boolean;
-    agentProfiles?: CanvasContract.WorkflowAgentProfileVO[];
-    accepting: boolean;
-    busy: boolean;
-    choose: (nodeIds: string[]) => Promise<void>;
-  };
   generation?: {
     ready?: boolean;
     runs: CanvasGenerationProjection[];

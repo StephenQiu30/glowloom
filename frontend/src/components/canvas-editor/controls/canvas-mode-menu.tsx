@@ -1,6 +1,6 @@
 import { Hand, MousePointer2 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { CanvasToolbarButton } from "./canvas-toolbar-primitives.tsx";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,15 +22,13 @@ export function CanvasModeMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="toolbar-icon"
+        <CanvasToolbarButton
           aria-label={`画布操作模式：${value === "pan" ? "抓手" : "选择"}`}
           title="操作模式（V / H）"
           data-canvas-mode-trigger
         >
           <Icon />
-        </Button>
+        </CanvasToolbarButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent
         side="top"

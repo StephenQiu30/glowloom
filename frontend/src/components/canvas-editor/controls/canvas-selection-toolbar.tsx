@@ -11,7 +11,6 @@ import {
   Group,
   Layers,
   Ungroup,
-  Play,
   Grid2X2,
   LayoutDashboard,
   Download,
@@ -42,8 +41,6 @@ export function CanvasSelectionToolbar({
   onGroup,
   onStack,
   onUngroup,
-  onRun,
-  runDisabled = false,
   readOnly = false,
   onLayout,
   onDownload,
@@ -59,8 +56,6 @@ export function CanvasSelectionToolbar({
   onGroup: () => void;
   onStack?: () => void;
   onUngroup: () => void;
-  onRun?: () => void;
-  runDisabled?: boolean;
   readOnly?: boolean;
   onLayout?: (mode: "grid" | "smart") => void;
   onDownload?: () => void;
@@ -69,7 +64,7 @@ export function CanvasSelectionToolbar({
   onColorTagChange?: (tag: CanvasColorTag | null) => void;
 }) {
   const theme = canvasThemes[useThemeStore((state) => state.theme)];
-  if (!nodes.length || (nodes.length < 2 && !onRun)) return null;
+  if (nodes.length < 2) return null;
 
   const bounds = nodeBounds(nodes);
   const left = viewport.x + bounds.left * viewport.k - SELECTION_PAD;
@@ -155,14 +150,6 @@ export function CanvasSelectionToolbar({
               >
                 <DropdownMenuGroup>
                   <DropdownMenuItem onSelect={onGroup}>普通组</DropdownMenuItem>
-                  <DropdownMenuItem disabled>分镜组</DropdownMenuItem>
-                  <p className="max-w-60 px-2 py-1.5 text-xs text-muted-foreground">
-                    {nodes.some((n) => n.type !== "image") || nodes.length > 49
-                      ? "分镜组仅支持图片，最多支持49个图片节点"
-                      : !nodes.some((n) => n.metadata?.content)
-                        ? "所选节点均无可用图片"
-                        : "分镜组暂不可用"}
-                  </p>
                 </DropdownMenuGroup>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -199,15 +186,6 @@ export function CanvasSelectionToolbar({
               label=""
               icon={<Download className="size-4" />}
               onClick={onDownload}
-            />
-          )}
-          {onRun && (
-            <SelectionAction
-              title="运行选中节点或分组"
-              label="运行流程"
-              icon={<Play className="size-4" />}
-              onClick={onRun}
-              disabled={runDisabled}
             />
           )}
           {canUngroup ? (

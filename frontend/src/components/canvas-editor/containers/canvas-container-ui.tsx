@@ -192,17 +192,6 @@ export function CanvasContainerToolbar({
 }) {
   const stack = containerKind(node) === "stack";
   const background = node.serviceData?.config?.container?.background ?? "none";
-  const storyboardReason =
-    members.some((member) => member.type !== "image") || members.length > 49
-      ? "分镜组仅支持图片，最多支持49个图片节点"
-      : !members.some(
-            (member) =>
-              member.documentData?.fileReferences?.some(
-                (ref) => ref.purpose === "CONTENT",
-              ) && member.metadata?.content,
-          )
-        ? "所选节点均无可用图片"
-        : "分镜组成功态尚未接入";
   return (
     <Toolbar
       role="toolbar"
@@ -216,16 +205,6 @@ export function CanvasContainerToolbar({
       onPointerDown={(e) => e.stopPropagation()}
     >
       <span className="px-2 text-sm">{members.length} 个节点</span>
-      {!stack && (
-        <Button
-          variant="ghost"
-          size="toolbar"
-          disabled
-          title={storyboardReason}
-        >
-          转为分镜组<span className="sr-only">{storyboardReason}</span>
-        </Button>
-      )}
       <Button
         variant="ghost"
         size="toolbar"

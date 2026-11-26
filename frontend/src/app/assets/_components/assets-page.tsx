@@ -21,7 +21,13 @@ import {
 import { ContentState } from "@/components/layout/content-state";
 import { readErrorMessage } from "@/lib/read-error";
 import { cn } from "cn";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+} from "react";
 import {
   ArrowLeft,
   Trash2,
@@ -36,6 +42,11 @@ import { useLoginDialog } from "@/components/layout/basic-layout";
 import { useOptionalSession } from "@/components/auth/session";
 import { RequestError } from "@/lib/request";
 import { Button } from "@/components/ui/button";
+import {
+  CanvasAssetSearch,
+  type CanvasAssetLayout,
+} from "@/components/canvas-editor/controls/canvas-asset-toolbar";
+import { CanvasToolbarButton } from "@/components/canvas-editor/controls/canvas-toolbar-primitives";
 import {
   Item,
   ItemActions,
@@ -97,6 +108,8 @@ function Library({
   onPageSizeChange,
   onClearSearch,
   onBack,
+  panel,
+  refreshKey,
 }: {
   filter: Filter;
   onFilter: (filter: Filter) => void;
@@ -105,6 +118,8 @@ function Library({
   onPageSizeChange: (size: PageSize) => void;
   onClearSearch: () => void;
   onBack?: () => void;
+  panel?: ComponentProps<typeof LibraryToolbar>["panel"];
+  refreshKey?: number;
 }) {
   const session = useOptionalSession();
   const login = useLoginDialog();
@@ -185,7 +200,7 @@ function Library({
         if (!controller.signal.aborted && !adjustingPage) setLoading(false);
       });
     return () => controller.abort();
-  }, [filter, actorID, pageIndex, pageSize, retry]);
+  }, [filter, actorID, pageIndex, pageSize, retry, refreshKey]);
   function reload() {
     setLoading(true);
     setError("");
@@ -337,9 +352,11 @@ function Library({
       ref={libraryElement}
       tabIndex={-1}
       className="media-library"
+      data-layout={panel?.layout}
       aria-label="参考素材"
     >
       <LibraryToolbar
+        panel={panel}
         filter={filter}
         onFilter={onFilter}
         onBack={onBack}
@@ -371,30 +388,44 @@ function Library({
               </FieldLabel>
             </Field>
 
-            <Button
-              className="max-md:min-h-11"
-              disabled={!selection.length || saving || !!pendingOperation}
-              variant="ghost"
-              onClick={() =>
-                setConfirm(filter.trash ? "restore_items" : "recycle_items")
-              }
-            >
-              {filter.trash ? <RotateCw /> : <Trash2 />}
-              {filter.trash ? "恢复" : "移入回收站"}
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="lg"
-              disabled={locked}
-              onClick={() => {
-                setBatch(false);
-                setSelected([]);
-              }}
-            >
-              <X data-icon="inline-start" />
-              取消选择
-            </Button>
+            {panel ? (
+              <CanvasToolbarButton
+                aria-label={filter.trash ? "恢复" : "移入回收站"}
+                title={filter.trash ? "恢复" : "移入回收站"}
+                disabled={!selection.length || locked}
+                onClick={() =>
+                  setConfirm(filter.trash ? "restore_items" : "recycle_items")
+                }
+              >
+                {filter.trash ? <RotateCw /> : <Trash2 />}
+              </CanvasToolbarButton>
+            ) : (
+              <>
+                <Button
+                  className="max-md:min-h-11"
+                  disabled={!selection.length || locked}
+                  variant="ghost"
+                  onClick={() =>
+                    setConfirm(filter.trash ? "restore_items" : "recycle_items")
+                  }
+                >
+                  {filter.trash ? <RotateCw /> : <Trash2 />}
+                  {filter.trash ? "恢复" : "移入回收站"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="lg"
+                  disabled={locked}
+                  onClick={() => {
+                    setBatch(false);
+                    setSelected([]);
+                  }}
+                >
+                  <X data-icon="inline-start" />
+                  取消选择
+                </Button>
+              </>
+            )}
           </div>
         }
         canCreateFolder={!!page && !loading}
@@ -555,15 +586,26 @@ function Library({
                 {page && !loading && !error && (
                   <ItemActions>
                     <ItemDescription>共 {page.total} 个素材</ItemDescription>
-                    <Button
-                      variant="ghost"
-                      size="icon-lg"
-                      aria-label="刷新素材"
-                      disabled={locked}
-                      onClick={reload}
-                    >
-                      <RotateCw />
-                    </Button>
+                    {panel ? (
+                      <CanvasToolbarButton
+                        aria-label="刷新素材"
+                        title="刷新素材"
+                        disabled={locked}
+                        onClick={reload}
+                      >
+                        <RotateCw />
+                      </CanvasToolbarButton>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="icon-lg"
+                        aria-label="刷新素材"
+                        disabled={locked}
+                        onClick={reload}
+                      >
+                        <RotateCw />
+                      </Button>
+                    )}
                   </ItemActions>
                 )}
               </Item>
@@ -700,6 +742,7 @@ function Library({
             {page && !error && (
               <DataPagination
                 label="素材分页"
+                compact={!!panel}
                 page={pageIndex}
                 pageSize={pageSize}
                 total={page.total}
@@ -906,12 +949,16 @@ function Library({
     </section>
   );
 }
-export function ReferenceAssetsPage({
+function ReferenceAssets({
   onBack,
   initialFilter,
+  embedded,
+  refreshKey,
 }: {
   onBack?: () => void;
   initialFilter?: Filter;
+  embedded?: boolean;
+  refreshKey?: number;
 }) {
   const [pageSize, setPageSize] = useState<PageSize>(DEFAULT_PAGE_SIZE);
   const [filter, setFilter] = useState<Filter>(
@@ -927,12 +974,14 @@ export function ReferenceAssetsPage({
   );
   const [search, setSearch] = useState(initialFilter?.search ?? "");
   const [locked, setLocked] = useState(false);
+  const [layout, setLayout] = useState<CanvasAssetLayout>("grid");
   useEffect(() => {
+    if (embedded) return;
     const url = new URL(window.location.href);
     url.search = writeReferenceLocation(filter, url.searchParams);
     if (url.href !== window.location.href)
       window.history.replaceState(null, "", url);
-  }, [filter]);
+  }, [embedded, filter]);
   const pageSearch = useMemo(
     () => ({
       value: search,
@@ -945,26 +994,60 @@ export function ReferenceAssetsPage({
     }),
     [search, locked],
   );
+  function clearSearch() {
+    setSearch("");
+    setFilter((current) => ({ ...current, search: "" }));
+  }
+  const library = (
+    <Library
+      key={JSON.stringify([filter, pageSize])}
+      filter={filter}
+      onFilter={setFilter}
+      onLock={setLocked}
+      onBack={onBack}
+      pageSize={pageSize}
+      onPageSizeChange={setPageSize}
+      panel={
+        embedded
+          ? {
+              layout,
+              onLayoutChange: setLayout,
+              search: (
+                <CanvasAssetSearch
+                  label={pageSearch.label}
+                  value={search}
+                  disabled={locked}
+                  onChange={setSearch}
+                  onSubmit={() => pageSearch.onSearch(search)}
+                  onClear={clearSearch}
+                />
+              ),
+            }
+          : undefined
+      }
+      refreshKey={refreshKey}
+      onClearSearch={clearSearch}
+    />
+  );
+  if (embedded)
+    return <div className="canvas-reference-library">{library}</div>;
   return (
-    <PageLayout
-      screen="assets"
-
-      fullBleed
-      search={pageSearch}
-    >
-      <Library
-        key={JSON.stringify([filter, pageSize])}
-        filter={filter}
-        onFilter={setFilter}
-        onLock={setLocked}
-        onBack={onBack}
-        pageSize={pageSize}
-        onPageSizeChange={setPageSize}
-        onClearSearch={() => {
-          setSearch("");
-          setFilter((current) => ({ ...current, search: "" }));
-        }}
-      />
+    <PageLayout screen="assets" fullBleed search={pageSearch}>
+      {library}
     </PageLayout>
   );
+}
+
+export function ReferenceAssetsPage({
+  onBack,
+  initialFilter,
+}: {
+  onBack?: () => void;
+  initialFilter?: Filter;
+}) {
+  return <ReferenceAssets onBack={onBack} initialFilter={initialFilter} />;
+}
+
+export function ReferenceAssetsPanel({ refreshKey }: { refreshKey?: number }) {
+  return <ReferenceAssets embedded refreshKey={refreshKey} />;
 }

@@ -349,20 +349,20 @@ installDevelopmentTransport({
       return new Blob([imageBytes], { type: "image/png" });
     if (url === "/api/canvas-assets/templates")
       return {
-        items: [
-          {
-            key:
-              params.kind === "short_drama"
-                ? "storyboard-three-shots-v1"
-                : "text-to-image-v1",
-            kind: params.kind,
-            name: params.kind === "short_drama" ? "三镜分镜" : "文字生图",
-            description: "创建可编辑的预填工作流，不自动运行生成。",
-            is_template: true,
-            node_count: params.kind === "short_drama" ? 7 : 3,
-            requires_model: true,
-          },
-        ],
+        items:
+          params.kind === "short_drama"
+            ? []
+            : [
+                {
+                  key: "director-stage-v1",
+                  kind: "canvas",
+                  name: "3D导演台",
+                  description: "从示例白模与机位打开导演台。",
+                  is_template: true,
+                  node_count: 1,
+                  requires_model: false,
+                },
+              ],
       };
     if (url === "/api/canvas-assets")
       return {

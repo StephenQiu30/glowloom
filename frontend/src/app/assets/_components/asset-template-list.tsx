@@ -8,6 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { ContentState } from "@/components/layout/content-state";
 import { RequestError } from "@/lib/request";
 import { readErrorMessage } from "@/lib/read-error";
+const retiredTemplateKeys = new Set([
+  "text-to-image-v1",
+  "storyboard-three-shots-v1",
+]);
 export type AssetTemplate = {
   key: string;
   kind: "canvas" | "short_drama";
@@ -53,7 +57,11 @@ export function AssetTemplateList({
         )
           throw new RequestError("invalid_receipt");
         if (!controller.signal.aborted) {
-          setItems(result.items as AssetTemplate[]);
+          setItems(
+            (result.items as AssetTemplate[]).filter(
+              (item) => !retiredTemplateKeys.has(item.key),
+            ),
+          );
           setError("");
         }
       })

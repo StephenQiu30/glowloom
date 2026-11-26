@@ -4,9 +4,24 @@ import { Toolbar, ToolbarGroup } from "@/components/ui/toolbar";
 import type { ReactNode } from "react";
 import Link from "next/link";
 
-import { ChevronDown, CheckSquare, FolderPlus, Upload } from "lucide-react";
+import {
+  ChevronDown,
+  CheckSquare,
+  Filter,
+  FolderPlus,
+  ListChecks,
+  Upload,
+} from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
+import {
+  CanvasToolbarButton,
+  CanvasToolbarGroup,
+} from "@/components/canvas-editor/controls/canvas-toolbar-primitives";
+import {
+  CanvasAssetLayoutButton,
+  type CanvasAssetLayout,
+} from "@/components/canvas-editor/controls/canvas-asset-toolbar";
 import { PageHeader } from "@/components/layout/page-header";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
@@ -55,6 +70,7 @@ export function LibraryToolbar({
   onFolder,
   onUpload,
   onBack,
+  panel,
 }: {
   filter: LibraryFilter;
   onFilter: (filter: LibraryFilter) => void;
@@ -67,8 +83,164 @@ export function LibraryToolbar({
   onFolder: () => void;
   onUpload: () => void;
   onBack?: () => void;
+  panel?: {
+    search: ReactNode;
+    layout: CanvasAssetLayout;
+    onLayoutChange: (layout: CanvasAssetLayout) => void;
+  };
 }) {
   const inactive = disabled || locked;
+  const filterActive = filter.favorite || filter.trash || filter.recent;
+  const filterMenu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        {panel ? (
+          <CanvasToolbarButton
+            variant={filterActive ? "secondary" : "ghost"}
+            disabled={inactive}
+            aria-label="筛选素材"
+            title="筛选素材"
+          >
+            <Filter />
+          </CanvasToolbarButton>
+        ) : (
+          <Button
+            variant={filterActive ? "secondary" : "ghost"}
+            size="toolbar"
+            disabled={inactive}
+            aria-label={
+              filter.favorite
+                ? "筛选素材：收藏"
+                : filter.trash
+                  ? "筛选素材：回收站"
+                  : "筛选素材"
+            }
+            data-active={filterActive || undefined}
+          >
+            {filter.favorite ? "收藏" : filter.trash ? "回收站" : "筛选"}
+            <ChevronDown data-icon="inline-end" />
+          </Button>
+        )}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align={panel ? "end" : "start"}
+        className="library-filter-menu w-56"
+      >
+        {panel && (
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>素材类型</DropdownMenuLabel>
+            <DropdownMenuRadioGroup
+              value={filter.kind}
+              onValueChange={(kind) => onFilter({ ...filter, kind })}
+            >
+              {mediaKinds.map(({ id, label }) => (
+                <DropdownMenuRadioItem key={id} value={id}>
+                  {label}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuGroup>
+        )}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>显示范围</DropdownMenuLabel>
+          <DropdownMenuCheckboxItem
+            checked={filter.favorite}
+            onCheckedChange={(favorite) =>
+              onFilter({
+                ...filter,
+                favorite,
+                trash: favorite ? false : filter.trash,
+              })
+            }
+          >
+            仅显示收藏
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem
+            checked={filter.recent}
+            onCheckedChange={(recent) => onFilter({ ...filter, recent })}
+          >
+            最近 30 天
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem
+            checked={filter.trash}
+            onCheckedChange={(trash) =>
+              onFilter({
+                ...filter,
+                trash,
+                favorite: false,
+                folder: "",
+              })
+            }
+          >
+            回收站
+          </DropdownMenuCheckboxItem>
+        </DropdownMenuGroup>
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>排序</DropdownMenuLabel>
+          <DropdownMenuRadioGroup
+            value={filter.order}
+            onValueChange={(order) => onFilter({ ...filter, order })}
+          >
+            {orders.map((order) => (
+              <DropdownMenuRadioItem key={order.value} value={order.value}>
+                {order.label}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
+        <DropdownMenuGroup
+          className={panel ? undefined : "library-mobile-menu-actions"}
+        >
+          <DropdownMenuLabel>管理素材</DropdownMenuLabel>
+          {!panel && (
+            <DropdownMenuItem onSelect={onBatch}>
+              <CheckSquare />
+              {batch ? "取消选择" : "批量操作"}
+            </DropdownMenuItem>
+          )}
+          {!batch && (
+            <DropdownMenuItem disabled={!canCreateFolder} onSelect={onFolder}>
+              <FolderPlus />
+              新建文件夹
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+  if (panel)
+    return (
+      <>
+        <div className="canvas-asset-tools">
+          {panel.search}
+          <CanvasToolbarGroup appearance="plain" aria-label="参考素材工具">
+            <CanvasToolbarButton
+              aria-label="多选素材"
+              title={batch ? "退出多选" : "多选素材"}
+              aria-pressed={batch}
+              disabled={inactive}
+              onClick={onBatch}
+            >
+              <ListChecks />
+            </CanvasToolbarButton>
+            {filterMenu}
+            <CanvasAssetLayoutButton
+              layout={panel.layout}
+              onChange={panel.onLayoutChange}
+            />
+            <CanvasToolbarButton
+              aria-label="上传素材"
+              title="上传素材"
+              disabled={inactive}
+              onClick={onUpload}
+            >
+              <Upload />
+            </CanvasToolbarButton>
+          </CanvasToolbarGroup>
+        </div>
+        {batch && batchActions}
+      </>
+    );
   return (
     <>
       <PageHeader title="参考素材">
@@ -148,108 +320,7 @@ export function LibraryToolbar({
           </ToggleGroup>
           <Separator orientation="vertical" className="toolbar-separator" />
           <ToolbarGroup appearance="plain" className="toolbar-filter-group">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant={
-                    filter.favorite || filter.trash || filter.recent
-                      ? "secondary"
-                      : "ghost"
-                  }
-                  size="toolbar"
-                  disabled={inactive}
-                  aria-label={
-                    filter.favorite
-                      ? "筛选素材：收藏"
-                      : filter.trash
-                        ? "筛选素材：回收站"
-                        : "筛选素材"
-                  }
-                  data-active={
-                    filter.favorite ||
-                    filter.trash ||
-                    filter.recent ||
-                    undefined
-                  }
-                >
-                  {filter.favorite ? "收藏" : filter.trash ? "回收站" : "筛选"}
-                  <ChevronDown data-icon="inline-end" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="start"
-                className="library-filter-menu w-56"
-              >
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel>显示范围</DropdownMenuLabel>
-                  <DropdownMenuCheckboxItem
-                    checked={filter.favorite}
-                    onCheckedChange={(favorite) =>
-                      onFilter({
-                        ...filter,
-                        favorite,
-                        trash: favorite ? false : filter.trash,
-                      })
-                    }
-                  >
-                    仅显示收藏
-                  </DropdownMenuCheckboxItem>
-                  <DropdownMenuCheckboxItem
-                    checked={filter.recent}
-                    onCheckedChange={(recent) =>
-                      onFilter({ ...filter, recent })
-                    }
-                  >
-                    最近 30 天
-                  </DropdownMenuCheckboxItem>
-                  <DropdownMenuCheckboxItem
-                    checked={filter.trash}
-                    onCheckedChange={(trash) =>
-                      onFilter({
-                        ...filter,
-                        trash,
-                        favorite: false,
-                        folder: "",
-                      })
-                    }
-                  >
-                    回收站
-                  </DropdownMenuCheckboxItem>
-                </DropdownMenuGroup>
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel>排序</DropdownMenuLabel>
-                  <DropdownMenuRadioGroup
-                    value={filter.order}
-                    onValueChange={(order) => onFilter({ ...filter, order })}
-                  >
-                    {orders.map((order) => (
-                      <DropdownMenuRadioItem
-                        key={order.value}
-                        value={order.value}
-                      >
-                        {order.label}
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuGroup>
-                <DropdownMenuGroup className="library-mobile-menu-actions">
-                  <DropdownMenuLabel>管理素材</DropdownMenuLabel>
-                  <DropdownMenuItem onSelect={onBatch}>
-                    <CheckSquare />
-                    {batch ? "取消选择" : "批量操作"}
-                  </DropdownMenuItem>
-                  {!batch && (
-                    <DropdownMenuItem
-                      disabled={!canCreateFolder}
-                      onSelect={onFolder}
-                    >
-                      <FolderPlus />
-                      新建文件夹
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {filterMenu}
             <Button
               variant="ghost"
               size="toolbar"

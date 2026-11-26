@@ -1,20 +1,11 @@
 "use client";
-import {
-  Alert,
-  AlertDescription,
-} from "@/components/ui/alert";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import { useState, useSyncExternalStore, type ReactNode } from "react";
 import useSWR from "swr";
-import {
-  getScopeGeneration,
-  getSessionGeneration,
-} from "@/lib/request";
+import { getScopeGeneration, getSessionGeneration } from "@/lib/request";
 import { UsersRound } from "lucide-react";
-import {
-  listTeamMembers,
-  teamMemberAvatar,
-} from "@/api/identity";
+import { listTeamMembers, teamMemberAvatar } from "@/api/identity";
 import { getMyAvatar } from "@/api/media";
 import { useOptionalSession } from "@/components/auth/session";
 import { useSpace } from "@/components/spaces/space-context";
@@ -313,7 +304,16 @@ function ParticipantList({
     </Popover>
   );
 }
-function Participants({ ids, context }: { ids: string[]; context: Context }) {
+function Participants({
+  ids,
+  context,
+  showSelf,
+}: {
+  ids: string[];
+  context: Context;
+  showSelf: boolean;
+}) {
+  const shown = showSelf ? ids : ids.filter((id) => id !== context.actor.id);
   // SWR 2.5.1 disposes a local provider during Activity/Suspense hiding,
   // while React retains its cache ref. Use SWR's application cache lifecycle;
   // both queries partition private data by actor, session, scope and generation.
@@ -323,10 +323,10 @@ function Participants({ ids, context }: { ids: string[]; context: Context }) {
       aria-label={`${ids.length} 位参与者在线`}
     >
       <AvatarGroup className="hidden items-center [@media(pointer:fine)]:flex">
-        {ids.slice(0, 3).map((id) => (
+        {shown.slice(0, 3).map((id) => (
           <Participant key={id} id={id} context={context} />
         ))}
-        {ids.length > 3 && (
+        {shown.length > 3 && (
           <ParticipantList ids={ids} context={context}>
             <Button
               type="button"
@@ -335,7 +335,7 @@ function Participants({ ids, context }: { ids: string[]; context: Context }) {
               size="icon"
               className="size-8 min-h-8 shrink-0 rounded-full border-0 p-0"
             >
-              <AvatarGroupCount>+{ids.length - 3}</AvatarGroupCount>
+              <AvatarGroupCount>+{shown.length - 3}</AvatarGroupCount>
             </Button>
           </ParticipantList>
         )}
@@ -343,7 +343,8 @@ function Participants({ ids, context }: { ids: string[]; context: Context }) {
       <ParticipantList ids={ids} context={context}>
         <Button
           variant="ghost"
-          className="h-11 min-w-11 [@media(pointer:fine)]:hidden"
+          size="toolbar"
+          className="[@media(pointer:fine)]:hidden"
           aria-label={`查看全部 ${ids.length} 位参与者`}
         >
           <UsersRound />
@@ -358,11 +359,13 @@ export function CanvasParticipants({
   actorID,
   scopeID,
   connected,
+  showSelf = true,
 }: {
   client: CanvasYjsLiveSession;
   actorID: string;
   scopeID: string;
   connected: boolean;
+  showSelf?: boolean;
 }) {
   const peers = useSyncExternalStore(
     client.subscribePresence,
@@ -372,24 +375,27 @@ export function CanvasParticipants({
   const session = useOptionalSession();
   const { spaces } = useSpace();
   if (!connected)
-    return (
+    return showSelf ? (
       <span role="status" className="text-xs text-muted-foreground">
         协作连接已断开，在线状态未知
       </span>
-    );
+    ) : null;
   if (!session || session.actor.id !== actorID) return null;
+  const ids = participantUserIDs(actorID, peers);
+  if (!showSelf && ids.length < 2) return null;
   const space = spaces.find((item) => item.id === scopeID);
   return (
     <Participants
       key={`${session.session_id}:${scopeID}`}
-      ids={participantUserIDs(actorID, peers)}
+      ids={ids}
+      showSelf={showSelf}
       context={{
         actor: session.actor,
         sessionID: session.session_id,
         requestGeneration: `${getSessionGeneration()}:${getScopeGeneration()}`,
         scopeID,
         teamID: space?.team_id || undefined,
-        userIDs: participantUserIDs(actorID, peers),
+        userIDs: ids,
       }}
     />
   );

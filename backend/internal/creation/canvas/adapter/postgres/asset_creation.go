@@ -86,6 +86,9 @@ func (s *AssetCreationStore) CreateAsset(ctx context.Context, actor identity.Pri
 			}
 			return nil
 		}
+		if domain.IsRetiredSystemAssetTemplate(input.TemplateKey) {
+			return domain.ErrInvalidCommand
+		}
 		projectKey := uuid.NewSHA1(key, []byte("canvas-assets/owning-project"))
 		project, err := access.CreateAssetProject(ctx, actor, projectKey, input.Name)
 		if err != nil {

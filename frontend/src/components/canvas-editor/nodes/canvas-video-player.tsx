@@ -43,7 +43,7 @@ function VideoPlayer({ node }: { node: CanvasNodeData }) {
   }, [src, output]);
   return (
     <div
-      className="canvas-video-player bg-media-backdrop relative h-full w-full overflow-hidden rounded-xl"
+      className="canvas-video-player bg-media-backdrop relative h-full w-full overflow-hidden rounded-md"
       data-canvas-no-zoom
     >
       <video

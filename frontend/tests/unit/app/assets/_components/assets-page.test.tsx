@@ -8,7 +8,10 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { ReferenceAssetsPage as AssetsPage } from "@/app/assets/_components/assets-page";
+import {
+  ReferenceAssetsPage as AssetsPage,
+  ReferenceAssetsPanel,
+} from "@/app/assets/_components/assets-page";
 import { request, RequestError } from "@/lib/request";
 
 // Isolated transport tests. These responses never enter the running application.
@@ -60,10 +63,42 @@ const emptyPage = {
 };
 beforeEach(() => {
   vi.clearAllMocks();
+  window.history.replaceState({}, "", "/assets");
   state.session = { actor: { id: actor } };
   vi.mocked(request).mockReset().mockResolvedValue(emptyPage);
 });
 afterEach(cleanup);
+
+it("在画布面板搜索参考素材并保留画布地址", async () => {
+  window.history.replaceState({}, "", "/canvas?canvas_id=example");
+  render(<ReferenceAssetsPanel />);
+  await screen.findByText("这里还没有素材");
+  const search = screen.getByRole("searchbox", { name: "搜索参考素材" });
+  fireEvent.change(search, { target: { value: "素材名称" } });
+  fireEvent.click(screen.getByRole("button", { name: "搜索" }));
+  await screen.findByText("没有匹配的素材");
+  expect(request).toHaveBeenLastCalledWith(
+    "/api/media/library",
+    expect.objectContaining({
+      params: expect.objectContaining({
+        scope: "personal",
+        search: "素材名称",
+      }),
+    }),
+  );
+  expect(window.location.pathname + window.location.search).toBe(
+    "/canvas?canvas_id=example",
+  );
+  expect(screen.queryByRole("link", { name: "返回资产" })).toBeNull();
+  const layout = screen.getByRole("button", { name: "资产显示方式" });
+  fireEvent.keyDown(layout, { key: "ArrowDown" });
+  fireEvent.click(await screen.findByRole("menuitemradio", { name: "列表" }));
+  expect(
+    screen
+      .getByRole("region", { name: "参考素材" })
+      .getAttribute("data-layout"),
+  ).toBe("list");
+});
 
 it("reference media and folder filters restore from a bookmark and keep URL state", async () => {
   const initialFilter = {

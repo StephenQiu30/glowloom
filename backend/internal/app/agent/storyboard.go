@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -16,6 +17,14 @@ import (
 
 const storyboardReadTool = "canvas_storyboard_read"
 const storyboardWriteTool = "canvas_storyboard_write"
+
+// RetireStoryboardTools removes dedicated storyboard operations from tool discovery and execution.
+func (b *Boundary) RetireStoryboardTools() {
+	b.Capabilities.Tools = slices.DeleteFunc(b.Capabilities.Tools, func(tool app.Tool) bool {
+		name := tool.Descriptor.Name
+		return name == storyboardReadTool || name == storyboardWriteTool
+	})
+}
 
 type storyboardToolInput struct {
 	CanvasID uuid.UUID `json:"canvas_id"`

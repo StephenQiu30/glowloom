@@ -1,4 +1,8 @@
-import { ToolbarGroup } from "@/components/ui/toolbar";
+import {
+  CanvasToolbarButton,
+  CanvasToolbarDivider,
+  CanvasToolbarGroup,
+} from "./canvas-toolbar-primitives.tsx";
 import { CanvasModeMenu } from "./canvas-mode-menu.tsx";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,7 +16,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { PanelTop, Link2, Focus, Minus, Plus, Check } from "lucide-react";
+import { Map, Share2, Focus, Minus, Plus, Check } from "lucide-react";
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { CANVAS_MIN_SCALE, CANVAS_MAX_SCALE } from "../lib/canvas-viewport.ts";
@@ -49,8 +53,7 @@ export function CanvasZoomControls({
   const [error, setError] = useState("");
   const percent = Math.round(scale * 100);
   return (
-    <ToolbarGroup
-      appearance="plain"
+    <CanvasToolbarGroup
       data-canvas-no-zoom
       className="canvas-viewport-controls"
       aria-label="画布视图控制"
@@ -58,38 +61,34 @@ export function CanvasZoomControls({
       {onCanvasToolChange && (
         <CanvasModeMenu value={canvasTool} onChange={onCanvasToolChange} />
       )}
-      <div className="canvas-view-shortcuts flex items-center gap-1">
-        {[
-          {
-            label: "小地图",
-            icon: PanelTop,
-            onClick: onToggleMiniMap,
-            pressed: isMiniMapOpen,
-          },
-          {
-            label: "显示连线",
-            icon: Link2,
-            onClick: onToggleConnections,
-            pressed: showConnections,
-          },
-        ].map(({ label, icon: Icon, onClick, pressed }) => (
-          <Tooltip key={label}>
-            <TooltipTrigger asChild>
-              <Button
-                variant={pressed ? "secondary" : "ghost"}
-                size="toolbar-icon"
-                onClick={onClick}
-                aria-label={label}
-                data-canvas-view-control={label === "适合屏幕" ? "" : undefined}
-                aria-pressed={pressed}
-              >
-                <Icon />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top">{label}</TooltipContent>
-          </Tooltip>
-        ))}
-      </div>
+      {[
+        {
+          label: "小地图",
+          icon: Map,
+          onClick: onToggleMiniMap,
+          pressed: isMiniMapOpen,
+        },
+        {
+          label: "显示连线",
+          icon: Share2,
+          onClick: onToggleConnections,
+          pressed: showConnections,
+        },
+      ].map(({ label, icon: Icon, onClick, pressed }) => (
+        <Tooltip key={label}>
+          <TooltipTrigger asChild>
+            <CanvasToolbarButton
+              onClick={onClick}
+              aria-label={label}
+              aria-pressed={pressed}
+            >
+              <Icon />
+            </CanvasToolbarButton>
+          </TooltipTrigger>
+          <TooltipContent side="top">{label}</TooltipContent>
+        </Tooltip>
+      ))}
+      <CanvasToolbarDivider className="canvas-viewport-divider" />
       <Popover
         open={zoomOpen}
         onOpenChange={(open) => {
@@ -101,15 +100,14 @@ export function CanvasZoomControls({
         }}
       >
         <PopoverTrigger asChild>
-          <Button
-            variant="ghost"
-            size="toolbar"
-            className="min-w-16"
+          <CanvasToolbarButton
+            iconOnly={false}
+            className="canvas-zoom-trigger"
             aria-label={`缩放选项，当前 ${percent}%`}
             data-canvas-view-control
           >
             {percent}%
-          </Button>
+          </CanvasToolbarButton>
         </PopoverTrigger>
         <PopoverContent
           side="top"
@@ -201,6 +199,6 @@ export function CanvasZoomControls({
           </Button>
         </PopoverContent>
       </Popover>
-    </ToolbarGroup>
+    </CanvasToolbarGroup>
   );
 }

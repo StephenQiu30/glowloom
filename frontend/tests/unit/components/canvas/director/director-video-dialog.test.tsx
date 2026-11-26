@@ -78,7 +78,7 @@ it("uses all shot durations for sequence export and keeps manual overrides edita
   fireEvent.keyDown(screen.getByRole("combobox", { name: "机位来源" }), {
     key: "ArrowDown",
   });
-  fireEvent.click(await screen.findByRole("option", { name: "按分镜顺序" }));
+  fireEvent.click(await screen.findByRole("option", { name: "按镜头顺序" }));
   const duration = screen.getByRole("spinbutton", {
     name: "时长（秒）",
   }) as HTMLInputElement;

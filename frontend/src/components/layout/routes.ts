@@ -53,8 +53,6 @@ export const screens = [
   { id: "audit", name: "审计日志", node: "4108:129597", group: "管理" },
   { id: "health", name: "运行诊断", node: "4108:129086", group: "管理" },
   { id: "bible", name: "主体", node: "3713:110935", group: "创作" },
-  { id: "storyboard", name: "分镜", node: "3541:97258", group: "创作" },
-  { id: "shot", name: "镜头", node: "3393:74543", group: "创作" },
   { id: "analytics", name: "数据分析", node: "3993:119616", group: "创作" },
 ] as const;
 export type Screen = (typeof screens)[number]["id"];

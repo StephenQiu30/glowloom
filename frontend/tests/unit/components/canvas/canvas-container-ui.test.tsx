@@ -26,7 +26,7 @@ function fixture(kind: "group" | "stack") {
     kind,
   )[0];
 }
-it("ordinary group exposes operations independent of workflow and preserves the source storyboard restriction", () => {
+it("ordinary group exposes layout actions without a storyboard conversion entry", () => {
   const release = vi.fn();
   render(
     <CanvasContainerToolbar
@@ -41,9 +41,7 @@ it("ordinary group exposes operations independent of workflow and preserves the 
     />,
   );
   expect(screen.getByRole("toolbar", { name: "组操作" })).toBeTruthy();
-  expect(
-    screen.getByRole("button", { name: /转为分镜组/ }).getAttribute("title"),
-  ).toBe("分镜组仅支持图片，最多支持49个图片节点");
+  expect(screen.queryByRole("button", { name: /转为分镜组/ })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "解除编组" }));
   expect(release).toHaveBeenCalledOnce();
   expect(screen.getByRole("button", { name: "布局" })).toBeTruthy();

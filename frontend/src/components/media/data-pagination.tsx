@@ -20,6 +20,7 @@ export function DataPagination({
   total,
   hasNext = false,
   disabled = false,
+  compact = false,
   onPageChange,
   onPageSizeChange,
 }: {
@@ -29,21 +30,32 @@ export function DataPagination({
   total?: number;
   hasNext?: boolean;
   disabled?: boolean;
+  compact?: boolean;
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: PageSize) => void;
 }) {
   const pages = total === undefined ? undefined : Math.ceil(total / pageSize);
+  if (compact && !hasNext && (pages ?? page) <= 1) return null;
   const current =
     pages === 0 ? 0 : pages === undefined ? page : Math.min(page, pages);
   return (
-    <Pagination aria-label={label} className="data-pagination">
-      <PageSizeSelect
-        label={`${label}每页数量`}
-        value={pageSize}
-        disabled={disabled}
-        onChange={onPageSizeChange}
-      />
-      <span className="data-pagination-status" role="status">
+    <Pagination
+      aria-label={label}
+      className="data-pagination"
+      data-compact={compact || undefined}
+    >
+      {!compact && (
+        <PageSizeSelect
+          label={`${label}每页数量`}
+          value={pageSize}
+          disabled={disabled}
+          onChange={onPageSizeChange}
+        />
+      )}
+      <span
+        className={compact ? "sr-only" : "data-pagination-status"}
+        role="status"
+      >
         <span aria-hidden="true">
           {pages === 0
             ? "0 项"

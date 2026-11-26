@@ -59,18 +59,6 @@ type StoryboardQuoteRequest struct {
 type StoryboardQuoteResponse operationhttp.QuoteResponse
 
 // Quote freezes the saved storyboard shot in the normal video operation quote.
-// @Summary 为当前镜头报价
-// @ID quoteCanvasStoryboardShot
-// @Tags canvases
-// @Accept json
-// @Produce json
-// @Param id path string true "画布 UUID"
-// @Param Idempotency-Key header string true "UUID"
-// @Param body body StoryboardQuoteRequest true "镜头及模型"
-// @Success 201 {object} StoryboardQuoteResponse
-// @Failure 409 {object} httpapi.Problem
-// @Failure 422 {object} httpapi.Problem
-// @Router /api/canvases/{id}/storyboard/quote [post]
 func (h storyboardDelivery) Quote(c *gin.Context) {
 	canvasID, ok := httpapi.PathUUID(c, "id")
 	if !ok {
@@ -119,16 +107,6 @@ func (h storyboardDelivery) Quote(c *gin.Context) {
 }
 
 // Candidates lists attempts for the same stable shot across content versions.
-// @Summary 查找镜头候选及运行任务
-// @ID listCanvasStoryboardCandidates
-// @Tags canvases
-// @Produce json
-// @Param id path string true "画布 UUID"
-// @Param board_id query string true "故事板 UUID"
-// @Param shot_id query string true "镜头 UUID"
-// @Success 200 {array} operation.TaskSummary
-// @Failure 404 {object} httpapi.Problem
-// @Router /api/canvases/{id}/storyboard/candidates [get]
 func (h storyboardDelivery) Candidates(c *gin.Context) {
 	canvasID, ok := httpapi.PathUUID(c, "id")
 	if !ok {
@@ -160,18 +138,6 @@ func (h storyboardDelivery) Candidates(c *gin.Context) {
 }
 
 // Adopt installs one ready candidate without creating a clip or an export.
-// @Summary 采用当前镜头的已就绪候选
-// @ID adoptCanvasStoryboardShot
-// @Tags canvases
-// @Accept json
-// @Produce json
-// @Param id path string true "画布 UUID"
-// @Param Idempotency-Key header string true "UUID"
-// @Param body body domain.StoryboardAdoption true "采用结果"
-// @Success 200 {object} application.StoryboardView
-// @Failure 409 {object} httpapi.Problem
-// @Failure 422 {object} httpapi.Problem
-// @Router /api/canvases/{id}/storyboard/adopt [post]
 func (h storyboardDelivery) Adopt(c *gin.Context) {
 	canvasID, ok := httpapi.PathUUID(c, "id")
 	if !ok {

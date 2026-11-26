@@ -39,11 +39,6 @@ declare namespace API {
     id: string;
   };
 
-  type adoptCanvasStoryboardShotParams = {
-    /** 画布 UUID */
-    id: string;
-  };
-
   type AdoptReceipt = {
     changed?: boolean;
     duplicate?: boolean;
@@ -790,11 +785,6 @@ declare namespace API {
     pid: string;
   };
 
-  type confirmScriptEpisodeStructureParams = {
-    /** 正式分集UUID */
-    eid: string;
-  };
-
   type ContainerConfig = {
     background?: "none" | "cyan" | "blue" | "purple" | "orange" | "yellow";
     kind?: "group" | "stack";
@@ -1336,8 +1326,6 @@ declare namespace API {
     trace_id?: string;
   };
 
-  type DialogueKind = "dialogue" | "voiceover" | "inner";
-
   type DirectorBoneFrame = {
     easing?: string;
     id?: string;
@@ -1857,18 +1845,6 @@ declare namespace API {
     previous_episode_id?: string;
   };
 
-  type EpisodeStructure = {
-    actor_id?: string;
-    created_at?: string;
-    document?: StructureDocument;
-    episode_id?: string;
-    id?: string;
-    org_id?: string;
-    project_id?: string;
-    source_hash?: string;
-    version_no?: number;
-  };
-
   type EpisodeText = {
     content_hash?: string;
     episode_id?: string;
@@ -2138,11 +2114,6 @@ declare namespace API {
     id: string;
   };
 
-  type getCanvasStoryboardParams = {
-    /** 画布 UUID */
-    id: string;
-  };
-
   type getCreationAnalyticsParams = {
     /** personal (default) or platform; current platform permission required */
     scope?: string;
@@ -2383,18 +2354,6 @@ declare namespace API {
     from: number;
     /** 不包含终点，最多65536scalar */
     to: number;
-  };
-
-  type getScriptEpisodeStructureParams = {
-    /** 正式分集UUID */
-    eid: string;
-  };
-
-  type getScriptEpisodeStructureVersionParams = {
-    /** 正式分集UUID */
-    eid: string;
-    /** 结构版本号 */
-    version: number;
   };
 
   type getScriptFileImportParams = {
@@ -3093,15 +3052,6 @@ declare namespace API {
     pid: string;
   };
 
-  type listCanvasStoryboardCandidatesParams = {
-    /** 画布 UUID */
-    id: string;
-    /** 故事板 UUID */
-    board_id: string;
-    /** 镜头 UUID */
-    shot_id: string;
-  };
-
   type listDiagnosticLogsParams = {
     /** Inclusive UTC RFC3339 time, default last 24h */
     from?: string;
@@ -3433,15 +3383,6 @@ declare namespace API {
     pid: string;
     /** 剧本版本UUID */
     version_id: string;
-  };
-
-  type listScriptEpisodeStructureVersionsParams = {
-    /** 正式分集UUID */
-    eid: string;
-    /** 严格早于结构版本号 */
-    before_version_no?: number;
-    /** 1..100 */
-    limit?: number;
   };
 
   type listScriptFileImportsParams = {
@@ -4834,11 +4775,6 @@ declare namespace API {
     | "failed"
     | "cancelled";
 
-  type quoteCanvasStoryboardShotParams = {
-    /** 画布 UUID */
-    id: string;
-  };
-
   type QuotedMessage = {
     content_hash: string;
     message_id: string;
@@ -5407,11 +5343,6 @@ declare namespace API {
     mode: Mode;
   };
 
-  type saveScriptEpisodeStructureParams = {
-    /** 正式分集UUID */
-    eid: string;
-  };
-
   type ScalarSpan = {
     end?: number;
     start?: number;
@@ -5854,76 +5785,6 @@ declare namespace API {
     shots?: StoryboardShot[];
   };
 
-  type StoryboardAdoption = {
-    board_id?: string;
-    expected_revision?: number;
-    operation_id?: string;
-    output_id?: string;
-    shot_id?: string;
-    shot_revision?: number;
-  };
-
-  type StoryboardBoard = {
-    id?: string;
-    shots?: StoryboardShot[];
-  };
-
-  type StoryboardCommand = {
-    append?: StoryboardDraft;
-    board_id?: string;
-    edit?: StoryboardEdit;
-    expected_revision?: number;
-    move?: StoryboardMove;
-    shots?: StoryboardDraft[];
-  };
-
-  type StoryboardDraft = {
-    action?: string;
-    camera?: string;
-    dialogue?: string;
-    duration_ms?: number;
-    sound?: string;
-    title?: string;
-  };
-
-  type StoryboardEdit = {
-    expected_revision?: number;
-    field?: string;
-    shot_id?: string;
-    value?: Record<string, any>;
-  };
-
-  type StoryboardMove = {
-    before_id?: string;
-    shot_id?: string;
-  };
-
-  type StoryboardQuoteRequest = {
-    board_id?: string;
-    expected_revision?: number;
-    model_key?: string;
-    shot_id?: string;
-    shot_revision?: number;
-  };
-
-  type StoryboardQuoteResponse = {
-    available_micros?: number;
-    compiler_version?: string;
-    confirm_key?: string;
-    confirmable?: boolean;
-    editor_draft?: PromptDraft;
-    expires_at?: string;
-    final_prompt?: string;
-    operation_id?: string;
-    prompt_preparation?: PromptPreparation;
-    quote_detail?: Record<string, any>;
-    quote_micros?: number;
-    reference_mapping?: ReferenceMapping[];
-    reused_from_id?: string | null;
-    submission_epoch?: number;
-    submission_id?: string;
-  };
-
   type StoryboardShot = {
     action?: string;
     adopted?: StoryboardTake;
@@ -5949,88 +5810,6 @@ declare namespace API {
     ordinal: number;
     shot_id: string;
     shot_revision: number;
-  };
-
-  type StoryboardView = {
-    board?: StoryboardBoard;
-    canvas_id?: string;
-    commit_seq?: string;
-    project_id?: string;
-    revision?: number;
-  };
-
-  type StructureConfirmRequest = {
-    ack_invalidate?: boolean;
-    base_structure_version_no?: number;
-    expected_episode_revision?: number;
-    expected_revision?: number;
-  };
-
-  type StructureDetail = {
-    episode?: Episode;
-    structure?: EpisodeStructure;
-  };
-
-  type StructureDocument = {
-    scenes?: StructureScene[];
-    unassigned_lines?: UnassignedLine[];
-  };
-
-  type StructureItem = {
-    character_id?: string;
-    character_version_id?: string;
-    content?: string;
-    emotion?: string;
-    kind?: DialogueKind;
-    line_key?: string;
-    span_end?: number;
-    span_start?: number;
-    speaker_text?: string;
-    type?: StructureItemType;
-  };
-
-  type StructureItemType = "line" | "action";
-
-  type StructurePage = {
-    items?: StructureSummary[];
-    next_version_no?: number;
-  };
-
-  type StructureReceipt = {
-    episode_revision?: number;
-    project_revision?: number;
-    review_status?: StructureReviewStatus;
-    script_revision?: number;
-    structure_id?: string;
-    version_no?: number;
-  };
-
-  type StructureReviewStatus = "candidate" | "confirmed";
-
-  type StructureSaveRequest = {
-    base_structure_version_no?: number;
-    document?: StructureDocument;
-    expected_episode_revision?: number;
-    expected_revision?: number;
-  };
-
-  type StructureScene = {
-    heading?: string;
-    items?: StructureItem[];
-    location_text?: string;
-    scene_key?: string;
-    seq_no?: number;
-    span_end?: number;
-    span_start?: number;
-    time_of_day?: string;
-  };
-
-  type StructureSummary = {
-    created_at?: string;
-    episode_id?: string;
-    id?: string;
-    source_hash?: string;
-    version_no?: number;
   };
 
   type StyleLibraryChangeResult = {
@@ -6663,13 +6442,6 @@ declare namespace API {
     pid: string;
   };
 
-  type UnassignedLine = {
-    content?: string;
-    line_key?: string;
-    span_end?: number;
-    span_start?: number;
-  };
-
   type unbindBibleVoiceParams = {
     /** Project UUID */
     pid: string;
@@ -7053,10 +6825,5 @@ declare namespace API {
     current_actor_id?: string;
     current_org_id?: string;
     state?: ProjectState;
-  };
-
-  type writeCanvasStoryboardParams = {
-    /** 画布 UUID */
-    id: string;
   };
 }

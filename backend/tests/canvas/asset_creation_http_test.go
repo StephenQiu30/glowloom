@@ -32,7 +32,7 @@ func TestCanvasAssetCreationHTTPUsesExplicitCatalogAndRejectsInvalidCommand(t *t
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, httptest.NewRequestWithContext(t.Context(), "GET", "/api/canvas-assets/templates?kind=short_drama", nil))
 	var catalog application.AssetTemplateCatalog
-	if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &catalog) != nil || len(catalog.Items) != 1 || catalog.Items[0].Kind != "short_drama" || !catalog.Items[0].IsTemplate {
+	if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &catalog) != nil || len(catalog.Items) != 0 {
 		t.Fatal(response.Code, response.Body.String())
 	}
 	response = httptest.NewRecorder()
@@ -52,13 +52,13 @@ func TestCanvasAssetCreationHTTPUsesExplicitCatalogAndRejectsInvalidCommand(t *t
 			t.Fatal("invalid creation reached store", response.Code, response.Body.String(), store.calls)
 		}
 	}
-	request := httptest.NewRequestWithContext(t.Context(), "POST", "/api/canvas-assets", strings.NewReader(`{"template_key":"text-to-image-v1"}`))
+	request := httptest.NewRequestWithContext(t.Context(), "POST", "/api/canvas-assets", strings.NewReader(`{"template_key":"director-stage-v1"}`))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Idempotency-Key", uuid.NewString())
 	response = httptest.NewRecorder()
 	router.ServeHTTP(response, request)
 	var created application.CreatedAssetCanvas
-	if response.Code != 201 || json.Unmarshal(response.Body.Bytes(), &created) != nil || store.calls != 1 || created.Kind != "canvas" || created.Name != "文生图工作流" || created.IsTemplate || created.TemplateKey != "text-to-image-v1" {
+	if response.Code != 201 || json.Unmarshal(response.Body.Bytes(), &created) != nil || store.calls != 1 || created.Kind != "canvas" || created.Name != "3D导演台" || created.IsTemplate || created.TemplateKey != "director-stage-v1" {
 		t.Fatal(response.Code, response.Body.String(), store.calls)
 	}
 }

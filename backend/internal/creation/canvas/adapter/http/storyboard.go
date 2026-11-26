@@ -31,14 +31,6 @@ func (h *StoryboardHandler) Register(group *gin.RouterGroup) {
 }
 
 // Get returns the current ordered shots at the canvas revision.
-// @Summary 普通画布故事板
-// @ID getCanvasStoryboard
-// @Tags canvases
-// @Produce json
-// @Param id path string true "画布 UUID"
-// @Success 200 {object} application.StoryboardView
-// @Failure 404 {object} httpapi.Problem
-// @Router /api/canvases/{id}/storyboard [get]
 func (h *StoryboardHandler) Get(c *gin.Context) {
 	id, ok := httpapi.PathUUID(c, "id")
 	if !ok {
@@ -53,18 +45,6 @@ func (h *StoryboardHandler) Get(c *gin.Context) {
 }
 
 // Write validates and applies one storyboard edit or first publication.
-// @Summary 正式写入普通画布故事板
-// @ID writeCanvasStoryboard
-// @Tags canvases
-// @Accept json
-// @Produce json
-// @Param id path string true "画布 UUID"
-// @Param Idempotency-Key header string true "UUID"
-// @Param body body domain.StoryboardCommand true "镜头操作"
-// @Success 200 {object} application.StoryboardView
-// @Failure 409 {object} httpapi.Problem
-// @Failure 422 {object} httpapi.Problem
-// @Router /api/canvases/{id}/storyboard [post]
 func (h *StoryboardHandler) Write(c *gin.Context) {
 	id, ok := httpapi.PathUUID(c, "id")
 	if !ok {

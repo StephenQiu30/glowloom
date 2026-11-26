@@ -7,6 +7,13 @@ import { SessionContext } from "@/components/auth/session";
 import { SpaceContext } from "@/components/spaces/space-context";
 import { CanvasProviders } from "@/components/canvas/editor";
 import { Button } from "@/components/ui/button";
+import { Toaster } from "@/components/ui/sonner";
+import { CanvasMediaContext } from "@/components/canvas-editor/lib/canvas-media-context.ts";
+import { CanvasTopBar } from "@/components/canvas-editor/controls/canvas-top-bar.tsx";
+import { ReferenceAssetsPanel } from "@/app/assets/_components/assets-page";
+import { CanvasAccountControls } from "@/components/canvas/canvas-account-controls";
+import { NotificationProvider } from "@/components/notifications/notification-provider";
+import { RequestError } from "@/lib/request";
 import { ProjectAssetDialog } from "@/components/media/project-asset-dialog";
 import { PersonalLibraryPicker } from "@/components/media/personal-reference-picker";
 import { serviceGraph } from "@/components/canvas/service-graph";
@@ -25,12 +32,37 @@ const actorID = id(1),
   canvasID = id(3),
   nodeID = id(4),
   scopeID = id(5);
+const fixtureParams = new URLSearchParams(location.search);
+const inspectToolbar = fixtureParams.has("toolbar");
+const syncing = fixtureParams.has("syncing");
 const identity = {
-  actor: { id: actorID },
+  actor: {
+    id: actorID,
+    display_name: "画布验收账号",
+    email: "canvas@example.test",
+    platform_role: "creator",
+  },
   session_id: id(6),
   csrf_token: "fixture-only",
 } as API.EmailSessionView;
 const space = { id: scopeID, writable: true } as API.SpaceView;
+const notificationSummary = {
+  data_epoch: "canvas-fixture",
+  mailbox_version: "1",
+  max_inbox_seq: "1",
+  unread_count: 1,
+};
+const notification = {
+  id: id(9),
+  inbox_seq: "1",
+  title: "画布验收通知",
+  body: "隔离浏览器验收消息。",
+  category: "collaboration",
+  read: false,
+  occurred_at: new Date().toISOString(),
+  status: "active",
+  action_path: "",
+};
 setCSRFToken("fixture-only");
 setCreationScope(scopeID);
 installDevelopmentTransport({
@@ -38,11 +70,31 @@ installDevelopmentTransport({
   async request(url, options) {
     const params = options.params ?? {};
     if (url === "/api/session") return identity;
+    if (url === "/api/billing/wallet") {
+      if (fixtureParams.has("walletForbidden"))
+        throw new RequestError("forbidden", 403);
+      return {
+        enabled: true,
+        general_credits: "0",
+        held_credits: "2",
+        payer: "personal",
+      };
+    }
+    if (url === "/api/notifications/summary") return notificationSummary;
+    if (url === "/api/notifications/display") return {};
+    if (url === "/api/notifications")
+      return { items: [notification], ...notificationSummary };
+    if (url.endsWith("/operations")) return { items: [] };
     if (url === "/api/me/preferences") return { revision: "1", theme: "dark" };
     if (url === "/api/models") return { items: [] };
     if (url.endsWith("/prompt-submissions/current")) return { epoch: 0 };
     if (url.includes("/library") && !url.endsWith("/preview")) {
       const kind = String(params.kind ?? "image");
+      const page = Number(params.page) || 1;
+      const pageSize = Number(params.page_size) || 20;
+      const total = fixtureParams.has("assetPages") ? pageSize + 2 : 12;
+      const offset = (page - 1) * pageSize;
+      const count = Math.max(0, Math.min(pageSize, total - offset));
       return {
         current_actor_id: actorID,
         current_org_id: scopeID,
@@ -52,26 +104,29 @@ installDevelopmentTransport({
           params.scope === "personal"
             ? { kind: "personal" }
             : { kind: "project", project_id: projectID },
-        page: Number(params.page) || 1,
-        page_size: params.page_size ?? 20,
-        total: 12,
+        page,
+        page_size: pageSize,
+        total,
         folders: [],
-        items: Array.from({ length: 12 }, (_, index) => ({
-          id: id(20 + index),
-          asset_id: id(50 + index),
-          revision: 1,
-          favorite: false,
-          updated_at: "2026-11-16T00:00:00Z",
-          title: `LongUnbrokenReferenceAssetNameForResponsiveAcceptance-${index}`,
-          kind,
-          catalog_state: "active",
-          media: {
-            id: id(50 + index),
-            kind,
+        items: Array.from({ length: count }, (_, index) => {
+          const position = offset + index;
+          return {
+            id: id(20 + position),
+            asset_id: id(50 + position),
             revision: 1,
-            file_name: `长素材名称用于验证窄屏-${index}.png`,
-          },
-        })),
+            favorite: false,
+            updated_at: "2026-11-16T00:00:00Z",
+            title: `LongUnbrokenReferenceAssetNameForResponsiveAcceptance-${position}`,
+            kind,
+            catalog_state: "active",
+            media: {
+              id: id(50 + position),
+              kind,
+              revision: 1,
+              file_name: `长素材名称用于验证窄屏-${position}.png`,
+            },
+          };
+        }),
       };
     }
     if (url.endsWith("/preview"))
@@ -164,6 +219,7 @@ function Fixture() {
       throw new Error("隔离布局验收不创建生成任务");
     },
   } as unknown as CanvasYjsLiveSession).current;
+  const Shell = inspectToolbar ? NotificationProvider : PassThrough;
   return (
     <ThemeProvider attribute="class" forcedTheme="dark">
       <SessionContext value={identity}>
@@ -178,61 +234,101 @@ function Fixture() {
           }}
         >
           <TooltipProvider>
-            <CanvasProviders>
-              <div className="canvas-workspace h-dvh">
-                <CanvasPage
-                  documentIntegration={{
-                    projectId: projectID,
-                    initialState: graph,
-                    viewStateKey: `responsive-${innerWidth}`,
-                    mediaEnabled: false,
-                    canNavigate: true,
-                    frozen: false,
-                    onChange: setGraph,
-                    renderGenerationPanel: () => (
-                      <CanvasGenerationPanel
-                        client={client}
-                        nodeID={nodeID}
-                        canvasID={canvasID}
-                        projectID={projectID}
-                      />
-                    ),
-                    toolbar: () => (
-                      <div className="flex flex-wrap gap-2 p-2">
-                        <span title="隔离布局验收，无保存与生成请求">
-                          隔离验收
-                        </span>
-                        <Button onClick={() => setPicker("project")}>
-                          项目素材
-                        </Button>
-                        <Button onClick={() => setPicker("personal")}>
-                          个人素材
-                        </Button>
-                      </div>
-                    ),
-                  }}
-                />
-              </div>
-              {picker === "project" && (
-                <ProjectAssetDialog
-                  projectID={projectID}
-                  canvasPresentation
-                  onClose={() => setPicker(null)}
-                  onAdd={() => {}}
-                />
-              )}
-              {picker === "personal" && (
-                <PersonalLibraryPicker
-                  owner={{ actorId: actorID, scopeId: scopeID }}
-                  onClose={() => setPicker(null)}
-                  onSelect={() => {}}
-                />
-              )}
-            </CanvasProviders>
+            <Shell>
+              <CanvasProviders>
+                <div className="canvas-workspace h-dvh">
+                  <CanvasMediaContext.Provider
+                    value={{
+                      canvasId: canvasID,
+                      projectId: projectID,
+                      bindingRevision: "1",
+                    }}
+                  >
+                    <CanvasPage
+                      documentIntegration={{
+                        projectId: projectID,
+                        initialState: graph,
+                        viewStateKey: `responsive-${innerWidth}`,
+                        mediaEnabled: false,
+                        renderReferenceAssets: (refreshKey) => (
+                          <ReferenceAssetsPanel refreshKey={refreshKey} />
+                        ),
+                        canNavigate: !syncing,
+                        frozen: false,
+                        onChange: setGraph,
+                        renderGenerationPanel: () => (
+                          <CanvasGenerationPanel
+                            client={client}
+                            nodeID={nodeID}
+                            canvasID={canvasID}
+                            projectID={projectID}
+                          />
+                        ),
+                        toolbar: (controls) =>
+                          inspectToolbar ? (
+                            <CanvasTopBar
+                              {...controls}
+                              title="画布导航验收"
+                              projectID={projectID}
+                              canvasID={canvasID}
+                              canSwitchCanvas={!syncing}
+                              onRenameProject={() => {}}
+                              onDeleteProject={() => {}}
+                              renderAccount={(compact) => (
+                                <CanvasAccountControls
+                                  scopeID={scopeID}
+                                  compact={compact}
+                                  canNavigate={!syncing}
+                                  onHome={controls.onHome}
+                                />
+                              )}
+                            />
+                          ) : (
+                            <>
+                              <div className="flex flex-wrap gap-2 p-2">
+                                <span title="隔离布局验收，无保存与生成请求">
+                                  隔离验收
+                                </span>
+                                <Button onClick={() => setPicker("project")}>
+                                  项目素材
+                                </Button>
+                                <Button onClick={() => setPicker("personal")}>
+                                  个人素材
+                                </Button>
+                              </div>
+                              {controls.renderMore?.()}
+                            </>
+                          ),
+                      }}
+                    />
+                  </CanvasMediaContext.Provider>
+                </div>
+                {picker === "project" && (
+                  <ProjectAssetDialog
+                    projectID={projectID}
+                    canvasPresentation
+                    onClose={() => setPicker(null)}
+                    onAdd={() => {}}
+                  />
+                )}
+                {picker === "personal" && (
+                  <PersonalLibraryPicker
+                    owner={{ actorId: actorID, scopeId: scopeID }}
+                    onClose={() => setPicker(null)}
+                    onSelect={() => {}}
+                  />
+                )}
+              </CanvasProviders>
+              {inspectToolbar && <Toaster />}
+            </Shell>
           </TooltipProvider>
         </SpaceContext>
       </SessionContext>
     </ThemeProvider>
   );
 }
+function PassThrough({ children }: { children: React.ReactNode }) {
+  return children;
+}
+
 createRoot(document.getElementById("root")!).render(<Fixture />);

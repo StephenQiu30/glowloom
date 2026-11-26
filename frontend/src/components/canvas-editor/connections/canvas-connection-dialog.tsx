@@ -26,7 +26,6 @@ import {
 
 export function CanvasConnectionDialog({
   edge,
-  agentProfiles,
   source,
   target,
   connections,
@@ -34,7 +33,6 @@ export function CanvasConnectionDialog({
   onClose,
 }: {
   edge: CanvasContract.CanvasDocumentConnectionDTO;
-  agentProfiles: CanvasContract.WorkflowAgentProfileVO[];
   source: CanvasNodeData;
   target: CanvasNodeData;
   connections: CanvasConnection[];
@@ -74,17 +72,7 @@ export function CanvasConnectionDialog({
   const runOutput = ["GENERATE", "PROCESS", "AGENT"].includes(
     source.documentData?.parameters?.mode ?? "",
   );
-  const fields = ["PROCESS", "AGENT"].includes(
-    target.documentData?.parameters?.mode ?? "",
-  )
-    ? (agentProfiles.find(
-        (profile) =>
-          profile.id === source.documentData?.parameters?.agent?.profile,
-      )?.fields ?? [])
-    : [];
-  const [field, setField] = useState(
-    edge.binding.selection?.field ?? "summary",
-  );
+  const field = edge.binding.selection?.field;
   const selected = validOptions.find((item) => item[0] === port);
   const bound =
     binding === "text"
@@ -95,12 +83,7 @@ export function CanvasConnectionDialog({
             (multiple && selection === "ALL") ||
             /^[1-9]\d*$/.test(index))
         : refs.some((ref) => ref.referenceKey === binding);
-  const allowed =
-    !!selected &&
-    bound &&
-    (binding !== "run" ||
-      field === "summary" ||
-      fields.some((item) => item.key === field));
+  const allowed = !!selected && bound;
   return (
     <Dialog
       open
@@ -165,29 +148,6 @@ export function CanvasConnectionDialog({
                 </SelectContent>
               </Select>
             </Field>
-            {binding === "run" &&
-              (fields.length > 0 || field !== "summary") && (
-                <Field>
-                  <FieldLabel htmlFor="canvas-output-field">
-                    输出字段
-                  </FieldLabel>
-                  <Select value={field} onValueChange={setField}>
-                    <SelectTrigger id="canvas-output-field">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        <SelectItem value="summary">摘要文本</SelectItem>
-                        {fields.map((item) => (
-                          <SelectItem key={item.key} value={item.key!}>
-                            {item.label}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </Field>
-              )}
             {binding === "run" && multiple && (
               <Field>
                 <FieldLabel>结果范围</FieldLabel>
@@ -255,7 +215,9 @@ export function CanvasConnectionDialog({
                                 ? { mode: "ALL" }
                                 : {
                                     mode: "ITEM",
-                                    ...(field !== "summary" ? { field } : {}),
+                                    ...(field && field !== "summary"
+                                      ? { field }
+                                      : {}),
                                     index:
                                       sourceType === "text" ? 1 : Number(index),
                                   },

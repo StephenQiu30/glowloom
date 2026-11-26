@@ -25,13 +25,11 @@ export default async function Page({
         initialTab={
           tab === "create"
             ? "create"
-            : tab === "script"
+            : tab === "script" || tab === "episodes"
               ? "script"
               : tab === "video"
                 ? "video"
-                : tab === "episodes"
-                  ? "episodes"
-                  : "assets"
+                : "assets"
         }
         initialSession={isProjectID(session) ? session : undefined}
       />

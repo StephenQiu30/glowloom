@@ -6,19 +6,7 @@ import { notifyError } from "@/components/canvas/runtime/components/feedback/err
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field, FieldLabel } from "@/components/ui/field";
-import {
-  CanvasAgentParameters,
-  defaultCanvasAgent,
-} from "../parameters/canvas-agent-parameters.tsx";
 import { CanvasModelSelect } from "../parameters/canvas-model-select.tsx";
-import {
-  SelectGroup,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { RichTextInput } from "../runtime/components/editor/rich-text/rich-text-input.tsx";
 import { documentText } from "../runtime/components/editor/lib/rich-text-document.ts";
 import type { CanvasNodeData } from "../types/canvas.ts";
@@ -42,7 +30,6 @@ export function CanvasDocumentNodePanel({
   onDisconnectReference,
   onStartReferenceSelection,
   generation,
-  workflow,
   onGenerate,
   pendingForm,
   onPendingForm,
@@ -58,7 +45,6 @@ export function CanvasDocumentNodePanel({
   onDisconnectReference?: (fromNodeId: string, toNodeId: string) => void;
   onStartReferenceSelection?: (nodeId: string) => void;
   generation?: CanvasDocumentIntegration["generation"];
-  workflow?: CanvasDocumentIntegration["workflow"];
   onGenerate?: () => void;
   pendingForm?: CanvasPendingForms[string];
   onPendingForm?: (form: CanvasPendingForms[string] | undefined) => void;
@@ -81,12 +67,8 @@ export function CanvasDocumentNodePanel({
   const parameters = source.parameters;
   const supported = ["text", "image", "video"].includes(node.type);
   const selected = parameters?.modelSelection;
-  const agent = parameters?.mode === "AGENT";
-  const processing = parameters?.mode === "PROCESS" || agent;
-  const generatorVisible =
-    ["image", "video"].includes(node.type) ||
-    !workflow?.enabled ||
-    parameters?.mode === "GENERATE";
+  const processing =
+    parameters?.mode === "PROCESS" || parameters?.mode === "AGENT";
   const run = generation?.runs.find((value) => value.nodeId === node.id);
   const submitting = generation?.submitting.includes(node.id);
   const pending =
@@ -94,17 +76,16 @@ export function CanvasDocumentNodePanel({
   const canGenerate =
     supported &&
     !!onGenerate &&
-    (processing
-      ? workflow?.enabled && workflow.accepting && !workflow.busy
-      : generation?.ready === true &&
-        !!selected &&
-        !!(
-          node.metadata?.richText
-            ? documentText(node.metadata.richText.content)
-            : node.type === "text"
-              ? node.metadata?.content
-              : node.metadata?.prompt
-        )?.trim()) &&
+    !processing &&
+    generation?.ready === true &&
+    !!selected &&
+    !!(
+      node.metadata?.richText
+        ? documentText(node.metadata.richText.content)
+        : node.type === "text"
+          ? node.metadata?.content
+          : node.metadata?.prompt
+    )?.trim() &&
     !pending &&
     !submitting;
   const generate = () => {
@@ -131,38 +112,7 @@ export function CanvasDocumentNodePanel({
   const generationControls = (
     <div className="canvas-prompt-controls">
       <div className="canvas-prompt-parameters">
-        {node.type === "text" && workflow?.enabled && (
-          <Select
-            value={parameters?.mode ?? "MANUAL"}
-            onValueChange={(mode) =>
-              patch({
-                parameters:
-                  mode === "AGENT"
-                    ? { mode, agent: parameters?.agent ?? defaultCanvasAgent }
-                    : mode === "GENERATE"
-                      ? { ...parameters, agent: undefined, mode }
-                      : { mode },
-              })
-            }
-          >
-            <SelectTrigger aria-label="文字节点执行方式" className="w-36">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectItem value="MANUAL" disabled={connectedNodes.length > 0}>
-                  固定文字
-                </SelectItem>
-                <SelectItem value="PROCESS">确定性拼接</SelectItem>
-                {workflow.agentEnabled && (
-                  <SelectItem value="AGENT">Agent（Mock）</SelectItem>
-                )}
-                <SelectItem value="GENERATE">模型生成</SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        )}
-        {supported && !processing && generatorVisible && (
+        {supported && !processing && (
           <CanvasModelSelect
             key={node.id}
             type={node.type}
@@ -178,51 +128,35 @@ export function CanvasDocumentNodePanel({
             }
           />
         )}
-        {["image", "video"].includes(node.type) &&
-          selected &&
-          generatorVisible && (
-            <CanvasGenerationParameters
-              type={node.type}
-              parameters={parameters}
-              hasReferences={
-                connectedNodes.length > 0 ||
-                !!source.fileReferences?.some((reference) =>
-                  reference.purpose?.startsWith("REFERENCE_"),
-                )
-              }
-              onChange={(parameters) => patch({ parameters })}
-            />
-          )}
+        {["image", "video"].includes(node.type) && selected && (
+          <CanvasGenerationParameters
+            type={node.type}
+            parameters={parameters}
+            hasReferences={
+              connectedNodes.length > 0 ||
+              !!source.fileReferences?.some((reference) =>
+                reference.purpose?.startsWith("REFERENCE_"),
+              )
+            }
+            onChange={(parameters) => patch({ parameters })}
+          />
+        )}
       </div>
-      {supported && (processing || generatorVisible) && (
+      {supported && !processing && (
         <Button
           size="icon-lg"
           className="canvas-prompt-submit"
-          aria-label={
-            processing
-              ? agent
-                ? "运行 Agent（Mock）"
-                : "运行确定性处理"
-              : pending || submitting
-                ? "正在生成"
-                : "生成"
-          }
+          aria-label={pending || submitting ? "正在生成" : "生成"}
           disabled={!canGenerate}
-          aria-describedby={
-            !processing && !generation ? availabilityId : undefined
-          }
+          aria-describedby={!generation ? availabilityId : undefined}
           title={
-            processing
-              ? agent
-                ? "按保存快照运行 Agent（Mock）"
-                : "按保存快照运行确定性拼接"
-              : !generation
-                ? "当前画布的生成服务尚未接入"
-                : !selected
-                  ? "请先选择模型"
-                  : pending
-                    ? "生成中"
-                    : undefined
+            !generation
+              ? "当前画布的生成服务尚未接入"
+              : !selected
+                ? "请先选择模型"
+                : pending
+                  ? "生成中"
+                  : undefined
           }
           onClick={generate}
         >
@@ -404,16 +338,6 @@ export function CanvasDocumentNodePanel({
         </div>
       ) : (
         promptEditor
-      )}
-      {agent && parameters?.agent && (
-        <CanvasAgentParameters
-          id={node.id}
-          value={parameters.agent}
-          profiles={workflow?.agentProfiles ?? []}
-          onChange={(value) =>
-            patch({ parameters: { ...parameters, agent: value } })
-          }
-        />
       )}
       {!expanded && generationControls}
       {supported && !processing && !generation && (

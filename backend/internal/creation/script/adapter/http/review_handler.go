@@ -32,11 +32,6 @@ func (h *ReviewHandler) Register(g *gin.RouterGroup) {
 	g.POST("/projects/:pid/episodes/split/resplit", h.Resplit)
 	g.POST("/projects/:pid/episodes/split/confirm", h.ConfirmSplit)
 	g.GET("/episodes/:eid/source-text", h.SourceText)
-	g.GET("/episodes/:eid/structure", h.Structure)
-	g.GET("/episodes/:eid/structure/versions", h.StructureVersions)
-	g.GET("/episodes/:eid/structure/versions/:version", h.StructureVersion)
-	g.POST("/episodes/:eid/structure", h.SaveStructure)
-	g.POST("/episodes/:eid/structure/confirm", h.ConfirmStructure)
 }
 
 // SplitReviewRequest binds complete reviewed boundaries to both visible heads.
@@ -307,25 +302,9 @@ func (h *ReviewHandler) SourceText(c *gin.Context) {
 }
 
 // Structure returns the current manual head with its retained formal episode status.
-// @Summary 当前手工结构
-// @Tags script
-// @ID getScriptEpisodeStructure
-// @Produce json
-// @Param eid path string true "正式分集UUID"
-// @Success 200 {object} StructureDetail
-// @Router /api/episodes/{eid}/structure [get]
 func (h *ReviewHandler) Structure(c *gin.Context) { h.structure(c, 0) }
 
 // StructureVersions lists actual immutable history including superseded candidates.
-// @Summary 手工结构全部版本
-// @Tags script
-// @ID listScriptEpisodeStructureVersions
-// @Produce json
-// @Param eid path string true "正式分集UUID"
-// @Param before_version_no query integer false "严格早于结构版本号"
-// @Param limit query integer false "1..100"
-// @Success 200 {object} application.StructurePage
-// @Router /api/episodes/{eid}/structure/versions [get]
 func (h *ReviewHandler) StructureVersions(c *gin.Context) {
 	actor, err := resolveActor(c, h.resolve)
 	if err != nil {
@@ -350,14 +329,6 @@ func (h *ReviewHandler) StructureVersions(c *gin.Context) {
 }
 
 // StructureVersion selects one immutable version without replacing current pointers.
-// @Summary 指定历史手工结构
-// @Tags script
-// @ID getScriptEpisodeStructureVersion
-// @Produce json
-// @Param eid path string true "正式分集UUID"
-// @Param version path integer true "结构版本号"
-// @Success 200 {object} StructureDetail
-// @Router /api/episodes/{eid}/structure/versions/{version} [get]
 func (h *ReviewHandler) StructureVersion(c *gin.Context) {
 	version, err := strconv.ParseInt(c.Param("version"), 10, 64)
 	if err != nil || version < 1 {
@@ -392,16 +363,6 @@ func (h *ReviewHandler) structure(c *gin.Context, version int64) {
 }
 
 // SaveStructure preserves every reviewed item and creates a new immutable candidate.
-// @Summary 保存完整手工结构候选
-// @Tags script
-// @ID saveScriptEpisodeStructure
-// @Accept json
-// @Produce json
-// @Param eid path string true "正式分集UUID"
-// @Param Idempotency-Key header string true "UUID"
-// @Param body body StructureSaveRequest true "完整结构与两级CAS"
-// @Success 200 {object} application.StructureReceipt
-// @Router /api/episodes/{eid}/structure [post]
 func (h *ReviewHandler) SaveStructure(c *gin.Context) {
 	actor, err := resolveActor(c, h.resolve)
 	if err != nil {
@@ -431,18 +392,6 @@ func (h *ReviewHandler) SaveStructure(c *gin.Context) {
 }
 
 // ConfirmStructure requires current formal identity and explicit downstream impact evidence.
-// @Summary 明确确认当前手工结构
-// @Tags script
-// @ID confirmScriptEpisodeStructure
-// @Accept json
-// @Produce json
-// @Param eid path string true "正式分集UUID"
-// @Param Idempotency-Key header string true "UUID"
-// @Param body body StructureConfirmRequest true "当前结构CAS与影响确认"
-// @Success 200 {object} application.StructureReceipt
-// @Failure 409 {object} httpapi.Problem
-// @Failure 503 {object} httpapi.Problem
-// @Router /api/episodes/{eid}/structure/confirm [post]
 func (h *ReviewHandler) ConfirmStructure(c *gin.Context) {
 	actor, err := resolveActor(c, h.resolve)
 	if err != nil {

@@ -13,13 +13,6 @@ import { isSameSkillVersion, isVersionedSkill } from "./conversation-state";
 
 const starters = [
   {
-    name: "叙事短片导演分镜",
-    cover: "/design/reference/moonlight-whale.png",
-    description: "从故事构思到镜头设计，逐步完成分镜与创作提示词。",
-    prompt:
-      "请把我的故事构思拆成短片分镜，逐镜列出画面、景别、运镜、时长和创作提示词。若缺少故事背景，请先向我提问。",
-  },
-  {
     name: "系列套图生成",
     cover: "/design/reference/amber-perfume.png",
     description: "围绕同一角色或产品，制作风格一致的系列图片。",
@@ -29,7 +22,7 @@ const starters = [
   {
     name: "爆款电商短视频题材创意",
     cover: "/design/reference/cobalt-headphones.png",
-    description: "整理商品卖点，生成短视频创意与分镜方案。",
+    description: "整理商品卖点，生成短视频创意与拍摄提纲。",
     prompt:
       "请根据我提供的商品与目标受众，提出三组电商短视频创意，分别给出开场钩子、主卖点和镜头结构。若信息不足，请先向我提问。",
   },

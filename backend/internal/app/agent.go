@@ -56,6 +56,7 @@ func RegisterAgentBoundary(ctx context.Context, router *gin.Engine, protected *g
 	}
 	if options.CanvasRuntime != nil {
 		boundary.WithCanvasRuntime(options.CanvasRuntime).WithCanvasNotification(options.CanvasNotify)
+		boundary.RetireStoryboardTools()
 	}
 	var runtime *runtimeclient.RuntimeClient
 	if options.Origin != "" && options.ServiceToken != "" {
@@ -73,7 +74,7 @@ func RegisterAgentBoundary(ctx context.Context, router *gin.Engine, protected *g
 	if runtime != nil {
 		quotes = runtime
 	}
-	agenthttp.NewPublicHandler(boundary.Store, boundary.Store, client).WithCanvasAccess(boundary.CheckCanvas).WithStoryboardTargets(boundary.StoryboardTargets).WithControlStatus(boundary.Store).WithConversationInputs(boundary.ConversationInputs(quotes)).WithConversationHistory(boundary.ConversationHistory(), boundary.Store).Register(protected)
+	agenthttp.NewPublicHandler(boundary.Store, boundary.Store, client).WithCanvasAccess(boundary.CheckCanvas).WithControlStatus(boundary.Store).WithConversationInputs(boundary.ConversationInputs(quotes)).WithConversationHistory(boundary.ConversationHistory(), boundary.Store).Register(protected)
 	boundary.BusinessHandler(options.BusinessToken).Register(router)
 	agenthttp.RegisterSkillManagement(protected, boundary.Store)
 	if runtime != nil {

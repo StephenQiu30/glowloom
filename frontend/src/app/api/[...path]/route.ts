@@ -830,21 +830,6 @@ async function proxy(
       query: [],
     },
     {
-      pattern: `episodes/${identityUUID}/source-text`,
-      methods: ["GET"],
-      query: ["from", "to"],
-    },
-    {
-      pattern: `episodes/${identityUUID}/structure`,
-      methods: ["GET", "POST"],
-      query: [],
-    },
-    {
-      pattern: `episodes/${identityUUID}/structure/confirm`,
-      methods: ["POST"],
-      query: [],
-    },
-    {
       pattern: `projects/${identityUUID}/media-exports`,
       methods: ["GET", "POST"],
       query: ["canvas_id", "node_id", "limit", "cursor"],
@@ -943,21 +928,6 @@ async function proxy(
       pattern: `canvases/${identityUUID}/assistant-sessions`,
       methods: ["GET", "POST"],
       query: [],
-    },
-    {
-      pattern: `canvases/${identityUUID}/storyboard`,
-      methods: ["GET", "POST"],
-      query: [],
-    },
-    {
-      pattern: `canvases/${identityUUID}/storyboard/(quote|adopt)`,
-      methods: ["POST"],
-      query: [],
-    },
-    {
-      pattern: `canvases/${identityUUID}/storyboard/candidates`,
-      methods: ["GET"],
-      query: ["board_id", "shot_id"],
     },
     {
       pattern: `canvases/${identityUUID}/assistant-sessions/${identityUUID}`,

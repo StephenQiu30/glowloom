@@ -471,7 +471,8 @@ function InfiniteCanvasPage({
     accountId: string;
   } | null>(null);
   const [assetsRevision, setAssetsRevision] = useState(0);
-  const [savedAssetScope, setSavedAssetScope] = useState<string>();
+  const [assetNavigationSlot, setAssetNavigationSlot] =
+    useState<HTMLDivElement | null>(null);
   const currentProject = project;
   const theme = canvasThemes[useThemeStore((state) => state.theme)];
   const [nodes, setNodesState] = useState<CanvasNodeData[]>(
@@ -6084,7 +6085,6 @@ function InfiniteCanvasPage({
             integrationRef.current?.onPendingForm?.(panelNode.id, form)
           }
           generation={integrationRef.current.generation}
-          workflow={integrationRef.current.workflow}
           onGenerate={() => {
             integrationRef.current?.onChange(
               {
@@ -6096,15 +6096,7 @@ function InfiniteCanvasPage({
               },
               true,
             );
-            if (
-              ["PROCESS", "AGENT"].includes(
-                panelNode.documentData?.parameters?.mode ?? "",
-              )
-            ) {
-              void integrationRef.current?.workflow?.choose([panelNode.id]);
-            } else {
-              void generateDocumentNode(panelNode.id);
-            }
+            void generateDocumentNode(panelNode.id);
           }}
           nodes={nodes}
           connectedNodes={connectedNodesByNodeId.get(panelNode.id) || []}
@@ -6377,17 +6369,17 @@ function InfiniteCanvasPage({
         action={{ label: "重试", onClick: retryBackground }}
       />
       <CanvasSidePanel
-        projectId={documentIntegration?.projectId}
         nodes={nodes}
         selectedNodeIds={selectedNodeIds}
         onFocusNode={focusNode}
         onPreviewNode={setPreviewNodeId}
-        onInsertAsset={handleAssetInsert}
-        assetsRevision={assetsRevision}
-        savedAssetScope={savedAssetScope}
+        referenceAssets={documentIntegration?.renderReferenceAssets?.(
+          assetsRevision,
+        )}
+        navigationRef={setAssetNavigationSlot}
       />
       <section
-        className="@container/canvas relative isolate min-w-0 flex-1 overflow-hidden"
+        className="canvas-editor-viewport @container/canvas relative isolate min-w-0 flex-1 overflow-hidden"
         onPointerMoveCapture={(event) => {
           if (containerRef.current?.contains(event.target as Node))
             documentIntegration?.onCursor?.(
@@ -7006,37 +6998,17 @@ function InfiniteCanvasPage({
                 ),
               );
             }}
-            runDisabled={
-              documentIntegration?.workflow?.busy ||
-              !documentIntegration?.workflow?.accepting
-            }
-            onRun={
-              documentIntegration?.workflow?.enabled
-                ? () => {
-                    integrationRef.current?.onChange(
-                      {
-                        nodes: nodesRef.current,
-                        connections: connectionsRef.current,
-                        backgroundMode,
-                        showImageInfo,
-                        viewport: savedViewport,
-                      },
-                      true,
-                    );
-                    void integrationRef.current?.workflow?.choose(
-                      selectedNodes.map((node) => node.id),
-                    );
-                  }
-                : undefined
-            }
           />
         ) : null}
 
         <CanvasToolbar
-          header={
+          header={(renderMore) =>
             documentIntegration ? (
               documentIntegration.toolbar({
                 nodes,
+                renderMore,
+                assetNavigationSlot,
+                compact: size.width > 0 ? size.width < 768 : undefined,
                 onFocusNode: focusNode,
                 canUndo:
                   documentIntegration.undo?.canUndo ?? historyState.canUndo,
@@ -7053,6 +7025,9 @@ function InfiniteCanvasPage({
             ) : (
               <CanvasTopBar
                 nodes={nodes}
+                renderMore={renderMore}
+                assetNavigationSlot={assetNavigationSlot}
+                compact={size.width > 0 ? size.width < 768 : undefined}
                 onFocusNode={focusNode}
                 title={currentProject?.title || "未命名画布"}
                 onRenameProject={() => {
@@ -7391,9 +7366,6 @@ function InfiniteCanvasPage({
               <CanvasConnectionDialog
                 key={documentConnection.id}
                 edge={documentConnection}
-                agentProfiles={
-                  documentIntegration?.workflow?.agentProfiles ?? []
-                }
                 source={source}
                 target={target}
                 connections={connections.filter(
@@ -7436,10 +7408,7 @@ function InfiniteCanvasPage({
             node={assetSave.node}
             accountId={assetSave.accountId}
             onClose={() => setAssetSave(null)}
-            onSaved={(scope) => {
-              setSavedAssetScope(scope);
-              setAssetsRevision((value) => value + 1);
-            }}
+            onSaved={() => setAssetsRevision((value) => value + 1)}
           />
         )}
         <AssetPickerModal

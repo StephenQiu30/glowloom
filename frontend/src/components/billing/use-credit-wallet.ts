@@ -10,11 +10,16 @@ export function useCreditWallet(
   cursor?: string,
   enabled = true,
   limit: number = DEFAULT_PAGE_SIZE,
+  scopeID?: string,
 ) {
   const session = useOptionalSession();
   const { selected, pending } = useSpace();
   const key =
-    enabled && !pending && session && selected?.id
+    enabled &&
+    !pending &&
+    session &&
+    selected?.id &&
+    (!scopeID || selected.id === scopeID)
       ? [
           "credit-wallet",
           session.session_id,

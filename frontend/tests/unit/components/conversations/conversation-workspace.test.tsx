@@ -23,11 +23,11 @@ afterEach(() => {
 });
 
 const featured = {
-  skill_id: "storyboard",
+  skill_id: "image-series",
   version: "2",
-  resource_hash: "storyboard-hash",
-  name: "叙事短片导演分镜",
-  description: "完成分镜与创作提示词。",
+  resource_hash: "image-series-hash",
+  name: "系列套图生成",
+  description: "完成系列图片方案。",
   enabled: true,
 };
 const existing = {
@@ -98,9 +98,7 @@ it("selects the exact enabled skill version without changing the draft or sendin
   ).toBeTruthy();
   expect(screen.queryByText("停用技能")).toBeNull();
   expect(screen.queryByText("未绑定技能")).toBeNull();
-  fireEvent.click(
-    screen.getByRole("button", { name: "试一试：叙事短片导演分镜" }),
-  );
+  fireEvent.click(screen.getByRole("button", { name: "试一试：系列套图生成" }));
   expect(c.changeSettings).toHaveBeenCalledWith({
     budget: "1",
     skills: [
@@ -159,16 +157,14 @@ it("首页 Agent 只显示当前项目可用的版本化技能，点击只选择
   expect(screen.queryByRole("group", { name: "推荐技能" })).toBeNull();
 });
 
-it("shows all three starters without a project and fills a real prompt without selecting a skill or sending", () => {
+it("shows the available starters without a project and fills a real prompt without selecting a skill or sending", () => {
   const c = setup();
   render(<ConversationWorkspace {...props} enabled={false} />);
   expect(screen.getByText("创作输入")).toBeTruthy();
-  expect(screen.getAllByRole("button", { name: /试一试/ })).toHaveLength(3);
-  fireEvent.click(
-    screen.getByRole("button", { name: "试一试：叙事短片导演分镜" }),
-  );
+  expect(screen.getAllByRole("button", { name: /试一试/ })).toHaveLength(2);
+  fireEvent.click(screen.getByRole("button", { name: "试一试：系列套图生成" }));
   const draft = vi.mocked(c.changeDraft).mock.calls[0]![0];
-  expect(draftText(draft)).toContain("分镜");
+  expect(draftText(draft)).toContain("图片方案");
   expect(c.changeSettings).not.toHaveBeenCalled();
   expect(c.send).not.toHaveBeenCalled();
 });

@@ -43,11 +43,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   SelectGroup,
   Select,
@@ -2462,7 +2458,7 @@ function DirectorWorkspace({
             {shot && (
               <>
                 <Choice
-                  label="分镜机位"
+                  label="镜头机位"
                   value={shot.camera_id}
                   items={scene.cameras.map((camera) => [
                     camera.id,
@@ -2494,7 +2490,7 @@ function DirectorWorkspace({
                       save({ ...scene, shots });
                     }}
                   >
-                    {direction < 0 ? "前移分镜" : "后移分镜"}
+                    {direction < 0 ? "前移镜头" : "后移镜头"}
                   </Button>
                 ))}
                 <NumberField

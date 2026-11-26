@@ -1,6 +1,11 @@
-import { ButtonGroup } from "@/components/ui/button-group";
+import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
+import {
+  CanvasToolbarButton,
+  CanvasToolbarDivider,
+  CanvasToolbarGroup,
+} from "./canvas-toolbar-primitives.tsx";
 import { Toolbar } from "@/components/ui/toolbar";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,11 +21,20 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { ChevronDown, Pencil, FolderOpen, History } from "lucide-react";
+import {
+  ChevronDown,
+  Pencil,
+  FolderOpen,
+  PanelLeftOpen,
+  History,
+  Search,
+  UserRound,
+  Link2,
+  Copy,
+} from "lucide-react";
 import { CanvasNodeSearch } from "../search/canvas-node-search.tsx";
 import { CanvasHistoryDialog } from "../history/canvas-history-dialog.tsx";
 import { toast } from "@/components/feedback/notification";
-import { Search, UserRound, Link2 } from "lucide-react";
 import Link from "next/link";
 import { BrandMark } from "@/components/canvas/runtime/components/layout/shell/brand-mark";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -28,11 +42,17 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  PopoverTitle,
 } from "@/components/ui/popover";
-import { MoreHorizontal } from "lucide-react";
 import { CanvasNodeSummary } from "./canvas-node-summary.tsx";
 import type { CanvasNodeData } from "../types/canvas.ts";
-import { NotificationBell } from "@/components/notifications/notification-bell";
+import { Button } from "@/components/ui/button";
+import { isProjectID } from "@/components/projects/project";
+import type { CanvasMoreControl } from "./canvas-toolbar.tsx";
+import {
+  CANVAS_ASSET_PANEL_ID,
+  useCanvasSidePanelStore,
+} from "../store/use-canvas-side-panel-store.ts";
 
 export function CanvasTopBar({
   title,
@@ -47,9 +67,12 @@ export function CanvasTopBar({
   onCreateProject,
   onDeleteProject,
   saveControl,
-  workflowControl,
   participantsControl,
-  accountControl,
+  presenceConnected,
+  renderAccount,
+  renderMore,
+  compact,
+  assetNavigationSlot,
   onFocusNode,
   onCreatePersonalProject,
   onProjectCanvases,
@@ -78,9 +101,12 @@ export function CanvasTopBar({
   onUndo: () => void;
   onRedo: () => void;
   saveControl?: React.ReactNode;
-  workflowControl?: React.ReactNode;
   participantsControl?: React.ReactNode;
-  accountControl?: React.ReactNode;
+  presenceConnected?: boolean;
+  renderAccount?: (compact: boolean) => React.ReactNode;
+  renderMore?: CanvasMoreControl;
+  compact?: boolean;
+  assetNavigationSlot?: HTMLElement | null;
   onCreatePersonalProject?: () => void;
   onProjectCanvases?: () => void;
   canSwitchCanvas?: boolean;
@@ -90,6 +116,20 @@ export function CanvasTopBar({
   projectPath?: string;
 }) {
   const isMobile = useIsMobile();
+  const compactLayout = compact ?? isMobile;
+  const assetPanelOpen = useCanvasSidePanelStore((state) => state.panelOpen);
+  const toggleAssetPanel = useCanvasSidePanelStore(
+    (state) => state.togglePanel,
+  );
+  const navigationDocked = assetPanelOpen && !!assetNavigationSlot;
+  const focusAfterOpen = useRef(false);
+  useEffect(() => {
+    if (!navigationDocked || !focusAfterOpen.current) return;
+    focusAfterOpen.current = false;
+    assetNavigationSlot?.parentElement
+      ?.querySelector<HTMLButtonElement>("[data-canvas-side-panel-close]")
+      ?.focus();
+  }, [assetNavigationSlot, navigationDocked]);
   const nodeSummary = nodes && (
     <CanvasNodeSummary
       nodes={nodes}
@@ -97,8 +137,6 @@ export function CanvasTopBar({
       projectID={projectID}
     />
   );
-  const groupClass =
-    "items-center gap-1 rounded-lg bg-(--canvas-toolbar) px-1.5 py-1 ring-1 ring-inset ring-border";
   const history = (
     <CanvasHistoryDialog
       onLocate={
@@ -109,202 +147,201 @@ export function CanvasTopBar({
         })
       }
     >
-      <Button
-        variant="ghost"
-        size={isMobile ? "toolbar-icon" : "icon-sm"}
-        aria-label="生成历史"
-      >
+      <CanvasToolbarButton aria-label="生成历史" title="生成历史">
         <History />
-      </Button>
+      </CanvasToolbarButton>
     </CanvasHistoryDialog>
   );
   const search = (
     <CanvasNodeSearch nodes={nodes ?? []} onLocate={(id) => onFocusNode?.(id)}>
-      <Button
-        variant="ghost"
-        size={isMobile ? "toolbar-icon" : "icon-sm"}
+      <CanvasToolbarButton
         aria-label="搜索画布"
+        title="搜索画布"
         disabled={!onFocusNode}
       >
         <Search />
-      </Button>
+      </CanvasToolbarButton>
     </CanvasNodeSearch>
   );
-  const secondaryActions = (
-    <>
-      <NotificationBell onLogin={onHome} />
-      <div
-        className={
-          isMobile
-            ? "contents"
-            : "rounded-lg bg-(--canvas-toolbar) px-1 py-1 ring-1 ring-border ring-inset"
-        }
-      >
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size={isMobile ? "toolbar" : "sm"}
-              className="canvas-share-trigger"
-              aria-label="复制画布链接"
-              onClick={() => {
-                void navigator.clipboard
-                  .writeText(window.location.href)
-                  .then(() => toast.success("画布链接已复制"))
-                  .catch(() =>
-                    toast.error("复制失败，请从浏览器地址栏复制链接"),
-                  );
-              }}
-            >
-              <Link2 />
-              <span className="hidden sm:inline">分享</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>复制画布链接，保留现有访问权限</TooltipContent>
-        </Tooltip>
-      </div>
-      {!accountControl && (
-        <Button
-          variant="ghost"
-          size={isMobile ? "toolbar-icon" : "icon"}
-          aria-label="账号设置"
-          disabled={!canSwitchCanvas}
-          asChild={canSwitchCanvas}
-        >
-          {canSwitchCanvas ? (
-            <Link href="/account">
-              <UserRound />
-            </Link>
-          ) : (
-            <UserRound />
-          )}
-        </Button>
+  const sharePath =
+    isProjectID(projectID) && isProjectID(canvasID)
+      ? "/canvas?" +
+        new URLSearchParams({ project_id: projectID, canvas_id: canvasID })
+      : "";
+  const account = renderAccount ? (
+    renderAccount(compactLayout)
+  ) : (
+    <CanvasToolbarButton
+      aria-label="账号设置"
+      title="账号设置"
+      disabled={!canSwitchCanvas}
+      asChild={canSwitchCanvas}
+    >
+      {canSwitchCanvas ? (
+        <Link href="/account">
+          <UserRound />
+        </Link>
+      ) : (
+        <UserRound />
       )}
-    </>
+    </CanvasToolbarButton>
+  );
+  const navigation = (
+    <CanvasToolbarGroup
+      className="canvas-navigation-group"
+      appearance={navigationDocked ? "plain" : "surface"}
+      aria-label="画布导航"
+    >
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <CanvasToolbarButton
+            className="canvas-brand"
+            aria-label="打开导航菜单"
+          >
+            <BrandMark />
+          </CanvasToolbarButton>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          sideOffset={8}
+          className="w-canvas-menu"
+          data-canvas-no-zoom
+        >
+          <DropdownMenuGroup>
+            <DropdownMenuItem className="h-10 px-3" onSelect={onHome}>
+              回到主页
+            </DropdownMenuItem>
+            <DropdownMenuItem className="h-10 px-3" onSelect={onProjects}>
+              全部项目
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+          {(!projectCanvas || canDeleteCanvas) && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                {!projectCanvas && (
+                  <DropdownMenuItem
+                    className="h-10 px-3"
+                    onSelect={onCreateProject}
+                  >
+                    新建画布
+                  </DropdownMenuItem>
+                )}
+                {canDeleteCanvas && (
+                  <DropdownMenuItem
+                    className="h-10 px-3"
+                    variant="destructive"
+                    onSelect={onDeleteProject}
+                  >
+                    删除当前画布
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuGroup>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <CanvasToolbarButton
+            iconOnly={false}
+            className="canvas-project-trigger"
+            aria-label="打开画布菜单"
+          >
+            <span className="truncate">{title}</span>
+            <ChevronDown data-icon="inline-end" />
+          </CanvasToolbarButton>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          sideOffset={8}
+          className="w-canvas-menu"
+          data-canvas-no-zoom
+        >
+          {projectPath && (
+            <DropdownMenuLabel className="text-xs font-normal break-words whitespace-normal">
+              所属项目：{projectPath}
+            </DropdownMenuLabel>
+          )}
+          <DropdownMenuGroup>
+            {onProjectCanvases && (
+              <DropdownMenuItem
+                className="h-9"
+                disabled={!canSwitchCanvas}
+                onSelect={onProjectCanvases}
+              >
+                <FolderOpen />
+                返回所属项目
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem
+              className="h-9"
+              disabled={!canRenameCanvas}
+              onSelect={onRenameProject}
+            >
+              <Pencil />
+              重命名画布
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="h-9"
+              disabled={exportingProject}
+              onSelect={onExportProject}
+            >
+              导出画布
+            </DropdownMenuItem>
+            {onCreatePersonalProject && (
+              <DropdownMenuItem
+                className="h-9"
+                onSelect={onCreatePersonalProject}
+              >
+                <FolderOpen />
+                建立个人项目
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {!navigationDocked && (
+        <>
+          <CanvasToolbarDivider />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <CanvasToolbarButton
+                aria-label="资产管理"
+                iconOnly={false}
+                aria-expanded={assetPanelOpen}
+                aria-controls={
+                  assetPanelOpen ? CANVAS_ASSET_PANEL_ID : undefined
+                }
+                data-canvas-side-panel-trigger
+                onClick={(event) => {
+                  focusAfterOpen.current =
+                    !assetPanelOpen && event.detail === 0 && !isMobile;
+                  toggleAssetPanel();
+                }}
+              >
+                <PanelLeftOpen />
+                <span className="canvas-assets-label">资产管理</span>
+              </CanvasToolbarButton>
+            </TooltipTrigger>
+            <TooltipContent>资产管理</TooltipContent>
+          </Tooltip>
+        </>
+      )}
+    </CanvasToolbarGroup>
   );
   return (
     <TooltipProvider>
       <Toolbar
-        density="roomy"
         data-canvas-no-zoom
-        className="canvas-topbar flex min-w-0 flex-1 items-center justify-between gap-2"
+        className="canvas-topbar flex-1 justify-between"
       >
-        <div className="canvas-chrome-panel pointer-events-auto flex min-w-0 items-center gap-1">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="toolbar"
-                className="canvas-brand"
-                aria-label="打开导航菜单"
-              >
-                <BrandMark />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="start"
-              sideOffset={8}
-              className="w-canvas-menu"
-              data-canvas-no-zoom
-            >
-              <DropdownMenuGroup>
-                <DropdownMenuItem className="h-10 px-3" onSelect={onHome}>
-                  回到主页
-                </DropdownMenuItem>
-                <DropdownMenuItem className="h-10 px-3" onSelect={onProjects}>
-                  全部项目
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-              {(!projectCanvas || canDeleteCanvas) && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuGroup>
-                    {!projectCanvas && (
-                      <DropdownMenuItem
-                        className="h-10 px-3"
-                        onSelect={onCreateProject}
-                      >
-                        新建画布
-                      </DropdownMenuItem>
-                    )}
-                    {canDeleteCanvas && (
-                      <DropdownMenuItem
-                        className="h-10 px-3"
-                        variant="destructive"
-                        onSelect={onDeleteProject}
-                      >
-                        删除当前画布
-                      </DropdownMenuItem>
-                    )}
-                  </DropdownMenuGroup>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="toolbar"
-                className="canvas-project-trigger"
-                aria-label="打开画布菜单"
-              >
-                <span className="truncate">{title}</span>
-                <ChevronDown data-icon="inline-end" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="start"
-              sideOffset={8}
-              className="w-canvas-menu"
-              data-canvas-no-zoom
-            >
-              {projectPath && (
-                <DropdownMenuLabel className="text-xs font-normal break-words whitespace-normal">
-                  所属项目：{projectPath}
-                </DropdownMenuLabel>
-              )}
-              <DropdownMenuGroup>
-                {onProjectCanvases && (
-                  <DropdownMenuItem
-                    className="h-9"
-                    disabled={!canSwitchCanvas}
-                    onSelect={onProjectCanvases}
-                  >
-                    <FolderOpen />
-                    返回所属项目
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem
-                  className="h-9"
-                  disabled={!canRenameCanvas}
-                  onSelect={onRenameProject}
-                >
-                  <Pencil />
-                  重命名画布
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="h-9"
-                  disabled={exportingProject}
-                  onSelect={onExportProject}
-                >
-                  导出画布
-                </DropdownMenuItem>
-                {onCreatePersonalProject && (
-                  <DropdownMenuItem
-                    className="h-9"
-                    onSelect={onCreatePersonalProject}
-                  >
-                    <FolderOpen />
-                    建立个人项目
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
+        <div className="canvas-chrome-panel pointer-events-auto flex min-w-0 items-center">
+          {navigationDocked
+            ? createPortal(navigation, assetNavigationSlot)
+            : navigation}
           <div className="canvas-status-panel flex items-center gap-1">
-            {!isMobile && nodeSummary}
-            {!isMobile && workflowControl}
+            {!compactLayout && nodeSummary}
             {saveControl === undefined ? (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -325,46 +362,81 @@ export function CanvasTopBar({
             )}
           </div>
         </div>
-        <div className="canvas-header-actions pointer-events-auto flex shrink-0 items-center gap-1">
-          {isMobile && workflowControl}
-          {!isMobile && participantsControl}
-          {isMobile ? (
-            search
-          ) : (
-            <ButtonGroup aria-label="搜索与历史" className={groupClass}>
-              {search}
-              {history}
-            </ButtonGroup>
-          )}
-          {isMobile ? (
+        <div className="canvas-header-actions pointer-events-auto flex shrink-0 items-center">
+          <CanvasToolbarGroup
+            aria-label={compactLayout ? "搜索" : "搜索与生成历史"}
+          >
+            {search}
+            {!compactLayout && history}
+          </CanvasToolbarGroup>
+          <CanvasToolbarGroup aria-label="协作与分享">
+            {!compactLayout && participantsControl}
             <Popover>
               <PopoverTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-lg"
-                  aria-label="更多画布信息"
+                <CanvasToolbarButton
+                  iconOnly={compactLayout}
+                  aria-label="分享"
+                  title="分享"
+                  disabled={!sharePath}
                 >
-                  <MoreHorizontal data-icon="inline-start" />
-                </Button>
+                  <Link2 />
+                  {!compactLayout && <span>分享</span>}
+                </CanvasToolbarButton>
               </PopoverTrigger>
               <PopoverContent
                 side="bottom"
                 align="end"
-                className="w-auto"
+                sideOffset={8}
+                aria-label="分享画布"
+                className="w-72 max-w-[calc(100vw-24px)] gap-3"
                 data-canvas-no-zoom
               >
-                <div className="flex flex-wrap items-center gap-1">
-                  {nodeSummary}
-                  {participantsControl}
-                  {history}
-                  {secondaryActions}
+                <PopoverTitle>分享画布</PopoverTitle>
+                <div className="grid gap-1">
+                  <p className="truncate text-sm font-medium" title={title}>
+                    {title}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    拥有项目访问权限的成员可打开链接。
+                  </p>
                 </div>
+                {presenceConnected === false && (
+                  <p role="status" className="text-sm text-muted-foreground">
+                    在线状态暂不可用
+                  </p>
+                )}
+                {compactLayout && participantsControl}
+                <Button
+                  variant="outline"
+                  className="justify-start"
+                  onClick={async () => {
+                    const url = new URL(sharePath, window.location.origin);
+                    try {
+                      await navigator.clipboard.writeText(url.href);
+                      toast.success("画布链接已复制");
+                    } catch {
+                      toast.error("复制失败，请从浏览器地址栏复制链接");
+                    }
+                  }}
+                >
+                  <Copy />
+                  复制链接
+                </Button>
               </PopoverContent>
             </Popover>
-          ) : (
-            secondaryActions
-          )}
-          {accountControl}
+          </CanvasToolbarGroup>
+          {renderMore?.({
+            shortcuts: compactLayout ? (
+              <>
+                {history}
+                {nodeSummary}
+              </>
+            ) : undefined,
+            appearanceInAccount: !!renderAccount,
+          })}
+          <CanvasToolbarGroup aria-label="账号与服务">
+            {account}
+          </CanvasToolbarGroup>
         </div>
       </Toolbar>
     </TooltipProvider>

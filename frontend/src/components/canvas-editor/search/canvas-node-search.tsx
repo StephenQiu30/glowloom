@@ -12,10 +12,7 @@ import {
 import { useSearchParams } from "next/navigation";
 import { useOptionalSession } from "@/components/auth/session";
 import { previewLibraryMediaAsset } from "@/api/media";
-import {
-  getSubjectMedia,
-  getSubjectVersion,
-} from "@/api/subjects";
+import { getSubjectMedia, getSubjectVersion } from "@/api/subjects";
 import { requireCanvasSubjectVersion } from "@/components/canvas/lib/canvas-subject-source";
 import {
   getCreationScope,
@@ -46,12 +43,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { CanvasNodeData } from "../types/canvas.ts";
 import {
   canvasNodeName,
@@ -141,7 +133,7 @@ export function CanvasNodeSearch({
             </Button>
           )}
         </div>
-        <SearchPreviews>
+        <CanvasNodeThumbnailProvider>
           <Tabs
             value={type}
             onValueChange={(value) => setType(value as CanvasSearchType)}
@@ -220,7 +212,7 @@ export function CanvasNodeSearch({
                           <span className="absolute top-0 left-1 text-[10px] tabular-nums">
                             {index + 1}
                           </span>
-                          <SearchPreview
+                          <CanvasNodeThumbnail
                             node={node}
                             fallback={<Icon className="size-5" />}
                           />
@@ -247,7 +239,7 @@ export function CanvasNodeSearch({
               )}
             </TabsContent>
           </Tabs>
-        </SearchPreviews>
+        </CanvasNodeThumbnailProvider>
       </PopoverContent>
     </Popover>
   );
@@ -402,7 +394,11 @@ class PreviewQueue {
 const PreviewContext = createContext<PreviewQueue | null>(null);
 const contextVersion = () =>
   `${getSessionGeneration()}/${getScopeGeneration()}`;
-function SearchPreviews({ children }: { children: ReactNode }) {
+export function CanvasNodeThumbnailProvider({
+  children,
+}: {
+  children: ReactNode;
+}) {
   const session = useOptionalSession(),
     params = useSearchParams();
   const generation = useSyncExternalStore(
@@ -458,12 +454,14 @@ function previewTarget(node: CanvasNodeData): Target | null {
     ? { kind, asset, revision }
     : null;
 }
-function SearchPreview({
+export function CanvasNodeThumbnail({
   node,
   fallback,
+  mediaFallback,
 }: {
   node: CanvasNodeData;
   fallback: ReactNode;
+  mediaFallback?: ReactNode;
 }) {
   const queue = useContext(PreviewContext),
     element = useRef<HTMLSpanElement>(null);
@@ -488,7 +486,10 @@ function SearchPreview({
           queue={queue}
           target={target}
           fallback={fallback}
+          mediaFallback={mediaFallback}
         />
+      ) : visible ? (
+        (mediaFallback ?? fallback)
       ) : (
         fallback
       )}
@@ -499,10 +500,12 @@ function ResolvedSearchImage({
   queue,
   target,
   fallback,
+  mediaFallback,
 }: {
   queue: PreviewQueue;
   target: Target;
   fallback: ReactNode;
+  mediaFallback?: ReactNode;
 }) {
   const [grant, setGrant] = useState<Grant | null>(null),
     [failed, setFailed] = useState(false),
@@ -540,6 +543,8 @@ function ResolvedSearchImage({
         onError={() => setFailed(true)}
       />
     </>
+  ) : failed ? (
+    (mediaFallback ?? fallback)
   ) : (
     fallback
   );

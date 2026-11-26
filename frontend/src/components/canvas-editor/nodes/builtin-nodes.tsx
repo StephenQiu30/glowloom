@@ -1,6 +1,6 @@
 import {
   Type,
-  Camera,
+  Palette,
   Clapperboard,
   Contact,
   Box,
@@ -8,7 +8,7 @@ import {
   Image as ImageIcon,
   AudioLines,
   Settings2,
-  Video,
+  SquarePlay,
 } from "lucide-react";
 
 import { NODE_SPECS } from "../constants/canvas.ts";
@@ -60,7 +60,7 @@ const BUILTIN_DEFINITIONS: CanvasNodeDefinition[] = [
   {
     type: CanvasNodeType.Video,
     title: "视频",
-    icon: <Video className={iconClass} />,
+    icon: <SquarePlay className={iconClass} />,
     minimapColor: "var(--node-video)",
     keepAspectRatio: () => true,
     resource: builtinResource,
@@ -124,7 +124,7 @@ export function registerBuiltinNodes() {
       {
         type: "cinema_studio",
         title: "导演工具箱",
-        icon: <Camera className={iconClass} />,
+        icon: <Palette className={iconClass} />,
         defaultSize: { width: 400, height: 280 },
         defaultMetadata: {},
         hidePanel: true,

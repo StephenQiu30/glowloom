@@ -8,8 +8,10 @@ import {
 } from "@testing-library/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "next-themes";
+import { CanvasTopBar } from "@/components/canvas-editor/controls/canvas-top-bar.tsx";
 import { CanvasToolbar } from "@/components/canvas-editor/controls/canvas-toolbar.tsx";
 import { CanvasZoomControls } from "@/components/canvas-editor/controls/canvas-zoom-controls.tsx";
+import { CANVAS_ASSET_PANEL_ID } from "@/components/canvas-editor/store/use-canvas-side-panel-store.ts";
 
 vi.mock("@/components/canvas-editor/lib/node-registry.ts", () => ({
   useNodeRegistryVersion: () => 0,
@@ -30,6 +32,33 @@ vi.mock("@/components/auth/session", () => ({
 afterEach(() => {
   cleanup();
   localStorage.clear();
+});
+
+it("即使画布尚不能离开，也能原地打开和收起资产管理", () => {
+  const props = {
+    title: "画布标题",
+    canUndo: false,
+    canRedo: false,
+    onRenameProject: vi.fn(),
+    onHome: vi.fn(),
+    onProjects: vi.fn(),
+    onCreateProject: vi.fn(),
+    onDeleteProject: vi.fn(),
+    onExportProject: vi.fn(),
+    onImportImage: vi.fn(),
+    onUndo: vi.fn(),
+    onRedo: vi.fn(),
+  };
+  render(<CanvasTopBar {...props} canSwitchCanvas={false} />);
+  const navigation = screen.getByRole("group", { name: "画布导航" });
+  const assets = screen.getByRole("button", { name: "资产管理" });
+  expect(navigation.contains(assets)).toBe(true);
+  expect(assets.getAttribute("aria-expanded")).toBe("false");
+  fireEvent.click(assets);
+  expect(assets.getAttribute("aria-expanded")).toBe("true");
+  expect(assets.getAttribute("aria-controls")).toBe(CANVAS_ASSET_PANEL_ID);
+  fireEvent.click(assets);
+  expect(assets.getAttribute("aria-expanded")).toBe("false");
 });
 
 it("合并画布入口后保留撤销、配置节点和只读限制", () => {
@@ -65,6 +94,8 @@ it("合并画布入口后保留撤销、配置节点和只读限制", () => {
   expect(undo).toHaveBeenCalledOnce();
   fireEvent.click(screen.getByRole("button", { name: "添加配置节点" }));
   expect(create).toHaveBeenCalledWith("config");
+  fireEvent.click(screen.getByRole("button", { name: "从素材库添加" }));
+  expect(props.onBrowseAssets).toHaveBeenCalledOnce();
   expect(screen.getByRole("switch", { name: "图片信息" })).toBeTruthy();
   rerender(
     <TooltipProvider>

@@ -40,24 +40,16 @@ import {
 } from "@/components/ui/sheet";
 import {
   ChevronRight,
-  Contact,
-  Clapperboard,
-  Box,
-  Palette,
   Plus,
   Copy,
   Download,
   FileText,
-  Type,
-  Play,
   Group,
   Image as ImageIcon,
-  AudioLines,
   Puzzle,
   RefreshCw,
   Star,
   Trash2,
-  Video,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import React, {
@@ -279,6 +271,10 @@ export const CanvasNode = React.memo(function CanvasNode({
     data.type === CanvasNodeType.Image && Boolean(data.metadata?.content);
   const hasVideoContent =
     data.type === CanvasNodeType.Video && Boolean(data.metadata?.content);
+  const isMedia =
+    data.type === CanvasNodeType.Image ||
+    data.type === CanvasNodeType.Video ||
+    data.type === CanvasNodeType.Audio;
   const isGroup = data.type === CanvasNodeType.Group;
   const batchCount =
     data.type === CanvasNodeType.Image
@@ -619,25 +615,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                       if (!readOnly) setIsEditingTitle(true);
                     }}
                   >
-                    {data.type === CanvasNodeType.Image ? (
-                      <ImageIcon />
-                    ) : data.type === CanvasNodeType.Video ? (
-                      <Video />
-                    ) : data.type === CanvasNodeType.Audio ? (
-                      <AudioLines />
-                    ) : data.type === CanvasNodeType.Text ? (
-                      <Type />
-                    ) : data.type === "subject" ? (
-                      <Contact />
-                    ) : data.type === "timeline" ? (
-                      <Clapperboard />
-                    ) : data.type === "director" ? (
-                      <Box />
-                    ) : data.type === "cinema_studio" ? (
-                      <Palette />
-                    ) : (
-                      <FileText />
-                    )}
+                    {definition?.icon ?? <FileText />}
                     <span className="truncate">
                       {data.title || "未命名节点"}
                     </span>
@@ -657,6 +635,7 @@ export const CanvasNode = React.memo(function CanvasNode({
 
             <div
               className="canvas-node-body relative h-full w-full overflow-visible rounded-xl border"
+              data-media-frame={isMedia ? "" : undefined}
               style={{
                 background: isGroup
                   ? containerKind(data) === "stack"
@@ -667,7 +646,9 @@ export const CanvasNode = React.memo(function CanvasNode({
                       : "transparent"
                   : hasImageContent || hasVideoContent || transparentBg
                     ? "transparent"
-                    : theme.node.fill,
+                    : isMedia
+                      ? "var(--canvas-media-surface, var(--card))"
+                      : theme.node.fill,
                 borderColor: isGroup
                   ? isGroupDropTarget || isActive
                     ? selectionBlue
@@ -1264,7 +1245,9 @@ function TextContent({
         ) : primaryText ? (
           <TextSlotStatus text={primaryText} />
         ) : (
-          <EmptyNodeContent type={CanvasNodeType.Text} />
+          <Empty aria-label="空文本节点">
+            <FileText aria-hidden />
+          </Empty>
         )}
       </div>
       {isBatchRoot ? (
@@ -1385,35 +1368,25 @@ function ImageNodeContent(props: NodeContentRendererProps) {
   );
 }
 
-function EmptyNodeContent({ type }: { type: string }) {
-  if (type === CanvasNodeType.Text)
-    return (
-      <Empty aria-label="空文本节点">
-        <FileText aria-hidden />
-      </Empty>
-    );
-  const Icon =
-    type === CanvasNodeType.Video
-      ? Play
-      : type === CanvasNodeType.Audio
-        ? AudioLines
-        : type === CanvasNodeType.Text
-          ? FileText
-          : ImageIcon;
+const mediaPlaceholderDescriptions = {
+  [CanvasNodeType.Image]: "输入画面描述，或添加参考图片开始创作",
+  [CanvasNodeType.Video]: "输入镜头描述，或添加参考素材开始创作",
+  [CanvasNodeType.Audio]: "选中节点，添加已上传的音频素材",
+};
+
+function EmptyMediaContent({
+  type,
+}: {
+  type: keyof typeof mediaPlaceholderDescriptions;
+}) {
   return (
     <Empty className="canvas-node-placeholder" data-node-type={type}>
       <EmptyHeader>
         <EmptyMedia variant="icon">
-          <Icon />
+          {getNodeDefinition(type)?.icon ?? <ImageIcon />}
         </EmptyMedia>
         <EmptyDescription className="sr-only">
-          {type === CanvasNodeType.Text
-            ? "双击输入故事大纲，或选中节点生成分镜脚本"
-            : type === CanvasNodeType.Audio
-              ? "选中节点，添加已上传的音频素材"
-              : type === CanvasNodeType.Image
-                ? "输入画面描述，或添加参考图片开始创作"
-                : "输入镜头描述，或添加参考素材开始创作"}
+          {mediaPlaceholderDescriptions[type]}
         </EmptyDescription>
       </EmptyHeader>
     </Empty>
@@ -1421,12 +1394,12 @@ function EmptyNodeContent({ type }: { type: string }) {
 }
 
 function EmptyImageContent() {
-  return <EmptyNodeContent type={CanvasNodeType.Image} />;
+  return <EmptyMediaContent type={CanvasNodeType.Image} />;
 }
 
 function VideoNodeContent({ node }: NodeContentRendererProps) {
   if (!node.metadata?.content)
-    return <EmptyNodeContent type={CanvasNodeType.Video} />;
+    return <EmptyMediaContent type={CanvasNodeType.Video} />;
   return <CanvasVideoPlayer node={node} />;
 }
 
@@ -1435,7 +1408,7 @@ function AudioNodeContent({ node }: NodeContentRendererProps) {
   return src ? (
     <CanvasAudioPlayer key={src} src={src} title={node.title} />
   ) : (
-    <EmptyNodeContent type={CanvasNodeType.Audio} />
+    <EmptyMediaContent type={CanvasNodeType.Audio} />
   );
 }
 
@@ -1508,7 +1481,7 @@ function ImageContent({
           src={primarySource}
           alt={node.title}
           draggable={false}
-          className="size-full rounded-xl object-contain"
+          className="size-full rounded-[inherit] object-contain"
         />
         <Popover>
           <PopoverTrigger asChild>
@@ -1604,7 +1577,7 @@ function ImageContent({
               />
             ))
         : null}
-      <div className="h-full w-full overflow-hidden rounded-xl">
+      <div className="h-full w-full overflow-hidden rounded-[inherit]">
         {primaryContent ? (
           <PreviewImage
             src={primarySource}

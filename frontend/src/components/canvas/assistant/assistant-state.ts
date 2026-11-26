@@ -26,7 +26,7 @@ export const assistantSkills = [
   {
     id: "short_film",
     title: "剧情短片",
-    description: "创意、剧本、素材、分镜到视频的完整创作流程",
+    description: "围绕创意、剧本和素材规划短片",
   },
   {
     id: "product_images",

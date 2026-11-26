@@ -28,7 +28,7 @@ func TestCanvasAssetCreationAllocatesActualPrimaryAndTemplatesWithoutGeneration(
 		t.Fatal(err)
 	}
 	creator := application.NewAssetCreator(pgcanvas.NewAssetCreationStore(db, canvaswire.AssetCreationAuthority))
-	for _, input := range []application.AssetCreationInput{{}, {Kind: "short_drama"}, {TemplateKey: "text-to-image-v1"}, {Kind: "short_drama", TemplateKey: "storyboard-three-shots-v1"}} {
+	for _, input := range []application.AssetCreationInput{{}, {Kind: "short_drama"}, {TemplateKey: "director-stage-v1"}} {
 		key := uuid.New()
 		created, err := creator.Create(t.Context(), actor, key, input)
 		if err != nil || created.ID == uuid.Nil || created.ProjectID == uuid.Nil || created.IsTemplate || created.Revision != 1 || created.ProjectRevision != 1 {
@@ -39,13 +39,10 @@ func TestCanvasAssetCreationAllocatesActualPrimaryAndTemplatesWithoutGeneration(
 			t.Fatal(doc, created, err)
 		}
 		want := 0
-		if input.TemplateKey == "text-to-image-v1" {
-			want = 2
+		if input.TemplateKey == "director-stage-v1" {
+			want = 1
 		}
-		if input.TemplateKey == "storyboard-three-shots-v1" {
-			want = 6
-		}
-		if len(doc.Nodes) != want || len(doc.Edges) != want/2 {
+		if len(doc.Nodes) != want || len(doc.Edges) != 0 {
 			t.Fatal("template graph not persisted", doc)
 		}
 		var facts struct {
@@ -131,7 +128,7 @@ func TestCanvasAssetCreationRollsBackProjectBudgetAuditAndReceipts(t *testing.T)
 		return failAssetCreation{AssetCreationAccess: canvaswire.AssetCreationAuthority(tx), err: failed}
 	}))
 	key := uuid.New()
-	if _, err := creator.Create(t.Context(), actor, key, application.AssetCreationInput{TemplateKey: "text-to-image-v1"}); !errors.Is(err, failed) {
+	if _, err := creator.Create(t.Context(), actor, key, application.AssetCreationInput{TemplateKey: "director-stage-v1"}); !errors.Is(err, failed) {
 		t.Fatal(err)
 	}
 	var after int64
@@ -158,7 +155,7 @@ func TestCanvasAssetCreationConcurrentRetryAndRevokedSession(t *testing.T) {
 	actor, _ := seedCanvasActor(t, db)
 	creator := application.NewAssetCreator(pgcanvas.NewAssetCreationStore(db, canvaswire.AssetCreationAuthority))
 	key := uuid.New()
-	input := application.AssetCreationInput{Kind: "short_drama", TemplateKey: "storyboard-three-shots-v1"}
+	input := application.AssetCreationInput{TemplateKey: "director-stage-v1"}
 	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 	defer cancel()
 	type result struct {
@@ -210,7 +207,7 @@ func TestCanvasAssetCreationReceiptFailureRollsBackSeedGraph(t *testing.T) {
 		}
 	})
 	creator := application.NewAssetCreator(pgcanvas.NewAssetCreationStore(db, canvaswire.AssetCreationAuthority))
-	if _, err := creator.Create(t.Context(), actor, uuid.New(), application.AssetCreationInput{TemplateKey: "text-to-image-v1"}); err == nil {
+	if _, err := creator.Create(t.Context(), actor, uuid.New(), application.AssetCreationInput{TemplateKey: "director-stage-v1"}); err == nil {
 		t.Fatal("receipt failure claimed successful template creation")
 	}
 	var count int64

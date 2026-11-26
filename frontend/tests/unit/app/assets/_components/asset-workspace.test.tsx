@@ -1130,11 +1130,20 @@ it("系统模板有明确标记，使用时创建真实预填副本而不执行�
       {
         key: "text-to-image-v1",
         kind: "canvas",
-        name: "文字生图",
-        description: "预填可编辑工作流",
+        name: "已退役的文生图工作流",
+        description: "旧版服务返回的目录项",
         is_template: true,
-        node_count: 3,
+        node_count: 2,
         requires_model: true,
+      },
+      {
+        key: "director-stage-v1",
+        kind: "canvas",
+        name: "3D导演台",
+        description: "预填可编辑构图",
+        is_template: true,
+        node_count: 1,
+        requires_model: false,
       },
     ],
   });
@@ -1146,19 +1155,20 @@ it("系统模板有明确标记，使用时创建真实预填副本而不执行�
     revision: "1",
     project_revision: 1,
     collection: "current",
-    template_key: "text-to-image-v1",
+    template_key: "director-stage-v1",
     is_template: false,
   });
   render(<AssetWorkspace initialView="canvas" />);
   fireEvent.click(
-    await screen.findByRole("button", { name: "使用模板 · 文字生图" }),
+    await screen.findByRole("button", { name: "使用模板 · 3D导演台" }),
   );
   await waitFor(() =>
     expect(state.createAsset).toHaveBeenCalledWith(
-      { kind: "canvas", template_key: "text-to-image-v1" },
+      { kind: "canvas", template_key: "director-stage-v1" },
       expect.anything(),
     ),
   );
+  expect(screen.queryByRole("button", { name: /文生图工作流/ })).toBeNull();
   expect(state.create).not.toHaveBeenCalled();
   expect(state.historyCommand).not.toHaveBeenCalled();
 });
@@ -1343,20 +1353,20 @@ it("默认画布只在网格提供新建和模板，不在工具栏叠加辅助�
   state.templates.mockResolvedValue({
     items: [
       {
-        key: "text-to-image-v1",
+        key: "director-stage-v1",
         kind: "canvas",
-        name: "文生图工作流",
+        name: "3D导演台",
         description: "不应出现在卡片上的工程说明",
         is_template: true,
-        node_count: 2,
-        requires_model: true,
+        node_count: 1,
+        requires_model: false,
       },
     ],
   });
   render(<AssetWorkspace initialView="canvas" />);
   const create = await screen.findByRole("button", { name: "新建项目" });
   const template = await screen.findByRole("button", {
-    name: "使用模板 · 文生图工作流",
+    name: "使用模板 · 3D导演台",
   });
   expect(create.parentElement).toBe(template.parentElement);
   expect(create.parentElement?.firstElementChild).toBe(create);

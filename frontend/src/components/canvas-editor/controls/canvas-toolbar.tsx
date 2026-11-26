@@ -1,14 +1,13 @@
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Toolbar } from "@/components/ui/toolbar";
-import { useState, type ReactNode } from "react";
+import {
+  CanvasToolbarButton,
+  CanvasToolbarGroup,
+} from "./canvas-toolbar-primitives.tsx";
+import { useState, type ComponentProps, type ReactNode } from "react";
 import { ThemeToggle } from "@/components/controls/theme-controls";
 import { Button } from "@/components/ui/button";
 import { CanvasGuideDialog } from "./canvas-guide-dialog.tsx";
-import {
-  Field,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import {
   Popover,
   PopoverContent,
@@ -16,10 +15,7 @@ import {
 } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
-import {
-  ToggleGroup,
-  ToggleGroupItem,
-} from "@/components/ui/toggle-group";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Tooltip,
   TooltipContent,
@@ -35,8 +31,12 @@ import {
   Camera,
   Palette,
   Clapperboard,
+  Axis3D,
+  Film,
+  SquareUserRound,
+  SwatchBook,
   MoveRight,
-  Folder,
+  FolderOpen,
   Eraser,
   Keyboard,
   Info,
@@ -47,6 +47,26 @@ import {
   Undo2,
   Upload,
 } from "lucide-react";
+
+function CanvasCreationTool({
+  label,
+  children,
+  ...props
+}: ComponentProps<typeof CanvasToolbarButton> & { label: string }) {
+  return (
+    <CanvasToolbarButton {...props} className="canvas-creation-tool">
+      {children}
+      <span className="canvas-creation-label" aria-hidden="true">
+        {label}
+      </span>
+    </CanvasToolbarButton>
+  );
+}
+
+export type CanvasMoreControl = (options?: {
+  shortcuts?: ReactNode;
+  appearanceInAccount?: boolean;
+}) => ReactNode;
 
 export function CanvasToolbar({
   header,
@@ -69,7 +89,7 @@ export function CanvasToolbar({
   onBackgroundModeChange,
   onShowImageInfoChange,
 }: {
-  header?: ReactNode;
+  header?: ReactNode | ((more: CanvasMoreControl) => ReactNode);
   viewControls?: ReactNode;
   canEdit?: boolean;
   selectedCount: number;
@@ -102,61 +122,37 @@ export function CanvasToolbar({
     setCreateOpen(false);
     onCreateNode(type);
   };
+  const dockOrder = [
+    "text",
+    "image",
+    "video",
+    "audio",
+    "timeline",
+    "subject",
+    "director",
+  ];
   const dock = (
-    <Toolbar
-      density="roomy"
-      className={
-        isMobile
-          ? "grid grid-cols-4 gap-1 [&_button]:min-h-11 [&_button]:min-w-11"
-          : "canvas-dock-surface flex flex-col items-center"
-      }
+    <CanvasToolbarGroup
+      layout={isMobile ? "grid" : "rail"}
+      className={isMobile ? undefined : "canvas-creation-rail"}
+      data-canvas-no-zoom
+      aria-label="画布工具栏"
     >
       {definitions
-        .filter((item) =>
-          [
-            "text",
-            "image",
-            "video",
-            "audio",
-            "timeline",
-            "subject",
-            "director",
-          ].includes(item.type),
-        )
-        .sort(
-          (a, b) =>
-            [
-              "text",
-              "image",
-              "video",
-              "audio",
-              "timeline",
-              "subject",
-              "director",
-            ].indexOf(a.type) -
-            [
-              "text",
-              "image",
-              "video",
-              "audio",
-              "timeline",
-              "subject",
-              "director",
-            ].indexOf(b.type),
-        )
+        .filter((item) => dockOrder.includes(item.type))
+        .sort((a, b) => dockOrder.indexOf(a.type) - dockOrder.indexOf(b.type))
         .map((definition) =>
           definition.type === "director" ? (
-            <div key={definition.type} className="flex flex-col">
+            <div key={definition.type} className="contents">
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="toolbar-icon"
+                  <CanvasCreationTool
+                    label="导演工具箱"
                     aria-label="导演工具箱"
                     disabled={!canEdit}
                   >
                     <Clapperboard />
-                  </Button>
+                  </CanvasCreationTool>
                 </PopoverTrigger>
                 <PopoverContent
                   side="right"
@@ -169,7 +165,7 @@ export function CanvasToolbar({
                     [
                       { kind: "camera", label: "相机", Icon: Camera },
                       { kind: "palette", label: "配色", Icon: Palette },
-                      { kind: "style", label: "风格", Icon: Clapperboard },
+                      { kind: "style", label: "风格", Icon: SwatchBook },
                       { kind: "motion", label: "运镜", Icon: MoveRight },
                     ] as const
                   ).map(({ kind, label, Icon }) => (
@@ -185,254 +181,239 @@ export function CanvasToolbar({
                   ))}
                 </PopoverContent>
               </Popover>
-              <Tooltip>
+              <CanvasCreationTool
+                label={definition.title}
+                aria-label={`添加${definition.title}节点`}
+                disabled={!canEdit}
+                onClick={() => create(definition.type)}
+              >
+                <Axis3D />
+              </CanvasCreationTool>
+            </div>
+          ) : (
+            <CanvasCreationTool
+              key={definition.type}
+              label={definition.title}
+              aria-label={`添加${definition.title}节点`}
+              disabled={!canEdit}
+              onClick={() => create(definition.type)}
+            >
+              {definition.type === "timeline" ? (
+                <Film />
+              ) : definition.type === "subject" ? (
+                <SquareUserRound />
+              ) : (
+                definition.icon
+              )}
+            </CanvasCreationTool>
+          ),
+        )}
+      <Separator className="canvas-dock-divider" />
+      <CanvasCreationTool
+        label="素材库"
+        aria-label="从素材库添加"
+        disabled={!canEdit}
+        onClick={() => {
+          setCreateOpen(false);
+          onBrowseAssets();
+        }}
+      >
+        <FolderOpen />
+      </CanvasCreationTool>
+      <CanvasCreationTool
+        label="上传"
+        aria-label="本地上传"
+        disabled={!canEdit}
+        onClick={() => {
+          setCreateOpen(false);
+          onUpload();
+        }}
+      >
+        <Upload />
+      </CanvasCreationTool>
+    </CanvasToolbarGroup>
+  );
+  const renderMore: CanvasMoreControl = ({
+    shortcuts,
+    appearanceInAccount,
+  } = {}) => (
+    <CanvasToolbarGroup aria-label="画布操作">
+      <Popover>
+        <PopoverTrigger asChild>
+          <CanvasToolbarButton aria-label="更多画布操作" title="更多画布操作">
+            <MoreHorizontal />
+          </CanvasToolbarButton>
+        </PopoverTrigger>
+        <PopoverContent
+          side="bottom"
+          align="end"
+          sideOffset={8}
+          className="w-64"
+          data-canvas-no-zoom
+        >
+          {shortcuts && (
+            <>
+              <div
+                className="flex flex-wrap items-center gap-1"
+                aria-label="画布快捷入口"
+              >
+                {shortcuts}
+              </div>
+              <Separator className="my-3" />
+            </>
+          )}
+          <div className="mb-3 flex flex-wrap items-center gap-1">
+            {[
+              {
+                label: "撤销",
+                icon: Undo2,
+                action: onUndo,
+                enabled: canUndo,
+              },
+              {
+                label: "重做",
+                icon: Redo2,
+                action: onRedo,
+                enabled: canRedo,
+              },
+            ].map(({ label, icon: Icon, action, enabled }) => (
+              <Tooltip key={label}>
                 <TooltipTrigger asChild>
                   <Button
                     variant="ghost"
                     size="toolbar-icon"
-                    aria-label={`添加${definition.title}节点`}
-                    disabled={!canEdit}
-                    onClick={() => create(definition.type)}
+                    aria-label={label}
+                    onClick={action}
+                    disabled={!enabled}
                   >
-                    {definition.icon}
+                    <Icon data-icon="inline-start" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="right">{definition.title}</TooltipContent>
+                <TooltipContent side="top">{label}</TooltipContent>
               </Tooltip>
-            </div>
-          ) : (
-            <Tooltip key={definition.type}>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="toolbar-icon"
-                  aria-label={`添加${definition.title}节点`}
-                  disabled={!canEdit}
-                  onClick={() => create(definition.type)}
-                >
-                  {definition.icon}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="right">{definition.title}</TooltipContent>
-            </Tooltip>
-          ),
-        )}
-      <Separator className={isMobile ? "col-span-full" : "my-1 max-w-8"} />
-      <Tooltip>
-        <TooltipTrigger asChild>
+            ))}
+
+            <CanvasGuideDialog kind="shortcuts">
+              <Button
+                variant="ghost"
+                size="toolbar-icon"
+                aria-label="快捷键"
+                title="快捷键"
+              >
+                <Keyboard data-icon="inline-start" />
+              </Button>
+            </CanvasGuideDialog>
+          </div>
+          <FieldGroup>
+            {!appearanceInAccount && (
+              <Field orientation="horizontal">
+                <FieldLabel>主题</FieldLabel>
+                <ThemeToggle />
+              </Field>
+            )}
+            <Field>
+              <FieldLabel>画布背景</FieldLabel>
+              <ToggleGroup
+                type="single"
+                value={backgroundMode}
+                onValueChange={(value) => {
+                  if (value)
+                    onBackgroundModeChange(value as CanvasBackgroundMode);
+                }}
+                aria-label="画布背景"
+              >
+                <ToggleGroupItem value="dots">点阵</ToggleGroupItem>
+                <ToggleGroupItem value="lines">网格</ToggleGroupItem>
+                <ToggleGroupItem value="blank">无背景</ToggleGroupItem>
+              </ToggleGroup>
+            </Field>
+            <Field orientation="horizontal">
+              <FieldLabel htmlFor="canvas-image-info">
+                <Info />
+                图片信息
+              </FieldLabel>
+              <Switch
+                id="canvas-image-info"
+                checked={showImageInfo}
+                onCheckedChange={onShowImageInfoChange}
+              />
+            </Field>
+          </FieldGroup>
+          <Separator className="my-3" />
+          {definitions
+            .filter(
+              (item) =>
+                ![
+                  "text",
+                  "image",
+                  "video",
+                  "audio",
+                  "timeline",
+                  "subject",
+                ].includes(item.type),
+            )
+            .map((definition) => (
+              <Button
+                key={definition.type}
+                variant="ghost"
+                className="w-full justify-start"
+                disabled={!canEdit}
+                onClick={() => onCreateNode(definition.type)}
+              >
+                {definition.icon}添加{definition.title}节点
+              </Button>
+            ))}
           <Button
-            variant="ghost"
-            size="toolbar-icon"
-            aria-label="资产管理"
-            disabled={!canEdit}
-            onClick={() => {
-              setCreateOpen(false);
-              onBrowseAssets();
-            }}
+            variant="destructive"
+            className="w-full justify-start"
+            disabled={!canEdit || !selectedCount}
+            onClick={onDelete}
           >
-            <Folder data-icon="inline-start" />
+            <Trash2 />
+            删除选中
           </Button>
-        </TooltipTrigger>
-        <TooltipContent side="right">从参考素材添加</TooltipContent>
-      </Tooltip>
-      <Tooltip>
-        <TooltipTrigger asChild>
           <Button
-            variant="ghost"
-            size="toolbar-icon"
-            aria-label="本地上传"
+            variant="destructive"
+            className="w-full justify-start"
             disabled={!canEdit}
-            onClick={() => {
-              setCreateOpen(false);
-              onUpload();
-            }}
+            onClick={onClear}
           >
-            <Upload data-icon="inline-start" />
+            <Eraser />
+            清空画布
           </Button>
-        </TooltipTrigger>
-        <TooltipContent side="right">本地上传</TooltipContent>
-      </Tooltip>
-    </Toolbar>
+        </PopoverContent>
+      </Popover>
+    </CanvasToolbarGroup>
   );
   return (
     <div className="canvas-controls-layout" data-canvas-controls>
       <header className="canvas-control-header" data-canvas-no-zoom>
-        {header}
-        <Toolbar
-          density="roomy"
-          data-canvas-no-zoom
-          className="canvas-global-actions flex shrink-0 items-center gap-1"
-        >
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="ghost"
-                size={isMobile ? "toolbar-icon" : "icon"}
-                className="canvas-more-trigger"
-                aria-label="更多画布操作"
-                title="更多画布操作"
-              >
-                <MoreHorizontal data-icon="inline-start" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              side="bottom"
-              align="end"
-              sideOffset={8}
-              className="w-64"
-              data-canvas-no-zoom
-            >
-              <div className="mb-3 flex flex-wrap items-center gap-1">
-                {[
-                  {
-                    label: "撤销",
-                    icon: Undo2,
-                    action: onUndo,
-                    enabled: canUndo,
-                  },
-                  {
-                    label: "重做",
-                    icon: Redo2,
-                    action: onRedo,
-                    enabled: canRedo,
-                  },
-                ].map(({ label, icon: Icon, action, enabled }) => (
-                  <Tooltip key={label}>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="toolbar-icon"
-                        aria-label={label}
-                        onClick={action}
-                        disabled={!enabled}
-                      >
-                        <Icon data-icon="inline-start" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">{label}</TooltipContent>
-                  </Tooltip>
-                ))}
-
-                <CanvasGuideDialog kind="shortcuts">
-                  <Button
-                    variant="ghost"
-                    size="toolbar-icon"
-                    aria-label="快捷键"
-                    title="快捷键"
-                  >
-                    <Keyboard data-icon="inline-start" />
-                  </Button>
-                </CanvasGuideDialog>
-              </div>
-              <FieldGroup>
-                <Field orientation="horizontal">
-                  <FieldLabel>主题</FieldLabel>
-                  <ThemeToggle />
-                </Field>
-                <Field>
-                  <FieldLabel>画布背景</FieldLabel>
-                  <ToggleGroup
-                    type="single"
-                    value={backgroundMode}
-                    onValueChange={(value) => {
-                      if (value)
-                        onBackgroundModeChange(value as CanvasBackgroundMode);
-                    }}
-                    aria-label="画布背景"
-                  >
-                    <ToggleGroupItem value="dots">点阵</ToggleGroupItem>
-                    <ToggleGroupItem value="lines">网格</ToggleGroupItem>
-                    <ToggleGroupItem value="blank">无背景</ToggleGroupItem>
-                  </ToggleGroup>
-                </Field>
-                <Field orientation="horizontal">
-                  <FieldLabel htmlFor="canvas-image-info">
-                    <Info />
-                    图片信息
-                  </FieldLabel>
-                  <Switch
-                    id="canvas-image-info"
-                    checked={showImageInfo}
-                    onCheckedChange={onShowImageInfoChange}
-                  />
-                </Field>
-              </FieldGroup>
-              <Separator className="my-3" />
-              {definitions
-                .filter(
-                  (item) =>
-                    ![
-                      "text",
-                      "image",
-                      "video",
-                      "audio",
-                      "timeline",
-                      "subject",
-                    ].includes(item.type),
-                )
-                .map((definition) => (
-                  <Button
-                    key={definition.type}
-                    variant="ghost"
-                    className="w-full justify-start"
-                    disabled={!canEdit}
-                    onClick={() => onCreateNode(definition.type)}
-                  >
-                    {definition.icon}添加{definition.title}节点
-                  </Button>
-                ))}
-              <Button
-                variant="destructive"
-                className="w-full justify-start"
-                disabled={!canEdit || !selectedCount}
-                onClick={onDelete}
-              >
-                <Trash2 />
-                删除选中
-              </Button>
-              <Button
-                variant="destructive"
-                className="w-full justify-start"
-                disabled={!canEdit}
-                onClick={onClear}
-              >
-                <Eraser />
-                清空画布
-              </Button>
-            </PopoverContent>
-          </Popover>
-        </Toolbar>
+        {typeof header === "function" ? (
+          (header(renderMore) ?? renderMore())
+        ) : (
+          <>
+            {header}
+            {renderMore()}
+          </>
+        )}
       </header>
-      {!isMobile && (
-        <div
-          data-canvas-no-zoom
-          className="canvas-action-dock"
-          aria-label="画布工具栏"
-        >
-          {dock}
-        </div>
-      )}
+      {!isMobile && <div className="canvas-action-dock">{dock}</div>}
       <footer className="canvas-control-footer" data-canvas-no-zoom>
         <div className="flex min-w-0 items-center gap-1">
           {viewControls}
           {isMobile && (
             <Popover open={createOpen} onOpenChange={setCreateOpen}>
               <PopoverTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-lg"
-                  aria-label="添加节点"
-                  disabled={!canEdit}
-                >
-                  <Plus data-icon="inline-start" />
-                </Button>
+                <CanvasToolbarButton aria-label="添加节点" disabled={!canEdit}>
+                  <Plus />
+                </CanvasToolbarButton>
               </PopoverTrigger>
               <PopoverContent
                 side="top"
                 align="end"
                 collisionPadding={12}
                 className="w-auto max-w-[calc(100dvw-24px)]"
-                aria-label="画布工具栏"
+                aria-label="添加画布节点和素材"
                 data-canvas-no-zoom
               >
                 {dock}
@@ -440,7 +421,8 @@ export function CanvasToolbar({
             </Popover>
           )}
         </div>
-        <Toolbar
+        <CanvasToolbarGroup
+          appearance="plain"
           className={
             assistantOpen
               ? "canvas-assistant-action invisible"
@@ -453,21 +435,21 @@ export function CanvasToolbar({
                 tabIndex={onOpenAssistant ? undefined : 0}
                 aria-label={onOpenAssistant ? undefined : "AI 对话暂不可用"}
               >
-                <Button
-                  variant="secondary"
-                  size="toolbar"
+                <CanvasToolbarButton
+                  iconOnly={isMobile}
+                  variant="outline"
                   aria-label="与 AI 对话"
                   aria-expanded={assistantOpen}
                   aria-controls={
-                    assistantOpen ? "canvas-storyboard-assistant" : undefined
+                    assistantOpen ? "canvas-conversation-panel" : undefined
                   }
                   onClick={onOpenAssistant}
                   disabled={!onOpenAssistant}
                   className="rounded-full"
                 >
                   <Sparkles data-icon="inline-start" />
-                  <span className="hidden sm:inline">与 AI 对话</span>
-                </Button>
+                  {!isMobile && <span>与 AI 对话</span>}
+                </CanvasToolbarButton>
               </span>
             </TooltipTrigger>
             {!assistantOpen && (
@@ -476,7 +458,7 @@ export function CanvasToolbar({
               </TooltipContent>
             )}
           </Tooltip>
-        </Toolbar>
+        </CanvasToolbarGroup>
       </footer>
     </div>
   );

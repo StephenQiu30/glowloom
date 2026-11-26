@@ -24,16 +24,10 @@ import {
   readCanvasAssistantSession,
   appendCanvasAssistantTurn,
 } from "@/api/canvasAssistant";
-import {
-  createPromptDraft,
-  currentPromptSubmission,
-} from "@/api/promptEditor";
+import { createPromptDraft, currentPromptSubmission } from "@/api/promptEditor";
 import { getOperation } from "@/api/operations";
 import { getMediaPreview } from "@/api/media";
-import {
-  draftRequest,
-  requireSaved,
-} from "@/components/generation/draft-save";
+import { draftRequest, requireSaved } from "@/components/generation/draft-save";
 import type { ComposerSession } from "@/components/generation/composer-session";
 import type { PromptDraft } from "@/components/generation/prompt-document";
 import type {
@@ -389,7 +383,9 @@ function AssistantPanel({
     return value.turns.every((t) => !t.operation_id);
   });
   const hasConversation = current?.turns.some((t) => t.operation_id);
-  const filtered = assistantSkills.filter((s) => s.title.includes(search));
+  const filtered = assistantSkills.filter(
+    (item) => item.id !== "storyboard" && item.title.includes(search),
+  );
   function insertSkill(title: string, description: string) {
     if (!composer.current?.editor.isEditable) return;
     composer.current.editor
@@ -446,7 +442,6 @@ function AssistantPanel({
   );
   const shortcuts = [
     assistantSkills[0],
-    assistantSkills[1],
     assistantSkills[2],
     {
       id: "script",

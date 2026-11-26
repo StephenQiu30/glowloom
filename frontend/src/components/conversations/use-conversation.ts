@@ -56,7 +56,6 @@ export interface ConversationOptions {
   independent?: boolean;
   initialDraft?: PromptDraft;
   goalContract?: API.GoalContract;
-  workflow?: import("@/components/canvas/skill-workflow/skill-workflow-graph").SkillWorkflow;
   onDraftChange?: (draft: PromptDraft) => void;
   onAccepted?: (sessionID: string) => void;
 }
@@ -169,14 +168,11 @@ export function useConversation({
   independent,
   initialDraft,
   goalContract,
-  workflow,
   onDraftChange,
   onAccepted,
 }: ConversationOptions) {
   const memory = useConversationContext();
-  const draftKey = workflow
-    ? `workflow/${workflow.id}`
-    : `${independent ? "" : projectID}/${sessionID ?? (canvasID ? `canvas/${canvasID}/new` : "new")}`;
+  const draftKey = `${independent ? "" : projectID}/${sessionID ?? (canvasID ? `canvas/${canvasID}/new` : "new")}`;
   const identity = `${ownerKey}/${projectID}/${draftKey}`;
   const [view, setView] = useState(() => initialView(identity, sessionID));
   const state =
@@ -518,23 +514,6 @@ export function useConversation({
               },
             },
           };
-        if (event.event === "workflow.node.completed" && "node_id" in data)
-          return {
-            ...old,
-            runs: {
-              ...old.runs,
-              [id]: {
-                ...run,
-                snapshot: {
-                  ...run.snapshot,
-                  events: [
-                    ...run.snapshot.events,
-                    { event_type: event.event, payload: data },
-                  ],
-                },
-              },
-            },
-          };
         const parts =
           "message_parts" in data
             ? readMessageParts(data.message_parts, id)
@@ -709,7 +688,6 @@ export function useConversation({
             max_micros: budgetMicros(settings.budget)!,
             params: {},
             skills: settings.skills,
-            ...(workflow ? { workflow: structuredClone(workflow) } : {}),
           },
           ...(selectedQuote ? { quoted_from: selectedQuote } : {}),
         },

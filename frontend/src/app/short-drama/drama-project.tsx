@@ -13,15 +13,9 @@ import { ContentState } from "@/components/layout/content-state";
 import { canvasHref, requireProject } from "@/components/projects/project";
 import { useSpace } from "@/components/spaces/space-context";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  emptyPromptDraft,
-  type PromptDraft,
-} from "@/components/generation/prompt-document";
 import { RequestError } from "@/lib/request";
 import { ScriptPanel } from "./script-panel";
-import { EpisodePanel } from "./episode-panel";
 import { ProductionAssets } from "./production-assets";
 import { VideoPanel } from "./video-panel";
 import { clearStudioInput, readStudioInput } from "./studio-input";
@@ -38,7 +32,7 @@ const ConversationWorkspace = dynamic(
   },
 );
 
-type Tab = "script" | "create" | "assets" | "episodes" | "video";
+type Tab = "script" | "create" | "assets" | "video";
 
 export function DramaProject(props: {
   projectID: string;
@@ -95,24 +89,12 @@ function ProjectWorkspace({
   const [sessionID, setSessionID] = useState(
     initialTab === "video" ? undefined : initialSession,
   );
-  const [productionSessionID, setProductionSessionID] = useState(
-    initialTab === "video" ? initialSession : undefined,
-  );
   const [generated, setGenerated] = useState("");
   const [scriptLocked, setScriptLocked] = useState(false);
-  const [episodesLocked, setEpisodesLocked] = useState(false);
   const [agentLocked, setAgentLocked] = useState(false);
-  const [assistantLocked, setAssistantLocked] = useState(false);
   const [videoLocked, setVideoLocked] = useState(false);
   const [assetsLocked, setAssetsLocked] = useState(false);
-  const [shotPrompt, setShotPrompt] = useState<string>();
-  const locked =
-    scriptLocked ||
-    episodesLocked ||
-    agentLocked ||
-    assistantLocked ||
-    videoLocked ||
-    assetsLocked;
+  const locked = scriptLocked || agentLocked || videoLocked || assetsLocked;
   const project = useSWR(
     [owner, projectID, "short-drama-project"],
     async () => {
@@ -144,40 +126,6 @@ function ProjectWorkspace({
     writable && Boolean(project.data) && project.data?.status !== "archived",
     (assets) => setDraft(createStudioDraft(studioInput, assets)),
   );
-  const [assistantDraft, setAssistantDraft] = useState<PromptDraft>();
-  const [episodeScope, setEpisodeScope] = useState<string>();
-  const [assistantSession, setAssistantSession] = useState<string>();
-  const [assistantOpen, setAssistantOpen] = useState(false);
-  const [rewriteLine, setRewriteLine] = useState<string>();
-  const [suggestion, setSuggestion] = useState<{
-    episodeID: string;
-    lineID: string;
-    text: string;
-  }>();
-
-  function openAssistant(
-    id: string,
-    title: string,
-    source: string,
-    line?: string,
-  ) {
-    if (assistantLocked) return;
-    if (episodeScope !== id || rewriteLine !== line) {
-      setEpisodeScope(id);
-      setRewriteLine(line);
-      setAssistantSession(undefined);
-      const excerpt = Array.from(source).slice(0, 1200).join("");
-      setAssistantDraft(
-        promptDraft(
-          line
-            ? `请改写「${title}」的这个分镜片段。仅给出改写后的可拍摄画面描述。\n\n${excerpt}`
-            : `请作为故事板助手，为「${title}」给出镜头建议，包括景别、动作、运镜和时长。\n\n${excerpt}`,
-        ),
-      );
-    }
-    setAssistantOpen(true);
-  }
-
   if (
     accessDenied(project.error) ||
     accessDenied(script.error) ||
@@ -237,12 +185,7 @@ function ProjectWorkspace({
   const canWrite = writable && project.data.status !== "archived";
   function selectTab(next: Tab) {
     setTab(next);
-    const id =
-      next === "create"
-        ? sessionID
-        : next === "video"
-          ? productionSessionID
-          : undefined;
+    const id = next === "create" ? sessionID : undefined;
     const query = new URLSearchParams({ tab: next });
     if (id) query.set("session", id);
     window.history.replaceState(null, "", `/short-drama/${projectID}?${query}`);
@@ -274,9 +217,6 @@ function ProjectWorkspace({
           </TabsTrigger>
           <TabsTrigger value="assets" disabled={locked}>
             制作资产库
-          </TabsTrigger>
-          <TabsTrigger value="episodes" disabled={locked}>
-            分镜
           </TabsTrigger>
           <TabsTrigger value="video" disabled={locked}>
             转绘与后期
@@ -343,95 +283,18 @@ function ProjectWorkspace({
         </TabsContent>
         <TabsContent value="video" forceMount hidden={activeTab !== "video"}>
           <VideoPanel
-            key={shotPrompt}
             owner={owner}
             project={project.data}
             writable={canWrite}
             canvas={canvas}
-            initialPrompt={shotPrompt}
-            productionSessionID={productionSessionID}
-            onProductionAccepted={(id) => {
-              setProductionSessionID(id);
-              window.history.replaceState(
-                null,
-                "",
-                `/short-drama/${projectID}?tab=video&session=${id}`,
-              );
-            }}
             initialInput={
-              !shotPrompt && studioInput?.kind === "redraw"
-                ? studioInput
-                : undefined
+              studioInput?.kind === "redraw" ? studioInput : undefined
             }
             styleAssets={referenceCopy.assets.filter(
               (asset) => asset.kind === "image",
             )}
             onLock={setVideoLocked}
           />
-        </TabsContent>
-        <TabsContent value="episodes">
-          <EpisodePanel
-            projectID={projectID}
-            owner={owner}
-            head={script.data}
-            writable={canWrite}
-            onChange={script.mutate}
-            onLock={setEpisodesLocked}
-            onShot={(text) => {
-              setShotPrompt(text);
-              selectTab("video");
-            }}
-            onAssistant={openAssistant}
-            onRewrite={(id, line, title, source) =>
-              openAssistant(id, title, source, line)
-            }
-            suggestion={suggestion}
-            onSuggestionApplied={() => setSuggestion(undefined)}
-          />
-          {assistantOpen && assistantDraft && (
-            <Card className="mt-(--layout-gap)">
-              <CardHeader className="flex items-center justify-between">
-                <CardTitle>
-                  <h2>故事板助手</h2>
-                </CardTitle>
-                <Button
-                  variant="ghost"
-                  disabled={locked}
-                  onClick={() => setAssistantOpen(false)}
-                >
-                  收起
-                </Button>
-              </CardHeader>
-              <CardContent>
-                <ConversationWorkspace
-                  key={`${episodeScope}/${rewriteLine ?? "episode"}`}
-                  embedded
-                  ownerKey={owner}
-                  projectID={projectID}
-                  sessionID={assistantSession}
-                  enabled={canWrite}
-                  initialDraft={assistantDraft}
-                  onDraftChange={setAssistantDraft}
-                  onChooseProject={noProjectChange}
-                  onAccepted={setAssistantSession}
-                  onLock={setAssistantLocked}
-                  useReplyLabel="选用这条片段建议"
-                  onUseReply={
-                    canWrite && episodeScope && rewriteLine
-                      ? (text) => {
-                          setSuggestion({
-                            episodeID: episodeScope,
-                            lineID: rewriteLine,
-                            text,
-                          });
-                          setAssistantOpen(false);
-                        }
-                      : undefined
-                  }
-                />
-              </CardContent>
-            </Card>
-          )}
         </TabsContent>
       </Tabs>
     </div>
@@ -443,17 +306,4 @@ function accessDenied(error: unknown) {
   return (
     error instanceof RequestError && [401, 403, 404].includes(error.status)
   );
-}
-function promptDraft(text: string): PromptDraft {
-  const draft = emptyPromptDraft();
-  return {
-    ...draft,
-    document: {
-      type: "doc",
-      content: text.split("\n").map((line) => ({
-        type: "paragraph",
-        ...(line ? { content: [{ type: "text", text: line }] } : {}),
-      })),
-    },
-  };
 }

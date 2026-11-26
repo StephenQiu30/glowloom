@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	stdhttp "net/http"
@@ -446,6 +447,23 @@ func (h *PublicHandler) Start(c *gin.Context) {
 		send(c, nil, domain.ErrInvalid)
 		return
 	}
+	rid := domain.RootRunID(sid, in.RequestID)
+	if manifest["workflow"] != nil {
+		// Retired workflows can only replay a previously admitted request.
+		if h.store == nil {
+			send(c, nil, domain.ErrUnavailable)
+			return
+		}
+		authority, err := h.store.ReadAuthority(c.Request.Context(), identityhttp.Principal(c), scope.ProjectID, rid)
+		if errors.Is(err, domain.ErrNotFound) || err == nil && authority.SessionID != sid {
+			send(c, nil, domain.ErrInvalid)
+			return
+		}
+		if err != nil {
+			send(c, nil, err)
+			return
+		}
+	}
 	scope.CanvasID = in.CanvasID
 	if !h.checkCanvas(c, scope) {
 		return
@@ -586,7 +604,6 @@ func (h *PublicHandler) Start(c *gin.Context) {
 		send(c, nil, domain.ErrInvalid)
 		return
 	}
-	rid := domain.RootRunID(sid, in.RequestID)
 	hash := domain.ContentHash(in)
 	if err = h.store.AdmitRun(c.Request.Context(), domain.Admission{RootRunID: rid, SessionID: sid, SubmissionID: domain.SubmissionID(rid), RequestID: in.RequestID, ContentHash: hash, Scope: scope, BudgetMicros: in.BudgetMicros, GoalContract: in.GoalContract, SkillPins: pins.Skills, ModelSelection: modelSelection}); err != nil {
 		send(c, nil, err)

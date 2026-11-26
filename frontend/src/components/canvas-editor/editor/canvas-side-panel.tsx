@@ -1,49 +1,40 @@
 import { PreviewImage } from "@/components/canvas/runtime/components/media/preview-image";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
 import { ContentState } from "@/components/layout/content-state";
 import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupInput,
-} from "@/components/ui/input-group";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   ChevronRight,
   Download,
+  Filter,
+  Folder,
   Eye,
   FileText,
   Image as ImageIcon,
   ListChecks,
+  ListX,
+  PanelLeftClose,
+  SquareCheck,
+  UserRound,
   Music2,
   Search,
   Settings2,
   Square,
   Type,
   Video,
-  X,
 } from "lucide-react";
 import { motion } from "motion/react";
 import {
@@ -51,27 +42,46 @@ import {
   useState,
   useSyncExternalStore,
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+  type Ref,
 } from "react";
 
-import { canvasThemes, type CanvasTheme } from "../runtime/lib/theme.ts";
 import { getNodeDefinition } from "../lib/node-registry.ts";
-import { cn } from "@/lib/utils";
+import {
+  CanvasAssetLayoutButton,
+  CanvasAssetSearch,
+  type CanvasAssetLayout,
+} from "../controls/canvas-asset-toolbar.tsx";
+import {
+  CanvasToolbarButton,
+  CanvasToolbarGroup,
+} from "../controls/canvas-toolbar-primitives.tsx";
+import {
+  CanvasNodeThumbnail,
+  CanvasNodeThumbnailProvider,
+} from "../search/canvas-node-search.tsx";
+import {
+  canvasNodeName,
+  canvasNodeTypeLabel,
+  canvasSearchType,
+  canvasSearchTypes,
+  type CanvasSearchType,
+} from "../search/canvas-node-search-state.ts";
+import { formatDuration } from "@/components/canvas/runtime/lib/media/image-utils";
 import {
   getImagePreviewRevision,
   previewUrlFor,
   subscribeImagePreviews,
 } from "@/components/canvas/runtime/lib/media/image-storage";
 import {
+  CANVAS_ASSET_PANEL_ID,
   CANVAS_SIDE_PANEL_MAX_WIDTH,
   CANVAS_SIDE_PANEL_MIN_WIDTH,
   CANVAS_SIDE_PANEL_MOTION_MS,
   useCanvasSidePanelStore,
 } from "../store/use-canvas-side-panel-store.ts";
-import { useThemeStore } from "@/components/canvas/runtime/store/use-theme-store";
 import { CanvasNodeType, type CanvasNodeData } from "../types/canvas.ts";
 
-import { LibraryPickerContent } from "@/components/canvas/runtime/components/assets/picker/library-picker-content";
-import type { InsertAssetPayload } from "@/components/canvas/runtime/components/assets/picker/asset-picker-modal";
 import { ZipDownloadDialog } from "@/components/canvas/runtime/components/assets/transfer/zip-download-dialog";
 import { canvasZipSelection } from "../lib/canvas-zip-selection.ts";
 import { notifyError } from "@/components/canvas/runtime/components/feedback/error-notification";
@@ -82,14 +92,12 @@ const PANEL_EASE = [0.22, 1, 0.36, 1] as const;
 type PanelTab = "canvas" | "assets";
 
 type Props = {
-  assetsRevision?: number;
-  savedAssetScope?: string;
-  projectId?: string;
+  referenceAssets?: ReactNode;
+  navigationRef: Ref<HTMLDivElement>;
   nodes: CanvasNodeData[];
   selectedNodeIds: Set<string>;
   onFocusNode: (nodeId: string) => void;
   onPreviewNode: (nodeId: string) => void;
-  onInsertAsset: (payload: InsertAssetPayload) => void;
 };
 
 const NODE_TYPE_ICON: Record<string, typeof Square> = {
@@ -98,7 +106,8 @@ const NODE_TYPE_ICON: Record<string, typeof Square> = {
   [CanvasNodeType.Audio]: Music2,
   [CanvasNodeType.Text]: Type,
   [CanvasNodeType.Config]: Settings2,
-  [CanvasNodeType.Group]: Square,
+  [CanvasNodeType.Group]: Folder,
+  subject: UserRound,
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -107,17 +116,24 @@ const STATUS_LABEL: Record<string, string> = {
   error: "未完成",
 };
 
+function restoreAssetTriggerFocus() {
+  requestAnimationFrame(() => {
+    document
+      .querySelector<HTMLButtonElement>(
+        '[data-canvas-side-panel-trigger][aria-expanded="false"]',
+      )
+      ?.focus();
+  });
+}
+
 export function CanvasSidePanel({
-  assetsRevision,
-  savedAssetScope,
-  projectId,
+  referenceAssets,
+  navigationRef,
   nodes,
   selectedNodeIds,
   onFocusNode,
   onPreviewNode,
-  onInsertAsset,
 }: Props) {
-  const theme = canvasThemes[useThemeStore((state) => state.theme)];
   const tab = useCanvasSidePanelStore((state) => state.tab);
   const setTab = useCanvasSidePanelStore((state) => state.setTab);
   const [assetsVisited, setAssetsVisited] = useState(false);
@@ -134,25 +150,19 @@ export function CanvasSidePanel({
     event.preventDefault();
     const startX = event.clientX;
     const startWidth = width;
-    let nextWidth = startWidth;
     const onMove = (moveEvent: PointerEvent) => {
-      nextWidth = Math.min(
-        CANVAS_SIDE_PANEL_MAX_WIDTH,
-        Math.max(
-          CANVAS_SIDE_PANEL_MIN_WIDTH,
-          startWidth + moveEvent.clientX - startX,
-        ),
-      );
-      setWidth(nextWidth);
+      setWidth(startWidth + moveEvent.clientX - startX);
     };
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
       setResizing(false);
     };
     setResizing(true);
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
   };
 
   const panelContent = (
@@ -162,24 +172,30 @@ export function CanvasSidePanel({
         setTab(value as PanelTab);
         if (value === "assets" || tab === "assets") setAssetsVisited(true);
       }}
-      className="flex min-h-0 flex-1 flex-col gap-2"
+      className="canvas-asset-panel flex min-h-0 flex-1 flex-col"
     >
-      <div className="canvas-panel-header flex min-h-17 shrink-0 items-center gap-2 px-3 py-3">
-        <TabsList className="flex-1">
-          <TabsTrigger value="canvas">画布</TabsTrigger>
-          <TabsTrigger value="assets">资产</TabsTrigger>
-        </TabsList>
-        {!isMobile ? (
-          <Button
-            variant="ghost"
-            size="icon-lg"
-            aria-label="收起资产管理"
-            onClick={closePanel}
-          >
-            <X />
-          </Button>
-        ) : null}
+      <div className="canvas-panel-header">
+        <div ref={navigationRef} className="min-w-0 flex-1" />
+        <CanvasToolbarButton
+          aria-label="收起资产管理"
+          title="收起资产管理"
+          data-canvas-side-panel-close
+          onClick={() => {
+            closePanel();
+            if (!isMobile) restoreAssetTriggerFocus();
+          }}
+        >
+          <PanelLeftClose />
+        </CanvasToolbarButton>
       </div>
+      <TabsList
+        variant="pill"
+        className="canvas-asset-tabs"
+        aria-label="资产来源"
+      >
+        <TabsTrigger value="canvas">画布资产</TabsTrigger>
+        <TabsTrigger value="assets">参考素材</TabsTrigger>
+      </TabsList>
       <TabsContent
         forceMount
         value="canvas"
@@ -193,7 +209,6 @@ export function CanvasSidePanel({
             if (isMobile) closePanel();
           }}
           onPreviewNode={onPreviewNode}
-          theme={theme}
         />
       </TabsContent>
       <TabsContent
@@ -201,14 +216,8 @@ export function CanvasSidePanel({
         value="assets"
         className="min-h-0 flex-1 overflow-hidden data-[state=inactive]:hidden"
       >
-        {(assetsVisited || tab === "assets") && (
-          <CanvasAssetsTab
-            key={`${projectId}:${assetsRevision}`}
-            projectId={projectId}
-            initialScope={savedAssetScope}
-            onInsert={onInsertAsset}
-          />
-        )}
+        {(assetsVisited || tab === "assets") &&
+          (referenceAssets ?? <ContentState title="参考素材暂不可用" />)}
       </TabsContent>
     </Tabs>
   );
@@ -221,19 +230,17 @@ export function CanvasSidePanel({
         }}
       >
         <SheetContent
+          id={CANVAS_ASSET_PANEL_ID}
           aria-describedby={undefined}
           side="left"
           className="gap-0 p-0"
+          showCloseButton={false}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
-            document
-              .querySelector<HTMLButtonElement>(
-                "[data-canvas-side-panel-trigger]",
-              )
-              ?.focus();
+            restoreAssetTriggerFocus();
           }}
         >
-          <SheetHeader>
+          <SheetHeader className="sr-only">
             <SheetTitle>资产管理</SheetTitle>
           </SheetHeader>
           {panelContent}
@@ -257,27 +264,36 @@ export function CanvasSidePanel({
       }}
     >
       <motion.aside
-        className="relative flex h-full shrink-0 flex-col overflow-hidden border-r"
+        id={CANVAS_ASSET_PANEL_ID}
+        aria-label="资产管理"
+        inert={panelClosing}
+        className="relative flex h-full shrink-0 flex-col overflow-hidden border-r bg-background text-foreground"
         initial={{ x: -48 }}
         animate={{ x: panelClosing ? -28 : 0 }}
         transition={{
           duration: resizing ? 0 : PANEL_MOTION_SECONDS,
           ease: PANEL_EASE,
         }}
-        style={{
-          width,
-          background: theme.toolbar.panel,
-          borderColor: theme.toolbar.border,
-          color: theme.node.text,
-        }}
+        style={{ width }}
         data-canvas-no-zoom
       >
         {panelContent}
         <Button
           variant="ghost"
           type="button"
-          className="absolute inset-y-0 right-0 z-40 w-4 translate-x-1/2 cursor-col-resize"
+          role="separator"
+          aria-orientation="vertical"
+          aria-controls={CANVAS_ASSET_PANEL_ID}
+          aria-valuemin={CANVAS_SIDE_PANEL_MIN_WIDTH}
+          aria-valuemax={CANVAS_SIDE_PANEL_MAX_WIDTH}
+          aria-valuenow={width}
+          className="absolute inset-y-0 right-0 z-40 h-auto w-4 translate-x-1/2 cursor-col-resize touch-none p-0"
           onPointerDown={startResize}
+          onKeyDown={(event) => {
+            if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+            event.preventDefault();
+            setWidth(width + (event.key === "ArrowLeft" ? -16 : 16));
+          }}
           aria-label={"调整左侧面板宽度"}
         />
       </motion.aside>
@@ -285,24 +301,16 @@ export function CanvasSidePanel({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Canvas tab: list nodes and center, zoom, and select the clicked node.
-// ---------------------------------------------------------------------------
+const nodeAssetTypes = [
+  ...canvasSearchTypes,
+  { type: CanvasNodeType.Config, label: "配置" },
+] as const;
+type NodeAssetType = CanvasSearchType | CanvasNodeType.Config;
 
-const NODE_FILTER_VALUES = [
-  "all",
-  CanvasNodeType.Image,
-  CanvasNodeType.Video,
-  CanvasNodeType.Text,
-  CanvasNodeType.Audio,
-  CanvasNodeType.Config,
-  CanvasNodeType.Group,
-];
-
-function nodePreviewText(node: CanvasNodeData) {
-  if (node.type === CanvasNodeType.Text)
-    return node.metadata?.content || node.metadata?.prompt || "";
-  return getNodeDefinition(node.type)?.title || node.type;
+function nodeAssetType(node: CanvasNodeData): NodeAssetType {
+  return node.type === CanvasNodeType.Config
+    ? CanvasNodeType.Config
+    : canvasSearchType(node.type, node);
 }
 
 function CanvasNodesTab({
@@ -310,21 +318,15 @@ function CanvasNodesTab({
   selectedNodeIds,
   onFocusNode,
   onPreviewNode,
-  theme,
-}: {
-  nodes: CanvasNodeData[];
-  selectedNodeIds: Set<string>;
-  onFocusNode: (nodeId: string) => void;
-  onPreviewNode: (nodeId: string) => void;
-  theme: CanvasTheme;
-}) {
+}: Omit<Props, "referenceAssets" | "navigationRef">) {
   useSyncExternalStore(
     subscribeImagePreviews,
     getImagePreviewRevision,
     () => 0,
   );
   const [keyword, setKeyword] = useState("");
-  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [typeFilter, setTypeFilter] = useState<NodeAssetType>("all");
+  const [layout, setLayout] = useState<CanvasAssetLayout>("grid");
   const [selectMode, setSelectMode] = useState(false);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
@@ -332,21 +334,31 @@ function CanvasNodesTab({
   );
   const [download, setDownload] =
     useState<Omit<CanvasContract.AssetZipExportRequest, "commandId">>();
-
   const filtered = useMemo(() => {
     const query = keyword.trim().toLowerCase();
     return nodes.filter(
       (node) =>
-        (typeFilter === "all" || node.type === typeFilter) &&
+        (typeFilter === "all" || nodeAssetType(node) === typeFilter) &&
         (!query ||
-          [node.title, node.metadata?.content, node.metadata?.prompt]
+          [
+            node.title,
+            node.metadata?.prompt,
+            node.type === "text" && node.metadata?.content,
+          ]
             .filter(Boolean)
             .join(" ")
             .toLowerCase()
             .includes(query)),
     );
   }, [nodes, keyword, typeFilter]);
-  const treeRows = useMemo(() => {
+
+  const rows = useMemo(() => {
+    if (layout === "grid")
+      return filtered.map((node) => ({
+        node,
+        grouped: false,
+        expandable: false,
+      }));
     const filteredIds = new Set(filtered.map((node) => node.id));
     const groups = new Set(
       nodes
@@ -354,317 +366,260 @@ function CanvasNodesTab({
         .map((node) => node.id),
     );
     const children = new Map<string, CanvasNodeData[]>();
-    filtered.forEach((node) => {
+    for (const node of filtered) {
       const groupId = node.metadata?.groupId;
-      if (groupId && groups.has(groupId))
-        children.set(groupId, [...(children.get(groupId) || []), node]);
-    });
+      if (groupId && groups.has(groupId)) {
+        const members = children.get(groupId) ?? [];
+        members.push(node);
+        children.set(groupId, members);
+      }
+    }
     return nodes.flatMap((node) => {
       if (node.metadata?.groupId && groups.has(node.metadata.groupId))
         return [];
-      if (node.type !== CanvasNodeType.Group)
-        return filteredIds.has(node.id)
-          ? [{ node, depth: 0, hasChildren: false }]
-          : [];
-      const groupChildren = children.get(node.id) || [];
-      if (!filteredIds.has(node.id) && !groupChildren.length) return [];
+      const members = children.get(node.id) ?? [];
+      if (!filteredIds.has(node.id) && !members.length) return [];
       return [
-        { node, depth: 0, hasChildren: groupChildren.length > 0 },
+        { node, grouped: false, expandable: members.length > 0 },
         ...(collapsedGroups.has(node.id)
           ? []
-          : groupChildren.map((child) => ({
-              node: child,
-              depth: 1,
-              hasChildren: false,
+          : members.map((member) => ({
+              node: member,
+              grouped: true,
+              expandable: false,
             }))),
       ];
     });
-  }, [collapsedGroups, filtered, nodes]);
+  }, [collapsedGroups, filtered, layout, nodes]);
 
-  const exitSelect = () => {
-    setSelectMode(false);
-    setChecked(new Set());
-  };
-  const toggleChecked = (id: string) =>
-    setChecked((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const checkedNodes = nodes.filter((node) => checked.has(node.id));
   const allChecked =
-    filtered.length > 0 && filtered.every((node) => checked.has(node.id));
-  const toggleAll = () =>
-    setChecked(
-      allChecked ? new Set() : new Set(filtered.map((node) => node.id)),
-    );
-
-  const handleExport = () => {
-    const targets = nodes.filter((node) => checked.has(node.id));
-    if (!targets.length) return;
+    rows.length > 0 && rows.every(({ node }) => checked.has(node.id));
+  function handleExport() {
+    if (!checkedNodes.length) return;
     try {
-      setDownload(canvasZipSelection(targets, nodes));
+      setDownload(canvasZipSelection(checkedNodes, nodes));
     } catch (error) {
       notifyError(error, "素材ZIP尚不可打包");
     }
-  };
+  }
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 px-3 pt-1 pb-2.5">
-        <span className="text-xs font-medium opacity-60">{"画布元素"}</span>
-        {filtered.length ? (
-          <span className="text-xs opacity-35">{filtered.length}</span>
-        ) : null}
-        <Button
-          variant="ghost"
-          type="button"
-          onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
-          className="ml-auto flex items-center gap-1 px-1.5 py-1 opacity-70 transition hover:opacity-100"
-          style={
-            selectMode
-              ? { color: theme.toolbar.activeText, opacity: 1 }
-              : undefined
-          }
-        >
-          <ListChecks />
-          {selectMode ? "取消" : "选择"}
-        </Button>
-        {selectMode ? null : (
-          <Select
-            value={String(typeFilter ?? "")}
-            onValueChange={(value) => {
-              const option = NODE_FILTER_VALUES.map((value) => ({
-                value,
-                label:
-                  value === "all"
-                    ? "全部"
-                    : (
-                        {
-                          image: "图片",
-                          video: "视频",
-                          text: "文本",
-                          audio: "音频",
-                          config: "配置",
-                          group: "分组",
-                        } as Record<string, string>
-                      )[String(value)] || String(value),
-              })).find((item) => String(item.value) === value);
-              if (option) setTypeFilter(option.value);
+      <div className="canvas-asset-tools">
+        <CanvasAssetSearch
+          label="搜索节点"
+          value={keyword}
+          onChange={setKeyword}
+          onClear={() => setKeyword("")}
+        />
+        <CanvasToolbarGroup appearance="plain" aria-label="画布资产工具">
+          <CanvasToolbarButton
+            aria-label="多选节点"
+            title={selectMode ? "退出多选" : "多选节点"}
+            aria-pressed={selectMode}
+            onClick={() => {
+              setSelectMode(!selectMode);
+              setChecked(new Set());
             }}
           >
-            <SelectTrigger className="w-20" aria-label="节点类型筛选">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {NODE_FILTER_VALUES.map((value) => ({
-                  value,
-                  label:
-                    value === "all"
-                      ? "全部"
-                      : (
-                          {
-                            image: "图片",
-                            video: "视频",
-                            text: "文本",
-                            audio: "音频",
-                            config: "配置",
-                            group: "分组",
-                          } as Record<string, string>
-                        )[String(value)] || String(value),
-                })).map((option) => (
-                  <SelectItem
-                    key={String(option.value)}
-                    value={String(option.value)}
-                  >
-                    {option.label}
-                  </SelectItem>
+            <ListChecks />
+          </CanvasToolbarButton>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <CanvasToolbarButton
+                variant={typeFilter === "all" ? "ghost" : "secondary"}
+                aria-label="节点类型筛选"
+                title="节点类型筛选"
+              >
+                <Filter />
+              </CanvasToolbarButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" data-canvas-no-zoom>
+              <DropdownMenuRadioGroup
+                value={typeFilter}
+                onValueChange={(value) => {
+                  const type = nodeAssetTypes.find(
+                    (item) => item.type === value,
+                  )?.type;
+                  if (type) setTypeFilter(type);
+                }}
+              >
+                {nodeAssetTypes.map(({ type, label }) => (
+                  <DropdownMenuRadioItem key={type} value={type}>
+                    {label}
+                  </DropdownMenuRadioItem>
                 ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        )}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <CanvasAssetLayoutButton layout={layout} onChange={setLayout} />
+        </CanvasToolbarGroup>
       </div>
-      <div className="px-3 pb-2.5">
-        <InputGroup>
-          <InputGroupInput
-            aria-label="搜索节点"
-            placeholder={"搜索节点"}
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-          />
-          <InputGroupAddon>
-            {<Search className="text-muted-foreground" />}
-          </InputGroupAddon>
-
-          <InputGroupAddon align="inline-end">
-            <InputGroupButton aria-label="清空" onClick={() => setKeyword("")}>
-              <X />
-            </InputGroupButton>
-          </InputGroupAddon>
-        </InputGroup>
-      </div>
-      <div className="min-h-0 flex-1 [scrollbar-gutter:stable] overflow-y-auto px-2 pb-3">
-        {treeRows.length ? (
-          <div className="flex flex-col gap-1.5">
-            {treeRows.map(({ node, depth, hasChildren }) => {
-              const Icon = NODE_TYPE_ICON[node.type] || FileText;
-              const isImage =
-                node.type === CanvasNodeType.Image && node.metadata?.content;
-              const isChecked = checked.has(node.id);
-              const active = selectMode
-                ? isChecked
-                : selectedNodeIds.has(node.id);
-              return (
-                <div
-                  key={node.id}
-                  className={cn(
-                    "group relative flex items-center rounded-lg transition",
-                    depth && "ml-5",
-                    active
-                      ? ""
-                      : "hover:bg-media-backdrop/5 dark:hover:bg-media-foreground/5",
-                  )}
-                  style={
-                    active ? { background: theme.toolbar.activeBg } : undefined
-                  }
-                >
-                  {depth ? (
-                    <span
-                      className="pointer-events-none absolute top-[calc(-50%-0.4rem)] -left-3 h-[calc(100%+0.4rem)] w-3 rounded-bl-md border-b border-l opacity-45"
-                      style={{ borderColor: theme.node.stroke }}
-                    />
-                  ) : null}
-                  {node.type === CanvasNodeType.Group && hasChildren ? (
-                    <Button
-                      variant="ghost"
-                      type="button"
-                      onClick={() =>
-                        setCollapsedGroups((prev) =>
-                          prev.has(node.id)
-                            ? new Set([...prev].filter((id) => id !== node.id))
-                            : new Set(prev).add(node.id),
-                        )
-                      }
-                      className="ml-1 grid size-6 shrink-0 place-items-center opacity-55 transition hover:opacity-100"
-                      aria-label={node.title}
-                    >
-                      <ChevronRight
-                        className={cn(
-                          "size-3.5 transition-transform",
-                          !collapsedGroups.has(node.id) && "rotate-90",
-                        )}
-                      />
-                    </Button>
-                  ) : null}
-                  {selectMode && (
-                    <Checkbox
-                      className="ml-2"
-                      checked={isChecked}
-                      onCheckedChange={() => toggleChecked(node.id)}
-                      aria-label={`选择节点：${node.title || "未命名节点"}`}
-                    />
-                  )}
-                  <Button
-                    variant="ghost"
-                    type="button"
-                    onClick={() =>
-                      selectMode ? toggleChecked(node.id) : onFocusNode(node.id)
-                    }
-                    className={cn(
-                      "flex h-auto min-w-0 flex-1 items-center gap-3 py-2 pr-2 text-left",
-                      node.type === CanvasNodeType.Group && hasChildren
-                        ? "pl-0"
-                        : "pl-2",
-                    )}
-                    title={selectMode ? undefined : "定位到节点"}
-                    aria-pressed={selectMode ? isChecked : undefined}
+      <div className="canvas-asset-results">
+        {rows.length ? (
+          <CanvasNodeThumbnailProvider>
+            <ul
+              aria-label="画布资产"
+              className="canvas-asset-items"
+              data-layout={layout}
+            >
+              {rows.map(({ node, grouped, expandable }) => {
+                const name = canvasNodeName(node);
+                const type = nodeAssetType(node);
+                const Icon =
+                  NODE_TYPE_ICON[type] ??
+                  (type === "other" ? FileText : Square);
+                const selected = selectMode
+                  ? checked.has(node.id)
+                  : selectedNodeIds.has(node.id);
+                const collapsed = collapsedGroups.has(node.id);
+                const status = node.metadata?.status;
+                const canPreview =
+                  (type === "image" || type === "video") &&
+                  !!node.metadata?.content;
+                const typeLabel =
+                  getNodeDefinition(node.type)?.title ||
+                  canvasNodeTypeLabel(node.type, node);
+                const duration = node.metadata?.durationMs;
+                const fallback = (
+                  <Icon className="text-muted-foreground" size={20} />
+                );
+                return (
+                  <li
+                    className="canvas-asset-item"
+                    key={node.id}
+                    data-selected={selected || undefined}
+                    data-grouped={grouped || undefined}
                   >
-                    <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-md">
-                      {isImage ? (
-                        <PreviewImage
-                          src={
-                            previewUrlFor(node.metadata?.storageKey) ||
-                            node.metadata?.content
-                          }
-                          alt={node.title}
-                          className="size-full object-cover"
+                    {expandable && (
+                      <CanvasToolbarButton
+                        aria-expanded={!collapsed}
+                        aria-label={`${collapsed ? "展开" : "收起"}组：${name}`}
+                        onClick={() =>
+                          setCollapsedGroups((previous) => {
+                            const next = new Set(previous);
+                            if (!next.delete(node.id)) next.add(node.id);
+                            return next;
+                          })
+                        }
+                      >
+                        <ChevronRight
+                          className={collapsed ? undefined : "rotate-90"}
                         />
-                      ) : (
-                        <Icon className="size-5 opacity-60" />
-                      )}
-                    </span>
-                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                      <span className="block truncate text-sm leading-snug font-medium">
-                        {node.title ||
-                          getNodeDefinition(node.type)?.title ||
-                          "未命名节点"}
+                      </CanvasToolbarButton>
+                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="canvas-asset-item-trigger h-auto justify-start p-0"
+                      aria-label={`${selectMode ? "选择" : "定位"}节点：${name}，${typeLabel}`}
+                      aria-pressed={selectMode ? selected : undefined}
+                      aria-current={
+                        !selectMode && selected ? "true" : undefined
+                      }
+                      title={name}
+                      onClick={() => {
+                        if (!selectMode) {
+                          onFocusNode(node.id);
+                          return;
+                        }
+                        setChecked((previous) => {
+                          const next = new Set(previous);
+                          if (!next.delete(node.id)) next.add(node.id);
+                          return next;
+                        });
+                      }}
+                    >
+                      <span className="canvas-asset-cover" aria-hidden="true">
+                        <CanvasNodeThumbnail
+                          node={node}
+                          fallback={fallback}
+                          mediaFallback={
+                            <CanvasAssetMediaFallback
+                              node={node}
+                              type={type}
+                              fallback={fallback}
+                            />
+                          }
+                        />
+                        {duration && duration > 0 && type === "video" ? (
+                          <span className="canvas-asset-duration">
+                            {formatDuration(duration)}
+                          </span>
+                        ) : null}
+                        {selectMode && selected && (
+                          <SquareCheck className="canvas-asset-check" />
+                        )}
                       </span>
-                      <span className="block truncate text-xs leading-snug opacity-50">
-                        {nodePreviewText(node)}
+                      <span className="canvas-asset-item-label">
+                        <span className="block truncate">{name}</span>
+                        <span className="canvas-asset-item-detail">
+                          {[typeLabel, status && STATUS_LABEL[status]]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
                       </span>
-                    </span>
-                    {node.metadata?.status &&
-                    node.metadata.status !== "idle" ? (
-                      <Badge variant="secondary">
-                        {STATUS_LABEL[node.metadata.status] ||
-                          node.metadata.status}
-                      </Badge>
-                    ) : null}
-                  </Button>
-                  {selectMode || !isImage ? null : (
-                    <div className="flex shrink-0 flex-col items-center gap-0.5 pr-1.5">
-                      <Button
-                        variant="ghost"
-                        type="button"
+                    </Button>
+                    {!selectMode && canPreview && (
+                      <CanvasToolbarButton
+                        className="canvas-asset-preview"
+                        aria-label={`预览：${name}`}
+                        title="预览"
                         onClick={() => onPreviewNode(node.id)}
-                        className="grid size-7 place-items-center opacity-55 transition hover:opacity-100"
-                        aria-label={"放大预览"}
-                        title={"放大预览"}
                       >
                         <Eye />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                      </CanvasToolbarButton>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </CanvasNodeThumbnailProvider>
         ) : (
           <ContentState
             className="min-h-24 p-3"
             icon={Search}
-            title="画布暂无匹配节点"
+            title={nodes.length ? "没有匹配的节点" : "画布暂无资产"}
           />
         )}
       </div>
-      {selectMode ? (
-        <div
-          className="flex items-center gap-2 border-t px-3 py-2.5"
-          style={{ borderColor: theme.toolbar.border }}
+      {selectMode && (
+        <CanvasToolbarGroup
+          appearance="plain"
+          className="canvas-asset-selection"
+          aria-label="批量操作"
         >
-          <Button
-            variant="ghost"
-            type="button"
-            onClick={toggleAll}
-            className="px-2 py-1 opacity-70 transition hover:opacity-100"
+          <CanvasToolbarButton
+            aria-label={allChecked ? "取消全选" : "全选当前结果"}
+            title={allChecked ? "取消全选" : "全选当前结果"}
+            disabled={!rows.length}
+            onClick={() =>
+              setChecked((previous) => {
+                const next = new Set(previous);
+                for (const { node } of rows) {
+                  if (allChecked) next.delete(node.id);
+                  else next.add(node.id);
+                }
+                return next;
+              })
+            }
           >
-            {allChecked ? "取消全选" : "全选"}
-          </Button>
-          <span className="text-xs opacity-45">{`已选 ${checked.size}`}</span>
-          <Button
-            variant="ghost"
-            type="button"
-            onClick={() => void handleExport()}
-            disabled={!checked.size}
-            className="ml-auto flex items-center gap-1.5 px-3 py-1.5 transition disabled:cursor-not-allowed disabled:opacity-40"
+            {allChecked ? <ListX /> : <ListChecks />}
+          </CanvasToolbarButton>
+          <span className="flex-1 text-xs text-muted-foreground" role="status">
+            已选 {checkedNodes.length} 项
+          </span>
+          <CanvasToolbarButton
+            aria-label="打包下载"
+            title="打包下载"
+            onClick={handleExport}
+            disabled={!checkedNodes.length}
           >
             <Download />
-            {"打包下载"}
-          </Button>
-        </div>
-      ) : null}
+          </CanvasToolbarButton>
+        </CanvasToolbarGroup>
+      )}
       {download && (
         <ZipDownloadDialog
           request={download}
@@ -675,28 +630,49 @@ function CanvasNodesTab({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Assets tab: library scope, type filtering, and click-to-insert.
-// ---------------------------------------------------------------------------
-
-function CanvasAssetsTab({
-  projectId,
-  initialScope,
-  onInsert,
+function CanvasAssetMediaFallback({
+  node,
+  type,
+  fallback,
 }: {
-  projectId?: string;
-  initialScope?: string;
-  onInsert: (payload: InsertAssetPayload) => void;
+  node: CanvasNodeData;
+  type: NodeAssetType;
+  fallback: React.ReactNode;
 }) {
-  return (
-    <div className="h-full min-h-0 px-3 py-2">
-      <LibraryPickerContent
-        compact
-        insertOnUpload={false}
-        projectId={projectId}
-        initialScope={initialScope}
-        onInsert={onInsert}
+  const [failed, setFailed] = useState<string>();
+  const metadata = node.metadata;
+  const primary =
+    metadata?.images?.find((image) => image.id === metadata.primaryImageId) ??
+    metadata?.images?.[0];
+  const source =
+    type === "image"
+      ? previewUrlFor(primary?.storageKey || metadata?.storageKey) ||
+        primary?.content ||
+        metadata?.content
+      : metadata?.content;
+  if (!source || failed === source) return fallback;
+  if (type === "video") {
+    return (
+      <video
+        src={source}
+        preload="metadata"
+        muted
+        playsInline
+        aria-hidden="true"
+        className="size-full object-cover"
+        onError={() => setFailed(source)}
       />
-    </div>
-  );
+    );
+  }
+  if (type === "image") {
+    return (
+      <PreviewImage
+        src={source}
+        loading="lazy"
+        className="size-full object-cover"
+        onError={() => setFailed(source)}
+      />
+    );
+  }
+  return fallback;
 }

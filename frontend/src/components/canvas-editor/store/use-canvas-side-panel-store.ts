@@ -1,5 +1,6 @@
 import { create } from "zustand";
 
+export const CANVAS_ASSET_PANEL_ID = "canvas-asset-panel";
 export const CANVAS_SIDE_PANEL_MOTION_MS = 500;
 export const CANVAS_SIDE_PANEL_MIN_WIDTH = 280;
 export const CANVAS_SIDE_PANEL_MAX_WIDTH = 480;
@@ -19,26 +20,37 @@ type CanvasSidePanelStore = {
 };
 
 export const useCanvasSidePanelStore = create<CanvasSidePanelStore>(
-  (set, get) => ({
-    tab: "canvas",
-    setTab: (tab) => set({ tab }),
-    width: CANVAS_SIDE_PANEL_DEFAULT_WIDTH,
-    panelOpen: false,
-    panelMounted: false,
-    panelClosing: false,
-    setWidth: (width) => set({ width }),
-    openPanel: () => {
-      set({ panelOpen: true, panelMounted: true, panelClosing: false });
-    },
-    closePanel: () => {
-      if (!get().panelMounted || get().panelClosing) return;
-      set({ panelOpen: false, panelClosing: true });
-      setTimeout(() => {
-        if (get().panelClosing)
-          set({ panelMounted: false, panelClosing: false });
-      }, CANVAS_SIDE_PANEL_MOTION_MS);
-    },
-    togglePanel: () =>
-      get().panelOpen ? get().closePanel() : get().openPanel(),
-  }),
+  (set, get) => {
+    let closeTimer: ReturnType<typeof setTimeout> | undefined;
+    return {
+      tab: "canvas",
+      setTab: (tab) => set({ tab }),
+      width: CANVAS_SIDE_PANEL_DEFAULT_WIDTH,
+      panelOpen: false,
+      panelMounted: false,
+      panelClosing: false,
+      setWidth: (width) =>
+        set({
+          width: Math.min(
+            CANVAS_SIDE_PANEL_MAX_WIDTH,
+            Math.max(CANVAS_SIDE_PANEL_MIN_WIDTH, width),
+          ),
+        }),
+      openPanel: () => {
+        clearTimeout(closeTimer);
+        set({ panelOpen: true, panelMounted: true, panelClosing: false });
+      },
+      closePanel: () => {
+        if (!get().panelMounted || get().panelClosing) return;
+        clearTimeout(closeTimer);
+        set({ panelOpen: false, panelClosing: true });
+        closeTimer = setTimeout(() => {
+          if (get().panelClosing)
+            set({ panelMounted: false, panelClosing: false });
+        }, CANVAS_SIDE_PANEL_MOTION_MS);
+      },
+      togglePanel: () =>
+        get().panelOpen ? get().closePanel() : get().openPanel(),
+    };
+  },
 );

@@ -24,7 +24,7 @@ func scriptReviewRouter(sources *app.SourceService, episodes *app.EpisodeService
 	scripthttp.NewReviewHandler(episodes, history, scriptHTTPActor).Register(g)
 	return router
 }
-func TestScriptReviewHTTPRealRulesManualHistoryAndTypedImpact(t *testing.T) {
+func TestScriptReviewHTTPRealRulesAndRetiredStructureRoutes(t *testing.T) {
 	db, owner := scriptTestDB(t)
 	actor, pid := scriptActorProject(t, owner)
 	store := scriptStore(db)
@@ -90,51 +90,19 @@ func TestScriptReviewHTTPRealRulesManualHistoryAndTypedImpact(t *testing.T) {
 	if err := json.Unmarshal(r.Body.Bytes(), &text); err != nil || r.Code != 200 || text.Text != "你好😀" {
 		t.Fatal("actual scalar HTTP text", text, err)
 	}
-	revision = 3
-	episodeRevision := int64(1)
-	structureVersion := int64(0)
-	document := manualStructure()
-	save := scripthttp.StructureSaveRequest{ExpectedRevision: &revision, ExpectedEpisodeRevision: &episodeRevision, BaseStructureVersionNo: &structureVersion, Document: &document}
-	r = scriptHTTP(t, router, "POST", episodePath+"/structure", uuid.New(), save)
-	if r.Code != 200 {
-		t.Fatal("manual HTTP save", r.Code, r.Body.String())
-	}
-	revision = 4
-	episodeRevision = 2
-	structureVersion = 1
-	confirm := scripthttp.StructureConfirmRequest{ExpectedRevision: &revision, ExpectedEpisodeRevision: &episodeRevision, BaseStructureVersionNo: &structureVersion}
-	r = scriptHTTP(t, router, "POST", episodePath+"/structure/confirm", uuid.New(), confirm)
-	if r.Code != 200 {
-		t.Fatal("first manual HTTP confirm", r.Code, r.Body.String())
-	}
-	revision = 5
-	episodeRevision = 3
-	document.Scenes[0].Items[1].Content = "欢迎回来😀"
-	r = scriptHTTP(t, router, "POST", episodePath+"/structure", uuid.New(), save)
-	if r.Code != 200 {
-		t.Fatal(r.Code, r.Body.String())
-	}
-	revision = 6
-	episodeRevision = 4
-	structureVersion = 2
-	r = scriptHTTP(t, router, "POST", episodePath+"/structure/confirm", uuid.New(), confirm)
-	if r.Code != 409 || !strings.Contains(r.Body.String(), "affected_episodes") || !strings.Contains(r.Body.String(), formal.Episodes[0].ID.String()) {
-		t.Fatal("actual typed impact missing", r.Code, r.Body.String())
-	}
-	confirm.AckInvalidate = true
-	r = scriptHTTP(t, router, "POST", episodePath+"/structure/confirm", uuid.New(), confirm)
-	if r.Code != 503 || !strings.Contains(r.Body.String(), "context_unavailable") {
-		t.Fatal("missing actual downstream owner falsely confirmed", r.Code, r.Body.String())
-	}
-	for _, route := range []string{"/structure", "/structure/versions", "/structure/versions/1"} {
-		r = scriptHTTP(t, router, "GET", episodePath+route, uuid.Nil, nil)
-		if r.Code != 200 || strings.Contains(r.Body.String(), "object_key") {
-			t.Fatal("private structure history", route, r.Code, r.Body.String())
+	for _, route := range []struct {
+		method string
+		path   string
+	}{
+		{"GET", "/structure"},
+		{"GET", "/structure/versions"},
+		{"GET", "/structure/versions/1"},
+		{"POST", "/structure"},
+		{"POST", "/structure/confirm"},
+	} {
+		r = scriptHTTP(t, router, route.method, episodePath+route.path, uuid.New(), nil)
+		if r.Code != 404 {
+			t.Fatal("retired structure route", route, r.Code, r.Body.String())
 		}
-	}
-	foreign, _ := scriptActorProject(t, owner)
-	denied := scriptHTTP(t, scriptReviewRouter(sources, episodes, history, foreign), "GET", episodePath+"/structure/versions/1", uuid.Nil, nil)
-	if denied.Code != 404 {
-		t.Fatal("foreign manual history", denied.Code)
 	}
 }

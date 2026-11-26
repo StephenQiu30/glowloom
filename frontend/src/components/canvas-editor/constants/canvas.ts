@@ -83,8 +83,8 @@ export const NODE_SPECS = {
     metadata: { content: "", status: "idle", generationMode: "image" },
   },
   [CanvasNodeType.Video]: {
-    width: 320,
-    height: 180,
+    width: 560,
+    height: 315,
     get title() {
       return NODE_DEFAULT_SIZE[CanvasNodeType.Video].title;
     },

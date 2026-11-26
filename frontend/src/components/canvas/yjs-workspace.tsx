@@ -9,7 +9,6 @@ import {
 } from "react";
 import { toast } from "@/components/feedback/notification";
 import dynamic from "next/dynamic";
-import { Film } from "lucide-react";
 import { createCanvasAssistantAdoption } from "./assistant/canvas-assistant-adoption";
 import { createCanvasDomainConnector } from "./lib/canvas-domain-connection";
 import { createCanvasAudioConnector } from "./lib/canvas-audio-connection";
@@ -20,7 +19,6 @@ import { canvasAudioCatalogAcceptsSubjects } from "@/components/canvas-editor/li
 import type { CanvasNodeData } from "@/components/canvas-editor/types/canvas.ts";
 import type { CanvasClipboard } from "@/components/canvas-editor/lib/canvas-clipboard.ts";
 import { CanvasYjsLiveSession } from "./yjs-live-session";
-import { SkillWorkflowControl } from "./skill-workflow/skill-workflow-control";
 import { CanvasGenerationPanel } from "@/components/canvas-editor/nodes/canvas-generation-panel.tsx";
 import { CanvasOperationStatus } from "@/components/canvas-editor/nodes/canvas-operation-status.tsx";
 import { useCanvasOperationTasks } from "./hooks/use-canvas-operation-tasks";
@@ -31,6 +29,7 @@ import {
 import type { Task } from "@/components/generation/contracts";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ContentState } from "@/components/layout/content-state";
 import { CanvasParticipants } from "@/components/canvas-editor/canvas-participants.tsx";
 import { SpaceSwitcher } from "@/components/spaces/space-context";
 import { YjsPresence } from "@/components/canvas-editor/yjs-presence.tsx";
@@ -47,9 +46,7 @@ import { canvasSubjectSources } from "./lib/canvas-subject-source";
 import { getCSRFToken } from "@/lib/request";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ensureSessionFresh } from "@/components/auth/session-renewal";
-import { useOptionalSession } from "@/components/auth/session";
-import { AccountMenu } from "@/components/account/account-menu";
-import { AccountLogoutDialog } from "@/components/account/account-logout-dialog";
+import { CanvasAccountControls } from "./canvas-account-controls";
 import { Button } from "@/components/ui/button";
 import { CanvasLocalDrafts } from "@/components/canvas-editor/controls/canvas-local-drafts.tsx";
 import { Input } from "@/components/ui/input";
@@ -70,7 +67,14 @@ import {
 } from "@/components/projects/project";
 import { ProjectRenameDialog } from "@/components/projects/project-rename-dialog";
 import { ProjectMediaPreview } from "@/components/media/project-media";
-import type { CanvasStoryboardTab } from "./storyboard/canvas-storyboard-workspace";
+
+const ReferenceAssetsPanel = dynamic(
+  () =>
+    import("@/app/assets/_components/assets-page").then(
+      (module) => module.ReferenceAssetsPanel,
+    ),
+  { loading: () => <ContentState state="loading" title="正在读取参考素材" /> },
+);
 
 const CanvasTransferDialog = dynamic(() =>
   import("@/components/canvas-editor/editor/canvas-transfer-dialog.tsx").then(
@@ -142,9 +146,9 @@ const CanvasAssistantPanel = dynamic(
     ),
   },
 );
-const CanvasStoryboardWorkspace = dynamic(() =>
-  import("./storyboard/canvas-storyboard-workspace").then(
-    (module) => module.CanvasStoryboardWorkspace,
+const CanvasConversationPanel = dynamic(() =>
+  import("./assistant/canvas-conversation-panel").then(
+    (module) => module.CanvasConversationPanel,
   ),
 );
 
@@ -265,21 +269,19 @@ function CollaborativeEditor({
   );
   const isMobile = useIsMobile();
   const [legacyOpen, setLegacyOpen] = useState(false);
-  const [workbench, setWorkbench] = useState<{
-    open: boolean;
-    tab: CanvasStoryboardTab;
-    assistantOnly?: boolean;
-  }>();
-  const workbenchTrigger = useRef<HTMLElement | null>(null);
-  function openWorkbench(tab: CanvasStoryboardTab, assistantOnly = false) {
+  const [conversation, setConversation] = useState<
+    "unopened" | "open" | "closed"
+  >("unopened");
+  const conversationTrigger = useRef<HTMLElement | null>(null);
+  function openConversation() {
     if (document.activeElement instanceof HTMLElement)
-      workbenchTrigger.current = document.activeElement;
+      conversationTrigger.current = document.activeElement;
     setLegacyOpen(false);
-    setWorkbench({ open: true, tab, assistantOnly });
+    setConversation("open");
   }
-  function closeWorkbench() {
-    setWorkbench((previous) => previous && { ...previous, open: false });
-    requestAnimationFrame(() => workbenchTrigger.current?.focus());
+  function closeConversation() {
+    setConversation("closed");
+    requestAnimationFrame(() => conversationTrigger.current?.focus());
   }
   const [transfer, setTransfer] = useState<CanvasClipboard | null>(null);
   const [rename, setRename] = useState<string | null>(null);
@@ -345,7 +347,7 @@ function CollaborativeEditor({
       />
     );
   const ordinaryCanvas = dto.kind !== "short_drama";
-  const conversationOpen = workbench?.open && workbench.assistantOnly;
+  const conversationOpen = conversation === "open";
   return (
     <CanvasMediaContext.Provider
       value={{
@@ -373,12 +375,7 @@ function CollaborativeEditor({
             onClose={() => setTransfer(null)}
           />
         )}
-        <div
-          className="size-full"
-          inert={
-            (workbench?.open && (!conversationOpen || isMobile)) || undefined
-          }
-        >
+        <div className="size-full" inert={conversationOpen && isMobile}>
           <CanvasPage
             documentIntegration={{
               projectId: projectID,
@@ -396,9 +393,12 @@ function CollaborativeEditor({
                 bindingRevision: dto.revision!,
               },
               mediaEnabled: true,
-              assistantOpen: ordinaryCanvas ? !!conversationOpen : undefined,
+              renderReferenceAssets: (refreshKey) => (
+                <ReferenceAssetsPanel refreshKey={refreshKey} />
+              ),
+              assistantOpen: ordinaryCanvas ? conversationOpen : undefined,
               onOpenAssistant: ordinaryCanvas
-                ? () => openWorkbench("conversation", true)
+                ? openConversation
                 : () => setLegacyOpen(true),
               onTransferSelection: setTransfer,
               canNavigate: !view.unsafeToLeave,
@@ -412,13 +412,12 @@ function CollaborativeEditor({
               textBinding: client.textBinding,
               renderToolNode: (nodeID, type) =>
                 type === "storyboard" ? (
-                  <StoryboardNodePreview
+                  <ArchivedStoryboardPreview
                     projectID={projectID}
                     storyboard={
                       graph.nodes.find((node) => node.id === nodeID)
                         ?.serviceData?.config?.storyboard
                     }
-                    onOpen={() => openWorkbench("shots")}
                   />
                 ) : type === "timeline" ? (
                   <CanvasTimelineWorkspace
@@ -486,66 +485,28 @@ function CollaborativeEditor({
                   canDeleteCanvas={false}
                   canRenameCanvas={view.writable && !view.dirty}
                   canSwitchCanvas={!view.unsafeToLeave}
-                  accountControl={
-                    ordinaryCanvas ? (
-                      <CanvasAccountMenu disabled={view.unsafeToLeave} />
-                    ) : undefined
+                  renderAccount={
+                    ordinaryCanvas
+                      ? (compact) => (
+                          <CanvasAccountControls
+                            compact={compact}
+                            scopeID={scopeID}
+                            canNavigate={!view.unsafeToLeave}
+                            onHome={controls.onHome}
+                          />
+                        )
+                      : undefined
                   }
+                  presenceConnected={view.connected}
                   onDeleteProject={() => {}}
                   onRenameProject={() => void openRename()}
-                  workflowControl={
-                    <div className="flex shrink-0 items-center gap-1">
-                      {ordinaryCanvas && (
-                        <div
-                          role="group"
-                          aria-label="画布视图"
-                          className="flex shrink-0 items-center gap-1"
-                        >
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            className="hidden sm:inline-flex"
-                            aria-current="page"
-                          >
-                            工作流
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="max-sm:size-11"
-                            aria-label="打开故事板"
-                            title="故事板"
-                            onClick={() => openWorkbench("shots")}
-                          >
-                            <Film data-icon="inline-start" />
-                            <span className="max-sm:sr-only">故事板</span>
-                          </Button>
-                        </div>
-                      )}
-                      <SkillWorkflowControl
-                        client={client}
-                        graph={graph}
-                        canvasId={canvasID}
-                        projectId={projectID}
-                        identity={`${actorID}/${scopeID}`}
-                        enabled={
-                          view.connected &&
-                          view.writable &&
-                          !view.migration &&
-                          view.recovery.length === 0
-                        }
-                        saved={!view.dirty}
-                      />
-                    </div>
-                  }
                   participantsControl={
                     <CanvasParticipants
                       client={client}
                       actorID={actorID}
                       scopeID={scopeID}
                       connected={view.connected}
+                      showSelf={false}
                     />
                   }
                   saveControl={
@@ -581,34 +542,17 @@ function CollaborativeEditor({
             }}
           />
         </div>
-        {workbench && (
-          <CanvasStoryboardWorkspace
+        {conversation !== "unopened" && (
+          <CanvasConversationPanel
             canvasID={canvasID}
             projectID={projectID}
             scopeID={scopeID}
             actorID={actorID}
-            commitSeq={client.commitSeq}
             writable={view.writable && !view.migration}
-            boardWritable={view.writable && view.connected && !view.migration}
-            title={dto.name ?? "画布"}
-            saveStatus={view.phase}
-            canNavigate={!view.unsafeToLeave}
-            open={workbench.open}
-            tab={workbench.tab}
-            assistantOnly={workbench.assistantOnly}
-            onTabChange={(tab) =>
-              setWorkbench((previous) => ({
-                open: true,
-                tab,
-                assistantOnly:
-                  tab === "conversation" && previous?.assistantOnly,
-              }))
-            }
-            onClose={closeWorkbench}
+            open={conversationOpen}
+            onClose={closeConversation}
             onOpenLegacy={() => {
-              setWorkbench(
-                (previous) => previous && { ...previous, open: false },
-              );
+              setConversation("closed");
               setLegacyOpen(true);
             }}
           />
@@ -619,10 +563,7 @@ function CollaborativeEditor({
             projectID={projectID}
             onClose={() => {
               setLegacyOpen(false);
-              setWorkbench(
-                (previous) =>
-                  previous && { ...previous, open: true, tab: "conversation" },
-              );
+              if (conversation !== "unopened") setConversation("open");
             }}
             onAdopt={adoption.adoptMedia}
             onAdoptText={adoption.adoptText}
@@ -703,14 +644,12 @@ function CollaborativeEditor({
   );
 }
 
-function StoryboardNodePreview({
+function ArchivedStoryboardPreview({
   projectID,
   storyboard,
-  onOpen,
 }: {
   projectID: string;
   storyboard?: API.Storyboard;
-  onOpen: () => void;
 }) {
   const shots = storyboard?.shots ?? [];
   const adopted = shots.find((shot) =>
@@ -727,42 +666,9 @@ function StoryboardNodePreview({
           />
         </div>
       ) : null}
-      <Button
-        variant="secondary"
-        size="sm"
-        data-canvas-no-zoom
-        onPointerDown={(event) => event.stopPropagation()}
-        onDoubleClick={(event) => event.stopPropagation()}
-        onClick={(event) => {
-          event.stopPropagation();
-          onOpen();
-        }}
-      >
-        <Film data-icon="inline-start" />
-        {shots.length} 个镜头 · 打开故事板
-      </Button>
+      <span className="text-center text-sm text-muted-foreground">
+        历史故事板 · {shots.length} 个镜头
+      </span>
     </div>
-  );
-}
-
-function CanvasAccountMenu({ disabled }: { disabled: boolean }) {
-  const session = useOptionalSession();
-  const [logout, setLogout] = useState(false);
-
-  if (!session) return null;
-
-  return (
-    <>
-      <AccountMenu
-        actor={session.actor}
-        disabled={disabled}
-        onLogout={() => setLogout(true)}
-      />
-      <AccountLogoutDialog
-        open={logout}
-        onOpenChange={setLogout}
-        disabled={disabled}
-      />
-    </>
   );
 }

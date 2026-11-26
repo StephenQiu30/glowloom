@@ -57,12 +57,6 @@ export const workspaceRoutes = {
     group: "创作空间",
     access: "authenticated",
   },
-  workflows: {
-    href: "/workflows",
-    title: "工作流程",
-    group: "创作空间",
-    access: "authenticated",
-  },
   dashboard: {
     href: "/admin/dashboard",
     title: "数据中心",
