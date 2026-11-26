@@ -81,11 +81,11 @@ func (h *BusinessHandler) registerLLMGateway(router *gin.Engine) {
 			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"code": "agent_busy"})
 		}
 	})
-	g.POST("/v1/chat/completions", h.handleGatewayChatCompletions)
-	g.POST("/openai/v1/chat/completions", h.handleGatewayChatCompletions)
-	g.POST("/openai/v1/responses", h.handleGatewayOpenAIResponses)
-	g.POST("/anthropic/v1/messages", h.handleGatewayAnthropicMessages)
-	g.POST("/google/v1beta/models/*action", h.handleGatewayGoogleGenerateContent)
+	g.POST("/chat/completions", h.handleGatewayChatCompletions)
+	g.POST("/openai/chat/completions", h.handleGatewayChatCompletions)
+	g.POST("/openai/responses", h.handleGatewayOpenAIResponses)
+	g.POST("/anthropic/messages", h.handleGatewayAnthropicMessages)
+	g.POST("/google/models/*action", h.handleGatewayGoogleGenerateContent)
 }
 
 func (h *BusinessHandler) executeGatewayCall(

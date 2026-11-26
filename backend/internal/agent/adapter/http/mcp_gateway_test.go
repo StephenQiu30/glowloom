@@ -81,8 +81,8 @@ func TestInternalMCPAndGatewayEndpoints(t *testing.T) {
 		t.Fatalf("unexpected MCP tools/call response: %d %s", callRec.Code, callRec.Body.String())
 	}
 
-	// 4. Unified channel pass-through gateway /v1/chat/completions succeeds.
-	gwReq := httptest.NewRequestWithContext(t.Context(), stdhttp.MethodPost, "/internal/agent-gateway/v1/chat/completions", bytes.NewBufferString(`{"model":"gpt-4o","messages":[{"role":"user","content":"plan shot 1"}]}`))
+	// 4. Unified channel pass-through gateway /chat/completions succeeds.
+	gwReq := httptest.NewRequestWithContext(t.Context(), stdhttp.MethodPost, "/internal/agent-gateway/chat/completions", bytes.NewBufferString(`{"model":"gpt-4o","messages":[{"role":"user","content":"plan shot 1"}]}`))
 	gwReq.Header.Set("Authorization", "Bearer "+token)
 	gwReq.Header.Set("X-Agent-Audience", "agent-business")
 	gwReq.Header.Set("X-Glowloom-Actor-Id", actorID.String())
@@ -95,8 +95,8 @@ func TestInternalMCPAndGatewayEndpoints(t *testing.T) {
 		t.Fatalf("unexpected gateway response: %d %s", gwRec.Code, gwRec.Body.String())
 	}
 
-	// 5. Multi-protocol OpenAI route alias /openai/v1/chat/completions succeeds.
-	openaiReq := httptest.NewRequestWithContext(t.Context(), stdhttp.MethodPost, "/internal/agent-gateway/openai/v1/chat/completions", bytes.NewBufferString(`{"model":"gpt-4o","messages":[{"role":"user","content":"plan shot 2"}]}`))
+	// 5. Multi-protocol OpenAI route alias /openai/chat/completions succeeds.
+	openaiReq := httptest.NewRequestWithContext(t.Context(), stdhttp.MethodPost, "/internal/agent-gateway/openai/chat/completions", bytes.NewBufferString(`{"model":"gpt-4o","messages":[{"role":"user","content":"plan shot 2"}]}`))
 	openaiReq.Header.Set("Authorization", "Bearer "+token)
 	openaiReq.Header.Set("X-Agent-Audience", "agent-business")
 	openaiReq.Header.Set("X-Glowloom-Actor-Id", actorID.String())
@@ -109,8 +109,8 @@ func TestInternalMCPAndGatewayEndpoints(t *testing.T) {
 		t.Fatalf("unexpected openai alias gateway response: %d %s", openaiRec.Code, openaiRec.Body.String())
 	}
 
-	// 6. OpenAI Responses API /openai/v1/responses succeeds.
-	respReq := httptest.NewRequestWithContext(t.Context(), stdhttp.MethodPost, "/internal/agent-gateway/openai/v1/responses", bytes.NewBufferString(`{"model":"gpt-5","input":[{"role":"user","content":"plan shot 3"}]}`))
+	// 6. OpenAI Responses API /openai/responses succeeds.
+	respReq := httptest.NewRequestWithContext(t.Context(), stdhttp.MethodPost, "/internal/agent-gateway/openai/responses", bytes.NewBufferString(`{"model":"gpt-5","input":[{"role":"user","content":"plan shot 3"}]}`))
 	respReq.Header.Set("Authorization", "Bearer "+token)
 	respReq.Header.Set("X-Agent-Audience", "agent-business")
 	respReq.Header.Set("X-Glowloom-Actor-Id", actorID.String())
@@ -123,8 +123,8 @@ func TestInternalMCPAndGatewayEndpoints(t *testing.T) {
 		t.Fatalf("unexpected openai responses gateway response: %d %s", respRec.Code, respRec.Body.String())
 	}
 
-	// 7. Anthropic Messages API /anthropic/v1/messages preserves native response format.
-	anthReq := httptest.NewRequestWithContext(t.Context(), stdhttp.MethodPost, "/internal/agent-gateway/anthropic/v1/messages", bytes.NewBufferString(`{"model":"claude-sonnet-4-5","max_tokens":1024,"metadata":{"user_id":"sess-1"},"messages":[{"role":"user","content":"plan shot 4"}]}`))
+	// 7. Anthropic Messages API /anthropic/messages preserves native response format.
+	anthReq := httptest.NewRequestWithContext(t.Context(), stdhttp.MethodPost, "/internal/agent-gateway/anthropic/messages", bytes.NewBufferString(`{"model":"claude-sonnet-4-5","max_tokens":1024,"metadata":{"user_id":"sess-1"},"messages":[{"role":"user","content":"plan shot 4"}]}`))
 	anthReq.Header.Set("Authorization", "Bearer "+token)
 	anthReq.Header.Set("X-Agent-Audience", "agent-business")
 	anthReq.Header.Set("X-Glowloom-Actor-Id", actorID.String())
@@ -137,8 +137,8 @@ func TestInternalMCPAndGatewayEndpoints(t *testing.T) {
 		t.Fatalf("unexpected anthropic gateway response: %d %s", anthRec.Code, anthRec.Body.String())
 	}
 
-	// 8. Google Gemini /google/v1beta/models/gemini-2.5-pro:generateContent preserves native candidates format.
-	gemReq := httptest.NewRequestWithContext(t.Context(), stdhttp.MethodPost, "/internal/agent-gateway/google/v1beta/models/gemini-2.5-pro:generateContent", bytes.NewBufferString(`{"contents":[{"role":"user","parts":[{"text":"plan shot 5"}]}]}`))
+	// 8. Google Gemini /google/models/gemini-2.5-pro:generateContent preserves native candidates format.
+	gemReq := httptest.NewRequestWithContext(t.Context(), stdhttp.MethodPost, "/internal/agent-gateway/google/models/gemini-2.5-pro:generateContent", bytes.NewBufferString(`{"contents":[{"role":"user","parts":[{"text":"plan shot 5"}]}]}`))
 	gemReq.Header.Set("Authorization", "Bearer "+token)
 	gemReq.Header.Set("X-Agent-Audience", "agent-business")
 	gemReq.Header.Set("X-Glowloom-Actor-Id", actorID.String())

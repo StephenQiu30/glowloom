@@ -82,28 +82,28 @@ export function createGatewayModel(
   switch (protocol) {
     case 'openai':
       baseModel = createOpenAI({
-        baseURL: `${gatewayRoot}/openai/v1`,
+        baseURL: `${gatewayRoot}/openai`,
         apiKey: config.businessToken,
         headers,
       }).chat(modelId);
       break;
     case 'openai-responses':
       baseModel = createOpenAI({
-        baseURL: `${gatewayRoot}/openai/v1`,
+        baseURL: `${gatewayRoot}/openai`,
         apiKey: config.businessToken,
         headers,
       }).responses(modelId);
       break;
     case 'anthropic':
       baseModel = createAnthropic({
-        baseURL: `${gatewayRoot}/anthropic/v1`,
+        baseURL: `${gatewayRoot}/anthropic`,
         apiKey: config.businessToken,
         headers,
       })(modelId);
       break;
     case 'google':
       baseModel = createGoogleGenerativeAI({
-        baseURL: `${gatewayRoot}/google/v1beta`,
+        baseURL: `${gatewayRoot}/google`,
         apiKey: config.businessToken,
         headers,
       })(modelId);
@@ -112,7 +112,7 @@ export function createGatewayModel(
     default:
       baseModel = createOpenAICompatible({
         name: 'glowloom',
-        baseURL: `${gatewayRoot}/v1`,
+        baseURL: gatewayRoot,
         apiKey: config.businessToken,
         headers,
       }).chatModel(modelId);

@@ -41,7 +41,7 @@ it.skipIf(!dsn)(
       tools?: Array<{ function: { name: string } }>;
     }> = [];
     const mock = createServer(async (request, response) => {
-      if (request.url !== '/internal/agent-gateway/v1/chat/completions') {
+      if (request.url !== '/internal/agent-gateway/chat/completions') {
         response.writeHead(404).end();
         return;
       }
