@@ -8,3 +8,6 @@ content
 pnpm-lock.yaml
 test-results
 playwright-report
+
+public/design/project-knowledge/*.html
+public/design/project-knowledge/*.workflow.json

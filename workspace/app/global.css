@@ -1,6 +1,11 @@
 @import 'tailwindcss';
 @import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/generated/spacious.css';
 @import 'fumadocs-ui/css/preset.css';
+
+@theme inline {
+  --font-mono: var(--font-geist-mono);
+}
 
 html {
   scrollbar-gutter: stable;

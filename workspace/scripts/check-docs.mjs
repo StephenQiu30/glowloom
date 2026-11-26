@@ -19,10 +19,11 @@ const CATEGORIES = [
 ];
 const ROOT_DOCS = [
   'AGENTS.md',
-  'PROJECT.md',
   'BACKLOG.md',
   'README.md',
   'workspace/AGENTS.md',
+  'workspace/ARCHITECTURE.md',
+  'workspace/PROJECT.md',
   'workspace/README.md',
 ];
 
@@ -128,6 +129,11 @@ for (const relDoc of ROOT_DOCS) {
   const fullPath = path.join(REPO_ROOT, relDoc);
   if (existsSync(fullPath)) {
     checkLinks(fullPath);
+  } else if (
+    relDoc === 'workspace/ARCHITECTURE.md' ||
+    relDoc === 'workspace/PROJECT.md'
+  ) {
+    errors.push(`[missing-project-doc] ${relDoc}`);
   }
 }
 

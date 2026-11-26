@@ -10,19 +10,19 @@
 
 ## 3. 技术选择
 
-直接采用官方 `create-fumadocs-app` 的 Next.js、Fumadocs UI、Fumadocs MDX 与官方内置搜索（`fumadocs-core/search/server` 经 `/api/search` 提供检索，不依赖外部 Meilisearch 容器）。Fumadocs UI 使用官方 Base UI 实现及 shadcn 主题；不复制重写布局、侧栏、目录、搜索或 Markdown 渲染器。自有 TS 和测试遵循根 `AGENTS.md` 与 [workspace/AGENTS.md](../../AGENTS.md)，Server／Client 边界及异步加载遵循 Vercel 最佳实践。
+直接采用官方 `create-fumadocs-app` 的 Next.js、Fumadocs UI、Fumadocs MDX 与官方内置搜索（`fumadocs-core/search/server` 经 `/api/search` 提供检索，不依赖外部 Meilisearch 容器）。Fumadocs UI 使用官方 Base UI 实现与 Neutral 主题，布局、侧栏、目录、搜索和 Markdown 渲染由官方组件提供。自有 TS 和测试遵循根 `AGENTS.md` 与 [workspace/AGENTS.md](../../AGENTS.md)，Server／Client 边界及异步加载遵循 Vercel 最佳实践。
 
 ## 4. 内容与路由
 
-按 2026-11-16 补充需求，Fumadocs MDX 的 `defineDocs({ dir: 'content' })` 直接加载 `workspace/content/`，分类与首页均位于该目录下；不保留额外 `content/docs/` 层。官方 loader 的 `baseUrl` 仍为 `/docs`，页面相对路径和元数据层级保持原有结构。GitHub 页面入口指向仓库的 `workspace/content/<page.path>`。API 依据：[Fumadocs collections](https://fumadocs.dev/docs/mdx/collections)，具体类型以安装版本为准。
+项目级入口由 Workspace 根目录 [ARCHITECTURE](../../ARCHITECTURE.md) 与 [PROJECT](../../PROJECT.md) 维护，分别发布为 `/docs/architecture` 与 `/docs/project`。官方 collection 显式收录两份顶层文档及 `content/` 内的专题正文；`workspace/meta.json` 将首页、顶层文档、专题分类依次编入侧栏。专题现有路径、相对链接与稳定 ID 保留。GitHub 源文件入口按原始文件位置指向 `workspace/<page.path>`。 [Fumadocs Loader](https://www.fumadocs.dev/docs/headless/source-api)
 
-`content/` 是唯一知识正文目录，现有 Markdown 按 `requirement → design → prd → plan` 分层并辅以 `research`、`operations`、`templates`。缺少 frontmatter 的标题由 Fumadocs collection schema 从现有 H1 取值；历史 `/read` 与 `/read/*` 入口由 Next.js 原生重定向至 `/docs`；面向 Agent 的原文与索引通过 `/llms.txt`、`/llms-full.txt`、`/llms.mdx/[...path]` 及 `proxy.ts` 的 `Accept: text/markdown` 协商提供。根规范和业务代码仍由原工程维护，通过相对路径指向其源文件。
+专题按 `requirement → design → prd → plan` 分层，并辅以 `research`、`operations`、`templates`。缺少 frontmatter 的标题由 collection 从原 H1 获取。历史 `/read` 与 `/read/*` 入口继续重定向至 `/docs`；顶层和专题页面都进入搜索及 `/llms.txt`、`/llms-full.txt`、`/llms.mdx/[...path]` 与 `Accept: text/markdown` 协商。仓库根协作规范与业务代码由原工程维护。
 
 文件按分类使用唯一的 `NN-名称` 序号，保留历史空缺；日期放在序号之后。编号只维护在文件名，由官方 collection schema 派生到侧栏、页面标题、搜索和元数据；原文 H1 与锚点保留。部署配置归 `operations`；工具生成的安装设置、临时计划和规格不进入发布源、页面树或搜索。
 
 ## 5. 知识库界面
 
-使用官方 `DocsLayout` / `DocsPage`、导航树、TOC、相邻页、代码块、主题、移动侧栏及搜索弹窗。图表只采用官方 Mermaid recipe；普通 `.md` 内容不作为可执行 MDX。GFM 与显式 HTML 锚点交由官方内容编译扩展处理。
+阅读界面跟随 Fumadocs 官网文档页的 Neutral 配色、Geist 字体和 Spacious 布局。使用 Spacious 的 `DocsLayout` / `DocsPage`，由官方组件提供阅读面板、导航树、目录、相邻页、明暗主题、移动侧栏和搜索弹窗。[官方主题](https://www.fumadocs.dev/docs/ui/theme) · [Spacious 布局](https://www.fumadocs.dev/docs/ui/layouts/spacious)正文内嵌图表沿用官方 Mermaid recipe；已审核的 Archify 图作为 `public/design/` 下的独立静态附件，从正文链接打开。普通 `.md` 内容不作为可执行 MDX。GFM 与显式 HTML 锚点交由官方内容编译扩展处理。
 
 ## 6. 构建与部署
 
@@ -30,7 +30,7 @@
 
 ## 7. 与业务工程协作
 
-文档修改通过 Git；Agent 直接读取 `workspace/content/` 与仓库规范，也可通过 `/llms.txt` 与 `/docs/*.md` 获取机器可读正文。知识库完整度通过 `pnpm docs:check` 在本地与 Workspace CI 自动门禁校验（覆盖编号唯一性、分类导航覆盖、PRD/Plan 唯一来源追溯与相对链接有效性）。知识站不接管代码执行、授权、数据库或研发任务。无登录输入、PG、主机桥、TTS、额外运行账户和服务端会话。
+文档修改通过 Git；Agent 直接读取 Workspace 顶层入口、`workspace/content/` 与仓库规范，也可通过 `/llms.txt` 与 `/docs/*.md` 获取机器可读正文。知识库完整度通过 `pnpm docs:check` 在本地与 Workspace CI 自动门禁校验（覆盖编号唯一性、分类导航覆盖、PRD/Plan 唯一来源追溯与相对链接有效性）。知识站不接管代码执行、授权、数据库或研发任务。无登录输入、PG、主机桥、TTS、额外运行账户和服务端会话。
 
 ## 8. 验收
 

@@ -1,0 +1,354 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Glowloom 项目知识库设计 · 检索与引用",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "output": ".archify/workflow-knowledge-retrieval-20261126-160121/knowledge-retrieval.html",
+    "repository": {
+      "url": "https://github.com/StephenQiu30/glowloom.git",
+      "revision": "20e02016a7235c6b46f60b3d5002a7d4a5f09865"
+    },
+    "legend": {
+      "mode": "hidden"
+    }
+  },
+  "lanes": [
+    {
+      "id": "search",
+      "label": "当前项目查询"
+    },
+    {
+      "id": "results",
+      "label": "检索结果与 Agent"
+    },
+    {
+      "id": "citation",
+      "label": "引用打开与历史"
+    }
+  ],
+  "mainPath": [
+    "ask",
+    "scope",
+    "recall",
+    "verify-result",
+    "deliver"
+  ],
+  "nodes": [
+    {
+      "id": "ask",
+      "lane": "search",
+      "col": 0,
+      "type": "frontend",
+      "label": "提出项目查询",
+      "sublabel": "创作工作台或 Agent",
+      "explanation": "工作台调用拟新增的项目 HTTP 查询接口。Agent 继续使用 Go MCP 项目证据工具。",
+      "sources": [
+        {
+          "path": "backend/internal/app/agent/evidence.go",
+          "line": 23,
+          "end_line": 47,
+          "label": "现有 Agent 工具"
+        }
+      ]
+    },
+    {
+      "id": "scope",
+      "lane": "search",
+      "col": 1,
+      "type": "security",
+      "label": "限定可检索范围",
+      "sublabel": "项目身份与来源权限",
+      "explanation": "Go 按当前会话或运行授权解析项目、空间和组织；只召回当前用户有权且仍有效的来源版本。权限服务失败时对应请求失败。",
+      "sources": [
+        {
+          "path": "backend/internal/app/agent/evidence.go",
+          "line": 56,
+          "end_line": 68,
+          "label": "现有项目授权及调用"
+        },
+        {
+          "path": "backend/internal/creation/evidence/adapter/postgres/store.go",
+          "line": 44,
+          "end_line": 57,
+          "label": "现有项目证据筛选"
+        }
+      ]
+    },
+    {
+      "id": "recall",
+      "lane": "search",
+      "col": 2,
+      "type": "backend",
+      "label": "查询项目证据",
+      "sublabel": "精确读取／中文词法",
+      "explanation": "稳定 ID、明确镜头和精确词法匹配走既有路径。描述型查询只有在项目允许、索引就绪且通过网关预算准入时才使用混合召回。向量不可用时保留词法结果。",
+      "sources": [
+        {
+          "path": "backend/internal/creation/evidence/adapter/postgres/store.go",
+          "line": 53,
+          "end_line": 96,
+          "label": "现有词法与同名判断"
+        },
+        {
+          "path": "backend/internal/app/agent/semantic.go",
+          "line": 30,
+          "end_line": 76,
+          "label": "现有混合与回退"
+        }
+      ]
+    },
+    {
+      "id": "verify-result",
+      "lane": "search",
+      "col": 3,
+      "type": "security",
+      "label": "核验命中证据",
+      "sublabel": "权限、版本及定位",
+      "explanation": "复核结果仍属当前项目且版本未变。仅把最少必要片段和定位交给用户或 Agent。",
+      "sources": [
+        {
+          "path": "backend/internal/creation/evidence/adapter/postgres/store.go",
+          "line": 101,
+          "end_line": 121,
+          "label": "当前版本引用读取"
+        }
+      ]
+    },
+    {
+      "id": "deliver",
+      "lane": "search",
+      "col": 4,
+      "type": "frontend",
+      "label": "展示检索结果",
+      "sublabel": "来源、版本和定位",
+      "explanation": "工作台显示结果和打开原文入口。Agent 的回答及会话历史以同一版本化引用再次核验。",
+      "sources": [
+        {
+          "path": "workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md",
+          "line": 64,
+          "end_line": 66,
+          "label": "现有引用设计"
+        }
+      ]
+    },
+    {
+      "id": "denied",
+      "lane": "results",
+      "col": 1,
+      "type": "security",
+      "label": "拒绝或报告异常",
+      "sublabel": "区分失权与系统故障",
+      "explanation": "无权不显示正文、标题及数量。权限不可用时报告异常。",
+      "sources": [
+        {
+          "path": "backend/internal/app/agent/evidence.go",
+          "line": 56,
+          "end_line": 64,
+          "label": "现有权限拒绝"
+        }
+      ]
+    },
+    {
+      "id": "no-evidence",
+      "lane": "results",
+      "col": 2,
+      "type": "frontend",
+      "label": "提示补充或选择",
+      "sublabel": "无命中／歧义／索引中",
+      "explanation": "同名时显示可读候选；无匹配就提示补充；索引未就绪单独表达。",
+      "sources": [
+        {
+          "path": "backend/internal/app/agent/evidence.go",
+          "line": 67,
+          "end_line": 85,
+          "label": "索引未就绪标记"
+        },
+        {
+          "path": "backend/internal/creation/evidence/adapter/postgres/store.go",
+          "line": 88,
+          "end_line": 98,
+          "label": "既有同名状态"
+        }
+      ]
+    },
+    {
+      "id": "model",
+      "lane": "results",
+      "col": 3,
+      "type": "security",
+      "label": "Agent 入模校验",
+      "sublabel": "运行授权及证据回执",
+      "explanation": "仅在允许外发时送入模型，Go 网关绑定用户、会话、项目与证据版本；校验失败时重新检索或终止据此生成。",
+      "sources": [
+        {
+          "path": "backend/internal/app/aigateway/agent.go",
+          "line": 61,
+          "end_line": 85,
+          "label": "现有模型准入"
+        },
+        {
+          "path": "backend/internal/creation/evidence/adapter/postgres/store.go",
+          "line": 124,
+          "end_line": 156,
+          "label": "现有回执绑定"
+        }
+      ]
+    },
+    {
+      "id": "answer",
+      "lane": "results",
+      "col": 4,
+      "type": "frontend",
+      "label": "交付带引用回答",
+      "sublabel": "返回前再次验证",
+      "explanation": "历史或交付答案中的依赖片段按当前权限处理；依赖范围未知时限制整条正文。",
+      "sources": [
+        {
+          "path": "workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md",
+          "line": 58,
+          "end_line": 66,
+          "label": "现有上下文与证据原则"
+        }
+      ]
+    },
+    {
+      "id": "open-citation",
+      "lane": "citation",
+      "col": 2,
+      "type": "frontend",
+      "label": "打开引用或历史",
+      "sublabel": "使用原证据身份和版本",
+      "explanation": "回源由 Go 解析业务定位。记录的版本用于验证旧引用，历史正文沿用同一授权检查。",
+      "sources": [
+        {
+          "path": "backend/internal/app/agent/evidence.go",
+          "line": 37,
+          "end_line": 51,
+          "label": "当前工具按版本回源"
+        }
+      ]
+    },
+    {
+      "id": "recheck",
+      "lane": "citation",
+      "col": 3,
+      "type": "security",
+      "label": "校验当前权限和版本",
+      "sublabel": "撤回优先停止读取",
+      "explanation": "核验时结果只允许同一来源的精确版本。项目或来源失权后隐藏引用和相应正文。",
+      "sources": [
+        {
+          "path": "backend/internal/creation/evidence/adapter/postgres/store.go",
+          "line": 101,
+          "end_line": 121,
+          "label": "当前证据及版本读取"
+        },
+        {
+          "path": "backend/internal/app/agent/semantic.go",
+          "line": 87,
+          "end_line": 107,
+          "label": "既有回执重放校验"
+        }
+      ]
+    },
+    {
+      "id": "resolve",
+      "lane": "citation",
+      "col": 4,
+      "type": "frontend",
+      "label": "打开原位或提示刷新",
+      "sublabel": "旧版本和撤回状态可辨认",
+      "explanation": "允许时打开原文定位；版本已变提示重新检索；撤回或失权隐藏引用和依赖正文。",
+      "sources": [
+        {
+          "path": "workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md",
+          "line": 64,
+          "end_line": 66,
+          "label": "现有引用回源要求"
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": "ask",
+      "to": "scope",
+      "variant": "security"
+    },
+    {
+      "from": "scope",
+      "to": "recall",
+      "label": "通过",
+      "variant": "security"
+    },
+    {
+      "from": "scope",
+      "to": "denied",
+      "label": "拒绝",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "from": "recall",
+      "to": "verify-result",
+      "label": "命中",
+      "variant": "emphasis"
+    },
+    {
+      "from": "recall",
+      "to": "no-evidence",
+      "label": "待确认",
+      "variant": "default",
+      "role": "branch"
+    },
+    {
+      "from": "verify-result",
+      "to": "deliver",
+      "label": "界面",
+      "variant": "emphasis"
+    },
+    {
+      "from": "verify-result",
+      "to": "model",
+      "label": "Agent",
+      "variant": "security",
+      "role": "branch"
+    },
+    {
+      "from": "model",
+      "to": "answer",
+      "label": "准入通过",
+      "variant": "emphasis"
+    },
+    {
+      "from": "open-citation",
+      "to": "recheck",
+      "variant": "security"
+    },
+    {
+      "from": "recheck",
+      "to": "resolve",
+      "variant": "security"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "violet",
+      "title": "语义检索有条件启用",
+      "items": [
+        "仅已开通的项目和获准外发的来源可以调用统一 AI 网关。预算、模型索引或供应商不可用时保留词法。",
+        "新增文本资料首版采用词法。精确 ID 和镜头约定继续直接定位。"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "引用始终按当前授权读取",
+      "items": [
+        "检索、入模、返回用户、打开引用与历史重放有各自的复核点。",
+        "仓库链接指向已有机制。项目入口与历史正文复核为拟新增能力。"
+      ]
+    }
+  ]
+}

@@ -35,7 +35,9 @@ In the project, you can see:
 
 Collections are defined with the [Macro API](https://fumadocs.dev/docs/mdx/macro) in `lib/source.ts`.
 
-Project knowledge lives directly in `content/`, with category folders and `index.mdx` at its root. The collection uses `dir: 'content'`; public reading URLs remain under `/docs`, and GitHub source links use the repository's `workspace/content/` path.
+The project overview and engineering rules are maintained in [ARCHITECTURE.md](ARCHITECTURE.md) and [PROJECT.md](PROJECT.md). Fumadocs publishes them at `/docs/architecture` and `/docs/project`. Topic documents keep their existing `/docs/<category>/<slug>` paths. The collection reads the two top-level files and `content/`, and GitHub links point to the source files under `workspace/`.
+
+Standalone architecture attachments and their editable Archify sources are served from `public/design/`.
 
 Read the [Introduction](https://fumadocs.dev/docs/mdx) for further details.
 

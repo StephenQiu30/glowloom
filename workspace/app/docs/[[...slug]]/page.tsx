@@ -6,7 +6,7 @@ import {
   DocsTitle,
   MarkdownCopyButton,
   ViewOptionsPopover,
-} from 'fumadocs-ui/layouts/docs/page';
+} from 'fumadocs-ui/layouts/spacious/page';
 import { notFound } from 'next/navigation';
 import { getMDXComponents } from '@/components/mdx';
 import type { Metadata } from 'next';
@@ -32,7 +32,7 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
         <MarkdownCopyButton markdownUrl={markdownUrl} />
         <ViewOptionsPopover
           markdownUrl={markdownUrl}
-          githubUrl={`https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/${gitConfig.branch}/workspace/content/${encodeURI(page.path)}`}
+          githubUrl={`https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/${gitConfig.branch}/workspace/${encodeURI(page.path)}`}
         />
       </div>
       <DocsBody>

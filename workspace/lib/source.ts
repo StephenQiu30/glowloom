@@ -5,8 +5,14 @@ import { defineDocs } from 'fumadocs-mdx/macro';
 import { metaSchema, pageSchema } from 'fumadocs-core/source/schema';
 
 const docs = defineDocs({
-  dir: 'content',
+  dir: '.',
   docs: {
+    files: [
+      'ARCHITECTURE.md',
+      'PROJECT.md',
+      'content/**/*.md',
+      'content/**/*.mdx',
+    ],
     schema: ({ source, path }) =>
       pageSchema.extend({
         title: pageSchema.shape.title.default(
@@ -20,6 +26,7 @@ const docs = defineDocs({
     },
   },
   meta: {
+    files: ['meta.json', 'content/**/meta.json'],
     schema: metaSchema,
   },
 });
@@ -28,6 +35,11 @@ const docs = defineDocs({
 export const source = loader({
   baseUrl: docsRoute,
   source: docs.toFumadocsSource(),
+  slugs(file, next) {
+    if (file.path === 'ARCHITECTURE.md') return ['architecture'];
+    if (file.path === 'PROJECT.md') return ['project'];
+    return next().slice(1);
+  },
   plugins: [lucideIconsPlugin()],
 });
 

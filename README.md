@@ -39,7 +39,7 @@ git clone https://github.com/StephenQiu30/glowloom.git
 cd glowloom
 ```
 
-启动前，按 [.env.example](.env.example) 与 [PROJECT](PROJECT.md) 准备本地配置：
+启动前，按 [.env.example](.env.example) 与 [PROJECT](workspace/PROJECT.md) 准备本地配置：
 
 1. 可用的 PostgreSQL（含 pgvector）、Redis、Kafka 与对象存储。
 2. `.env` 中的依赖连接、身份与会话密钥、协作令牌、两个方向独立的 Agent 服务令牌与受限 PostgreSQL DSN，以及独立 API→Media 令牌 `GLOWLOOM_MEDIA_SERVICE_TOKEN`（至少 32 字节可见 ASCII，不含空白，不复用其他凭据）；模型接入另需凭据加密与请求 MAC 密钥。
@@ -145,18 +145,19 @@ backend/
 | 入口                                                                                                                                                    | 内容                           |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
 | [文档索引](workspace/content/index.mdx)                                                                                                            | 从产品范围进入各主题文档       |
+| [总体架构设计](workspace/ARCHITECTURE.md) | 服务拓扑、业务职责和数据边界 |
 | [产品总览](workspace/content/design/24-产品总览与交付边界设计.md) · [设计导航](workspace/content/design/00-设计导航.md)                                 | 能力范围、技术方案与交付边界   |
 | [工作台与创作入口](workspace/content/design/09-统一顶栏与阶段入口设计.md) · [多参考编辑器](workspace/content/design/06-多参考提示词编辑器调研与设计.md) | 创作流程与交互合同             |
 | [AI 接入](workspace/content/design/07-AI平台接入市场调研与架构设计.md)                                                                                  | 供应商与模型接入方案           |
 | [用户系统](workspace/content/prd/01-用户系统.md) · [需求与验收](workspace/content/requirement/02-用户系统需求.md)                                       | 账号、权限及验收规则           |
-| [PROJECT](PROJECT.md) · [AGENTS](AGENTS.md) · [DESIGN](DESIGN.md)                                                                                       | 工程工具链、协作规则与视觉规范 |
+| [PROJECT](workspace/PROJECT.md) · [AGENTS](AGENTS.md) · [DESIGN](DESIGN.md)                                                                                       | 工程工具链、协作规则与视觉规范 |
 | [BACKLOG](BACKLOG.md)                                                                                                                                   | 当前实施进展、剩余工作和阻塞   |
 
 文档直接维护 Markdown，按原始需求 → design → PRD → Plan 分层，使用[统一模板](workspace/content/templates/00-模板导航.md)。当前待办与阻塞见 [BACKLOG](BACKLOG.md)，验收证据见对应计划。
 
-研发知识正文统一在 `workspace/content/`。独立 Workspace 使用 Fumadocs 提供 Markdown 阅读、搜索和源码入口，启动与部署见[服务说明](workspace/README.md)。
+总体架构和工程规范位于 `workspace/`，专题正文位于 `workspace/content/`。独立 Workspace 使用 Fumadocs 提供 Markdown 阅读、搜索和源码入口，启动与部署见[服务说明](workspace/README.md)。
 
-默认 CI 包含后端全量 Race、隔离 PostgreSQL 集成与协作运行时测试，以及前端全量 Vitest 和含 TypeScript 检查的生产构建。完整质量门禁见 [PROJECT](PROJECT.md#4-质量门禁)。CI 通过不代表真实邮件、供应商或生产环境已通过验收。
+默认 CI 包含后端全量 Race、隔离 PostgreSQL 集成与协作运行时测试，以及前端全量 Vitest 和含 TypeScript 检查的生产构建。完整质量门禁见 [PROJECT](workspace/PROJECT.md#4-质量门禁)。CI 通过不代表真实邮件、供应商或生产环境已通过验收。
 
 ## 许可
 

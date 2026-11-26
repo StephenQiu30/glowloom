@@ -1,0 +1,2 @@
+# Keep the verified Archify HTML exports byte-for-byte.
+*.html -text -whitespace linguist-generated=true

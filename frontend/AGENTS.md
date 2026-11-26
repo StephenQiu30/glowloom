@@ -1,6 +1,6 @@
 # 前端协作规范
 
-本目录遵循根目录 [AGENTS](../AGENTS.md#前端工程规范)。工程工具与质量门禁以 [PROJECT](../PROJECT.md) 为准；不在协作文件中定义业务需求、接口形状或额外实施范围。
+本目录遵循根目录 [AGENTS](../AGENTS.md#前端工程规范)。工程工具与质量门禁以 [PROJECT](../workspace/PROJECT.md) 为准；不在协作文件中定义业务需求、接口形状或额外实施范围。
 
 编写、修改或审查 React / Next.js 代码时，使用适用的 Vercel React Best Practices 与 Next.js 规则；具体 API 核对当前安装版本的文档。修改前核对用户已接受的设计、服务端/客户端边界和生成文件归属。
 

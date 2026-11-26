@@ -1,0 +1,307 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Glowloom 项目知识库设计 · 入库、发布与撤回",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "output": ".archify/workflow-knowledge-intake-20261126-160121/knowledge-intake.html",
+    "repository": {
+      "url": "https://github.com/StephenQiu30/glowloom.git",
+      "revision": "20e02016a7235c6b46f60b3d5002a7d4a5f09865"
+    },
+    "legend": {
+      "mode": "hidden"
+    }
+  },
+  "lanes": [
+    {
+      "id": "intake",
+      "label": "资料纳管与发布"
+    },
+    {
+      "id": "blocked",
+      "label": "处理失败与恢复"
+    },
+    {
+      "id": "withdraw",
+      "label": "已发布资料撤回"
+    }
+  ],
+  "mainPath": [
+    "select",
+    "authorize",
+    "register",
+    "index",
+    "ready",
+    "publish"
+  ],
+  "nodes": [
+    {
+      "id": "select",
+      "lane": "intake",
+      "col": 0,
+      "type": "frontend",
+      "label": "选择项目资料",
+      "sublabel": "同空间 TXT／Markdown",
+      "explanation": "拟新增的项目知识库入口。维护者从现有项目可用资产中选择文本，正式剧本和共享约定仍沿原业务入口生效。",
+      "sources": [
+        {
+          "path": "workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md",
+          "line": 58,
+          "end_line": 72,
+          "label": "项目资料的既有边界"
+        }
+      ]
+    },
+    {
+      "id": "authorize",
+      "lane": "intake",
+      "col": 1,
+      "type": "security",
+      "label": "校验来源权限",
+      "sublabel": "项目写权及资产读权",
+      "explanation": "Go 核验项目编辑权、来源读取及项目使用授权，同时检查文本格式和字节限制。",
+      "sources": [
+        {
+          "path": "backend/internal/creation/workspace/application/scope_access.go",
+          "line": 78,
+          "end_line": 104,
+          "label": "现有会话与空间授权"
+        }
+      ]
+    },
+    {
+      "id": "register",
+      "lane": "intake",
+      "col": 2,
+      "type": "messagebus",
+      "label": "登记候选版本",
+      "sublabel": "同事务持久化任务",
+      "explanation": "保存源修订、内容标识与处理任务。相同登记请求返回原记录。",
+      "sources": [
+        {
+          "path": "backend/internal/creation/evidence/adapter/postgres/index.go",
+          "line": 25,
+          "end_line": 33,
+          "label": "异步任务去重先例"
+        }
+      ]
+    },
+    {
+      "id": "index",
+      "lane": "intake",
+      "col": 3,
+      "type": "backend",
+      "label": "读取与切片",
+      "sublabel": "复核源修订及权限",
+      "explanation": "读取登记版本的文本，数据库保存派生切片及其位置。复用项目任务执行模式，首版新增文本走词法。",
+      "sources": [
+        {
+          "path": "backend/internal/app/agent/evidence_index.go",
+          "line": 19,
+          "end_line": 51,
+          "label": "已采用剧本的任务先例"
+        }
+      ]
+    },
+    {
+      "id": "ready",
+      "lane": "intake",
+      "col": 4,
+      "type": "database",
+      "label": "候选就绪",
+      "sublabel": "等待维护者发布",
+      "explanation": "完整切片落库后进入就绪状态。就绪候选只有在显式发布后才能命中。",
+      "sources": [
+        {
+          "path": "backend/internal/creation/evidence/adapter/postgres/index.go",
+          "line": 55,
+          "end_line": 86,
+          "label": "派生索引原子生效先例"
+        }
+      ]
+    },
+    {
+      "id": "publish",
+      "lane": "intake",
+      "col": 5,
+      "type": "security",
+      "label": "确认并原子发布",
+      "sublabel": "重检权限及候选版本",
+      "explanation": "带预期发布指针切换当前可检索版本。并发提交只有一个有效；落后的任务不能使旧版复活。",
+      "sources": [
+        {
+          "path": "backend/internal/creation/workspace/application/project_memory.go",
+          "line": 28,
+          "end_line": 46,
+          "label": "显式发布与预期修订先例"
+        },
+        {
+          "path": "backend/db/schema.sql",
+          "line": 9869,
+          "end_line": 9875,
+          "label": "现有证据投影边界"
+        }
+      ]
+    },
+    {
+      "id": "reject",
+      "lane": "blocked",
+      "col": 1,
+      "type": "security",
+      "label": "拒绝登记",
+      "sublabel": "无权、格式错误或超限",
+      "explanation": "权限检查失败或无法完成时直接结束登记。不给调用者返回越权来源的标题、摘要或其他信息。",
+      "sources": [
+        {
+          "path": "backend/internal/creation/workspace/application/scope_access.go",
+          "line": 94,
+          "end_line": 104,
+          "label": "现有请求权限校验"
+        }
+      ]
+    },
+    {
+      "id": "fail",
+      "lane": "blocked",
+      "col": 3,
+      "type": "backend",
+      "label": "记录处理失败",
+      "sublabel": "保留有效的旧版本",
+      "explanation": "暂时故障有限次重试，永久错误需要更换来源。撤回或源失效后禁止激活任务结果。",
+      "sources": [
+        {
+          "path": "backend/internal/app/agent/evidence_index.go",
+          "line": 27,
+          "end_line": 40,
+          "label": "失效版本提前退出"
+        }
+      ]
+    },
+    {
+      "id": "request-withdraw",
+      "lane": "withdraw",
+      "col": 3,
+      "type": "frontend",
+      "label": "维护者撤回",
+      "sublabel": "携带预期修订",
+      "explanation": "从已发布资料发起撤回，沿用项目内容写权。",
+      "sources": [
+        {
+          "path": "backend/internal/creation/workspace/application/project_memory.go",
+          "line": 28,
+          "end_line": 46,
+          "label": "现有撤回操作先例"
+        }
+      ]
+    },
+    {
+      "id": "block",
+      "lane": "withdraw",
+      "col": 4,
+      "type": "security",
+      "label": "先停止读取",
+      "sublabel": "撤回状态立即生效",
+      "explanation": "新检索、打开引用、模型准入和历史正文读取依据当前权限及版本决定是否显示。",
+      "sources": [
+        {
+          "path": "backend/db/schema.sql",
+          "line": 9889,
+          "end_line": 9897,
+          "label": "现有项目约定撤回机制"
+        }
+      ]
+    },
+    {
+      "id": "cleanup",
+      "lane": "withdraw",
+      "col": 5,
+      "type": "messagebus",
+      "label": "后台清理",
+      "sublabel": "切片、向量及缓存",
+      "explanation": "清理任务可以重试。旧切片或向量存在时，当前证据投影已排除撤回内容。",
+      "sources": [
+        {
+          "path": "workspace/content/design/32-完整创作AgentHarness与Skill多Agent架构设计.md",
+          "line": 64,
+          "end_line": 66,
+          "label": "先阻断读取的设计约束"
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": "select",
+      "to": "authorize",
+      "variant": "default"
+    },
+    {
+      "from": "authorize",
+      "to": "register",
+      "label": "通过",
+      "variant": "security"
+    },
+    {
+      "from": "register",
+      "to": "index",
+      "variant": "dashed",
+      "role": "async"
+    },
+    {
+      "from": "index",
+      "to": "ready",
+      "label": "成功",
+      "variant": "emphasis"
+    },
+    {
+      "from": "ready",
+      "to": "publish",
+      "variant": "emphasis"
+    },
+    {
+      "from": "authorize",
+      "to": "reject",
+      "label": "不通过",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "from": "index",
+      "to": "fail",
+      "label": "失败",
+      "variant": "default",
+      "role": "error"
+    },
+    {
+      "from": "request-withdraw",
+      "to": "block",
+      "variant": "security"
+    },
+    {
+      "from": "block",
+      "to": "cleanup",
+      "variant": "dashed",
+      "role": "async"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "原文与版本",
+      "items": [
+        "原文仍由剧本、主体、项目约定或媒体域持有。知识库存放来源引用及可重建的索引。",
+        "旧版只在源仍获授权且未撤回时继续可用。"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "失败处理",
+      "items": [
+        "可恢复故障重试同一候选；格式错误或源版本改变后需重新登记。",
+        "仓库链接指向已有机制，图中的通用资料纳管与发布为设计提案。"
+      ]
+    }
+  ]
+}
