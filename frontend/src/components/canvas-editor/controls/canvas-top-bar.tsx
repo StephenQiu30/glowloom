@@ -25,7 +25,8 @@ import {
   ChevronDown,
   Pencil,
   FolderOpen,
-  PanelLeftOpen,
+  FolderClosed,
+  Frame,
   History,
   Search,
   UserRound,
@@ -36,7 +37,7 @@ import { CanvasNodeSearch } from "../search/canvas-node-search.tsx";
 import { CanvasHistoryDialog } from "../history/canvas-history-dialog.tsx";
 import { toast } from "@/components/feedback/notification";
 import Link from "next/link";
-import { BrandMark } from "@/components/canvas/runtime/components/layout/shell/brand-mark";
+import { BrandMark } from "@/components/brand/brand";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Popover,
@@ -198,7 +199,7 @@ export function CanvasTopBar({
             className="canvas-brand"
             aria-label="打开导航菜单"
           >
-            <BrandMark />
+            <BrandMark monochrome />
           </CanvasToolbarButton>
         </DropdownMenuTrigger>
         <DropdownMenuContent
@@ -248,6 +249,7 @@ export function CanvasTopBar({
             className="canvas-project-trigger"
             aria-label="打开画布菜单"
           >
+            <Frame aria-hidden="true" />
             <span className="truncate">{title}</span>
             <ChevronDown data-icon="inline-end" />
           </CanvasToolbarButton>
@@ -320,7 +322,7 @@ export function CanvasTopBar({
                   toggleAssetPanel();
                 }}
               >
-                <PanelLeftOpen />
+                <FolderClosed aria-hidden="true" />
                 <span className="canvas-assets-label">资产管理</span>
               </CanvasToolbarButton>
             </TooltipTrigger>

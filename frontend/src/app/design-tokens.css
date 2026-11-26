@@ -1,0 +1,67 @@
+:root {
+  --ui-icon-size: 1rem;
+  --workspace-navigation-icon-size: 1.25rem;
+  --workspace-navigation-label-size: 0.8125rem;
+  --workspace-navigation-label-line-height: 1.375rem;
+  --workspace-navigation-history-line-height: 1.125rem;
+  --workspace-navigation-section-line-height: 1.25rem;
+  --workspace-navigation-gap: 0.625rem;
+
+  --ui-control-size-compact: 1.75rem;
+  --ui-control-size-standard: 2rem;
+  --ui-control-size-default: 2.25rem;
+  --ui-control-size-large: 2.5rem;
+  --ui-control-size-touch: 2.75rem;
+
+  --ui-motion-duration-fast: 120ms;
+  --ui-motion-duration-standard: 150ms;
+  --ui-motion-duration-layout: 200ms;
+  --ui-motion-duration-emphasis: 320ms;
+  --ui-motion-ease: ease;
+  --ui-motion-scale-subtle: 1.045;
+  --ui-motion-breathe: ui-breathe 16s ease-in-out infinite;
+  --ui-ambient-strength: 18%;
+}
+
+@media (width < 768px) {
+  :root {
+    --ui-ambient-strength: 15%;
+  }
+}
+
+.dark {
+  --ui-ambient-strength: 28%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --ui-motion-duration-fast: 0ms;
+    --ui-motion-duration-standard: 0ms;
+    --ui-motion-duration-layout: 0ms;
+    --ui-motion-duration-emphasis: 0ms;
+    --ui-motion-breathe: none;
+  }
+}
+
+[data-icon-scale="navigation"] > svg {
+  inline-size: var(--workspace-navigation-icon-size);
+  block-size: var(--workspace-navigation-icon-size);
+}
+
+.motion-breathe {
+  opacity: 0.9;
+  animation: var(--ui-motion-breathe);
+}
+
+@keyframes ui-breathe {
+  0%,
+  100% {
+    opacity: 0.78;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(var(--ui-motion-scale-subtle));
+  }
+}

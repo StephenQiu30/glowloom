@@ -36,7 +36,7 @@ import {
   SquareUserRound,
   SwatchBook,
   MoveRight,
-  FolderOpen,
+  FolderClosed,
   Eraser,
   Keyboard,
   Info,
@@ -54,7 +54,11 @@ function CanvasCreationTool({
   ...props
 }: ComponentProps<typeof CanvasToolbarButton> & { label: string }) {
   return (
-    <CanvasToolbarButton {...props} className="canvas-creation-tool">
+    <CanvasToolbarButton
+      {...props}
+      className="canvas-creation-tool"
+      data-icon-scale="navigation"
+    >
       {children}
       <span className="canvas-creation-label" aria-hidden="true">
         {label}
@@ -218,7 +222,7 @@ export function CanvasToolbar({
           onBrowseAssets();
         }}
       >
-        <FolderOpen />
+        <FolderClosed aria-hidden="true" />
       </CanvasCreationTool>
       <CanvasCreationTool
         label="上传"

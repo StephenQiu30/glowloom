@@ -3,8 +3,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "./design-tokens.css";
 @import "../components/canvas-editor/canvas.css";
-
 
 @custom-variant dark (&:is(.dark *));
 
@@ -163,7 +163,7 @@
 }
 
 :root {
-  --toolbar-control-size: 28px;
+  --toolbar-control-size: var(--ui-control-size-compact);
   --toolbar-group-padding: 3px;
   --confirmation-background: #fff;
   --confirmation-secondary: rgb(0 0 0 / 6%);
@@ -284,7 +284,7 @@
   --layout-content-x: 32px;
   --layout-content-y: 24px;
   --layout-gap: 24px;
-  --control-height: 36px;
+  --control-height: var(--ui-control-size-default);
   --secondary-tab-padding-inline: calc(var(--spacing) * 4);
   --secondary-tab-gap: calc(var(--spacing) * 2);
   --radius-control: 8px;
@@ -657,7 +657,7 @@ button:not(:disabled),
   );
 }
 [data-toolbar-density="roomy"] {
-  --toolbar-control-size: 40px;
+  --toolbar-control-size: var(--ui-control-size-large);
 }
 .toolbar-group {
   display: inline-flex;
@@ -675,11 +675,11 @@ button:not(:disabled),
 }
 @media (width < 768px) {
   :root {
-    --toolbar-control-size: 44px;
+    --toolbar-control-size: var(--ui-control-size-touch);
     --toolbar-group-padding: 2px;
   }
   [data-toolbar-density="roomy"] {
-    --toolbar-control-size: 44px;
+    --toolbar-control-size: var(--ui-control-size-touch);
   }
   .toolbar-group[data-appearance="surface"] {
     padding-inline: 5px;
@@ -818,13 +818,6 @@ button:not(:disabled),
   gap: 4px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .product-shell [data-slot="sidebar-gap"],
-  .product-shell [data-slot="sidebar-container"],
-  .product-shell [data-slot="sidebar-menu-button"] {
-    transition: none;
-  }
-}
 .product-header-location {
   display: flex;
   min-width: 0;
@@ -867,8 +860,11 @@ button:not(:disabled),
 .sidebar-section-toggle {
   width: 100%;
   justify-content: flex-start;
-  gap: 4px;
+  gap: var(--workspace-navigation-gap);
   padding-inline: 8px;
+  font-size: var(--workspace-navigation-label-size);
+  font-weight: 400;
+  line-height: var(--workspace-navigation-section-line-height);
 }
 .sidebar-section-toggle[data-state="closed"] > svg {
   transform: rotate(-90deg);
@@ -901,12 +897,12 @@ button:not(:disabled),
   .sidebar-section-create,
   .sidebar-section-all,
   .sidebar-brand .sidebar-toggle {
-    min-height: 44px;
+    min-height: var(--ui-control-size-touch);
   }
   .sidebar-section-create,
   .sidebar-section-all,
   .sidebar-brand .sidebar-toggle {
-    min-width: 44px;
+    min-width: var(--ui-control-size-touch);
   }
 }
 
@@ -963,7 +959,7 @@ button:not(:disabled),
   .sidebar-history .sidebar-canvas-list [data-slot="sidebar-menu-button"],
   .sidebar-history [data-slot="sidebar-group-action"],
   .sidebar-brand .sidebar-toggle {
-    min-height: 44px;
+    min-height: var(--ui-control-size-touch);
     min-width: 44px;
   }
 }
@@ -1214,22 +1210,60 @@ button:not(:disabled),
 }
 
 .home-page {
-  --home-ambient-strength: 23%;
-  --home-composer-fill: linear-gradient(
-    to bottom,
-    color-mix(in srgb, var(--studio-ambient) 13%, transparent) 4%,
-    transparent 96%
-  );
-  padding: clamp(72px, 7cqi, 100px) var(--layout-content-x)
+  position: relative;
+  isolation: isolate;
+  min-height: 100%;
+  padding: clamp(74px, 7cqi, 98px) var(--layout-content-x)
     var(--layout-content-y);
-  background: radial-gradient(
-    ellipse 47% 280px at 50% 112px,
-    color-mix(
-      in srgb,
-      var(--studio-ambient) var(--home-ambient-strength),
-      transparent
+  background: var(--background);
+}
+.home-atmosphere {
+  position: absolute;
+  z-index: -1;
+  inset-block-start: 0;
+  inset-inline: 0;
+  block-size: clamp(24rem, 42cqi, 36rem);
+  overflow: clip;
+  pointer-events: none;
+}
+.home-atmosphere-glow {
+  position: absolute;
+  inset: 0;
+  transform-origin: center top;
+  background:
+    radial-gradient(
+      ellipse 68% 96% at 54% -12%,
+      color-mix(
+        in srgb,
+        var(--studio-ambient) var(--ui-ambient-strength),
+        transparent
+      ),
+      transparent 83%
     ),
-    transparent
+    radial-gradient(
+      ellipse 32% 78% at 78% 8%,
+      color-mix(
+        in srgb,
+        var(--brand-mark) calc(var(--ui-ambient-strength) * 0.53),
+        transparent
+      ),
+      transparent 88%
+    );
+}
+.home-atmosphere::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+      circle,
+      color-mix(in srgb, var(--foreground) 9%, transparent) 0.75px,
+      transparent 1.15px
+    )
+    center top / 24px 24px;
+  mask-image: radial-gradient(
+    ellipse 62% 86% at 56% 2%,
+    black 18%,
+    transparent 85%
   );
 }
 .creation-hero {
@@ -1244,16 +1278,16 @@ button:not(:disabled),
   line-height: 38px;
 }
 .creation-hero h1 {
-  margin: 0 0 20px;
-  font-size: clamp(28px, 3cqi, 36px);
+  margin: 0 0 24px;
+  font-size: clamp(28px, 3cqi, 34px);
   font-weight: 600;
   line-height: 1.2;
   letter-spacing: -0.035em;
   text-wrap: balance;
 }
 .creation-toggle {
-  margin: 0 auto 24px;
-  width: 228px;
+  margin: 0 auto clamp(20px, 2.8cqi, 32px);
+  width: 244px;
   max-width: 100%;
   height: 40px;
   padding: 2px;
@@ -1272,11 +1306,15 @@ button:not(:disabled),
   color: var(--foreground);
 }
 .home-page .creation-toggle [data-slot="toggle-group-item"][data-state="on"] {
-  background: var(--primary);
+  background: linear-gradient(
+    115deg,
+    color-mix(in srgb, var(--brand-mark) 10%, var(--primary)),
+    var(--primary) 64%
+  );
   color: var(--primary-foreground);
 }
 .home-page .creation-toggle {
-  background: var(--muted);
+  background: color-mix(in srgb, var(--muted) 84%, transparent);
   box-shadow: inset 0 0 0 1px var(--border);
 }
 .home-page .creation-toggle [data-slot="toggle-group-item"][data-state="off"] {
@@ -1289,7 +1327,20 @@ button:not(:disabled),
   border-radius: 24px;
 }
 .home-page .creation-input-surface {
-  background: var(--home-composer-fill) var(--card);
+  background:
+    radial-gradient(
+      ellipse at 95% 115%,
+      color-mix(in srgb, var(--brand-mark) 9%, transparent),
+      transparent 62%
+    ),
+    linear-gradient(
+      125deg,
+      color-mix(in srgb, var(--studio-ambient) 13%, var(--card)),
+      var(--card) 72%
+    );
+  box-shadow:
+    inset 0 0 0 1px var(--creation-border),
+    0 16px 36px color-mix(in srgb, var(--foreground) 6%, transparent);
 }
 .home-page .creation-input-surface:has(.prompt-editor:focus) {
   box-shadow: inset 0 0 0 1px
@@ -1327,11 +1378,12 @@ button:not(:disabled),
 }
 .home-destination-grid {
   display: grid;
-  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.8fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.8fr);
   gap: 12px;
 }
 .home-feature {
-  min-height: 168px;
+  min-height: 192px;
+  border-radius: var(--radius-xl);
 }
 .home-feature-link {
   position: absolute;
@@ -1361,22 +1413,65 @@ button:not(:disabled),
   gap: 12px;
   width: 100%;
   min-width: 0;
-  height: 78px;
-  padding: 6px 12px 6px 6px;
-  border-radius: 12px;
+  height: 90px;
+  padding: 8px 12px 8px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: linear-gradient(
+    110deg,
+    color-mix(in srgb, var(--studio-ambient) 10%, var(--card)),
+    var(--card) 65%
+  );
+}
+.home-destination-link[data-slot="button"]:hover {
+  border-color: var(--input);
+  background-color: var(--accent);
+  background-image: linear-gradient(
+    110deg,
+    color-mix(in srgb, var(--studio-ambient) 14%, var(--accent)),
+    var(--accent) 65%
+  );
 }
 .home-destination-link > svg {
   margin-inline-start: auto;
+  color: var(--muted-foreground);
+}
+.home-destination-copy {
+  display: grid;
+  flex: 1;
+  gap: 3px;
+  min-width: 0;
+  text-align: start;
+  white-space: normal;
+}
+.home-destination-title {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+}
+.home-destination-description {
+  font-size: 12px;
+  line-height: 17px;
+  font-weight: 400;
+  color: var(--muted-foreground);
 }
 .home-destination-cover {
   position: relative;
-  flex: 0 0 min(35%, 104px);
+  flex: 0 0 min(35%, 122px);
   height: 100%;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
-.home-destination-cover img {
+.home-destination-cover img,
+.home-feature img {
   object-fit: cover;
+  transition: transform var(--ui-motion-duration-emphasis) var(--ui-motion-ease);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .home-destination-link:is(:hover, :focus-visible) img,
+  .home-feature:has(.home-feature-link:is(:hover, :focus-visible)) img {
+    transform: scale(var(--ui-motion-scale-subtle));
+  }
 }
 .product-main:has([data-conversation-welcome]) {
   scrollbar-gutter: auto;
@@ -2068,7 +2163,7 @@ button:not(:disabled),
 @media (max-width: 767px) {
   :root {
     --layout-content-x: 16px;
-    --control-height: 44px;
+    --control-height: var(--ui-control-size-touch);
   }
   .personal-space-layout {
     grid-template-columns: 1fr;
@@ -2159,7 +2254,7 @@ button:not(:disabled),
     margin-top: 0;
   }
   [data-mobile="true"] [data-slot="sidebar-menu-button"] {
-    height: 44px;
+    height: var(--ui-control-size-touch);
   }
   [data-mobile="true"] .sidebar-history [data-slot="sidebar-group-action"] {
     width: 40px;
@@ -2168,7 +2263,6 @@ button:not(:disabled),
     right: 8px;
   }
   .home-page {
-    --home-ambient-strength: 15%;
     padding: 8px var(--layout-content-x) 32px;
   }
   .workspace-page {
@@ -2197,17 +2291,23 @@ button:not(:disabled),
     gap: 8px;
   }
   .home-destination-link[data-slot="button"] {
-    gap: 6px;
-    min-height: 58px;
+    gap: 8px;
+    min-height: 80px;
     height: auto;
     overflow-wrap: anywhere;
-    padding-inline-end: 6px;
+    padding-inline-end: 8px;
   }
   .home-destination-link .home-destination-cover {
-    height: 46px;
+    flex-basis: 29%;
+    height: 48px;
   }
-  .home-destination-link > span:last-of-type {
-    white-space: normal;
+  .home-destination-title {
+    font-size: 13px;
+    line-height: 18px;
+  }
+  .home-destination-description {
+    font-size: 11px;
+    line-height: 15px;
   }
   .home-destination-link > svg {
     display: none;
@@ -4092,7 +4192,7 @@ button:not(:disabled),
 }
 @media (max-width: 767px), (pointer: coarse) {
   .composer-toolbar {
-    --toolbar-control-size: 44px;
+    --toolbar-control-size: var(--ui-control-size-touch);
   }
   .composer-popover[data-slot],
   .composer-model-list[data-slot] {

@@ -129,10 +129,6 @@ html:has(.canvas-controls-layout) {
     max-width: min(28rem, 35cqw);
     gap: 0.5rem;
   }
-  .canvas-brand .brand-mark {
-    width: 1.5rem;
-    height: 1.5rem;
-  }
   .canvas-start-content [data-slot="empty-description"] {
     font-size: 0.875rem;
   }
@@ -1098,7 +1094,7 @@ html:has(.canvas-controls-layout) {
 
 .canvas-asset-panel {
   container: canvas-assets / inline-size;
-  --toolbar-control-size: 2rem;
+  --toolbar-control-size: var(--ui-control-size-standard);
   --asset-grid-columns: 4;
   --asset-panel-inset: calc(var(--spacing) * 3);
   --asset-grid-gap: calc(var(--spacing) * 2);
@@ -1168,11 +1164,6 @@ html:has(.canvas-controls-layout) {
 
 .canvas-asset-search [data-slot="input-group-addon"] {
   padding-block: 0;
-}
-
-.canvas-asset-search [data-slot="input-group-addon"] > svg {
-  width: var(--canvas-toolbar-icon-size, 1.125rem);
-  height: var(--canvas-toolbar-icon-size, 1.125rem);
 }
 
 .canvas-asset-search .canvas-toolbar-button {
@@ -1452,7 +1443,7 @@ html:has(.canvas-controls-layout) {
 
 @media (max-width: 767px) {
   .canvas-asset-panel {
-    --toolbar-control-size: 2.75rem;
+    --toolbar-control-size: var(--ui-control-size-touch);
   }
 
   .canvas-reference-library
@@ -1461,12 +1452,6 @@ html:has(.canvas-controls-layout) {
     [data-slot="card-action"] {
     display: none;
   }
-}
-
-.canvas-toolbar-button > svg,
-.canvas-toolbar-group [data-notification-trigger] > svg {
-  width: var(--canvas-toolbar-icon-size, 1.125rem);
-  height: var(--canvas-toolbar-icon-size, 1.125rem);
 }
 
 .toolbar-group.canvas-navigation-group {
@@ -1502,8 +1487,8 @@ html:has(.canvas-controls-layout) {
   visibility: hidden;
   pointer-events: none;
   transition:
-    opacity 120ms ease,
-    visibility 120ms;
+    opacity var(--ui-motion-duration-fast) var(--ui-motion-ease),
+    visibility var(--ui-motion-duration-fast) var(--ui-motion-ease);
 }
 
 .canvas-creation-rail::after {
@@ -1568,10 +1553,6 @@ html:has(.canvas-controls-layout) {
   }
 }
 
-.canvas-creation-tool > svg {
-  stroke-width: 2.15;
-}
-
 .canvas-creation-rail .canvas-creation-tool {
   position: relative;
 }
@@ -1586,16 +1567,16 @@ html:has(.canvas-controls-layout) {
   align-items: center;
   padding-inline-start: calc(var(--canvas-toolbar-padding) * 4);
   color: var(--muted-foreground);
-  font-size: var(--text-sm);
+  font-size: var(--workspace-navigation-label-size);
   font-weight: 500;
-  line-height: var(--text-sm--line-height);
+  line-height: var(--workspace-navigation-label-line-height);
   white-space: nowrap;
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
   transition:
-    opacity 120ms ease,
-    visibility 120ms;
+    opacity var(--ui-motion-duration-fast) var(--ui-motion-ease),
+    visibility var(--ui-motion-duration-fast) var(--ui-motion-ease);
 }
 
 .canvas-creation-rail:is(:hover, :has(:focus-visible))::after,
@@ -1620,14 +1601,6 @@ html:has(.canvas-controls-layout) {
   .canvas-creation-tool:is(:hover, :focus-visible)
   .canvas-creation-label {
   color: var(--foreground);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .canvas-editor-viewport::after,
-  .canvas-creation-rail::after,
-  .canvas-creation-label {
-    transition: none;
-  }
 }
 
 .canvas-dock-divider[data-slot="separator"] {
@@ -1668,15 +1641,15 @@ html:has(.canvas-controls-layout) {
 
 @container canvas (min-width: 768px) {
   .canvas-controls-layout {
-    --toolbar-control-size: 2rem;
+    --toolbar-control-size: var(--ui-control-size-standard);
   }
 
   .canvas-creation-rail {
-    --toolbar-control-size: 2.5rem;
+    --toolbar-control-size: var(--ui-control-size-large);
   }
 
   .canvas-assistant-action {
-    --toolbar-control-size: 2.25rem;
+    --toolbar-control-size: var(--ui-control-size-default);
   }
 
   .canvas-assistant-action .canvas-toolbar-button {
@@ -1686,7 +1659,7 @@ html:has(.canvas-controls-layout) {
 
 @container canvas (max-width: 767px) {
   .canvas-controls-layout {
-    --toolbar-control-size: 2.75rem;
+    --toolbar-control-size: var(--ui-control-size-touch);
   }
 
   .canvas-assets-label,
@@ -1730,7 +1703,6 @@ html:has(.canvas-controls-layout) {
   --canvas-toolbar-gap: 0.125rem;
   --canvas-toolbar-section-gap: 0.375rem;
   --canvas-toolbar-padding: 0.25rem;
-  --canvas-toolbar-icon-size: 1.125rem;
   --canvas-controls-layer: 50;
   --canvas-dock-label-space: 7rem;
   --canvas-dock-backdrop-blur: 0.875rem;
@@ -1770,10 +1742,6 @@ html:has(.canvas-controls-layout) {
   .canvas-workspace:has([data-node-editing="true"]) [aria-label="节点工具栏"] {
     display: none;
   }
-}
-
-.canvas-brand .brand-mark {
-  --brand-size: 24px;
 }
 
 /* Canvas editor overlays share the same document session as inline editing. */

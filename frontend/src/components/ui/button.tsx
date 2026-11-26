@@ -4,7 +4,7 @@ import { cn } from "cn";
 import { Slot } from "radix-ui";
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 touch-manipulation items-center justify-center rounded-md border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-[background-color,border-color,color,box-shadow,transform] outline-none select-none focus-visible:ring-1 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 touch-manipulation items-center justify-center rounded-md border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-[background-color,border-color,color,box-shadow,transform] duration-(--ui-motion-duration-standard) outline-none select-none focus-visible:ring-1 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-(--ui-icon-size)",
   {
     variants: {
       variant: {
@@ -39,13 +39,13 @@ const buttonVariants = cva(
         "toolbar-adaptive":
           "h-(--toolbar-control-size) min-w-(--toolbar-control-size) gap-1.5 px-2 text-xs max-md:w-(--toolbar-control-size) max-md:p-0",
         workspace:
-          "h-9 gap-2 px-3 text-[length:var(--text-workspace)] leading-[var(--text-workspace--line-height)] font-medium max-md:min-h-11 pointer-coarse:min-h-11",
+          "h-9 gap-2 px-3 text-[length:var(--text-workspace)] leading-[var(--text-workspace--line-height)] font-medium max-md:min-h-(--ui-control-size-touch) pointer-coarse:min-h-(--ui-control-size-touch)",
         reference: "h-16 w-12 rounded-md",
         skill: "h-9 gap-1.5 rounded-full px-3 text-sm",
         default: "h-9 gap-2 px-3",
         xs: "h-6 gap-1 rounded-[min(var(--radius-md),10px)] px-2 text-xs in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
         sm: "h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
-        feedback: "h-8 gap-2 px-3 max-md:min-h-11",
+        feedback: "h-8 gap-2 px-3 max-md:min-h-(--ui-control-size-touch)",
         lg: "h-9 gap-2 px-3",
         inline: "h-auto gap-1 p-0 text-xs",
         pill: "h-10 gap-2 rounded-full px-5",

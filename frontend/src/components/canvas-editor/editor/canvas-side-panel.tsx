@@ -26,7 +26,7 @@ import {
   Image as ImageIcon,
   ListChecks,
   ListX,
-  PanelLeftClose,
+  PanelLeft,
   SquareCheck,
   UserRound,
   Music2,
@@ -35,6 +35,7 @@ import {
   Square,
   Type,
   Video,
+  X,
 } from "lucide-react";
 import { motion } from "motion/react";
 import {
@@ -179,13 +180,18 @@ export function CanvasSidePanel({
         <CanvasToolbarButton
           aria-label="收起资产管理"
           title="收起资产管理"
+          className="text-muted-foreground"
           data-canvas-side-panel-close
           onClick={() => {
             closePanel();
             if (!isMobile) restoreAssetTriggerFocus();
           }}
         >
-          <PanelLeftClose />
+          {isMobile ? (
+            <X aria-hidden="true" />
+          ) : (
+            <PanelLeft aria-hidden="true" />
+          )}
         </CanvasToolbarButton>
       </div>
       <TabsList
