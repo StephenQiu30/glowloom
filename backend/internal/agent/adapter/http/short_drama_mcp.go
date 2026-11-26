@@ -19,7 +19,8 @@ type ShortDramaToolHandler func(ctx context.Context, scope domain.Scope, callID 
 type ShortDramaExecutors map[string]ShortDramaToolHandler
 
 type guardedWriteInput struct {
-	ExpectedVersion *int64 `json:"expected_version"`
+	ExpectedVersion  *int64 `json:"expected_version"`
+	ExpectedRevision *int64 `json:"expectedRevision"`
 }
 
 type guardedBillableInput struct {
@@ -31,7 +32,14 @@ func wrapShortDramaGuard(effect string, handler ShortDramaToolHandler) ShortDram
 	return func(ctx context.Context, scope domain.Scope, callID uuid.UUID, raw json.RawMessage) (domain.CallResult, error) {
 		if effect == "write" {
 			var guard guardedWriteInput
-			if err := json.Unmarshal(raw, &guard); err != nil || guard.ExpectedVersion == nil || *guard.ExpectedVersion < 0 {
+			if err := json.Unmarshal(raw, &guard); err != nil {
+				return domain.CallResult{Status: domain.CallStatusFailed}, errors.New("optimistic_lock_required: expected_version must be >= 0")
+			}
+			version := guard.ExpectedVersion
+			if version == nil {
+				version = guard.ExpectedRevision
+			}
+			if version == nil || *version < 0 {
 				return domain.CallResult{Status: domain.CallStatusFailed}, errors.New("optimistic_lock_required: expected_version must be >= 0")
 			}
 		}

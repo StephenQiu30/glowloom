@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -24,6 +26,38 @@ type mcpCallerIdentity struct {
 }
 
 func boolPtr(v bool) *bool { return &v }
+
+// resolveMCPCallID derives a deterministic UUID when the caller supplies
+// operationId/operation_id so crash-replayed billable tool calls hit Go's
+// idempotent execution ledger instead of double-charging.
+func resolveMCPCallID(args json.RawMessage) uuid.UUID {
+	var envelope struct {
+		OperationID      string `json:"operationId"`
+		OperationIDSnake string `json:"operation_id"`
+	}
+	if json.Unmarshal(args, &envelope) == nil {
+		rawOp := strings.TrimSpace(envelope.OperationID)
+		if rawOp == "" {
+			rawOp = strings.TrimSpace(envelope.OperationIDSnake)
+		}
+		if rawOp != "" {
+			if parsed, err := uuid.Parse(rawOp); err == nil {
+				return parsed
+			}
+			return uuid.NewSHA1(uuid.NameSpaceOID, []byte("glowloom:mcp:op:"+rawOp))
+		}
+	}
+	return uuid.New()
+}
+
+func isTerminalMCPTaskStatus(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "completed", "succeeded", "ready", "failed", "cancelled", "canceled":
+		return true
+	default:
+		return false
+	}
+}
 
 func annotationsForTool(desc app.ToolDescriptor) *mcp.ToolAnnotations {
 	readOnly := desc.Effect == "read"
@@ -75,7 +109,7 @@ func (h *BusinessHandler) newOfficialMCPServer() *mcp.Server {
 			if len(args) == 0 {
 				args = json.RawMessage(`{}`)
 			}
-			callID := uuid.New()
+			callID := resolveMCPCallID(args)
 			var result domain.CallResult
 			var execErr error
 			switch {
@@ -110,7 +144,179 @@ func (h *BusinessHandler) newOfficialMCPServer() *mcp.Server {
 			}, nil
 		})
 	}
+
+	h.registerBuiltInHarnessMCPTools(server)
 	return server
+}
+
+func (h *BusinessHandler) registerBuiltInHarnessMCPTools(server *mcp.Server) {
+	// 1. Built-in bounded long-poll task_wait tool (<= 25s slice) backed by media_get_task/task_get.
+	var taskGetTool *app.Tool
+	for i := range h.capabilities.Tools {
+		name := h.capabilities.Tools[i].Descriptor.Name
+		if name == "media_get_task" || name == "task_get" {
+			t := h.capabilities.Tools[i]
+			taskGetTool = &t
+			break
+		}
+	}
+	if taskGetTool != nil && taskGetTool.Execute != nil {
+		waitTool := &mcp.Tool{
+			Name:        "task_wait",
+			Description: "Deterministically wait up to 25s for async media task IDs to finish without burning LLM turns",
+			InputSchema: json.RawMessage(`{"type":"object","required":["taskIds"],"properties":{"taskIds":{"type":"array","items":{"type":"string"}},"timeoutMs":{"type":"integer"}}}`),
+			Annotations: &mcp.ToolAnnotations{
+				ReadOnlyHint:   true,
+				IdempotentHint: true,
+			},
+			Meta: mcp.Meta{"effect": "read", "billable": false},
+		}
+		server.AddTool(waitTool, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			caller, _ := ctx.Value(mcpIdentityKey{}).(mcpCallerIdentity)
+			if !caller.valid {
+				return &mcp.CallToolResult{
+					IsError: true,
+					Content: []mcp.Content{&mcp.TextContent{Text: "missing or invalid glowloom identity headers"}},
+				}, nil
+			}
+			var in struct {
+				TaskIDs   []string `json:"taskIds"`
+				TimeoutMs int      `json:"timeoutMs"`
+			}
+			if err := json.Unmarshal(req.Params.Arguments, &in); err != nil || len(in.TaskIDs) == 0 {
+				return &mcp.CallToolResult{
+					IsError: true,
+					Content: []mcp.Content{&mcp.TextContent{Text: "invalid task_wait arguments: taskIds required"}},
+				}, nil
+			}
+			sliceMs := in.TimeoutMs
+			if sliceMs <= 0 {
+				sliceMs = 5000
+			}
+			if sliceMs > 25000 {
+				sliceMs = 25000
+			}
+			deadline := time.Now().Add(time.Duration(sliceMs) * time.Millisecond)
+			pollInterval := 250 * time.Millisecond
+			if sliceMs < 500 {
+				pollInterval = 25 * time.Millisecond
+			}
+
+			var latest []map[string]any
+			for {
+				latest = make([]map[string]any, 0, len(in.TaskIDs))
+				allDone := true
+				for _, tid := range in.TaskIDs {
+					argBytes, _ := json.Marshal(map[string]string{"task_id": tid, "taskId": tid})
+					res, err := taskGetTool.Execute(ctx, caller.scope, uuid.New(), argBytes)
+					entry := map[string]any{"id": tid, "status": "running"}
+					if err != nil {
+						entry["status"] = "failed"
+						entry["error"] = err.Error()
+					} else if len(res.Result) > 0 {
+						var decoded map[string]any
+						if json.Unmarshal(res.Result, &decoded) == nil {
+							for k, v := range decoded {
+								entry[k] = v
+							}
+							if _, hasID := entry["id"]; !hasID {
+								entry["id"] = tid
+							}
+						}
+					}
+					statusStr, _ := entry["status"].(string)
+					if !isTerminalMCPTaskStatus(statusStr) {
+						allDone = false
+					}
+					latest = append(latest, entry)
+				}
+				if allDone || time.Now().After(deadline) {
+					break
+				}
+				timer := time.NewTimer(pollInterval)
+				select {
+				case <-ctx.Done():
+					timer.Stop()
+					return &mcp.CallToolResult{
+						IsError: true,
+						Content: []mcp.Content{&mcp.TextContent{Text: ctx.Err().Error()}},
+					}, nil
+				case <-timer.C:
+				}
+			}
+
+			payload, _ := json.Marshal(map[string]any{"tasks": latest})
+			return &mcp.CallToolResult{
+				IsError: false,
+				Content: []mcp.Content{&mcp.TextContent{Text: string(payload)}},
+			}, nil
+		})
+	}
+
+	// 2. Built-in skill_load_bundle tool for zero-fetch private skill loading over MCP.
+	if h.skills != nil {
+		skillTool := &mcp.Tool{
+			Name:        "skill_load_bundle",
+			Description: "Load a pinned private immutable skill bundle within the authorized run grant",
+			InputSchema: json.RawMessage(`{"type":"object","required":["skill_id","version","resource_hash"],"properties":{"root_run_id":{"type":"string"},"submission_id":{"type":"string"},"skill_id":{"type":"string"},"version":{"type":"string"},"resource_hash":{"type":"string"}}}`),
+			Annotations: &mcp.ToolAnnotations{
+				ReadOnlyHint:   true,
+				IdempotentHint: true,
+			},
+			Meta: mcp.Meta{"effect": "read", "billable": false},
+		}
+		server.AddTool(skillTool, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			caller, _ := ctx.Value(mcpIdentityKey{}).(mcpCallerIdentity)
+			if !caller.valid {
+				return &mcp.CallToolResult{
+					IsError: true,
+					Content: []mcp.Content{&mcp.TextContent{Text: "missing or invalid glowloom identity headers"}},
+				}, nil
+			}
+			var in struct {
+				RootRunID    string `json:"root_run_id"`
+				SkillID      string `json:"skill_id"`
+				Version      string `json:"version"`
+				ResourceHash string `json:"resource_hash"`
+			}
+			if err := json.Unmarshal(req.Params.Arguments, &in); err != nil {
+				return &mcp.CallToolResult{
+					IsError: true,
+					Content: []mcp.Content{&mcp.TextContent{Text: "invalid skill_load_bundle arguments"}},
+				}, nil
+			}
+			skillID, err := uuid.Parse(in.SkillID)
+			if err != nil {
+				return &mcp.CallToolResult{
+					IsError: true,
+					Content: []mcp.Content{&mcp.TextContent{Text: "invalid skill_id"}},
+				}, nil
+			}
+			runID := caller.runID
+			if parsedRun, err := uuid.Parse(in.RootRunID); err == nil {
+				runID = parsedRun
+			}
+			_, grant, err := h.executionGrant(ctx, runID, caller.scope)
+			if err != nil {
+				return &mcp.CallToolResult{
+					IsError: true,
+					Content: []mcp.Content{&mcp.TextContent{Text: err.Error()}},
+				}, nil
+			}
+			content, err := h.skills.ReadSkill(ctx, grant, skillID, in.Version, in.ResourceHash, "")
+			if err != nil {
+				return &mcp.CallToolResult{
+					IsError: true,
+					Content: []mcp.Content{&mcp.TextContent{Text: err.Error()}},
+				}, nil
+			}
+			payload, _ := json.Marshal(content)
+			return &mcp.CallToolResult{
+				IsError: false,
+				Content: []mcp.Content{&mcp.TextContent{Text: string(payload)}},
+			}, nil
+		})
+	}
 }
 
 // registerMCP mounts the official MCP Streamable HTTP endpoint (POST/GET/DELETE) for @mastra/mcp.
