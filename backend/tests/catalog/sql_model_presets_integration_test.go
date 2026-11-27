@@ -38,7 +38,7 @@ func TestSQLModelPresetsRetainEveryCloudCandidateAndReplay(t *testing.T) {
 	}
 	query := `SELECT v.payload->'config'->>'adapter_key' AS adapter,count(*) AS count FROM catalog.model_preset m JOIN catalog.provider_preset_version v ON v.id=m.preset_version_id JOIN catalog.provider_preset p ON p.id=v.preset_id AND p.origin='builtin' WHERE v.version_no=(SELECT max(version_no) FROM catalog.provider_preset_version WHERE preset_id=p.id) GROUP BY adapter ORDER BY adapter`
 	require.NoError(t, conn.DB.Raw(query).Scan(&rows).Error)
-	expected := map[string]int{"volcengine_ark": 32, "openrouter": 23, "vercel": 23, "byteplus": 4, "deepseek": 2, "openai": 6, "volcengine_speech": 2, "volcengine_music": 1, "volcengine_avatar": 1, "volcengine_motion": 1}
+	expected := map[string]int{"volcengine_ark": 33, "openrouter": 23, "vercel": 23, "byteplus": 4, "deepseek": 2, "openai": 6, "volcengine_speech": 2, "volcengine_music": 1, "volcengine_avatar": 1, "volcengine_motion": 1}
 	actual := map[string]int{}
 	for _, row := range rows {
 		actual[row.Adapter] = row.Count
