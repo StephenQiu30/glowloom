@@ -1,10 +1,27 @@
 :root {
+  --ui-font-sans:
+    var(--font-geist-sans), system-ui, "PingFang SC", "Microsoft YaHei",
+    "Noto Sans CJK SC", sans-serif;
+  --ui-font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --ui-text-caption: 0.75rem;
+  --ui-leading-caption: 1rem;
+  --ui-text-control: 0.8125rem;
+  --ui-leading-control: 1.375rem;
+  --ui-text-body: 0.875rem;
+  --ui-leading-body: 1.25rem;
+  --ui-text-title: 1rem;
+  --ui-leading-title: 1.5rem;
+  --ui-text-section: 1.125rem;
+  --ui-leading-section: 1.5rem;
+  --ui-text-display: clamp(1.625rem, 3.2cqi, 2rem);
+  --ui-leading-display: 1.25;
+
   --ui-icon-size: 1rem;
   --workspace-navigation-icon-size: 1.25rem;
-  --workspace-navigation-label-size: 0.8125rem;
-  --workspace-navigation-label-line-height: 1.375rem;
+  --workspace-navigation-label-size: var(--ui-text-control);
+  --workspace-navigation-label-line-height: var(--ui-leading-control);
   --workspace-navigation-history-line-height: 1.125rem;
-  --workspace-navigation-section-line-height: 1.25rem;
+  --workspace-navigation-section-line-height: var(--ui-leading-body);
   --workspace-navigation-gap: 0.5rem;
   --layout-sidebar: 15rem;
   --layout-sidebar-collapsed: 4rem;
@@ -37,18 +54,12 @@
   --ui-motion-duration-emphasis: 320ms;
   --ui-motion-ease: ease;
   --ui-motion-scale-subtle: 1.045;
-  --ui-motion-breathe: ui-breathe 16s ease-in-out infinite;
-  --ui-ambient-strength: 18%;
-}
-
-@media (width < 768px) {
-  :root {
-    --ui-ambient-strength: 15%;
-  }
+  --ui-motion-breathe: ui-breathe 20s ease-in-out infinite;
+  --ui-ambient-strength: 5%;
 }
 
 .dark {
-  --ui-ambient-strength: 28%;
+  --ui-ambient-strength: 9%;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -74,12 +85,10 @@
 @keyframes ui-breathe {
   0%,
   100% {
-    opacity: 0.78;
-    transform: scale(1);
+    opacity: 0.65;
   }
 
   50% {
     opacity: 1;
-    transform: scale(var(--ui-motion-scale-subtle));
   }
 }

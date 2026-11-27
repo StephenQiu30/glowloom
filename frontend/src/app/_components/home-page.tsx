@@ -7,6 +7,7 @@ import type { CreationType } from "@/components/generation/creation-types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { HomeCreation } from "./home-creation";
+import "./home-page.css";
 
 const destinations = [
   {
@@ -47,9 +48,7 @@ export function HomePage({
   return (
     <PageLayout screen="home" fullBleed>
       <div className="home-page">
-        <div className="home-atmosphere" aria-hidden="true">
-          <div className="home-atmosphere-glow motion-breathe" />
-        </div>
+        <div className="home-atmosphere motion-breathe" aria-hidden="true" />
         <HomeCreation initialType={initialType} />
         <section
           aria-labelledby="home-destinations"

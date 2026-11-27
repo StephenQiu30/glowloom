@@ -3,14 +3,24 @@
 import Link from "next/link";
 import { useRef, useState, type ReactNode } from "react";
 import {
-  ChevronRight,
+  Activity,
+  Bell,
+  Building2,
   ChevronLeft,
+  ChevronRight,
+  ClipboardList,
+  Coins,
+  Cpu,
+  KeyRound,
   LayoutGrid,
   LogOut,
+  MailPlus,
   Monitor,
   Settings,
   Shield,
-  Coins,
+  SlidersHorizontal,
+  Users,
+  type LucideIcon,
 } from "lucide-react";
 import { AccountAvatar } from "./account-avatar";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -33,20 +43,26 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const itemClassName = "min-h-10 gap-2 rounded-lg px-2 max-md:min-h-11";
-const accountLinks = [
-  { label: "我的团队", href: "/teams" },
-  { label: "邀请与授权", href: "/invitations" },
-  { label: "修改密码", href: "/reset-password" },
+import "./account-menu.css";
+
+const itemClassName =
+  "min-h-(--ui-control-size-large) gap-2 rounded-lg px-2 max-md:min-h-(--ui-control-size-touch)";
+
+type MenuLink = { label: string; href: string; icon: LucideIcon };
+
+const accountLinks: readonly MenuLink[] = [
+  { label: "我的团队", href: "/teams", icon: Users },
+  { label: "邀请与授权", href: "/invitations", icon: MailPlus },
+  { label: "修改密码", href: "/reset-password", icon: KeyRound },
 ];
-const platformLinks = [
-  { label: "AI 服务", href: "/models" },
-  { label: "用户管理", href: "/users" },
-  { label: "平台团队", href: "/platform/teams" },
-  { label: "平台设置", href: "/platform/settings" },
-  { label: "通知管理", href: "/platform/notifications" },
-  { label: "运行诊断", href: "/health" },
-  { label: "审计日志", href: "/audit" },
+const platformLinks: readonly MenuLink[] = [
+  { label: "AI 服务", href: "/models", icon: Cpu },
+  { label: "用户管理", href: "/users", icon: Users },
+  { label: "平台团队", href: "/platform/teams", icon: Building2 },
+  { label: "平台设置", href: "/platform/settings", icon: SlidersHorizontal },
+  { label: "通知管理", href: "/platform/notifications", icon: Bell },
+  { label: "运行诊断", href: "/health", icon: Activity },
+  { label: "审计日志", href: "/audit", icon: ClipboardList },
 ];
 type MenuSection = "账号设置" | "外观" | "平台管理";
 
@@ -80,13 +96,14 @@ function MenuLinks({
   links,
   disabled,
 }: {
-  links: typeof accountLinks;
+  links: readonly MenuLink[];
   disabled: boolean;
 }) {
   return (
-    <DropdownMenuGroup className="flex flex-col gap-1">
-      {links.map(({ label, href }) => (
+    <DropdownMenuGroup>
+      {links.map(({ label, href, icon: Icon }) => (
         <AccountDestination key={href} href={href} disabled={disabled}>
+          <Icon aria-hidden="true" className="text-muted-foreground" />
           {label}
         </AccountDestination>
       ))}
@@ -173,7 +190,7 @@ export function AccountMenu({
           <DropdownMenuSubContent
             collisionPadding={16}
             sideOffset={8}
-            className="max-h-(--radix-dropdown-menu-content-available-height) w-60 overflow-y-auto rounded-xl duration-150"
+            className="max-h-(--radix-dropdown-menu-content-available-height) w-52 overflow-y-auto rounded-xl duration-(--ui-motion-duration-standard)"
           >
             {children}
           </DropdownMenuSubContent>
@@ -209,7 +226,7 @@ export function AccountMenu({
         align="end"
         sideOffset={8}
         collisionPadding={16}
-        className="w-80 max-w-[calc(100vw-2rem)] rounded-xl p-1 duration-150"
+        className="w-80 max-w-[calc(100vw-2rem)] rounded-xl p-1 duration-(--ui-motion-duration-standard)"
       >
         {inlineSections && section ? (
           <>

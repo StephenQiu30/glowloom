@@ -1,0 +1,22 @@
+.account-menu-theme > [data-slot="dropdown-menu-label"] {
+  display: none;
+}
+.account-menu-theme [data-slot="dropdown-menu-radio-group"] {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.account-menu-theme [data-slot="dropdown-menu-radio-item"] {
+  min-height: var(--ui-control-size-large);
+  border-radius: var(--radius-control);
+  padding-left: 8px;
+}
+.account-menu-theme [data-slot="dropdown-menu-radio-item"] > svg {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .account-menu-theme [data-slot="dropdown-menu-radio-item"] {
+    min-height: var(--ui-control-size-touch);
+  }
+}
