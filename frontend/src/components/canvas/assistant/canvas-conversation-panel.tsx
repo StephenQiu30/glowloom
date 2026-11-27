@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState } from "react";
 import { History, X } from "lucide-react";
 import { ConversationWorkspace } from "@/components/conversations/conversation-workspace";
 import { FeedbackAlert } from "@/components/feedback/feedback-alert";
@@ -25,15 +25,18 @@ export function CanvasConversationPanel({
   canvasID,
   writable,
   open,
+  width,
+  onWidthChange,
   onClose,
   onOpenLegacy,
 }: CanvasConversationScope & {
   writable: boolean;
   open: boolean;
+  width: number;
+  onWidthChange: (width: number) => void;
   onClose: () => void;
   onOpenLegacy: () => void;
 }) {
-  const [width, setWidth] = useState(400);
   const heading = useRef<HTMLHeadingElement>(null);
   const [session, setSession] = useState<string | null>();
   const [sessionError, setSessionError] = useState("");
@@ -63,9 +66,8 @@ export function CanvasConversationPanel({
     <section
       id="canvas-conversation-panel"
       hidden={!open}
-      aria-label="画布对话"
-      className="absolute inset-x-0 top-0 bottom-0 z-[60] bg-popover md:top-[60px] md:left-auto md:z-40 md:w-(--canvas-conversation-width) md:border-t md:border-l"
-      style={{ "--canvas-conversation-width": `${width}px` } as CSSProperties}
+      aria-labelledby="canvas-conversation-heading"
+      className="canvas-conversation-panel absolute inset-0 z-[60] bg-card text-card-foreground"
       data-canvas-no-zoom
       onKeyDown={(event) => {
         if (
@@ -99,7 +101,7 @@ export function CanvasConversationPanel({
                 : 0;
           if (!delta) return;
           event.preventDefault();
-          setWidth((value) => clampPanelWidth(value + delta));
+          onWidthChange(clampPanelWidth(width + delta));
         }}
         onPointerDown={(event) => {
           if (event.button === 0)
@@ -108,7 +110,7 @@ export function CanvasConversationPanel({
         onPointerMove={(event) => {
           const panel = event.currentTarget.parentElement;
           if (panel && event.currentTarget.hasPointerCapture(event.pointerId))
-            setWidth(
+            onWidthChange(
               clampPanelWidth(
                 panel.getBoundingClientRect().right - event.clientX,
               ),
@@ -116,11 +118,12 @@ export function CanvasConversationPanel({
         }}
       />
       <div className="flex h-full min-h-0 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between border-b px-4 sm:px-5">
+        <header className="flex h-14 shrink-0 items-center justify-between gap-2 px-4">
           <h2
+            id="canvas-conversation-heading"
             ref={heading}
             tabIndex={-1}
-            className="text-base font-semibold outline-none"
+            className="min-w-0 truncate text-sm font-medium outline-none"
           >
             AI 对话
           </h2>
@@ -146,7 +149,7 @@ export function CanvasConversationPanel({
             </Button>
           </div>
         </header>
-        <div className="flex min-h-0 flex-1 flex-col gap-2 px-3 pt-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="flex min-h-0 flex-1 flex-col px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
           {session === undefined ? (
             sessionError ? (
               <FeedbackAlert
@@ -166,7 +169,7 @@ export function CanvasConversationPanel({
                 }
               />
             ) : (
-              <p role="status" className="text-sm text-muted-foreground">
+              <p role="status" className="px-2 text-sm text-muted-foreground">
                 正在查找画布对话…
               </p>
             )
@@ -180,7 +183,7 @@ export function CanvasConversationPanel({
               writable={writable}
               panel
               compactEntry
-              panelEmptyMessage="输入想法，或添加参考素材。"
+              panelEmptyMessage={null}
               onChooseProject={() => {}}
             />
           )}

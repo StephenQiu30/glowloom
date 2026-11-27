@@ -427,11 +427,7 @@ export function CanvasToolbar({
         </div>
         <CanvasToolbarGroup
           appearance="plain"
-          className={
-            assistantOpen
-              ? "canvas-assistant-action invisible"
-              : "canvas-assistant-action"
-          }
+          className={assistantOpen ? "invisible" : undefined}
         >
           <Tooltip>
             <TooltipTrigger asChild>
@@ -439,9 +435,10 @@ export function CanvasToolbar({
                 tabIndex={onOpenAssistant ? undefined : 0}
                 aria-label={onOpenAssistant ? undefined : "AI 对话暂不可用"}
               >
-                <CanvasToolbarButton
-                  iconOnly={isMobile}
-                  variant="outline"
+                <Button
+                  type="button"
+                  size={isMobile ? "icon-round" : "pill"}
+                  variant="secondary"
                   aria-label="与 AI 对话"
                   aria-expanded={assistantOpen}
                   aria-controls={
@@ -449,11 +446,11 @@ export function CanvasToolbar({
                   }
                   onClick={onOpenAssistant}
                   disabled={!onOpenAssistant}
-                  className="rounded-full"
+                  className="border-border max-md:size-(--ui-control-size-touch)"
                 >
                   <Sparkles data-icon="inline-start" />
                   {!isMobile && <span>与 AI 对话</span>}
-                </CanvasToolbarButton>
+                </Button>
               </span>
             </TooltipTrigger>
             {!assistantOpen && (

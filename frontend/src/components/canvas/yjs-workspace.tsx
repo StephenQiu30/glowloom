@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  type CSSProperties,
 } from "react";
 import { toast } from "@/components/feedback/notification";
 import dynamic from "next/dynamic";
@@ -272,6 +273,7 @@ function CollaborativeEditor({
   const [conversation, setConversation] = useState<
     "unopened" | "open" | "closed"
   >("unopened");
+  const [conversationWidth, setConversationWidth] = useState(400);
   const conversationTrigger = useRef<HTMLElement | null>(null);
   function openConversation() {
     if (document.activeElement instanceof HTMLElement)
@@ -356,7 +358,15 @@ function CollaborativeEditor({
         bindingRevision: dto.revision!,
       }}
     >
-      <div className="canvas-workspace relative h-dvh">
+      <div
+        className="canvas-workspace relative h-dvh"
+        data-conversation-open={conversationOpen || undefined}
+        style={
+          {
+            "--canvas-conversation-width": `${conversationWidth}px`,
+          } as CSSProperties
+        }
+      >
         <CanvasTransferReceiver
           client={client}
           canvasID={canvasID}
@@ -550,6 +560,8 @@ function CollaborativeEditor({
             actorID={actorID}
             writable={view.writable && !view.migration}
             open={conversationOpen}
+            width={conversationWidth}
+            onWidthChange={setConversationWidth}
             onClose={closeConversation}
             onOpenLegacy={() => {
               setConversation("closed");

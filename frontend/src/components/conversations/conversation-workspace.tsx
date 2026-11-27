@@ -65,7 +65,7 @@ export function ConversationWorkspace({
   useReplyLabel?: string;
   embedded?: boolean;
   panel?: boolean;
-  panelEmptyMessage?: string;
+  panelEmptyMessage?: string | null;
   compactEntry?: boolean;
   homeGeneration?: boolean;
 }) {
@@ -223,7 +223,9 @@ export function ConversationWorkspace({
       ) : c.loading ? (
         <ConversationMessageSkeleton className="mx-auto w-full max-w-[800px] flex-1 px-4 py-6" />
       ) : !embedded ? (
-        panel && authorized && panelEmptyMessage ? (
+        panel && panelEmptyMessage === null ? (
+          <div className="flex-1" />
+        ) : panel && authorized && panelEmptyMessage ? (
           <p className="flex-1 text-sm text-muted-foreground">
             {panelEmptyMessage}
           </p>
@@ -330,6 +332,7 @@ export function ConversationWorkspace({
               }
               welcome={welcome}
               compactEntry={compactEntry}
+              canvasPanel={panel && !!options.canvasID}
               homeGeneration={homeGeneration || (!panel && !embedded)}
               textReference={textReference}
             />

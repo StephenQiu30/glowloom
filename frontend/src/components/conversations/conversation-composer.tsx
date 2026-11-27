@@ -83,6 +83,7 @@ export function ConversationComposer({
   projectSetting,
   welcome = false,
   compactEntry = false,
+  canvasPanel = false,
   homeGeneration = false,
   textReference,
 }: {
@@ -97,6 +98,7 @@ export function ConversationComposer({
   projectSetting?: ReactNode;
   welcome?: boolean;
   compactEntry?: boolean;
+  canvasPanel?: boolean;
   homeGeneration?: boolean;
   textReference?: DraftTextReference;
 }) {
@@ -355,11 +357,13 @@ export function ConversationComposer({
             placeholder={
               textReference
                 ? "输入想法，或用 @ 引用素材"
-                : compactEntry
-                  ? "输入想法、剧本或上传参考"
-                  : homeGeneration
-                    ? "输入想法、剧本或参考，用 / 选技能，@ 引用素材"
-                    : "输入想法、剧本或上传参考，支持 / 使用技能，@ 添加主体，和 Agent 一起创作"
+                : canvasPanel
+                  ? "输入想法、剧本或参考，用 / 选技能，@ 引用素材"
+                  : compactEntry
+                    ? "输入想法、剧本或上传参考"
+                    : homeGeneration
+                      ? "输入想法、剧本或参考，用 / 选技能，@ 引用素材"
+                      : "输入想法、剧本或上传参考，支持 / 使用技能，@ 添加主体，和 Agent 一起创作"
             }
             placeholderContent={
               inlineReferences ? undefined : (
@@ -430,7 +434,7 @@ export function ConversationComposer({
         role="group"
       >
         {inlineReferences && referenceControls}
-        {inlineReferences && modelPicker}
+        {inlineReferences && !canvasPanel && modelPicker}
         {headerActions ?? (
           <span
             className="flex h-(--toolbar-control-size) items-center gap-1.5 px-2 text-sm data-[welcome=true]:text-[var(--navigation-accent)]"
@@ -451,7 +455,10 @@ export function ConversationComposer({
             >
               <SlidersHorizontal className="size-4" />
               <span
-                className={cn("max-sm:sr-only", textReference && "sr-only")}
+                className={cn(
+                  "max-sm:sr-only",
+                  (textReference || canvasPanel) && "sr-only",
+                )}
               >
                 创作设置
               </span>
@@ -509,7 +516,7 @@ export function ConversationComposer({
               size="toolbar"
             >
               <WandSparkles className="size-4" />
-              <span className="max-sm:sr-only">
+              <span className={canvasPanel ? "sr-only" : "max-sm:sr-only"}>
                 技能
                 {c.settings.skills.length ? ` ${c.settings.skills.length}` : ""}
               </span>
@@ -602,7 +609,7 @@ export function ConversationComposer({
             ) : null}
           </ComposerPopoverContent>
         </Popover>
-        {!inlineReferences && (
+        {(!inlineReferences || canvasPanel) && (
           <ComposerToolbarButton
             type="button"
             variant="ghost"
@@ -622,7 +629,7 @@ export function ConversationComposer({
           className="ml-auto max-w-full"
         >
           <span className="sr-only">对话模型</span>
-          {!inlineReferences && modelPicker}
+          {(!inlineReferences || canvasPanel) && modelPicker}
           <ComposerToolbarButton
             type="button"
             variant="default"

@@ -1635,8 +1635,55 @@ html:has(.canvas-controls-layout) {
   font-variant-numeric: tabular-nums;
 }
 
-.canvas-assistant-action .canvas-toolbar-button {
-  border-radius: 999px;
+.canvas-conversation-panel .conversation-composer {
+  --creation-prompt-min-height: clamp(
+    calc(var(--spacing) * 16),
+    12dvh,
+    calc(var(--spacing) * 24)
+  );
+  background: var(--background);
+}
+
+.canvas-conversation-panel .reference-stack[data-reference-count="0"] > button {
+  width: var(--toolbar-control-size);
+  padding: 0;
+}
+
+.canvas-conversation-panel
+  .reference-stack[data-reference-count="0"]
+  [data-reference-label] {
+  display: none;
+}
+
+.canvas-conversation-panel .conversation-model-trigger {
+  max-width: calc(var(--spacing) * 26);
+}
+
+@media (min-width: 768px) {
+  .canvas-workspace {
+    --canvas-conversation-inset: calc(var(--spacing) * 4);
+    --canvas-conversation-gap: calc(var(--spacing) * 3);
+  }
+
+  .canvas-conversation-panel {
+    inset: calc(var(--spacing) * 15) var(--canvas-conversation-inset)
+      var(--canvas-conversation-inset) auto;
+    width: var(--canvas-conversation-width);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-2xl);
+  }
+}
+
+@media (min-width: 1280px) {
+  .canvas-conversation-panel {
+    top: var(--canvas-conversation-inset);
+  }
+
+  .canvas-workspace[data-conversation-open] .canvas-control-header {
+    margin-inline-end: calc(
+      var(--canvas-conversation-width) + var(--canvas-conversation-gap)
+    );
+  }
 }
 
 @container canvas (min-width: 768px) {
@@ -1646,14 +1693,6 @@ html:has(.canvas-controls-layout) {
 
   .canvas-creation-rail {
     --toolbar-control-size: var(--ui-control-size-large);
-  }
-
-  .canvas-assistant-action {
-    --toolbar-control-size: var(--ui-control-size-default);
-  }
-
-  .canvas-assistant-action .canvas-toolbar-button {
-    min-width: 7rem;
   }
 }
 
