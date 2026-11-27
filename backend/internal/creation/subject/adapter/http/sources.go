@@ -72,12 +72,9 @@ func sourceError(c *gin.Context, err error) {
 // @Router /api/subjects/sources [get]
 func (h *SourceHandler) List(c *gin.Context) {
 	query := c.Request.URL.Query()
-	allowed := map[string]bool{"kind": true, "search": true, "favorite_only": true, "quality": true, "page": true, "page_size": true}
-	for key, values := range query {
-		if !allowed[key] || len(values) != 1 {
-			sourceError(c, media.ErrInvalidQuery)
-			return
-		}
+	if !httpapi.SingleValueQuery(query, "kind", "search", "favorite_only", "quality", "page", "page_size") {
+		sourceError(c, media.ErrInvalidQuery)
+		return
 	}
 	input := media.SubjectCatalogueQuery{Kind: query.Get("kind"), Search: query.Get("search"), Quality: query.Get("quality"), Page: 1, PageSize: 20}
 	for key, destination := range map[string]*int{"page": &input.Page, "page_size": &input.PageSize} {

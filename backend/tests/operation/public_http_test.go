@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
 
 	operationhttp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/http"
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
@@ -22,6 +24,50 @@ type publicQuoteStore struct {
 	input   operationapp.CreateFreeQuoteInput
 	calls   int
 	failure error
+}
+
+type publicTaskStore struct {
+	operationapp.PublicQueryStore
+	inputs []operationapp.ListTasksInput
+	task   operationapp.TaskSummary
+}
+
+func (s *publicTaskStore) ListPublicTasks(_ context.Context, _ identityapp.Principal, input operationapp.ListTasksInput) (operationapp.TaskPage, error) {
+	s.inputs = append(s.inputs, input)
+	if input.After != nil {
+		return operationapp.TaskPage{}, nil
+	}
+	return operationapp.TaskPage{
+		Items: []operationapp.TaskSummary{s.task},
+		Next:  &operationapp.TaskCursor{ID: s.task.ID, CreateTime: s.task.CreateTime},
+	}, nil
+}
+
+func TestProjectTaskCursorContinuesOnlyTheOriginalQuery(t *testing.T) {
+	actor := historyActor()
+	task := operationapp.TaskSummary{ID: uuid.New(), ProjectID: uuid.New(), CreateTime: time.Unix(100, 0).UTC()}
+	store := &publicTaskStore{task: task}
+	router := gin.New()
+	router.Use(func(c *gin.Context) { c.Set("principal", actor) })
+	operationhttp.NewHandler(operationhttp.Dependencies{Query: operationapp.NewPublicQuery(store)}).Register(router.Group("/api"))
+
+	path := "/api/projects/" + task.ProjectID.String() + "/operations"
+	first := historyRequest(t.Context(), router, path+"?limit=1")
+	require.Equal(t, 200, first.Code, first.Body.String())
+	var page operationhttp.TaskPageResponse
+	require.NoError(t, json.Unmarshal(first.Body.Bytes(), &page))
+	require.NotNil(t, page.NextCursor)
+	cursor := "&cursor=" + url.QueryEscape(*page.NextCursor)
+
+	other := historyRequest(t.Context(), router, path+"?limit=2"+cursor)
+	require.Equal(t, 422, other.Code, other.Body.String())
+	require.Len(t, store.inputs, 1)
+
+	second := historyRequest(t.Context(), router, path+"?limit=1"+cursor)
+	require.Equal(t, 200, second.Code, second.Body.String())
+	require.JSONEq(t, `{"items":[],"next_cursor":null}`, second.Body.String())
+	require.Len(t, store.inputs, 2)
+	require.Equal(t, &operationapp.TaskCursor{ID: task.ID, CreateTime: task.CreateTime}, store.inputs[1].After)
 }
 
 func (s *publicQuoteStore) CreateFreeQuote(_ context.Context, _ identityapp.Principal, input operationapp.CreateFreeQuoteInput) (operationapp.CreateFreeQuoteResult, error) {

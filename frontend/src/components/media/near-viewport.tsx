@@ -1,5 +1,6 @@
 "use client";
 
+import { inView } from "motion";
 import { useCallback, useState, type ReactNode } from "react";
 
 /** Keep the reserved space while deferring private reads and player mounts. */
@@ -19,17 +20,7 @@ export function NearViewport({
       setReady(true);
       return;
     }
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setReady(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: "160px" },
-    );
-    observer.observe(element);
-    return () => observer.disconnect();
+    return inView(element, () => setReady(true), { margin: "160px" });
   }, []);
   return (
     <div ref={observe} className={className}>

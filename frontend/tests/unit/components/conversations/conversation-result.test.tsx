@@ -71,15 +71,19 @@ it("uses formal operation identities once and only returns a draft for explicit 
 
 it("defers offscreen operation reads until the result approaches the viewport", async () => {
   let intersect!: IntersectionObserverCallback;
-  const disconnect = vi.fn();
+  let target!: Element;
+  const unobserve = vi.fn();
   vi.stubGlobal(
     "IntersectionObserver",
     class {
       constructor(callback: IntersectionObserverCallback) {
         intersect = callback;
       }
-      observe() {}
-      disconnect = disconnect;
+      observe(element: Element) {
+        target = element;
+      }
+      unobserve = unobserve;
+      disconnect() {}
     },
   );
   try {
@@ -88,11 +92,12 @@ it("defers offscreen operation reads until the result approaches the viewport", 
     expect(screen.queryByText(id)).toBeNull();
     await act(async () =>
       intersect(
-        [{ isIntersecting: true } as IntersectionObserverEntry],
+        [{ isIntersecting: true, target } as IntersectionObserverEntry],
         {} as IntersectionObserver,
       ),
     );
     expect(screen.getByText(id)).toBeTruthy();
+    expect(unobserve).toHaveBeenCalledWith(target);
   } finally {
     vi.unstubAllGlobals();
   }

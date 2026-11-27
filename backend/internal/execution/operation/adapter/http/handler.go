@@ -2,9 +2,6 @@
 package http
 
 import (
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"strconv"
@@ -351,11 +348,6 @@ type TaskPageResponse struct {
 	Items      []application.TaskSummary `json:"items"`
 	NextCursor *string                   `json:"next_cursor" extensions:"x-nullable"`
 }
-type taskCursor struct {
-	ID         uuid.UUID `json:"id"`
-	CreateTime time.Time `json:"create_time"`
-	Binding    string    `json:"binding"`
-}
 
 // List restores real task state independently of browser-local editor state.
 // @Summary 项目任务中心
@@ -406,46 +398,32 @@ func (h *Handler) List(c *gin.Context) {
 		input.Limit = value
 	}
 	actor := identityhttp.Principal(c)
-	encoded, err := json.Marshal(struct {
+	pagination, err := newTaskPagination(struct {
 		Actor, Org uuid.UUID
 		Input      application.ListTasksInput
-	}{actor.ID, actor.ScopeID, input})
+	}{Actor: actor.ID, Org: actor.ScopeID, Input: input})
 	if err != nil {
 		writeError(c, err)
 		return
 	}
-	digest := sha256.Sum256(encoded)
-	binding := hex.EncodeToString(digest[:])
-	if raw := c.Query("cursor"); raw != "" {
-		if len(raw) > 1024 {
-			httpapi.WriteProblem(c, 422, "invalid_request", nil)
-			return
-		}
-		var cur taskCursor
-		body, err := base64.RawURLEncoding.DecodeString(raw)
-		if err != nil || len(body) > 768 || json.Unmarshal(body, &cur) != nil || cur.ID == uuid.Nil || cur.CreateTime.IsZero() || cur.Binding != binding {
-			httpapi.WriteProblem(c, 422, "invalid_request", nil)
-			return
-		}
-		input.After = &application.TaskCursor{ID: cur.ID, CreateTime: cur.CreateTime}
+	input.After, err = pagination.after(c.Query("cursor"))
+	if err != nil {
+		writeError(c, err)
+		return
 	}
 	page, err := h.dependencies.Query.List(c.Request.Context(), actor, input)
 	if err != nil {
 		writeError(c, err)
 		return
 	}
-	response := TaskPageResponse{Items: page.Items}
+	nextCursor, err := pagination.next(page.Next)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	response := TaskPageResponse{Items: page.Items, NextCursor: nextCursor}
 	if response.Items == nil {
 		response.Items = []application.TaskSummary{}
-	}
-	if page.Next != nil {
-		body, err := json.Marshal(taskCursor{ID: page.Next.ID, CreateTime: page.Next.CreateTime, Binding: binding})
-		if err != nil {
-			writeError(c, err)
-			return
-		}
-		value := base64.RawURLEncoding.EncodeToString(body)
-		response.NextCursor = &value
 	}
 	c.Header("Cache-Control", "private, no-store")
 	c.JSON(200, response)
