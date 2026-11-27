@@ -9,6 +9,11 @@ const config = {
   async redirects() {
     return [
       {
+        source: '/',
+        destination: '/docs',
+        permanent: false,
+      },
+      {
         source: '/read',
         destination: '/docs',
         permanent: false,

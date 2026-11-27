@@ -22,6 +22,8 @@
 
 ## 4. 主工程门禁
 
+直接阅读与标题统一见 AC-FD-11。根路径通过 Next.js 重定向到 `/docs`；在 Fumadocs collection 统一使用现有专题文件名派生标题。浏览器验收覆盖首页直达、侧栏、唯一主标题、搜索及原文。
+
 在实际 Workspace 目录安装冻结依赖并构建，不复用隔离目录的 Next 产物。执行 `pnpm docs:check`、`pnpm lint`、`pnpm types:check`、`pnpm format:check`、`pnpm build`；搜索通过内置 `/api/search` 提供，无需独立外部搜索服务或密钥同步。
 
 ## 5. 启动与接受

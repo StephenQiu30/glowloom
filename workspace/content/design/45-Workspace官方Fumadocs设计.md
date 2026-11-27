@@ -16,9 +16,9 @@
 
 项目级入口由 Workspace 根目录 [ARCHITECTURE](../../ARCHITECTURE.md) 与 [PROJECT](../../PROJECT.md) 维护，分别发布为 `/docs/architecture` 与 `/docs/project`。官方 collection 显式收录两份顶层文档及 `content/` 内的专题正文；`workspace/meta.json` 将首页、顶层文档、专题分类依次编入侧栏。专题现有路径、相对链接与稳定 ID 保留。GitHub 源文件入口按原始文件位置指向 `workspace/<page.path>`。 [Fumadocs Loader](https://www.fumadocs.dev/docs/headless/source-api)
 
-专题按 `requirement → design → prd → plan` 分层，并辅以 `research`、`operations`、`templates`。缺少 frontmatter 的标题由 collection 从原 H1 获取。历史 `/read` 与 `/read/*` 入口继续重定向至 `/docs`；顶层和专题页面都进入搜索及 `/llms.txt`、`/llms-full.txt`、`/llms.mdx/[...path]` 与 `Accept: text/markdown` 协商。仓库根协作规范与业务代码由原工程维护。
+专题按 `requirement → design → prd → plan` 分层，并辅以 `research`、`operations`、`templates`。根路径 `/` 直接重定向至文档索引 `/docs`，历史 `/read` 与 `/read/*` 沿现有入口重定向。顶层和专题页面都进入搜索及 `/llms.txt`、`/llms-full.txt`、`/llms.mdx/[...path]` 与 `Accept: text/markdown` 协商。仓库根协作规范与业务代码由原工程维护。 [Next.js 路由重定向](https://nextjs.org/docs/app/api-reference/config/next-config-js/redirects)
 
-文件按分类使用唯一的 `NN-名称` 序号，保留历史空缺；日期放在序号之后。编号只维护在文件名，由官方 collection schema 派生到侧栏、页面标题、搜索和元数据；原文 H1 与锚点保留。部署配置归 `operations`；工具生成的安装设置、临时计划和规格不进入发布源、页面树或搜索。
+专题文件按分类使用唯一的 `NN-名称.md`，沿用已有序号和历史空缺，日期写入正文。官方 collection 使用文件名去掉扩展名后的文本统一侧栏、阅读标题、搜索和元数据。HTML 只呈现一次主标题，保留正文原 H1 锚点，原始 Markdown 按原样提供。顶层项目文档和索引沿用各自标题。部署配置归 `operations`。
 
 ## 5. 知识库界面
 

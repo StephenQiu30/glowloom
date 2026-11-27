@@ -4,6 +4,10 @@ import { docsRoute } from './shared';
 import { defineDocs } from 'fumadocs-mdx/macro';
 import { metaSchema, pageSchema } from 'fumadocs-core/source/schema';
 
+export function numberedDocumentTitle(filePath: string) {
+  return /(?:^|\/)content\/[^/]+\/(\d{2}-.+)\.mdx?$/.exec(filePath)?.[1];
+}
+
 const docs = defineDocs({
   dir: '.',
   docs: {
@@ -15,10 +19,18 @@ const docs = defineDocs({
     ],
     schema: ({ source, path }) =>
       pageSchema.extend({
-        title: pageSchema.shape.title.default(
-          source.match(/^#\s+(.+)$/m)?.[1] ??
-            path.split('/').at(-1)!.replace(/\.md$/, ''),
-        ),
+        title: pageSchema.shape.title
+          .default(
+            source.match(/^#\s+(.+)$/m)?.[1] ??
+              path
+                .split('/')
+                .at(-1)!
+                .replace(/\.mdx?$/, ''),
+          )
+          .transform((title) => numberedDocumentTitle(path) ?? title),
+        sourceHeading: pageSchema.shape.title
+          .optional()
+          .transform(() => source.match(/^#\s+(.+)$/m)?.[1]),
         archived: pageSchema.shape.full.default(false),
       }),
     postprocess: {

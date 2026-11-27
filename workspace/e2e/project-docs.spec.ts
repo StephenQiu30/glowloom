@@ -4,11 +4,11 @@ test('publishes top-level project documents with their source links', async ({
   page,
 }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1 })).toContainText(
-    '织光知识库',
-  );
-  await page.getByRole('link', { name: '进入文档中心' }).click();
   await expect(page).toHaveURL(/\/docs$/);
+  await expect(
+    page.locator('article').getByRole('heading', { level: 1 }),
+  ).toHaveText('织光知识库');
+  await expect(page.getByRole('link', { name: '进入文档中心' })).toHaveCount(0);
   const sidebar = page.locator('#nd-sidebar');
   const documents = [
     {
@@ -51,6 +51,43 @@ test('publishes top-level project documents with their source links', async ({
     expect(markdown.ok()).toBe(true);
     expect(await markdown.text()).toContain(name);
   }
+});
+
+test('uses the numbered filename as the document title and keeps its source', async ({
+  page,
+}) => {
+  const title = '36-模型销售定价与结算执行计划';
+  const route = `/docs/plan/${title}`;
+  await page.goto(route);
+  await expect(
+    page.locator('article').getByRole('heading', { level: 1 }),
+  ).toHaveText(title);
+  await expect(
+    page.locator('#nd-sidebar').getByRole('link', { name: title, exact: true }),
+  ).toHaveAttribute('href', encodeURI(route));
+  await expect(page).toHaveTitle(new RegExp(title));
+
+  const search = await page.request.get('/api/search', {
+    params: { query: title },
+  });
+  expect(search.ok()).toBe(true);
+  const results = await search.json();
+  expect(results).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ url: encodeURI(route), content: title }),
+    ]),
+  );
+  expect(results).not.toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        url: expect.stringContaining(`${encodeURI(route)}#plan-36`),
+      }),
+    ]),
+  );
+
+  const markdown = await page.request.get(`${route}.md`);
+  expect(markdown.ok()).toBe(true);
+  expect(await markdown.text()).toContain('# Plan 36');
 });
 
 test('preserves topic navigation and source links', async ({ page }) => {

@@ -1,4 +1,4 @@
-import { source } from '@/lib/source';
+import { numberedDocumentTitle, source } from '@/lib/source';
 import {
   DocsBody,
   DocsDescription,
@@ -38,6 +38,9 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
       <DocsBody>
         <MDX
           components={getMDXComponents({
+            ...(numberedDocumentTitle(page.path)
+              ? { h1: ({ id }) => (id ? <span id={id} /> : null) }
+              : {}),
             a: ({ href, ...props }) => (
               <RelativeLink
                 {...props}
