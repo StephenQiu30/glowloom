@@ -3,7 +3,7 @@ package application
 import (
 	"fmt"
 	"time"
-	_ "time/tzdata"
+	_ "time/tzdata" // Keep calendar grouping available in images without system zoneinfo.
 
 	"github.com/google/uuid"
 )

@@ -51,16 +51,22 @@ func validCall(in domain.CallInput, kind string) bool {
 // ExecuteCall commits a stable outbound intent before any external request. Unknown
 // responses remain queryable and are never automatically sent again.
 func (s *Store) ExecuteCall(ctx context.Context, kind, name string, in domain.CallInput, execute app.Executor) (domain.CallReceipt, error) {
-	return s.executeCall(ctx, kind, name, in, nil, execute)
+	return s.executeCall(ctx, kind, name, in, nil, execute, nil)
+}
+
+// ExecuteGatewayModel derives the cap for a new call from the current grant.
+// A replay keeps the cap and result recorded by the original admission.
+func (s *Store) ExecuteGatewayModel(ctx context.Context, in domain.CallInput, model app.ModelCapability) (domain.CallReceipt, error) {
+	return s.executeCall(ctx, domain.CallKindModel, "chat", in, nil, nil, model)
 }
 
 // ExecuteToolIntent commits the original external-write identity and business
 // authority before any I/O. Replays never invoke admission or execution again.
 func (s *Store) ExecuteToolIntent(ctx context.Context, name string, in domain.CallInput, admit func(*gorm.DB, domain.Scope, uuid.UUID) error, execute app.Executor) (domain.CallReceipt, error) {
-	return s.executeCall(ctx, domain.CallKindTool, name, in, admit, execute)
+	return s.executeCall(ctx, domain.CallKindTool, name, in, admit, execute, nil)
 }
-func (s *Store) executeCall(ctx context.Context, kind, name string, in domain.CallInput, admit func(*gorm.DB, domain.Scope, uuid.UUID) error, execute app.Executor) (domain.CallReceipt, error) {
-	if !validCall(in, kind) || execute == nil || name == "" || (kind != domain.CallKindModel && kind != domain.CallKindTool) {
+func (s *Store) executeCall(ctx context.Context, kind, name string, in domain.CallInput, admit func(*gorm.DB, domain.Scope, uuid.UUID) error, execute app.Executor, gatewayModel app.ModelCapability) (domain.CallReceipt, error) {
+	if !validCall(in, kind) || (execute == nil && gatewayModel == nil) || name == "" || (kind != domain.CallKindModel && kind != domain.CallKindTool) {
 		return domain.CallReceipt{}, domain.ErrInvalid
 	}
 	var result domain.CallReceipt
@@ -79,7 +85,7 @@ func (s *Store) executeCall(ctx context.Context, kind, name string, in domain.Ca
 			return err
 		}
 		if found {
-			if old.InputHash != in.Call.InputHash || old.Kind != domain.CallKind(kind) || old.Name != name || old.MaxMicros != in.MaxMicros {
+			if old.InputHash != in.Call.InputHash || old.Kind != domain.CallKind(kind) || old.Name != name || (gatewayModel == nil && old.MaxMicros != in.MaxMicros) {
 				return domain.ErrConflict
 			}
 			result, err = s.replay(tx, a, old)
@@ -91,6 +97,9 @@ func (s *Store) executeCall(ctx context.Context, kind, name string, in domain.Ca
 		}
 		if kind == domain.CallKindModel && a.CostProjectionUnavailable {
 			return domain.ErrUnavailable
+		}
+		if gatewayModel != nil {
+			in.MaxMicros = g.AvailableMicros
 		}
 		reservation := in.MaxMicros
 		if kind == domain.CallKindTool {
@@ -128,7 +137,13 @@ func (s *Store) executeCall(ctx context.Context, kind, name string, in domain.Ca
 	if err != nil || !created {
 		return result, err
 	}
-	out, executeErr := execute(ctx, scope, result.ReceiptID)
+	var out domain.CallResult
+	var executeErr error
+	if gatewayModel != nil {
+		out, executeErr = gatewayModel(ctx, scope, result.ReceiptID, in.Input, result.MaxMicros)
+	} else {
+		out, executeErr = execute(ctx, scope, result.ReceiptID)
+	}
 	if executeErr != nil {
 		out = domain.CallResult{Status: domain.CallStatusUnknown, Result: json.RawMessage(`{"code":"business_result_unknown"}`)}
 	}

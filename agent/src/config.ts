@@ -8,7 +8,30 @@ export function resourceDirectory(name: string): string {
   return path.join(path.dirname(manifest), name);
 }
 
+function directoryList(name: string) {
+  return z
+    .string()
+    .default('')
+    .transform((value) =>
+      value
+        .split(',')
+        .map((directory) => directory.trim())
+        .filter(Boolean),
+    )
+    .pipe(
+      z.array(
+        z.string().refine(path.isAbsolute, 'Use an absolute directory path'),
+      ),
+    )
+    .transform((directories) => [
+      resourceDirectory(name),
+      ...directories.map((directory) => path.normalize(directory)),
+    ]);
+}
+
 const envSchema = z.object({
+  GLOWLOOM_AGENT_SKILLS_DIRS: directoryList('skills'),
+  GLOWLOOM_AGENT_PIPELINES_DIRS: directoryList('pipelines'),
   GLOWLOOM_AGENT_HTTP_ADDR: z.string().default('0.0.0.0:4401'),
   GLOWLOOM_AGENT_GRPC_ADDR: z.string().default('0.0.0.0:4402'),
   GLOWLOOM_AGENT_DB_DSN: z.string().min(1, 'GLOWLOOM_AGENT_DB_DSN is required'),
@@ -80,6 +103,8 @@ const envSchema = z.object({
 });
 
 export interface AgentConfig {
+  skillDirectories: string[];
+  pipelineDirectories: string[];
   httpHost: string;
   httpPort: number;
   grpcAddr: string;
@@ -134,6 +159,8 @@ export function loadConfig(env: NodeJS.ProcessEnv): AgentConfig {
     Boolean(parsed.LANGFUSE_SECRET_KEY);
 
   return {
+    skillDirectories: parsed.GLOWLOOM_AGENT_SKILLS_DIRS,
+    pipelineDirectories: parsed.GLOWLOOM_AGENT_PIPELINES_DIRS,
     httpHost,
     httpPort,
     grpcAddr: parsed.GLOWLOOM_AGENT_GRPC_ADDR,

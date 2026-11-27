@@ -38,6 +38,7 @@ type BusinessStore interface {
 	Acknowledge(context.Context, uuid.UUID, domain.AppliedReceipt) error
 	Propose(context.Context, domain.ProposalInput) (domain.Proposal, error)
 	ExecuteCall(context.Context, string, string, domain.CallInput, Executor) (domain.CallReceipt, error)
+	ExecuteGatewayModel(context.Context, domain.CallInput, ModelCapability) (domain.CallReceipt, error)
 	ReadCall(context.Context, uuid.UUID, uuid.UUID, domain.CallIdentity) (domain.CallReceipt, error)
 	ClaimDecision(context.Context, time.Time) (domain.Decision, bool, error)
 	RetryDecision(context.Context, uuid.UUID, time.Time) error

@@ -41,6 +41,18 @@
 - **Agent 服务**：`pnpm typecheck`、`pnpm lint`、`pnpm format:check`、`pnpm test`（含隔离 PostgreSQL 集成测试、租约恢复、Workflow `suspend/resume`、`Last-Event-ID` 重放与 Mastra Scorers 轨迹评测）、`pnpm build`。
 - **前端与部署**：`frontend/` `pnpm api:check`、`pnpm exec tsc --noEmit`、`pnpm exec vitest run`；`docker compose --env-file /dev/null config --no-interpolate --quiet`。
 
+### 3.3 Agent 资源目录与版本装配
+
+T-AGV2-10 承接 [PRD34 AC-AGV2-10](../prd/34-Agent服务架构重构与技术选型.md#agent-resource-acceptance)。保持现有包结构，按以下顺序实施。
+
+1. 在 Agent 的 `config.ts` 校验两个现有扩展目录配置，由 `server.ts` 向 Skill 和 Pipeline 注册表注入。校验重复标识、入口文件、合法资源路径与工作流引用。核对 Docker 打包清单，以及 Compose 从宿主机只读扩展目录到容器路径的映射。
+2. 在 Run 受理和恢复边界固定工作流定义、阶段身份、已选 Skill 摘要和已用 Prompt 版本。先核对已受理的运行能否从已有快照恢复。缺原定义时保留原审批和结果，进入受控停止或重新确认流程。
+3. 在 Agent 单测覆盖配置与路径解析，在只读容器执行默认及扩展目录的启动检查。在隔离 PostgreSQL 让短剧工作流于审批点挂起，替换目录并重启，再检查旧 Run 与新 Run 分别使用的版本。用两个独立项目和撤销授权的原 Run 验证私有资源及工具边界。使用隔离业务回执比对是否出现重复提交或核销。
+
+退出条件以 AC-AGV2-10 为准。单一 Agent 和同一 PostgreSQL 负责升级前后的 Run。停用扩展后重启，已挂起任务从原快照恢复；新任务使用当前配置。本阶段隔离测试库由完整 `schema.sql` 和 `data.sql` 初始化，无历史快照的旧测试合同退出使用。
+
+**2026-11-27 隔离验收。** 以受限 `glowloom_agent` 角色连接全新 PostgreSQL 18。编译 Agent 后，子进程 A 加载 v1 并在审批点挂起，退出后替换工作流 JSON、Skill 正文与附件、Prompt。子进程 B 加载 v2，对同一存储中的原工作流批准并恢复，执行器实际读取 v1 的阶段、附件和 Prompt，已完成的准备步骤没有重跑。新 Run 读取 v2。另从包目录之外启动编译后的 Agent，缺失扩展目录时启动失败，默认资源及隔离库有效时 `/healthz` 和 `/readyz` 返回成功。文件工作流使用注入的隔离执行器，Go 产品级费用审批与真实供应商回执仍待产品接入验证。
+
 ## 4. 迁移与回退边界
 
 - **P0（文档）**：纯知识库变更，不影响现有运行代码，可直接按 Git 提交回退。

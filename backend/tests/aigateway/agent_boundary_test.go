@@ -2,8 +2,11 @@ package aigateway_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -14,9 +17,80 @@ import (
 	agent "github.com/StephenQiu30/glowloom-server/backend/internal/agent/domain"
 	agentwire "github.com/StephenQiu30/glowloom-server/backend/internal/app/agent"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/aigateway"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/domain"
 	operation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 )
+
+func TestAgentModelGatewayReplaysPaidCallWithReducedRunBudget(t *testing.T) {
+	db, _, model, actor := fixture(t)
+	project := entrypointProject(t, db, actor)
+	entrypointSession(t, db, actor)
+	var sends atomic.Int64
+	runtime := &aigateway.Runtime{DB: db, Provider: providerFunc(func(ctx context.Context, dispatch application.Dispatch, emit func(json.RawMessage) error) (domain.Receipt, error) {
+		sends.Add(1)
+		return textProvider(ctx, dispatch, emit)
+	})}
+	boundary := agentwire.NewBoundary(db, runtime.AgentModel).WithGateway(runtime)
+	selection, err := json.Marshal(map[string]any{"model_key": model.Name, "release_id": model.ID, "max_tokens": 100})
+	require.NoError(t, err)
+	scope := agent.Scope{ActorID: actor.ID, OrgID: actor.OrgID, ScopeID: actor.ScopeID, ProjectID: project}
+	admission := agent.Admission{
+		RootRunID: uuid.New(), SessionID: uuid.New(), SubmissionID: uuid.New(), RequestID: uuid.New(),
+		ContentHash: agent.Hash([]byte("model gateway replay")), Scope: scope,
+		BudgetMicros: 2000000, ModelSelection: selection,
+	}
+	require.NoError(t, boundary.Store.AdmitRun(t.Context(), admission))
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	const token = "isolated-agent-gateway-service-token"
+	boundary.BusinessHandler(token).Register(router)
+	callID := uuid.NewString()
+	invoke := func(id, input string, stream bool) *httptest.ResponseRecorder {
+		t.Helper()
+		raw, err := json.Marshal(map[string]any{
+			"model": model.Name, "stream": stream,
+			"messages": []map[string]string{{"role": "user", "content": input}},
+		})
+		require.NoError(t, err)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/internal/agent-gateway/openai/chat/completions", bytes.NewReader(raw))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("X-Agent-Audience", "agent-business")
+		req.Header.Set("X-Glowloom-Actor-Id", scope.ActorID.String())
+		req.Header.Set("X-Glowloom-Org-Id", scope.OrgID.String())
+		req.Header.Set("X-Glowloom-Scope-Id", scope.ScopeID.String())
+		req.Header.Set("X-Glowloom-Project-Id", project.String())
+		req.Header.Set("X-Glowloom-Run-Id", admission.RootRunID.String())
+		req.Header.Set("X-Glowloom-Call-Id", id)
+		reply := httptest.NewRecorder()
+		router.ServeHTTP(reply, req)
+		return reply
+	}
+
+	streaming := invoke(callID, "fixture", true)
+	require.Equal(t, http.StatusUnprocessableEntity, streaming.Code, streaming.Body.String())
+	require.Zero(t, sends.Load())
+	first := invoke(callID, "fixture", false)
+	require.Equal(t, http.StatusOK, first.Code, first.Body.String())
+	require.Contains(t, first.Body.String(), "finished text")
+	snapshot, err := boundary.Store.CostSnapshot(t.Context(), admission.RootRunID)
+	require.NoError(t, err)
+	require.EqualValues(t, 100000, snapshot.SettledCharge)
+	require.Zero(t, snapshot.PendingCommitment)
+	again := invoke(callID, "fixture", false)
+	require.Equal(t, http.StatusOK, again.Code, again.Body.String())
+	require.JSONEq(t, first.Body.String(), again.Body.String())
+	changed := invoke(callID, "changed input", false)
+	require.Equal(t, http.StatusConflict, changed.Code, changed.Body.String())
+	malformed := invoke("invalid-call-id", "fixture", false)
+	require.Equal(t, http.StatusUnprocessableEntity, malformed.Code, malformed.Body.String())
+	require.EqualValues(t, 1, sends.Load())
+	var settlements int64
+	require.NoError(t, db.Raw("SELECT count(*) FROM ai.money_event WHERE scope_id=? AND kind='settle'", scope.ScopeID).Scan(&settlements).Error)
+	require.EqualValues(t, 1, settlements)
+}
 
 // Node's production client uses this authenticated HTTP business contract. Quote,
 // proposal, user approval, continuation, confirmation and task reads stay real.

@@ -9,6 +9,8 @@
 3. NodeNext 项目约定相对导入使用运行时 `.js` 扩展名，Node 内置模块用 `node:`。不使用 NestJS 装饰器或 `reflect-metadata`。
 4. 保持模块、函数与文件职责清晰。`src/` 遵循扁平两层包组织（`src/<package>/<module>.ts`），跨包相对导入不超过一层 `../<package>/<module>.js`，文件名统一 `kebab-case`，禁止手写 `index.ts` barrel 与无职责 `common`/`utils`。
 
+包内 Prompt、Skill 与工作流定义的归属、扩展目录配置和版本装配见[设计48 §7.8](../workspace/content/design/48-Agent服务Mastra架构与技术选型设计.md#agent-resource-layout)。
+
 ## Mastra、协议与职责边界
 
 1. `server.ts` 负责进程入口、配置加载（Zod）、连接池与组件装配、gRPC Server（`:4402`）与极简 HTTP 健康探针（`:4401`，仅 `/healthz`、`/readyz`）启动以及优雅停机。不引入 NestJS、Fastify、Swagger/OpenAPI 或 Prisma。
@@ -17,7 +19,7 @@
    - Go → Agent：强类型 `AgentRuntime` gRPC（唯一真源 `backend/api/proto/glowloom/agent/runtime.proto`），`StreamRunEvents` 使用 gRPC Server Streaming。
    - Agent → Go 业务工具：通过 `@mastra/mcp` 连接 Go 内部 MCP Server（`/internal/agent-mcp`）。
    - Agent → Go 鉴权/配额/摘要：通过强类型 `AgentBusiness` gRPC 或受控内部接口。
-   - Agent → LLM：通过 Vercel AI SDK 连接 Go 统一渠道透传网关（`/internal/agent-gateway`），完整保留 Prompt Cache、Thinking 与流式输出。
+   - Agent → LLM：通过 Vercel AI SDK 连接 Go 统一渠道网关（`/internal/agent-gateway`），按已验收的[协议范围](../workspace/content/design/48-Agent服务Mastra架构与技术选型设计.md#agent-gateway-support)使用模型能力。
 4. **数据库与持久化**：
    - 复用 PostgreSQL 独立 `agent` schema 与受限 `glowloom_agent` 角色；`backend/db/schema.sql` 是唯一表结构真源，严禁任何运行时 DDL 或自动迁移。
    - `@mastra/pg` 显式关闭运行时自动建表（`disableInit: true`）；服务级控制表（`service_sessions`、`service_runs`、`service_run_events`、`service_public_messages`、`service_control_inbox`、`recovery_backoff`）统一使用 `Kysely` + `pg` 访问。

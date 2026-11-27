@@ -1,34 +1,61 @@
 import { readdir, readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { resourceDirectory } from '../config.js';
 import { createStep, createWorkflow } from '@mastra/core/workflows';
 import { z } from 'zod';
-import { SkillRegistry } from '../skills/loader.js';
+import {
+  declarativeSkillSchema,
+  pinnedSkillSchema,
+  type SkillRegistry,
+} from '../skills/loader.js';
+import {
+  promptByRole,
+  promptSnapshotSchema,
+  type PromptRegistry,
+} from '../observability/langfuse.js';
+
+const roles = z.custom<keyof typeof promptByRole>(
+  (value) => typeof value === 'string' && Object.hasOwn(promptByRole, value),
+  'Unknown Agent role',
+);
 
 export const pipelineApprovalGateSchema = z.object({
   required: z.boolean().default(true),
-  stageKey: z.string(),
-  quoteTool: z.string().optional(),
+  stageKey: z.string().min(1),
+  quoteTool: z.string().min(1).optional(),
   summary: z.string().optional(),
 });
 
 export const pipelineStageSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
-  role: z.string().min(1),
+  role: roles,
   skill: z.string().min(1),
-  reviewer: z.string().optional(),
+  reviewer: roles.optional(),
   maxReviewRounds: z.number().int().min(1).max(5).default(2),
   approvalGate: pipelineApprovalGateSchema.optional(),
 });
 
-export const pipelineDefinitionSchema = z.object({
-  id: z.string().min(1),
-  version: z.string().default('1.0.0'),
-  description: z.string().default(''),
-  defaultAspectRatio: z.enum(['9:16', '16:9']).default('9:16'),
-  stages: z.array(pipelineStageSchema).min(1),
-});
+export const pipelineDefinitionSchema = z
+  .object({
+    id: z.string().min(1),
+    version: z.string().min(1).default('1.0.0'),
+    description: z.string().default(''),
+    defaultAspectRatio: z.enum(['9:16', '16:9']).default('9:16'),
+    stages: z.array(pipelineStageSchema).min(1),
+  })
+  .refine(
+    ({ stages }) =>
+      new Set(stages.map((stage) => stage.id)).size === stages.length,
+    'Duplicate stage ID',
+  )
+  .refine(({ stages }) => {
+    const gates = stages.flatMap((stage) =>
+      stage.approvalGate ? [stage.approvalGate.stageKey] : [],
+    );
+    return new Set(gates).size === gates.length;
+  }, 'Duplicate approval stage key');
 
 export type PipelineStage = z.infer<typeof pipelineStageSchema>;
 export type PipelineDefinition = z.infer<typeof pipelineDefinitionSchema>;
@@ -49,6 +76,9 @@ export type DynamicStageExecutor = (params: {
   projectId: string;
   stage: PipelineStage;
   skillInstructions: string;
+  skill: PinnedStageSkill;
+  rolePrompt: string;
+  reviewerPrompt?: string;
   allowedTools: string[];
   decisionId?: string;
   previousOutputs: StageExecutionResult[];
@@ -64,30 +94,42 @@ export class PipelineRegistry {
   private readonly pipelines = new Map<string, PipelineDefinition>();
   private readonly dirs: string[];
 
-  constructor(dirs?: string[]) {
-    const defaultDir = resourceDirectory('pipelines');
-    const extraDirs = (process.env.GLOWLOOM_AGENT_PIPELINES_DIRS ?? '')
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    this.dirs = dirs ?? [defaultDir, ...extraDirs];
+  constructor(dirs: string[] = [resourceDirectory('pipelines')]) {
+    this.dirs = dirs;
   }
 
-  async reload(): Promise<PipelineDefinition[]> {
-    this.pipelines.clear();
+  async reload(skills?: SkillRegistry): Promise<PipelineDefinition[]> {
+    const discovered = new Map<string, PipelineDefinition>();
     for (const dir of this.dirs) {
-      let entries: string[];
-      try {
-        entries = await readdir(dir);
-      } catch {
-        continue;
-      }
-      for (const file of entries.filter((f) => f.endsWith('.json')).sort()) {
-        const raw = await readFile(path.join(dir, file), 'utf8');
-        const parsed = pipelineDefinitionSchema.parse(JSON.parse(raw));
-        this.pipelines.set(parsed.id, parsed);
+      const entries = await readdir(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.name.endsWith('.json')) continue;
+        const file = path.join(dir, entry.name);
+        try {
+          if (!entry.isFile()) throw new Error('Expected a regular JSON file');
+          const raw = await readFile(file, 'utf8');
+          const parsed = pipelineDefinitionSchema.parse(JSON.parse(raw));
+          if (discovered.has(parsed.id))
+            throw new Error(`Duplicate pipeline ID: ${parsed.id}`);
+          if (skills) {
+            for (const stage of parsed.stages) {
+              if (!skills.get(stage.skill))
+                throw new Error(
+                  `Unknown Skill ${stage.skill} in stage ${stage.id}`,
+                );
+            }
+          }
+          discovered.set(parsed.id, parsed);
+        } catch (cause) {
+          throw new Error(`Invalid pipeline file: ${file}: ${String(cause)}`, {
+            cause,
+          });
+        }
       }
     }
+    this.pipelines.clear();
+    for (const [id, definition] of discovered)
+      this.pipelines.set(id, definition);
     return this.list();
   }
 
@@ -152,20 +194,24 @@ const pipelineResumeSchema = z.object({
   note: z.string().optional(),
 });
 
+const stageSkillSchema = z.union([
+  pinnedSkillSchema,
+  declarativeSkillSchema.strict(),
+]);
+type PinnedStageSkill = z.infer<typeof stageSkillSchema>;
+const pipelineResourcesSchema = z.object({
+  pipeline: pipelineDefinitionSchema,
+  digest: z.string().regex(/^[a-f0-9]{64}$/),
+  skills: z.record(z.string(), stageSkillSchema),
+  prompts: promptSnapshotSchema,
+});
+
 const pipelineStateSchema = z.object({
+  resources: pipelineResourcesSchema.optional(),
   nextStageIndex: z.number().int().nonnegative().default(0),
   completedStages: z.array(stageResultSchema).default([]),
   approvals: z.record(z.string(), z.string()).default({}),
   approvedStageIds: z.record(z.string(), z.string()).default({}),
-});
-
-const defaultStageExecutor: DynamicStageExecutor = async ({
-  stage,
-  decisionId,
-}) => ({
-  reviewRounds: stage.reviewer ? 1 : 0,
-  ...(decisionId ? { decisionId } : {}),
-  summary: `Executed stage "${stage.id}" via role=${stage.role} skill=${stage.skill}`,
 });
 
 /**
@@ -176,10 +222,9 @@ const defaultStageExecutor: DynamicStageExecutor = async ({
 export function createDynamicPipelineWorkflow(options: {
   pipelines: PipelineRegistry;
   skills: SkillRegistry;
-  stageExecutor?: DynamicStageExecutor;
+  prompts: PromptRegistry;
+  stageExecutor: DynamicStageExecutor;
 }) {
-  const executeStage = options.stageExecutor ?? defaultStageExecutor;
-
   const runStagesStep = createStep({
     id: 'execute-declarative-pipeline',
     description:
@@ -190,26 +235,56 @@ export function createDynamicPipelineWorkflow(options: {
     suspendSchema: pipelineSuspendSchema,
     resumeSchema: pipelineResumeSchema,
     execute: async ({ inputData, resumeData, suspend, state, setState }) => {
-      const pipeline =
-        inputData.inlinePipeline ??
-        (inputData.pipelineId
-          ? options.pipelines.get(inputData.pipelineId)
-          : undefined);
-
-      if (!pipeline) {
-        throw new Error(
-          `Declarative pipeline not found: ${inputData.pipelineId ?? '(none)'}`,
+      let resources = state?.resources;
+      if (!resources) {
+        if (resumeData)
+          throw new Error('Workflow resource snapshot is missing');
+        const pipeline =
+          inputData.inlinePipeline ??
+          (inputData.pipelineId
+            ? options.pipelines.get(inputData.pipelineId)
+            : undefined);
+        if (!pipeline)
+          throw new Error(
+            `Declarative pipeline not found: ${inputData.pipelineId ?? '(none)'}`,
+          );
+        const skills = Object.fromEntries(
+          [...new Set(pipeline.stages.map((stage) => stage.skill))].map(
+            (name) => {
+              const skill = options.skills.get(name);
+              if (!skill) throw new Error(`Unknown Skill: ${name}`);
+              return [name, skill];
+            },
+          ),
         );
+        resources = pipelineResourcesSchema.parse({
+          pipeline,
+          digest: createHash('sha256')
+            .update(JSON.stringify(pipeline))
+            .digest('hex'),
+          skills,
+          prompts: await options.prompts.snapshot(),
+        });
       }
+      const { pipeline, prompts, skills } = resources;
 
-      let stageIndex = state.nextStageIndex ?? 0;
+      let stageIndex = state?.nextStageIndex ?? 0;
       const completedStages: StageExecutionResult[] = [
-        ...(state.completedStages ?? []),
+        ...(state?.completedStages ?? []),
       ];
-      const approvals: Record<string, string> = { ...(state.approvals ?? {}) };
+      const approvals: Record<string, string> = { ...(state?.approvals ?? {}) };
       const approvedStageIds: Record<string, string> = {
-        ...(state.approvedStageIds ?? {}),
+        ...(state?.approvedStageIds ?? {}),
       };
+      const saveState = () =>
+        setState({
+          resources,
+          nextStageIndex: stageIndex,
+          completedStages,
+          approvals,
+          approvedStageIds,
+        });
+      saveState();
 
       // Handle incoming resume decision for the currently suspended stage.
       if (resumeData && stageIndex < pipeline.stages.length) {
@@ -228,12 +303,7 @@ export function createDynamicPipelineWorkflow(options: {
         const gateKey = currentStage.approvalGate?.stageKey ?? currentStage.id;
         approvals[gateKey] = resumeData.decisionId;
         approvedStageIds[currentStage.id] = resumeData.decisionId;
-        setState({
-          nextStageIndex: stageIndex,
-          completedStages,
-          approvals,
-          approvedStageIds,
-        });
+        saveState();
       }
 
       while (stageIndex < pipeline.stages.length) {
@@ -245,12 +315,6 @@ export function createDynamicPipelineWorkflow(options: {
           stage.approvalGate?.required &&
           !decisionId
         ) {
-          setState({
-            nextStageIndex: stageIndex,
-            completedStages,
-            approvals,
-            approvedStageIds,
-          });
           return await suspend({
             runId: inputData.runId,
             pipelineId: pipeline.id,
@@ -263,14 +327,18 @@ export function createDynamicPipelineWorkflow(options: {
           });
         }
 
-        const skillInstructions = options.skills.composeInstructions([
-          stage.skill,
-        ]);
-        const allowedTools = options.skills.resolveAllowedTools([stage.skill]);
-        const result = await executeStage({
+        const skill = skills[stage.skill];
+        if (!skill) throw new Error(`Skill snapshot missing: ${stage.skill}`);
+        const { instructions: skillInstructions, allowedTools } = skill;
+        const result = await options.stageExecutor({
           runId: inputData.runId,
           projectId: inputData.projectId,
           stage,
+          skill,
+          rolePrompt: prompts[promptByRole[stage.role]].text,
+          ...(stage.reviewer
+            ? { reviewerPrompt: prompts[promptByRole[stage.reviewer]].text }
+            : {}),
           skillInstructions,
           allowedTools,
           ...(decisionId ? { decisionId } : {}),
@@ -294,12 +362,7 @@ export function createDynamicPipelineWorkflow(options: {
         });
 
         stageIndex += 1;
-        setState({
-          nextStageIndex: stageIndex,
-          completedStages,
-          approvals,
-          approvedStageIds,
-        });
+        saveState();
       }
 
       return {

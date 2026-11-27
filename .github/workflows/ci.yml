@@ -236,9 +236,9 @@ jobs:
         run: |
           pnpm typecheck
           pnpm lint
+          pnpm build
           pnpm test
           pnpm eval
-          pnpm build
 
   frontend:
     runs-on: ubuntu-24.04

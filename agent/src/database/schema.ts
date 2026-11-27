@@ -45,6 +45,7 @@ export interface ServiceRunsTable {
   goal: string;
   manifest: Record<string, unknown>;
   skill_revisions: string[];
+  prompt_revisions: Record<string, unknown>;
   submission_id: string;
   accepted_revision: ColumnType<
     string,

@@ -145,7 +145,10 @@ export class SessionService implements AgentApplication {
         ];
         if (new Set(packages.map((pkg) => pkg.name)).size !== packages.length)
           throw new Error('Duplicate Skill in run');
-        return packages;
+        return {
+          skills: packages,
+          prompts: await this.options.agentTeam.snapshotPrompts(),
+        };
       },
     );
 
@@ -402,7 +405,10 @@ export class SessionService implements AgentApplication {
         }
       }
 
-      const packages = await this.options.store.skillsForRun(runId);
+      const [packages, prompts] = await Promise.all([
+        this.options.store.skillsForRun(runId),
+        this.options.store.promptsForRun(runId),
+      ]);
       const workspace = await skillWorkspace(packages);
       const explicitlySelected =
         input.manifest.skill_names !== undefined ||
@@ -478,6 +484,7 @@ export class SessionService implements AgentApplication {
                 throw new Error(`Pinned Skill unavailable: ${node.skill}`);
               const stage = await this.options.agentTeam.createScopedProducer(
                 identity,
+                prompts,
                 modelOptions,
                 `按以下技能完成当前画布步骤。输出该步骤的实际创作成果。以工具回执确认的状态描述真实执行结果。\n\n${skill.instructions}`,
                 await skillWorkspace([skill]),
@@ -530,6 +537,7 @@ export class SessionService implements AgentApplication {
             await (
               await this.options.agentTeam.createScopedProducer(
                 identity,
+                prompts,
                 modelOptions,
                 skillInstructions,
                 workspace,

@@ -153,6 +153,10 @@ flowchart LR
 - **上游渠道弹性配置**：渠道表中任意模型组均可配置直连官方端点、OpenRouter 或自托管 Bifrost 地址，实现按需扩展多上游容灾而不在架构上强绑定外部网关。
 - **多模态异步生成统一收口与混合等待**：文生图、图生视频、语音合成/克隆等异步任务继续由 Go `execution/gateway` + `operation` 统一处理提交、轮询、COS 落盘与计费，所有付费提交必须携带确定性 `operationId` 实现崩溃重放防重扣费。多阶段交付、审批与超长队列走 Mastra Workflow `suspend/resume` + Go 终态回调；自由对话内中短耗时即兴生成（15s–120s）由 Go 将 `task.wait`（≤25s 长轮询分片）暴露为标准 MCP Tool，Agent 侧在 MCP Tool Wrapper 内循环调用该 MCP Tool（走 `@mastra/mcp`，零手写 HTTP）并实时推送 `task.progress`，超过阈值安全 Yield，避免消耗 LLM 推理轮次去轮询任务状态。
 
+<a id="agent-gateway-support"></a>
+
+**当前支持范围（2026-11-27）。** Go SDK 网关的 Chat Completions、Responses 和 Messages 有独立 SSE 合同。Mastra 现有工作流通过内部 Agent 模型入口发起非流式请求，该入口在授权路径上拒绝模型流式请求。Gemini 客户端接线已存在，仍缺统一计量、授权和账本验收。Agent 进度事件、MCP 任务状态和供应商模型流分别验收。上方原生流式保真及 Gemini 的描述为实施目标，发布范围以协议、型号和用量证据为准。 [接入与计费底座](33-多设计模式驱动的模型与供应商接入扩展体系设计.md#agent-gateway-billing)
+
 ### 7.5 持久化、静态 Schema 与控制层（已确认）
 
 1. **数据库边界**：
@@ -193,21 +197,24 @@ flowchart LR
      - **成本与请求效率门禁**：校验单次任务的迭代步数上限、请求次数与返回字节预算，禁止死循环。
      - **LLM-as-a-Judge**：在关键创作质量与审批判断集上执行 Rubric 评分（CI 默认用固定回放/可控预算模型，真实高成本模型按需触发）。
 
-### 7.8 目标目录结构（设计建议）
+<a id="agent-resource-layout"></a>
 
-延续 Google TypeScript 扁平两层包组织（`src/<package>/<module>.ts`），彻底消除 NestJS 与 Prisma 残留：
+### 7.8 Agent 服务目录与运行资源
+
+承接 [SRC-AGV2-04](../requirement/33-Agent服务架构重构与技术选型需求.md#src-agv2-04)。沿用现有包结构。每个角色在 Mastra 中装配，按需引用 Prompt、Skill 和工作流。多个角色可以共用同一个 Skill 包，目录按资源职责组织。工程代码延续 `src/<package>/<module>.ts`。
 
 ```text
 agent/
 ├── prompts/                 # 本地兜底与种子 Prompt（线上权威为 Langfuse）
 ├── skills/                  # 声明式 SKILL.md 能力包与 MCP 白名单定义
+├── pipelines/               # 版本化 JSON 工作流，定义阶段、角色、Skill 和审批点
 ├── evals/                   # Mastra Scorers + Vitest 离线轨迹与质量评测集
 ├── tests/                   # 单元、契约、隔离 PG 与恢复集成测试
 └── src/
     ├── server.ts            # 进程入口：配置校验、PG/Redis/Langfuse 初始化、gRPC + 健康探针启动与优雅停机
     ├── config.ts            # Zod 环境变量校验
     ├── transport/           # gRPC Server（AgentRuntime）、极简 HTTP /healthz /readyz、鉴权与错误映射
-    ├── business/            # AgentBusiness gRPC 客户端、Go MCP 客户端装配、Go 透传网关 Provider Factory
+    ├── business/            # Go MCP 客户端、工具包装、Go 模型网关的 SDK Provider
     ├── database/            # pg Pool、Kysely Database 类型映射、@mastra/pg（disableInit）封装
     ├── sessions/            # 会话/Run 生命周期、PG 租约锁、事件日志、可插拔 EventBus、崩溃恢复
     ├── mastra/              # Mastra 实例装配、Producer 主 Agent、专家子 Agent、HITL Workflows、Memory 配置
@@ -215,7 +222,50 @@ agent/
     └── observability/       # Pino 脱敏日志、OTel + Langfuse Exporter、Prompt 拉取与本地缓存兜底
 ```
 
-依赖方向严格单向无环：`transport → sessions → mastra → {skills, business, database, observability}`。
+#### 服务分工
+
+- `server.ts` 统一装配配置、存储、资源注册表和入站协议。`transport/` 校验 gRPC 调用身份。`sessions/` 持有会话、Run 受理、资源版本、事件、租约及恢复。`mastra/` 持有 Producer、专家 Agent、委派、阶段和审批编排。依赖从入口向运行层与适配器单向流动。
+- `skills/` 的加载代码归 `src/skills/`，内容包归包根 `skills/`。Prompt 和工作流定义按资源发布。模型供应商、Key、精确型号、额度和费率由 Go 网关持有，Agent 通过授权运行使用逻辑模型标识，收费工具由 Go 负责确认、派发与结算。 [AI 网关与计费合同](33-多设计模式驱动的模型与供应商接入扩展体系设计.md#agent-gateway-billing)
+- Go 业务域持有项目剧本、设定、分镜、素材和已接受的画布修订，Canvas 服务负责协作计算。Agent 通过 Go MCP 接收按项目授权的摘要和资源引用，按需读取证据与指定修订，写入沿既有工具与审批合同。工程文档的 `workspace/`、Mastra 的运行时 Workspace 和创作项目是三个独立边界。 [创作项目知识库设计](50-创作项目知识库设计.md)
+
+#### 资源配置与启动校验
+
+本地从 Agent 包的 `package.json` 定位资源，独立于进程启动目录。镜像将资源打包到 `/app`，以只读根文件系统运行，`/tmp` 为临时空间；运行版本、会话与工作流恢复事实使用 PostgreSQL。gRPC 合同源位于 `backend/api/proto/glowloom/agent/runtime.proto`，镜像读取打包的 `/app/proto/runtime.proto`。
+
+| 资源 | 默认来源 | 扩展与版本规则 |
+| --- | --- | --- |
+| 角色指令 | `prompts/<role>.md`。启用 Langfuse 后优先解析远端发布版本 | 启动时验证本地兜底非空。运行受理时保存实际正文、摘要和可用的 Langfuse 版本 |
+| 内置与平台运营 Skill | `skills/<name>/SKILL.md` 及参考资料、附件 | `GLOWLOOM_AGENT_SKILLS_DIRS` 接受逗号分隔的容器绝对路径，部署以只读方式挂载。启动校验包内路径和重复名称 |
+| 工作流 | `pipelines/*.json` | `GLOWLOOM_AGENT_PIPELINES_DIRS` 支持只读扩展。启动校验目录、JSON、重复工作流/阶段/审批标识、角色与 Skill 引用 |
+| 项目私有 Skill | Go MCP `skill_load_bundle` | 按项目授权及 `skill_id / version / resource_hash` 读取并固定原始附件。业务操作时再由 Go 校验当前授权 |
+
+扩展目录的配置统一从 `src/config.ts` 解析，再由 `src/server.ts` 注入注册表。默认镜像包含三类内置资源；额外挂载是部署选项。工作流标识、Skill 标识和业务资源 ID 由请求选择，物理目录由部署选择。容器根目录、Git 仓库、用户主目录和其他项目目录均在模型的文件访问范围之外。
+
+需要发布平台扩展时，可在部署专用的 Compose 覆盖配置中按以下方式注入。两个挂载可以独立启用。
+
+```yaml
+services:
+  agent:
+    environment:
+      GLOWLOOM_AGENT_SKILLS_DIRS: /opt/glowloom/agent/skills
+      GLOWLOOM_AGENT_PIPELINES_DIRS: /opt/glowloom/agent/pipelines
+    volumes:
+      - /srv/glowloom/agent-resources/skills:/opt/glowloom/agent/skills:ro
+      - /srv/glowloom/agent-resources/pipelines:/opt/glowloom/agent/pipelines:ro
+```
+
+#### 智能体一次运行如何使用目录
+
+1. Go 核对创作空间、项目、Run 及授权，提交意图、所选工作流或画布修订、模型与预算范围，并提供允许的业务资源引用。Producer 承接自由创作；有阶段和审批的任务由 Workflow 调度相应专家。
+2. Agent 在受理时解析工作流和 Skill 版本，把 Skill 正文及附件按摘要装配为本次运行的 Mastra Workspace。模型先看可用能力及描述，再按需读取相对附件路径。沿用 Mastra 的 Skill 工具与 `CompositeVersionedSkillSource`。附件中的脚本仅作为静态资源。 [Mastra Skills 官方文档](https://mastra.ai/docs/sandbox/skills)
+3. 角色、工作流阶段和 Skill 提供工具范围，Go 以当前 Run 授权再次核验实际调用。一般创作通过现有 MCP 工具读取或提交业务操作，收费阶段使用 Go 生成的报价和用户审批回执，具体出站、恢复与计费沿同一网关。
+4. 发布新资源后，新 Run 使用新版本。等待审批或恢复的 Run 沿原资源快照执行，项目与工具权限按当前授权核验。原定义缺失、审批内容不再匹配或权限撤回时，保留已完成阶段和原回执，结束或请求重新确认，不按当下目录内容继续收费步骤。
+
+例如短剧工作流 `vertical-short-drama` 的 `extract-event-graph` 阶段选择 `scriptwriter` 角色和 `novel-to-event-graph` Skill。原始小说按项目证据引用读取。后续角色资产或视频生成阶段取得相应审批后再提交网关。
+
+**首阶段发布与执行。** Skill 和工作流通过 Git/CI 发布，角色 Prompt 由 Langfuse 管理。Producer 自动选择授权范围内的 Skill 与只读工具，写入和收费由 Go 执行既有权限与确认规则。通用运行底座使用文件型工作流验证暂停与恢复。产品级付费入口还需接入 Go 的提案、授权延续和账本回执。
+
+**单一服务与持久化。** 所有 Run 使用同一个 Agent 服务合同和同一 PostgreSQL `agent` schema。会话受理时固定 Skill 摘要与实际 Prompt。文件型工作流初次执行时将定义、Skill 附件和角色指令写入 Mastra 状态，恢复时读取同一份记录。发布资源只改变新 Run 的资源解析结果。Langfuse 版本号和内容摘要用于追溯来源。测试库用完整 SQL 初始化，新结构要求会话 Run 具备 Prompt 快照。 [成熟 Agent 服务调研](../research/01-Agent服务架构与技术选型调研.md#durable-agent-platforms) · [验收标准](../prd/34-Agent服务架构重构与技术选型.md#agent-resource-acceptance)
 
 ### 7.9 用户故事与来源追踪
 

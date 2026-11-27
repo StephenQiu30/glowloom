@@ -17,12 +17,13 @@ import { z } from 'zod';
 
 import { resourceDirectory } from '../config.js';
 
-export interface DeclarativeSkill {
-  name: string;
-  description: string;
-  instructions: string;
-  allowedTools: string[];
-}
+export const declarativeSkillSchema = z.object({
+  name: z.string(),
+  description: z.string(),
+  instructions: z.string(),
+  allowedTools: z.array(z.string()),
+});
+export type DeclarativeSkill = z.infer<typeof declarativeSkillSchema>;
 
 const fileSchema = z.object({
   blobHash: z.string().regex(/^[a-f0-9]{64}$/),
@@ -31,11 +32,7 @@ const fileSchema = z.object({
   encoding: z.enum(['utf-8', 'base64']).optional(),
 });
 
-export const pinnedSkillSchema = z.object({
-  name: z.string(),
-  description: z.string(),
-  instructions: z.string(),
-  allowedTools: z.array(z.string()),
+export const pinnedSkillSchema = declarativeSkillSchema.extend({
   digest: z.string().regex(/^[a-f0-9]{64}$/),
   tree: z.object({ entries: z.record(z.string(), fileSchema) }),
   blobs: z.array(
@@ -172,15 +169,7 @@ export async function skillWorkspace(
 export class SkillRegistry {
   private skills = new Map<string, DeclarativeSkill>();
   private pending: Promise<PinnedSkill[]> | undefined;
-  constructor(
-    private readonly dirs = [
-      resourceDirectory('skills'),
-      ...(process.env.GLOWLOOM_AGENT_SKILLS_DIRS ?? '')
-        .split(',')
-        .map((dir) => dir.trim())
-        .filter(Boolean),
-    ],
-  ) {}
+  constructor(private readonly dirs = [resourceDirectory('skills')]) {}
 
   discover(): Promise<PinnedSkill[]> {
     this.pending ??= this.scan().finally(() => {
@@ -227,17 +216,6 @@ export class SkillRegistry {
   }
   list(): DeclarativeSkill[] {
     return [...this.skills.values()];
-  }
-  resolveAllowedTools(names: readonly string[]): string[] {
-    return [
-      ...new Set(names.flatMap((name) => this.get(name)?.allowedTools ?? [])),
-    ];
-  }
-  composeInstructions(names: readonly string[]): string {
-    return names
-      .map((name) => this.get(name)?.instructions)
-      .filter(Boolean)
-      .join('\n\n');
   }
 }
 

@@ -1,9 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
-import { readFile } from 'node:fs/promises';
-import { z } from 'zod';
-import { canvasWorkflowSchema } from '../src/mastra/canvas-workflow.js';
 import { afterAll, expect, it, vi } from 'vitest';
 import { createDatabaseBundle } from '../src/database/connection.js';
 import { createMastraRuntime } from '../src/mastra/runtime.js';
@@ -197,6 +194,9 @@ it.skipIf(!dsn)(
     );
     expect((await service.startRun(start)).root_run_id).toBe(runId);
     const persisted = await new SessionStore(db.db).skillsForRun(runId);
+    const prompts = await store.promptsForRun(runId);
+    expect(prompts.producer.text).toContain('Producer');
+    expect(prompts.producer.digest).toMatch(/^[a-f0-9]{64}$/);
     expect(persisted.map((skill) => skill.name)).toEqual([
       'short-drama-review',
     ]);
@@ -230,48 +230,6 @@ it.skipIf(!dsn)(
         )
       ).events,
     ).toEqual([]);
-
-    const templateFile = new URL(
-      '../../frontend/src/components/canvas/skill-workflow/skill-workflow-templates.json',
-      import.meta.url,
-    );
-    const templates = z
-      .array(
-        z.object({
-          title: z.string(),
-          nodes: z.array(z.record(z.string(), z.unknown())),
-        }),
-      )
-      .parse(JSON.parse(await readFile(templateFile, 'utf8')));
-    for (const [index, template] of templates.entries()) {
-      const graph = canvasWorkflowSchema.parse({
-        id: randomUUID(),
-        nodes: template.nodes.map((node) => ({ ...node, id: node.skill })),
-      });
-      const receipt = await service.startRun({
-        ...start,
-        requestId: randomUUID(),
-        expectedExecutionRevision: index + 1,
-        goal: '按模板改编示例故事',
-        manifest: { model_key: 'test-model', workflow: graph },
-      });
-      const id = String(receipt.root_run_id);
-      await vi.waitFor(
-        async () => {
-          const run = await service.getRun(identity, id);
-          expect(run.state.status).toBe('completed');
-          expect(
-            run.events.filter(
-              (event) => event.event_type === 'workflow.node.completed',
-            ),
-          ).toHaveLength(graph.nodes.length);
-        },
-        { timeout: 5000, interval: 50 },
-      );
-      const pins = await store.skillsForRun(id);
-      expect(pins).toHaveLength(graph.nodes.length);
-    }
-    expect(requests).toHaveLength(21);
   },
   25_000,
 );

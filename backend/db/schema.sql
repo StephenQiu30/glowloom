@@ -7325,6 +7325,7 @@ CREATE TABLE agent.service_runs (
     goal text NOT NULL,
     manifest jsonb NOT NULL,
     skill_revisions jsonb NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(skill_revisions) = 'array'),
+    prompt_revisions jsonb NOT NULL CHECK (jsonb_typeof(prompt_revisions) = 'object'),
     submission_id uuid NOT NULL,
     accepted_revision bigint NOT NULL,
     status text NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'running', 'waiting_approval', 'completed', 'failed', 'cancelled')),

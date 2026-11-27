@@ -42,7 +42,7 @@ export function createDatabaseBundle(
     db,
     mastraStore,
     async close(): Promise<void> {
-      await db.destroy();
+      await Promise.all([db.destroy(), mastraStore.close()]);
     },
   };
 }

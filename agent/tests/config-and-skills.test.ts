@@ -8,6 +8,27 @@ import {
 } from '../src/skills/loader.js';
 
 describe('config, declarative skills, and prompt fallback', () => {
+  it('parses mounted resources once and rejects working-directory-relative overrides', () => {
+    const env = {
+      GLOWLOOM_AGENT_DB_DSN: 'postgres://glowloom_agent@127.0.0.1/glowloom',
+      GLOWLOOM_AGENT_SERVICE_TOKEN: 's'.repeat(32),
+      GLOWLOOM_AGENT_BUSINESS_ORIGIN: 'http://backend:18080',
+      GLOWLOOM_AGENT_BUSINESS_TOKEN: 'b'.repeat(32),
+      GLOWLOOM_AGENT_SKILLS_DIRS: '/opt/agent/skills, /opt/agent/shared',
+      GLOWLOOM_AGENT_PIPELINES_DIRS: '/opt/agent/pipelines',
+    };
+    const config = loadConfig(env);
+    expect(config.skillDirectories).toEqual([
+      expect.stringMatching(/\/agent\/skills$/),
+      '/opt/agent/skills',
+      '/opt/agent/shared',
+    ]);
+    expect(config.pipelineDirectories.at(-1)).toBe('/opt/agent/pipelines');
+    expect(() =>
+      loadConfig({ ...env, GLOWLOOM_AGENT_SKILLS_DIRS: './skills' }),
+    ).toThrow('Use an absolute directory path');
+  });
+
   it.each([undefined, '', '  '])(
     'loads Agent config with an unset or blank Langfuse URL (%j)',
     (langfuseBaseURL) => {

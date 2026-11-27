@@ -19,14 +19,15 @@ import {
 
 const config = loadConfig(process.env);
 const logger = createAgentLogger(config.logLevel);
+const prompts = new PromptRegistry(config.langfuse, logger);
+await prompts.validateLocal();
+const skills = new SkillRegistry(config.skillDirectories);
+await skills.reload();
+const pipelines = new PipelineRegistry(config.pipelineDirectories);
+await pipelines.reload(skills);
+
 const dbBundle = createDatabaseBundle(config.dbDsn, config.poolMax);
 const eventBus = createEventBus(config.redisUrl, logger);
-const prompts = new PromptRegistry(config.langfuse, logger);
-const skills = new SkillRegistry();
-await skills.reload();
-const pipelines = new PipelineRegistry();
-await pipelines.reload();
-
 const agentTeam = await createMastraRuntime({
   storage: dbBundle.mastraStore,
   gatewayConfig: {

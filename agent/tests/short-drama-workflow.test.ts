@@ -6,6 +6,8 @@ import {
   PipelineRegistry,
 } from '../src/mastra/pipeline-engine.js';
 import { SkillRegistry } from '../src/skills/loader.js';
+import { PromptRegistry } from '../src/observability/langfuse.js';
+import { createAgentLogger } from '../src/observability/logger.js';
 
 describe('Zero-hardcoding Data-Driven Mastra Pipeline Engine & Dynamic SkillRegistry', () => {
   const skills = new SkillRegistry();
@@ -18,6 +20,11 @@ describe('Zero-hardcoding Data-Driven Mastra Pipeline Engine & Dynamic SkillRegi
     const dynamicPipelineWorkflow = createDynamicPipelineWorkflow({
       pipelines,
       skills,
+      prompts: new PromptRegistry(undefined, createAgentLogger('error')),
+      stageExecutor: async ({ stage }) => ({
+        reviewRounds: stage.reviewer ? 1 : 0,
+        summary: stage.name,
+      }),
     });
     mastra = new Mastra({
       storage: new InMemoryStore(),

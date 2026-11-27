@@ -74,4 +74,19 @@ BeefTV 定位**本地优先桌面工作台**（Wails + Go + SQLite），内置�
 - 本文结论基于 2026-11-25 至 2026-11-26 的公开资料、框架类型定义与 `glanderness/BeefTV` 公开主干源码核查，未在本地实际编译运行 BeefTV 桌面端或压测 Bifrost/Langfuse。
 - `@mastra/pg` 禁用运行时 DDL（`disableInit`）、`service_runs` 原子预算列与 Go `task.wait` MCP 端点契约需在实施阶段通过隔离 PostgreSQL 与联调测试验证。
 
+<a id="durable-agent-platforms"></a>
+
+## 6. 通用 Agent 服务与在途运行治理
+
+2026-11-27 核对公开技术文档。整体架构应覆盖资源发布、编排与检查点、工具权限、模型调用、观测和评测。
+
+| 参考体系 | 已核对机制 | 织光采用的边界 |
+| --- | --- | --- |
+| Mastra | 会话与工作流依赖持久化存储，挂起运行由快照恢复。版本化 Skill Source 可从内容寻址存储装配技能树。 [存储](https://mastra.ai/docs/storage) · [Skills](https://mastra.ai/docs/sandbox/skills#custom-skill-sources) | Node 负责 Producer、专家、工作流与上下文。PostgreSQL 保存 Run 和检查点。在途工作流冻结实际定义与资源。 |
+| LangGraph / LangSmith Agent Server | PostgreSQL 持有 Run、会话、记忆与检查点，Redis 承担 Worker 通信及临时元数据。审批恢复从被中断的节点重新进入。修改节点或数据形状之前须考虑已有检查点。 [数据平面](https://docs.langchain.com/langsmith/data-plane) · [中断](https://docs.langchain.com/oss/javascript/langgraph/interrupts#resuming-interrupts) · [兼容性](https://docs.langchain.com/oss/javascript/langgraph/backward-compatibility) | Redis 可用于事件通知。以 PostgreSQL 为恢复真源。业务工具沿 Go 的授权、稳定操作身份和幂等回执承接重复执行。 |
+| Langfuse | 发布标签可重新指向不同版本，具体版本可精确读取。 [Prompt 版本化](https://langfuse.com/docs/prompt-management/features/prompt-version-control) | 发布标签供新 Run 解析。运行持久化实际 Prompt 正文、内容摘要和可用的来源版本。 |
+| Temporal | Pinned Worker 将运行绑定到特定 Worker 发布版本，旧运行可在旧构建排空。 [Worker Versioning](https://docs.temporal.io/worker-versioning#pinned-workflows) | 公开机制用于对照不同的升级模型。织光采用同一个 Agent 服务合同、同一个持久化真源和每次运行的资源快照。 |
+
+目录资源发布和检查点生命周期由[设计48 §7.8](../design/48-Agent服务Mastra架构与技术选型设计.md#agent-resource-layout)维护。模型、工具与计费的业务权威见[设计33](../design/33-多设计模式驱动的模型与供应商接入扩展体系设计.md#agent-gateway-billing)。
+
 [调研导航](00-调研导航.md) · [需求33](../requirement/33-Agent服务架构重构与技术选型需求.md) · [设计48](../design/48-Agent服务Mastra架构与技术选型设计.md)

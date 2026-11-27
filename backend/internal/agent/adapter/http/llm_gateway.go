@@ -1,7 +1,6 @@
 package http
 
 import (
-	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"net/http"
@@ -111,7 +110,12 @@ func (h *BusinessHandler) executeGatewayCall(
 	}
 	scope := domain.Scope{ActorID: actorID, OrgID: orgID, ScopeID: scopeID, ProjectID: projectID}
 	callID := uuid.New()
-	if supplied, parseErr := uuid.Parse(c.GetHeader("X-Glowloom-Call-Id")); parseErr == nil {
+	if header := c.GetHeader("X-Glowloom-Call-Id"); header != "" {
+		supplied, err := uuid.Parse(header)
+		if err != nil || supplied == uuid.Nil {
+			send(c, nil, domain.ErrInvalid)
+			return uuid.Nil, gatewayModelResult{}, false
+		}
 		callID = supplied
 	}
 	runID, _ := uuid.Parse(c.GetHeader("X-Glowloom-Run-Id"))
@@ -190,9 +194,8 @@ func (h *BusinessHandler) executeGatewayCall(
 			return uuid.Nil, gatewayModelResult{}, false
 		}
 		in := domain.CallInput{
-			Grant:     grant,
-			Input:     raw,
-			MaxMicros: grant.AvailableMicros,
+			Grant: grant,
+			Input: raw,
 			Call: domain.CallIdentity{
 				TaskID:          runID.String(),
 				CallID:          callID.String(),
@@ -203,10 +206,7 @@ func (h *BusinessHandler) executeGatewayCall(
 			},
 		}
 		var receipt domain.CallReceipt
-		receipt, err = h.store.ExecuteCall(c.Request.Context(), "model", "chat", in,
-			func(ctx context.Context, scope domain.Scope, id uuid.UUID) (domain.CallResult, error) {
-				return h.capabilities.Model(ctx, scope, id, raw, in.MaxMicros)
-			})
+		receipt, err = h.store.ExecuteGatewayModel(c.Request.Context(), in, h.capabilities.Model)
 		result = receipt.CallResult
 	}
 	if err != nil {

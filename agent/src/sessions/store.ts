@@ -2,6 +2,10 @@ import { createHash, randomUUID } from 'node:crypto';
 import { sql, type Kysely } from 'kysely';
 import type { AgentDatabase, RunStatus } from '../database/schema.js';
 import { runIdentifier } from '../skills/run-skills.js';
+import {
+  promptSnapshotSchema,
+  type PromptSnapshot,
+} from '../observability/langfuse.js';
 import { pinnedSkillSchema, type PinnedSkill } from '../skills/loader.js';
 import { AgentError } from './errors.js';
 import type {
@@ -166,10 +170,10 @@ export class SessionStore {
     input: StartRunInput,
     ownerId: string,
     leaseMs: number,
-    prepareSkills: (
+    prepareResources: (
       runId: string,
       submissionId: string,
-    ) => Promise<PinnedSkill[]>,
+    ) => Promise<{ skills: PinnedSkill[]; prompts: PromptSnapshot }>,
   ): Promise<{
     runId: string;
     submissionId: string;
@@ -275,18 +279,21 @@ export class SessionStore {
       );
       const submissionId = runIdentifier(runId, 'submission:initial');
       let skillRevisions: string[];
+      let promptRevisions: PromptSnapshot;
       if (input.retryOfRunId) {
         const original = await trx
           .selectFrom('agent.service_runs')
-          .select('skill_revisions')
+          .select(['skill_revisions', 'prompt_revisions'])
           .where('id', '=', input.retryOfRunId)
           .where('session_id', '=', input.sessionId)
           .executeTakeFirst();
         if (!original)
           throw new AgentError('run_not_found', 'Original run not found');
         skillRevisions = original.skill_revisions;
+        promptRevisions = promptSnapshotSchema.parse(original.prompt_revisions);
       } else {
-        const skills = await prepareSkills(runId, submissionId);
+        const { skills, prompts } = await prepareResources(runId, submissionId);
+        promptRevisions = prompts;
         skillRevisions = skills.map((skill) => skill.digest);
         if (skills.length > 0) {
           await trx
@@ -320,6 +327,7 @@ export class SessionStore {
           content_hash: contentHash,
           goal: input.goal,
           manifest: input.manifest,
+          prompt_revisions: promptRevisions,
           skill_revisions: sql<
             string[]
           >`CAST(${JSON.stringify(skillRevisions)} AS jsonb)`,
@@ -365,6 +373,15 @@ export class SessionStore {
         throw new Error('Pinned Skill revision unavailable');
       return skill;
     });
+  }
+
+  async promptsForRun(runId: string): Promise<PromptSnapshot> {
+    const run = await this.db
+      .selectFrom('agent.service_runs')
+      .select('prompt_revisions')
+      .where('id', '=', runId)
+      .executeTakeFirstOrThrow();
+    return promptSnapshotSchema.parse(run.prompt_revisions);
   }
 
   async appendEvent(

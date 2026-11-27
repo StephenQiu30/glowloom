@@ -52,6 +52,18 @@
 5. **混合异步媒体任务等待**：不引入 Temporal / Restate / DBOS；多阶段交付、HITL 付费审批与超长视频任务走 Mastra Workflow `suspend/resume` + Go 终态回调；自由对话内中短耗时任务（15s–120s）走 Go 暴露的标准 MCP Tool `task.wait`（≤25s 分片长轮询 + 进度推送 + 确定性 `operationId` 幂等 + 超时安全 Yield），杜绝 LLM 空轮询与重复扣费。
 6. **结果态与请求效率离线评测门禁**：在 Mastra Scorers + Vitest 基础上引入内存版 Mock MCP 业务模拟器（`sim-business`）与 AI SDK 原生 Mock 模型，零模型费、零手写 HTTP 桩验证画布终态、零重复付费 `operationId`、大画布定位与请求效率预算。
 
+<a id="src-agv2-04"></a>
+
+### SRC-AGV2-04（2026-11-27，Agent 目录与服务设计）
+
+> 包括对应的我们的agent服务作为一个智能体应该如何对目录进行对应的配置，还有我们当前的服务中应该如何设计等等
+
+用户要求明确 Agent 服务的源码目录、智能体运行时如何发现和读取资源，以及它与当前 Go 网关、业务数据的分工。目录配置、发布方式和在途任务兼容方案见[设计48 §7.8](../design/48-Agent服务Mastra架构与技术选型设计.md#agent-resource-layout)。
+
+**问答确认。** 先建设通用智能体底座，短剧用作隔离验收示例。Producer 默认自动选择经授权的 Skill 和只读工具，项目写入交由 Go 校验权限，收费操作使用 Go 报价与用户确认。工程团队通过 Git 和 CI 发布 Skill 与工作流，运营使用 Langfuse 发布 Prompt。测试环境直接采用完整新结构，删除缺快照的旧测试合同及其依赖。
+
+**服务一致性。** 用户要求 Agent 保持一个服务合同和同一数据真源。发布后由同一 Agent 读取新任务资源以及旧任务已经固定的运行内容。
+
 ## 2. 明确要求
 
 | ID          | 要求                                                                     | 确认边界                                                                                             |
@@ -64,6 +76,7 @@
 | FR-AGV2-06  | 落地“离线 CI 轨迹评测 + 线上 Langfuse 观测与 Prompt 治理”双轨体系        | CI 跑 Mastra Scorers + Vitest；线上对接自托管 Langfuse（OTel Trace / Prompt 管理 / Dataset / 采样）  |
 | FR-AGV2-07  | 落地画布分层有界视图、同轮写链 Rebase 与混合异步媒体任务等待             | Go/Canvas 守 CAS/幂等/分页；Agent MCP Wrapper 做 `<40KB` 裁剪、局部写 Rebase 与 `task.wait` + 超时 Yield |
 | FR-AGV2-08  | 落地原生多协议透传、Prompt Cache 稳定锚点、PG 持久预算与结果态离线评测   | 基于 `@ai-sdk/*` + `wrapLanguageModel` + 原生 `timeout.{stepMs,chunkMs}` + PG 派发前预扣 + Mock MCP 评测 |
+| FR-AGV2-09 | 定义 Agent 代码、运行资源和项目资料的目录与访问边界 | 说明默认来源、可配置入口、运行时的读取范围，以及配置变更对审批、恢复和业务授权的影响 |
 | NFR-AGV2-01 | 严格遵守仓库数据库与工程红线                                             | `backend/db/schema.sql` 唯一结构真源，关闭 `@mastra/pg` 运行时 DDL；遵循 Google Go / Google TS 规范  |
 | NFR-AGV2-02 | 严格执行 `agent/` 出网零手写 `fetch/http` 红线                           | 禁止手写 HTTP/`fetch` 出网代理或客户端（含清理既有 `gateway-provider.ts` / `run-skills.ts` 存量 `fetch`） |
 | BR-AGV2-01  | 保持既有前端公共 `/api`、SSE 对话体验与创作业务能力不回退                | 承接 [需求19](19-完整创作Agent与Skill多Agent需求.md) 的创作业务目标，替代其底层 Pi/NestJS 技术选型   |
@@ -93,5 +106,6 @@
 | AC-AGV2-07 | Mastra Scorers + Vitest 离线轨迹评测门禁与自托管 Langfuse OTel Trace / Prompt 兜底链路验证通过       | FR-AGV2-06、BR-AGV2-01  |
 | AC-AGV2-08 | `agent/src/` 全部出网零手写 `fetch/http`；多协议原生透传、`wrapLanguageModel` Cache 锚点、原生 `chunkMs` 超时与 PG 派发前原子预算验证通过 | FR-AGV2-08、NFR-AGV2-02 |
 | AC-AGV2-09 | 画布 `<40KB` 分层投影与同轮局部写链 Rebase、`operationId` 防重扣费、混合 `task.wait` 异步等待及 Mock MCP 结果态离线评测全部通过 | FR-AGV2-07、FR-AGV2-08  |
+| AC-AGV2-10 | 开发与容器的资源加载有明确配置，同一运行在资源更新后可按原版本恢复，项目资源和执行权限继续受业务授权约束 | FR-AGV2-09 |
 
 [需求导航](00-需求导航.md) · [设计48](../design/48-Agent服务Mastra架构与技术选型设计.md)

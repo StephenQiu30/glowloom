@@ -28,6 +28,18 @@
 | AC-AGV2-08 | 审查 `agent/src/` 网络调用与验证多协议透传、Cache 锚点、超时与预算 | `agent/src/` 全部出网零手写 `fetch/http`（仅保留入站健康探针）；官方 `@ai-sdk/*` 多协议透传、`wrapLanguageModel` Cache 锚点前移、原生 `chunkMs` 超时与 PG `service_runs` 派发前原子预算测试通过 | 设计48 §7.4、§7.5       |
 | AC-AGV2-09 | 验证画布分层有界投影、同轮写链 Rebase、混合异步等待与结果态 Eval | 大画布读取 `<40KB` 且截断字段带 `complete: false` 与指针下钻；同轮局部写链自动 Rebase 且外部修改触发熔断；付费任务带确定性 `operationId` 防重扣费；自由对话 `task.wait` 与 Workflow 混合等待及 Mock MCP 结果态离线评测全绿 | 设计48 §7.4、§7.6、§7.7 |
 
+<a id="agent-resource-acceptance"></a>
+
+### AC-AGV2-10 资源装配与在途恢复
+
+| 场景 | 可观察结果 |
+| --- | --- |
+| 开发者从任意工作目录启动，运维启动默认镜像或提供额外只读资源 | 加载同一版内置资源。显式配置的目录缺失、不可读、定义无效或标识重复时，服务启动报出哪个资源无法装配 |
+| 工作流在审批点挂起，运维更新同 ID 的资源并重启 Agent | 同一服务从同一数据库恢复旧 Run 的原工作流、Skill 附件、Prompt 和审批范围，新 Run 使用当前资源。撤销业务权限后，旧 Run 无法继续受影响的操作 |
+| 项目成员选用私有 Skill 或读取同名资料 | 资源访问沿当前项目授权和明确的版本引用；跨项目、任意宿主机路径或未授权工具调用被拒绝 |
+
+来源 [设计48 §7.8](../design/48-Agent服务Mastra架构与技术选型设计.md#agent-resource-layout)。
+
 ## 4. 排除范围与接受边界
 
 - 不引入独立第三方重型 LLM 网关中间件（如 LiteLLM Python 容器）作为强制依赖。

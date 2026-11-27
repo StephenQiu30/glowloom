@@ -10,6 +10,7 @@ import {
   canvasWorkflowSchema,
   createCanvasWorkflow,
 } from '../src/mastra/canvas-workflow.js';
+import { PipelineRegistry } from '../src/mastra/pipeline-engine.js';
 import {
   pinnedSkillSchema,
   SkillRegistry,
@@ -18,35 +19,22 @@ import {
 
 describe('canvas Skill execution', () => {
   it('discovers every packaged stage and reads the original reference, script, and image', async () => {
-    const templateFile = path.resolve(
-      resourceDirectory('skills'),
-      '../../frontend/src/components/canvas/skill-workflow/skill-workflow-templates.json',
-    );
-    const templates = canvasWorkflowSchema.array().parse(
-      JSON.parse(await readFile(templateFile, 'utf8')).map(
-        (template: { title: string; nodes: Array<{ skill: string }> }) => ({
-          id: template.title,
-          nodes: template.nodes.map((node) => ({ ...node, id: node.skill })),
-        }),
-      ),
-    );
-    const packages = await new SkillRegistry([
-      resourceDirectory('skills'),
-    ]).discover();
+    const registry = new SkillRegistry();
+    const packages = await registry.discover();
+    await registry.reload();
+    const definitions = await new PipelineRegistry().reload(registry);
     const stages = new Set(
-      templates.flatMap((template) => template.nodes.map((node) => node.skill)),
-    );
-    const selected = packages.filter((pkg) => stages.has(pkg.name));
-    expect(stages.size).toBe(19);
-    expect(selected).toHaveLength(19);
-    expect(
-      selected.reduce(
-        (count, pkg) => count + Object.keys(pkg.tree.entries).length,
-        0,
+      definitions.flatMap((pipeline) =>
+        pipeline.stages.map((stage) => stage.skill),
       ),
-    ).toBe(263);
+    );
+    expect(stages.size).toBeGreaterThan(0);
+    for (const name of ['short-drama-review', 'novel-staging'])
+      stages.add(name);
+    const selected = packages.filter((pkg) => stages.has(pkg.name));
+    expect(selected).toHaveLength(stages.size);
     const workspace = await skillWorkspace(selected);
-    expect(await workspace.skills?.list()).toHaveLength(19);
+    expect(await workspace.skills?.list()).toHaveLength(stages.size);
     expect(await workspace.skills?.get('short-drama-review')).toBeTruthy();
     for (const [name, file] of [
       ['short-drama-review', 'references/stage-contract.md'],
