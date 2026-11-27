@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/domain"
 )
 
@@ -41,6 +42,7 @@ func (s *Store) Configuration(ctx context.Context) (map[string]any, error) {
 			return err
 		}
 		out["model_presets"] = presets
+		out["key_endpoints"] = application.KeyEndpoints()
 		grants, err := listCreditGrants(tx)
 		if err != nil {
 			return err

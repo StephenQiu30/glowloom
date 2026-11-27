@@ -17,13 +17,14 @@ const OnboardingOrigin = "onboarding"
 
 // Onboarding is the immutable, keyless route and test plan reviewed before confirmation.
 type Onboarding struct {
-	Route       domain.Route      `json:"route"`
-	Scope       uuid.UUID         `json:"scope_id"`
-	Project     uuid.UUID         `json:"project_id"`
-	Replacement uuid.UUID         `json:"replaces_route_id"`
-	MediaTests  []json.RawMessage `json:"media_tests,omitempty"`
-	Concurrency int               `json:"concurrency"`
-	RPM         int               `json:"rpm"`
+	Route        domain.Route      `json:"route"`
+	Scope        uuid.UUID         `json:"scope_id"`
+	Project      uuid.UUID         `json:"project_id"`
+	Replacement  uuid.UUID         `json:"replaces_route_id"`
+	Verification string            `json:"verification,omitempty"`
+	MediaTests   []json.RawMessage `json:"media_tests,omitempty"`
+	Concurrency  int               `json:"concurrency"`
+	RPM          int               `json:"rpm"`
 }
 
 // Probe identifies one independently metered supplier invocation.
@@ -33,12 +34,28 @@ type Probe struct {
 	Tool bool            `json:"tool,omitempty"`
 }
 
+// ArkKeyVerification verifies the credential with the read-only Ark model catalogue.
+const ArkKeyVerification = "ark_models"
+
+const (
+	// ReadOnlyKeyVerification checks a credential without invoking a model.
+	ReadOnlyKeyVerification = "read_only_key"
+	// GenerationTrial prepares metered generation for separate approval.
+	GenerationTrial = "generation_trial"
+)
+
 // OnboardingPlan is the plan shown to a payer before uploading a key.
 type OnboardingPlan struct {
+	Method           string  `json:"method,omitempty"`
 	Probes           []Probe `json:"probes"`
 	Credits          int64   `json:"credits"`
 	EstimatedCredits *int64  `json:"estimated_credits,omitempty"`
 	PurchaseMicros   int64   `json:"purchase_micros"`
+}
+
+// ReadOnlyKey includes the original method name for persisted Ark reviews.
+func (p OnboardingPlan) ReadOnlyKey() bool {
+	return p.Method == ReadOnlyKeyVerification || p.Method == ArkKeyVerification
 }
 
 // PurchaseBound uses the full reviewed limits, including the most expensive input bucket.

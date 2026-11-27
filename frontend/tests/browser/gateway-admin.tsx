@@ -2,6 +2,8 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { AiServiceAdmin } from "../../src/components/ai-service/ai-service-admin";
+import { Toaster } from "../../src/components/ui/sonner";
+import { RequestError } from "../../src/lib/request";
 import { SpaceContext } from "../../src/components/spaces/space-context";
 import { installDevelopmentTransport } from "../../src/lib/development-transport";
 import type {
@@ -79,6 +81,7 @@ let creditOrder: API.CreditGrantOrder = {
   created_at: "2026-11-27T00:00:00Z",
 };
 const showQuick = params.has("quick-preset");
+const insufficientCredits = params.has("insufficient-credits");
 const quickPresets = [
   [
     "ark-video-mini",
@@ -265,9 +268,8 @@ const videoTariffFixture = {
 } satisfies GatewayPreset;
 
 let stagedTariffModel: GatewayModel | null = null;
-let quickCandidate: typeof candidate | null = null;
+let quickCandidate: OnboardingReview | null = null;
 let quickSends = 0;
-let quickVerificationReads = 0;
 
 installDevelopmentTransport({
   matches: (path) =>
@@ -283,12 +285,15 @@ installDevelopmentTransport({
       options.method === "POST"
     ) {
       const model = options.data as GatewayModel;
-      if (
-        model.preset_key !== tariffFixture.key ||
-        model.price.currency !== "CNY" ||
-        model.price.input !== 0 ||
-        model.price.text_tariff?.tiers[1]?.from_input !== 32001
-      ) {
+      const validImage =
+        model.preset_key === imageTariffFixture.key &&
+        model.price.media_tariff?.output_token_price === "30";
+      const validText =
+        model.preset_key === tariffFixture.key &&
+        model.price.currency === "CNY" &&
+        model.price.input === 0 &&
+        model.price.text_tariff?.tiers[1]?.from_input === 32001;
+      if (!validImage && !validText) {
         throw new Error("Expected a structured sale tariff");
       }
       stagedTariffModel = model;
@@ -299,17 +304,36 @@ installDevelopmentTransport({
       url === "/api/ai/admin/routes" &&
       options.method === "POST"
     ) {
-      const { route } = options.data as { route: GatewayRoute };
+      const { route, verification, media_tests } = options.data as {
+        route: GatewayRoute;
+        verification?: string;
+        media_tests?: unknown[];
+      };
+      const validTariff =
+        route.upstream_model === imageTariffFixture.upstream
+          ? route.purchase.media_tariff?.output_token_price === "30"
+          : route.upstream_model === tariffFixture.upstream &&
+            route.purchase.text_tariff?.tiers[1]?.output === "6";
       if (
         route.model_id !== stagedTariffModel?.id ||
-        route.upstream_model !== tariffFixture.upstream ||
-        route.purchase.text_tariff?.tiers[1]?.output !== "6"
+        !validTariff ||
+        verification ||
+        media_tests
       ) {
         throw new Error(
           "Expected a structured purchase tariff for the same model",
         );
       }
-      quickCandidate = { ...candidate, model_id: route.model_id };
+      quickCandidate = {
+        ...candidate,
+        model_id: route.model_id,
+        plan: {
+          method: "read_only_key",
+          credits: 0,
+          purchase_micros: 0,
+          probes: [],
+        },
+      };
       return quickCandidate;
     }
     if (
@@ -368,20 +392,19 @@ installDevelopmentTransport({
         ...candidate,
         upstream_model: preset.upstream,
         provider_key: preset.adapter,
-        plan: {
-          credits: preset.credits,
-          estimated_credits: preset.estimatedCredits,
-          purchase_micros: preset.purchaseMicros,
-          probes: [
-            {
-              name: "text2video",
-              input: {
-                prompt: "固定机位，窗边的陶瓷杯。",
-                params: { duration: 5, ratio: "16:9", resolution: "720p" },
-              },
+        plan: insufficientCredits
+          ? {
+              credits: preset.credits,
+              estimated_credits: preset.estimatedCredits,
+              purchase_micros: preset.purchaseMicros,
+              probes: [{ name: "text2video", input: {} }],
+            }
+          : {
+              method: "read_only_key",
+              credits: 0,
+              purchase_micros: 0,
+              probes: [],
             },
-          ],
-        },
       };
       return quickCandidate;
     }
@@ -395,16 +418,25 @@ installDevelopmentTransport({
         key: string;
         credits: number;
         purchase_micros: number;
+        confirm_trial?: boolean;
       };
+      const expectedKey =
+        stagedTariffModel?.preset_key === imageTariffFixture.key
+          ? "fixture-openai-key"
+          : "fixture-ark-key";
       if (
-        input.key !== "fixture-ark-key" ||
+        input.key !== expectedKey ||
+        Boolean(input.confirm_trial) !== insufficientCredits ||
         input.credits !== quickCandidate.plan.credits ||
         input.purchase_micros !== quickCandidate.plan.purchase_micros ||
         quickSends !== 0
       )
         throw new Error("Invalid budget confirmation");
+      if (insufficientCredits) {
+        throw new RequestError("insufficient_credits", 402);
+      }
       quickSends++;
-      quickCandidate = { ...quickCandidate, state: "verifying" };
+      quickCandidate = { ...quickCandidate, state: "active", available: true };
       return quickCandidate;
     }
     if (
@@ -412,16 +444,6 @@ installDevelopmentTransport({
       quickCandidate &&
       url === `/api/ai/admin/onboarding/${candidate.id}`
     ) {
-      if (
-        quickCandidate.state === "verifying" &&
-        ++quickVerificationReads === 2
-      ) {
-        quickCandidate = {
-          ...quickCandidate,
-          state: "active",
-          available: true,
-        };
-      }
       return quickCandidate;
     }
     if (options.method && options.method.toUpperCase() !== "GET")
@@ -438,6 +460,12 @@ installDevelopmentTransport({
       credentials: [],
       quotas: [],
       unknown: [],
+      key_endpoints: [arkTextPreset, imageTariffFixture].map(
+        ({ adapter, base_url }) => ({
+          provider: adapter,
+          base_url,
+        }),
+      ),
       onboarding: showPrepared
         ? [candidate]
         : quickCandidate
@@ -488,20 +516,23 @@ const testSpace = {
   writable: true,
 };
 createRoot(document.getElementById("root")!).render(
-  showQuick ? (
-    <SpaceContext.Provider
-      value={{
-        spaces: [testSpace],
-        selected: testSpace,
-        pending: false,
-        error: "",
-        refresh: async () => {},
-        select: async () => {},
-      }}
-    >
+  <>
+    <Toaster />
+    {showQuick ? (
+      <SpaceContext.Provider
+        value={{
+          spaces: [testSpace],
+          selected: testSpace,
+          pending: false,
+          error: "",
+          refresh: async () => {},
+          select: async () => {},
+        }}
+      >
+        <AiServiceAdmin />
+      </SpaceContext.Provider>
+    ) : (
       <AiServiceAdmin />
-    </SpaceContext.Provider>
-  ) : (
-    <AiServiceAdmin />
-  ),
+    )}
+  </>,
 );

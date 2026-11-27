@@ -77,7 +77,7 @@ func (s *Store) PublishRoute(ctx context.Context, route domain.Route, ciphertext
 }
 
 func validateRoute(model domain.Model, route domain.Route, concurrency, rpm int) error {
-	if model.Protocol != route.Protocol || route.KeyID != "" || (route.Protocol != "media" && len(route.DriverConfig) != 0) {
+	if model.Protocol != route.Protocol || route.KeyID != "" || route.KeyVerification != "" || (route.Protocol != "media" && len(route.DriverConfig) != 0) {
 		return domain.ErrInvalid
 	}
 	u, err := url.Parse(route.BaseURL)

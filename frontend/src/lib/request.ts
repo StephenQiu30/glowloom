@@ -233,9 +233,19 @@ client.interceptors.response.use(undefined, async (error: unknown) => {
       data = null;
     }
   }
-  const problem = data as Partial<API.Problem> | null;
+  const problem = data as
+    | (Partial<API.Problem> & { type?: unknown; error?: { type?: unknown } })
+    | null;
+  const gatewayCode =
+    error.config?.url?.startsWith("/api/ai/admin/") && problem?.type === "error"
+      ? problem.error?.type
+      : undefined;
   throw new RequestError(
-    typeof problem?.code === "string" ? problem.code : "request_unconfirmed",
+    typeof problem?.code === "string"
+      ? problem.code
+      : typeof gatewayCode === "string"
+        ? gatewayCode
+        : "request_unconfirmed",
     error.response?.status ?? 0,
     problem?.meta && typeof problem.meta === "object"
       ? problem.meta

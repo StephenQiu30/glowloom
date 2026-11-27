@@ -43,6 +43,16 @@ beforeAll(async () => {
       response.writeHead(204).end();
       return;
     }
+    if (path === "/api/ai/admin/onboarding/fixture/verify") {
+      response.writeHead(402, { "Content-Type": "application/json" });
+      response.end(
+        JSON.stringify({
+          type: "error",
+          error: { type: "insufficient_credits", message: "provider-detail" },
+        }),
+      );
+      return;
+    }
     if (path === "/problem") {
       response.writeHead(409, { "Content-Type": "application/json" });
       response.end(
@@ -295,6 +305,12 @@ it("统一保留 HTTP 错误码、状态和元数据，支持 204", async () => 
     meta: { revision: 2 },
   });
   await expect(request("/empty", { baseURL })).resolves.toBeUndefined();
+});
+
+it("保留 AI 接入失败的业务码和 HTTP 状态", async () => {
+  await expect(
+    request("/api/ai/admin/onboarding/fixture/verify", { baseURL }),
+  ).rejects.toEqual(new RequestError("insufficient_credits", 402));
 });
 
 it("超时转换为未确认错误，主动取消保持 Axios 取消语义", async () => {

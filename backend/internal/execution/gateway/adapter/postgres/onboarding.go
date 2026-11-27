@@ -158,13 +158,26 @@ func (s *Store) PrepareOnboarding(ctx context.Context, in application.Onboarding
 		if incompatibleQuota {
 			return domain.ErrConflict
 		}
-		plan, err := application.PlanOnboarding(in, model)
-		if err != nil {
-			return err
-		}
-		// Freeze normalized media probe inputs, including default parameters.
-		for i := range in.MediaTests {
-			in.MediaTests[i] = plan.Probes[i].Raw
+		var plan application.OnboardingPlan
+		var err error
+		switch in.Verification {
+		case application.ReadOnlyKeyVerification:
+			if _, ok := application.KeyEndpointFor(in.Route); !ok {
+				return domain.ErrProviderKeyCheckUnsupported
+			}
+			in.MediaTests = nil
+			plan = keyOnlyPlan()
+		case "", application.GenerationTrial:
+			plan, err = application.PlanOnboarding(in, model)
+			if err != nil {
+				return err
+			}
+			// Freeze normalized media probe inputs, including default parameters.
+			for i := range in.MediaTests {
+				in.MediaTests[i] = plan.Probes[i].Raw
+			}
+		default:
+			return domain.ErrInvalid
 		}
 		if err = lockAlias(tx, model.Name); err != nil {
 			return err
@@ -234,7 +247,30 @@ func loadOnboarding(tx *gorm.DB, id uuid.UUID, lock bool) (onboardingRow, Onboar
 	}
 	var contract onboardingContract
 	if json.Unmarshal(row.Document, &contract) != nil || json.Unmarshal(row.Model, &work.Model) != nil ||
-		(len(row.Actor) > 0 && json.Unmarshal(row.Actor, &work.Actor) != nil) || len(contract.Plan.Probes) == 0 {
+		(len(row.Actor) > 0 && json.Unmarshal(row.Actor, &work.Actor) != nil) {
+		return row, work, domain.ErrInvalid
+	}
+	quick := quickArkRoute(contract.Onboarding, work.Model)
+	switch {
+	case quick && row.State == "prepared" && contract.Verification == "":
+		// An old prepared draft never authorized a video probe.
+		contract.Plan = keyOnlyPlan()
+	case quick && row.State != "verifying" && contract.Plan.Method == "":
+		var checked bool
+		if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM ai.route WHERE id=? AND document->>'key_verification' IN (?,?))`, id, application.ArkKeyVerification, application.ReadOnlyKeyVerification).Row().Scan(&checked); err != nil {
+			return row, work, err
+		}
+		if checked {
+			contract.Plan = keyOnlyPlan()
+		} else if len(contract.Plan.Probes) == 0 {
+			return row, work, domain.ErrInvalid
+		}
+	case contract.Plan.ReadOnlyKey():
+		_, supported := application.KeyEndpointFor(contract.Route)
+		if !supported || len(contract.Plan.Probes) != 0 || contract.Plan.Credits != 0 || contract.Plan.PurchaseMicros != 0 {
+			return row, work, domain.ErrInvalid
+		}
+	case contract.Plan.Method != "" || len(contract.Plan.Probes) == 0:
 		return row, work, domain.ErrInvalid
 	}
 	work.Input, work.Plan, work.State = contract.Onboarding, contract.Plan, row.State
@@ -283,7 +319,7 @@ func (s *Store) ReviewOnboarding(ctx context.Context, id uuid.UUID) (OnboardingR
 				result.Probes = append(result.Probes, OnboardingProgress{RequestID: call.ID, State: state})
 			}
 		}
-		if work.Model.VideoMetering != nil {
+		if work.Model.VideoMetering != nil && work.Plan.Method == "" {
 			result.Plan.EstimatedCredits = &estimated
 		}
 		return nil
@@ -293,6 +329,10 @@ func (s *Store) ReviewOnboarding(ctx context.Context, id uuid.UUID) (OnboardingR
 
 // ConfirmOnboarding approves one durable verification or returns an existing equivalent run.
 func (s *Store) ConfirmOnboarding(ctx context.Context, id uuid.UUID, credits, purchase int64, seal func(uuid.UUID, uuid.UUID) ([]byte, string, error)) (uuid.UUID, error) {
+	return s.confirmOnboarding(ctx, id, credits, purchase, seal, nil)
+}
+
+func (s *Store) confirmOnboarding(ctx context.Context, id uuid.UUID, credits, purchase int64, seal func(uuid.UUID, uuid.UUID) ([]byte, string, error), checked *keyVerification) (uuid.UUID, error) {
 	result := id
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := s.check(ctx, tx, s.actor.ScopeID, uuid.Nil, true); err != nil {
@@ -316,13 +356,16 @@ func (s *Store) ConfirmOnboarding(ctx context.Context, id uuid.UUID, credits, pu
 			return domain.ErrBudget
 		}
 		if row.State != "prepared" {
+			if checked != nil {
+				return requireConfirmedKey(tx, id, checked.fingerprint)
+			}
 			// A duplicate carries neither a new credential nor a new approval.
 			if row.State != "verifying" && row.State != "active" && work.Actor.ID != s.actor.ID {
 				return domain.ErrConflict
 			}
 			return nil
 		}
-		if work.Input.Replacement == uuid.Nil {
+		if !work.Plan.ReadOnlyKey() && work.Input.Replacement == uuid.Nil {
 			existing, err := equivalentOnboarding(tx, work)
 			if err != nil {
 				return err
@@ -335,15 +378,22 @@ func (s *Store) ConfirmOnboarding(ctx context.Context, id uuid.UUID, credits, pu
 		if err := checkPrevious(tx, row, work.Model); err != nil {
 			return err
 		}
-		var available int64
-		if err := tx.Raw("SELECT COALESCE((SELECT available FROM ai.account WHERE scope_id=?),0)", work.Input.Scope).Row().Scan(&available); err != nil {
-			return err
-		}
-		if available < credits {
-			return domain.ErrFunds
-		}
-		if err := tx.Exec("INSERT INTO ai.account(scope_id) VALUES(?) ON CONFLICT DO NOTHING", work.Input.Scope).Error; err != nil {
-			return err
+		keyCheck := work.Plan.ReadOnlyKey()
+		if keyCheck {
+			if checked == nil || string(mustJSON(checked.route)) != string(mustJSON(work.Input.Route)) {
+				return domain.ErrForbidden
+			}
+		} else {
+			var available int64
+			if err := tx.Raw("SELECT COALESCE((SELECT available FROM ai.account WHERE scope_id=?),0)", work.Input.Scope).Row().Scan(&available); err != nil {
+				return err
+			}
+			if available < credits {
+				return domain.ErrFunds
+			}
+			if err := tx.Exec("INSERT INTO ai.account(scope_id) VALUES(?) ON CONFLICT DO NOTHING", work.Input.Scope).Error; err != nil {
+				return err
+			}
 		}
 		route := work.Input.Route
 		cipher, keyID, err := seal(route.Supplier, route.Credential)
@@ -353,8 +403,17 @@ func (s *Store) ConfirmOnboarding(ctx context.Context, id uuid.UUID, credits, pu
 		if len(cipher) == 0 || keyID == "" {
 			return domain.ErrInvalid
 		}
+		if keyCheck {
+			route.KeyVerification = application.ReadOnlyKeyVerification
+		}
 		if err := insertRoute(tx, route, cipher, keyID, work.Input.Concurrency, work.Input.RPM, false); err != nil {
 			return err
+		}
+		if keyCheck {
+			if err := tx.Exec("UPDATE ai.onboarding SET actor=?::jsonb,confirmed_at=clock_timestamp(),key_check_fingerprint=? WHERE id=?", string(mustJSON(s.actor)), checked.fingerprint, id).Error; err != nil {
+				return err
+			}
+			return activateOnboarding(tx, row, work)
 		}
 		if err := tx.Exec("INSERT INTO ai.budget(scope_id,id,limit_credits) VALUES(?,?,?)", work.Input.Scope, id, credits).Error; err != nil {
 			return err

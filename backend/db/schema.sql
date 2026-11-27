@@ -9639,9 +9639,19 @@ CREATE TABLE ai.budget (
  spent bigint NOT NULL DEFAULT 0 CHECK(spent>=0),PRIMARY KEY(scope_id,id),CHECK(held+spent<=limit_credits)
 );
 GRANT SELECT,INSERT,UPDATE ON ai.budget TO glowloom_app,glowloom_execution;
+-- Successful authentication evidence contains no key or upstream response.
+CREATE TABLE ai.provider_key_verification (
+    fingerprint text PRIMARY KEY CHECK (fingerprint ~ '^[0-9a-f]{64}$'),
+    provider text NOT NULL,
+    base_url text NOT NULL,
+    verified_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+GRANT SELECT,INSERT ON ai.provider_key_verification TO glowloom_app,glowloom_execution;
+
 -- A reviewed model and route may be prepared without credentials or live publication.
 CREATE TABLE ai.onboarding (
  id uuid PRIMARY KEY,
+ key_check_fingerprint text REFERENCES ai.provider_key_verification(fingerprint),
  model_id uuid NOT NULL REFERENCES ai.model(id),
  previous_model_id uuid REFERENCES ai.model(id),
  replaces_route_id uuid REFERENCES ai.route(id),

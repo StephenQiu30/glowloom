@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, useState } from "react";
 import { ArrowLeft, Settings2 } from "lucide-react";
 import { ensureIndependentCreation } from "@/api/projects";
 import { ProviderLogo } from "@/components/providers/provider-logo";
@@ -49,7 +49,7 @@ export function ModelOnboardingDialog({
   configuration: AiServiceConfiguration;
   scope?: string;
   busy: boolean;
-  error: ReactNode;
+  error: string;
   run: RunMutation;
   refresh: () => void;
   allowExistingModel: boolean;
@@ -145,7 +145,11 @@ export function ModelOnboardingDialog({
 
   const configurationPanel = (
     <>
-      {error}
+      {error && (
+        <p className="sr-only" role="alert">
+          {error}
+        </p>
+      )}
       {needsModel && (
         <section
           aria-labelledby="gateway-setup-model"

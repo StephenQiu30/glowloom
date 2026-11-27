@@ -61,6 +61,9 @@ func (h *Handler) route(c *gin.Context) {
 		problem(c, err)
 		return
 	}
+	if in.Verification == "" {
+		in.Verification = application.ReadOnlyKeyVerification
+	}
 	store := h.store(identityhttp.Principal(c))
 	if err := store.PrepareOnboarding(c.Request.Context(), in); err != nil {
 		problem(c, err)
@@ -117,7 +120,8 @@ func (h *Handler) onboarding(c *gin.Context) {
 // @Produce json
 // @Param id path string true "候选 ID"
 // @Param input body object true "API Key、确认积分和采购费用上限"
-// @Success 202 {object} pg.OnboardingReview
+// @Success 200 {object} pg.OnboardingReview "只读鉴权成功"
+// @Success 202 {object} pg.OnboardingReview "付费验证已排队"
 // @Router /api/ai/admin/onboarding/{id}/verify [post]
 func (h *Handler) verifyOnboarding(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
@@ -125,6 +129,7 @@ func (h *Handler) verifyOnboarding(c *gin.Context) {
 		Key            string `json:"key"`
 		Credits        *int64 `json:"credits"`
 		PurchaseMicros *int64 `json:"purchase_micros"`
+		ConfirmTrial   bool   `json:"confirm_trial"`
 	}
 	if err != nil || bindOnboarding(c, 16<<10, &in) != nil || in.Credits == nil || in.PurchaseMicros == nil ||
 		in.Key == "" || len(in.Key) > 8192 || strings.ContainsAny(in.Key, "\r\n\x00") || strings.TrimSpace(in.Key) != in.Key {
@@ -136,7 +141,13 @@ func (h *Handler) verifyOnboarding(c *gin.Context) {
 		return
 	}
 	store := h.store(identityhttp.Principal(c))
-	candidate, err := store.ConfirmOnboarding(c.Request.Context(), id, *in.Credits, *in.PurchaseMicros, func(supplier, credential uuid.UUID) ([]byte, string, error) {
+	ctx := c.Request.Context()
+	review, err := store.ReviewOnboarding(ctx, id)
+	if err != nil {
+		problem(c, err)
+		return
+	}
+	seal := func(supplier, credential uuid.UUID) ([]byte, string, error) {
 		raw, err := json.Marshal(map[string]string{"api_key": in.Key})
 		if err != nil {
 			return nil, "", err
@@ -144,12 +155,30 @@ func (h *Handler) verifyOnboarding(c *gin.Context) {
 		defer clear(raw)
 		sealed, err := h.sealer.Seal(supplier, credential, raw)
 		return sealed, h.sealer.KeyID(), err
-	})
+	}
+	if review.Plan.ReadOnlyKey() && in.ConfirmTrial {
+		problem(c, domain.ErrInvalid)
+		return
+	}
+	if !review.Plan.ReadOnlyKey() && !in.ConfirmTrial {
+		problem(c, domain.ErrTrialConfirmationRequired)
+		return
+	}
+	var candidate uuid.UUID
+	if review.Plan.ReadOnlyKey() {
+		candidate, err = store.ConfirmProviderKey(ctx, id, *in.Credits, *in.PurchaseMicros, h.keyCheck.MACKey, in.Key, h.keyCheck.Verify, seal)
+	} else {
+		candidate, err = store.ConfirmOnboarding(ctx, id, *in.Credits, *in.PurchaseMicros, seal)
+	}
 	if err != nil {
 		problem(c, err)
 		return
 	}
-	writeOnboardingReview(c, store, candidate, http.StatusAccepted)
+	status := http.StatusAccepted
+	if review.Plan.ReadOnlyKey() {
+		status = http.StatusOK
+	}
+	writeOnboardingReview(c, store, candidate, status)
 }
 
 // rollbackOnboarding 停止候选路线接新单并恢复仍合格的原版本.

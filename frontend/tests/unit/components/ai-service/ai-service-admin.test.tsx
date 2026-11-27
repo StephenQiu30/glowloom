@@ -1,12 +1,13 @@
 import {
   cleanup,
   fireEvent,
-  render,
   screen,
   waitFor,
   within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { render, findFeedback } from "../../../feedback";
+import { RequestError } from "@/lib/request";
 import { AiServiceAdmin } from "@/components/ai-service/ai-service-admin";
 import { SpaceContext } from "@/components/spaces/space-context";
 import {
@@ -20,7 +21,10 @@ import {
 
 const send = vi.hoisted(() => vi.fn());
 const actor = vi.hoisted(() => ({ role: "platform_admin" }));
-vi.mock("@/lib/request", () => ({ request: send }));
+vi.mock("@/lib/request", async (loadOriginal) => ({
+  ...(await loadOriginal<typeof import("@/lib/request")>()),
+  request: send,
+}));
 vi.mock("@/components/auth/session", () => ({
   useOptionalSession: () => ({
     actor: { id: "admin", platform_role: actor.role },
@@ -145,13 +149,15 @@ it("opens a prepared model at API Key verification without requesting manual pri
   expect(within(dialog).getByText("待验证")).toBeTruthy();
   expect(within(dialog).queryByRole("button", { name: "验证详情" })).toBeNull();
   expect(
-    within(dialog).getByText("保存后自动验证，最多使用 2 积分。"),
+    within(dialog).getByRole("checkbox", {
+      name: "确认生成试跑，最多使用 2 积分",
+    }),
   ).toBeTruthy();
   expect(screen.queryByLabelText("销售输入价")).toBeNull();
   expect(screen.queryByLabelText("采购输入价")).toBeNull();
   expect(
     screen.getByRole<HTMLButtonElement>("button", {
-      name: "保存接入",
+      name: "确认并试跑",
     }).disabled,
   ).toBe(true);
   expect(send.mock.calls.map(([path]) => path)).toEqual([
@@ -458,15 +464,21 @@ it("saves the keyless procurement plan before showing API Key and budget confirm
   const secret =
     await within(dialog).findByLabelText<HTMLInputElement>("API Key");
   expect(screen.getByRole("dialog", { name: "新增接入" })).toBe(dialog);
-  expect(screen.getByText("保存后自动验证，最多使用 2 积分。")).toBeTruthy();
+  expect(
+    screen.getByRole("checkbox", { name: "确认生成试跑，最多使用 2 积分" }),
+  ).toBeTruthy();
   expect(
     send.mock.calls.find(([path]) => path.endsWith("/routes"))?.[1].data,
   ).not.toHaveProperty("key");
   const verify = screen.getByRole<HTMLButtonElement>("button", {
-    name: "保存接入",
+    name: "确认并试跑",
   });
   expect(verify.disabled).toBe(true);
   fireEvent.change(secret, { target: { value: "secret-once" } });
+  expect(verify.disabled).toBe(true);
+  fireEvent.click(
+    screen.getByRole("checkbox", { name: "确认生成试跑，最多使用 2 积分" }),
+  );
   expect(verify.disabled).toBe(false);
   send.mockImplementation(async (path: string) => {
     if (path.endsWith("/verify")) throw new Error("cannot-save");
@@ -477,13 +489,18 @@ it("saves the keyless procurement plan before showing API Key and budget confirm
   expect(send).toHaveBeenCalledWith(
     `/api/ai/admin/onboarding/${verificationID}/verify`,
     expect.objectContaining({
-      data: { key: "secret-once", credits: 2, purchase_micros: 500 },
+      data: {
+        key: "secret-once",
+        credits: 2,
+        purchase_micros: 500,
+        confirm_trial: true,
+      },
     }),
   );
   expect(localStorage.length).toBe(0);
   expect(sessionStorage.length).toBe(0);
   expect(screen.queryByText("secret-once")).toBeNull();
-  await screen.findByText("cannot-save");
+  await findFeedback("cannot-save");
   fireEvent.click(within(dialog).getByRole("button", { name: "关闭对话框" }));
   expect(screen.queryByRole("alertdialog")).toBeNull();
   expect(screen.queryByRole("dialog", { name: "新增接入" })).toBeNull();
@@ -499,6 +516,7 @@ it("normalizes empty configuration and discards any credential read-back fields"
   });
   expect(await loadAiServiceConfiguration()).toEqual({
     model_presets: [],
+    key_endpoints: [],
     credit_grants: [],
     models: [],
     routes: [],
@@ -608,6 +626,7 @@ it("prepares a supported media driver with an explicit probe and no key", async 
     credentials: [],
     quotas: [],
     unknown: [],
+    key_endpoints: [{ provider: "openai", base_url: mediaDriver.base_url }],
     media_drivers: [
       {
         key: "openai",
@@ -628,6 +647,9 @@ it("prepares a supported media driver with an explicit probe and no key", async 
   fireEvent.click(screen.getByRole("button", { name: "新增接入" }));
   fireEvent.click(screen.getByRole("button", { name: "使用已有模型" }));
   await chooseOption("媒体驱动", /OpenAI/i);
+  expect(screen.getByRole("button", { name: "准备接入" })).toBeTruthy();
+  expect(screen.queryByLabelText("验证项目 ID")).toBeNull();
+  await chooseOption("验证方式", "生成试跑");
   for (const [label, value] of [
     ["验证付款空间 ID", supplier],
     ["验证项目 ID", credential],
@@ -651,6 +673,7 @@ it("prepares a supported media driver with an explicit probe and no key", async 
         method: "POST",
         data: expect.objectContaining({
           project_id: credential,
+          verification: "generation_trial",
           media_tests: [
             expect.objectContaining({
               mode: "text2image",
@@ -1145,4 +1168,98 @@ it("carries a selected supplier preset through draft and procurement without a k
       ([path]) => path.includes("/verify") || path.endsWith("/routes"),
     ),
   ).toBe(false);
+});
+
+it("shows insufficient verification credits in one centered toast and keeps the unsaved key for retry", async () => {
+  const draft = { ...review, plan: { ...review.plan, credits: 120 } };
+  let confirmed = false;
+  send.mockImplementation(async (path: string) => {
+    if (path.endsWith("configuration")) {
+      return {
+        models: [{ model, enabled: false, draft: true }],
+        onboarding: [draft],
+        routes: [],
+        credentials: [],
+        quotas: [],
+        unknown: [],
+      };
+    }
+    if (path.endsWith("/verify") && !confirmed) {
+      throw new RequestError("insufficient_credits", 402);
+    }
+    return confirmed ? { ...draft, state: "verifying" } : draft;
+  });
+  render(<AiServiceAdmin />);
+  fireEvent.click(await screen.findByRole("button", { name: "新增接入" }));
+  const dialog = screen.getByRole("dialog", { name: "新增接入" });
+  fireEvent.click(
+    within(dialog).getByRole("option", { name: /^text\/default/ }),
+  );
+  const key = await within(dialog).findByLabelText<HTMLInputElement>("API Key");
+  fireEvent.change(key, { target: { value: "fixture-key" } });
+  fireEvent.click(
+    within(dialog).getByRole("checkbox", {
+      name: "确认生成试跑，最多使用 120 积分",
+    }),
+  );
+  fireEvent.click(within(dialog).getByRole("button", { name: "确认并试跑" }));
+  const feedback = await findFeedback("验证空间积分不足，需至少 120 积分");
+  expect(
+    feedback.closest("[data-sonner-toaster]")?.getAttribute("data-x-position"),
+  ).toBe("center");
+  expect(within(dialog).queryByText("操作未完成")).toBeNull();
+  expect(key.value).toBe("fixture-key");
+  expect(localStorage.length).toBe(0);
+  expect(sessionStorage.length).toBe(0);
+  confirmed = true;
+  fireEvent.click(within(dialog).getByRole("button", { name: "确认并试跑" }));
+  expect(await within(dialog).findByText("验证中")).toBeTruthy();
+  expect(within(dialog).queryByLabelText("API Key")).toBeNull();
+  expect(key.value).toBe("");
+});
+
+it("enables a Seedance channel after a zero-credit credential check", async () => {
+  const draft = {
+    ...review,
+    plan: {
+      method: "read_only_key",
+      credits: 0,
+      purchase_micros: 0,
+      probes: [],
+    },
+  };
+  let live = false;
+  send.mockImplementation(async (path: string) => {
+    if (path.endsWith("configuration")) {
+      return {
+        models: [{ model, enabled: live, draft: !live }],
+        onboarding: [draft],
+        routes: [],
+        credentials: [],
+        quotas: [],
+        unknown: [],
+      };
+    }
+    if (path.endsWith("/verify")) live = true;
+    return live ? { ...draft, state: "active", available: true } : draft;
+  });
+  render(<AiServiceAdmin />);
+  fireEvent.click(await screen.findByRole("button", { name: "新增接入" }));
+  const dialog = screen.getByRole("dialog", { name: "新增接入" });
+  fireEvent.click(
+    within(dialog).getByRole("option", { name: /^text\/default/ }),
+  );
+  const key = await within(dialog).findByLabelText("API Key");
+  expect(within(dialog).getByText("只读鉴权 · 0 积分")).toBeTruthy();
+  fireEvent.change(key, { target: { value: "simulated-key" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "保存接入" }));
+  expect(await within(dialog).findByRole("status")).toBeTruthy();
+  await findFeedback("接入已保存");
+  expect(send).toHaveBeenCalledWith(
+    `/api/ai/admin/onboarding/${verificationID}/verify`,
+    expect.objectContaining({
+      data: { key: "simulated-key", credits: 0, purchase_micros: 0 },
+    }),
+  );
+  expect(within(dialog).getByRole("status").textContent).toBe("可用");
 });

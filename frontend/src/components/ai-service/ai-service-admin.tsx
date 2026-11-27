@@ -1,6 +1,8 @@
 "use client";
 
 import { AdminHeading } from "@/components/governance/admin-layout";
+import { toast } from "@/components/feedback/notification";
+import { RequestError } from "@/lib/request";
 import { AiServiceAction } from "./admin-action";
 import { ArkVideoEstimate } from "./ark-video-estimate";
 import { ModelCatalog } from "./model-catalog";
@@ -16,6 +18,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   useCallback,
   useEffect,
+  useId,
   useRef,
   useState,
   type ReactNode,
@@ -83,6 +86,21 @@ import {
 import { CreditsForm, ReconciliationForm, protocolLabels } from "./admin-forms";
 import { OnboardingPanel, onboardingState } from "./onboarding-verification";
 import { modeLabel } from "./media-fields";
+
+const operationErrors = new Map([
+  ["invalid_request_error", "请检查接入配置"],
+  ["permission_error", "当前账号无权执行此操作"],
+  ["idempotency_conflict", "接入状态已变化，请刷新后重试"],
+  ["insufficient_credits", "验证空间积分不足"],
+  ["provider_key_rejected", "供应商未接受 API Key，请核对后重试"],
+  ["provider_key_scope", "API Key 缺少只读接口权限"],
+  ["provider_key_check_unsupported", "该地址不支持只读鉴权，可选择生成试跑"],
+  ["trial_confirmation_required", "请先确认试跑费用"],
+  ["budget_exceeded", "验证预算已更新，请核对后重试"],
+  ["model_unavailable", "接入服务暂时不可用"],
+  ["ai_result_unknown", "提交结果待确认，请核对原记录"],
+  ["request_unconfirmed", "提交结果待确认，请核对原记录"],
+]);
 
 const tabs = [
   ["models", "模型"],
@@ -154,7 +172,7 @@ function AiServiceConfigurationPage({
   const [inDetail, setInDetail] = useState(Boolean(entityID));
   const [readError, setReadError] = useState(false);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const feedbackID = useId();
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const submitting = useRef(false);
@@ -186,24 +204,24 @@ function AiServiceConfigurationPage({
     submitting.current = true;
     setBusy(true);
     setError("");
-    setNotice("");
     try {
       await action();
-      setNotice(success);
+      if (success) toast.success(success, { id: feedbackID });
+      else toast.dismiss(feedbackID);
       refresh();
       return true;
     } catch (cause) {
-      // Provider response bodies are never shown as form feedback.
-      setError(
-        cause instanceof Error &&
-          cause.name === "Error" &&
-          !cause.message.startsWith("Request failed")
-          ? cause.message
-          : "保存未完成。请核对当前状态后重试。",
-      );
-      requestAnimationFrame(() =>
-        document.getElementById("gateway-operation-error")?.focus(),
-      );
+      const fallback = "保存失败，请重试";
+      const message =
+        cause instanceof RequestError
+          ? (operationErrors.get(cause.code) ?? fallback)
+          : cause instanceof Error &&
+              cause.name === "Error" &&
+              !cause.message.startsWith("Request failed")
+            ? cause.message || fallback
+            : fallback;
+      setError(message);
+      toast.error(message, { id: feedbackID });
       return false;
     } finally {
       submitting.current = false;
@@ -285,12 +303,6 @@ function AiServiceConfigurationPage({
   const title = "AI 服务";
   const showListing = !inDetail && !billingAction && !candidate;
 
-  const operationError = error && (
-    <Alert id="gateway-operation-error" tabIndex={-1} variant="destructive">
-      <AlertTitle>操作未完成</AlertTitle>
-      <AlertDescription>{error}</AlertDescription>
-    </Alert>
-  );
   function reload() {
     setLoading(true);
     refresh();
@@ -390,12 +402,6 @@ function AiServiceConfigurationPage({
                   刷新配置
                 </Button>
               </AlertDescription>
-            </Alert>
-          )}
-          {!setup && operationError}
-          {notice && (
-            <Alert role="status">
-              <AlertDescription>{notice}</AlertDescription>
             </Alert>
           )}
           {!configuration && loading && (
@@ -583,7 +589,7 @@ function AiServiceConfigurationPage({
             configuration={configuration}
             scope={defaultScope}
             busy={busy}
-            error={operationError}
+            error={error}
             run={run}
             refresh={refresh}
             allowExistingModel={

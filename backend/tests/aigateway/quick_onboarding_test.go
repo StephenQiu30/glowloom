@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os/exec"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -15,79 +14,43 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/aigateway"
 	gatewayhttp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/adapter/http"
 	pg "github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/domain"
-	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
-	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
-	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 )
-
-var seedancePresetCases = []struct {
-	key, upstream                      string
-	estimate, maximum, purchaseMaximum int64
-	charged, purchaseActual            int64
-}{
-	{"ark-video-mini", "doubao-seedance-2-0-mini-260615", 25, 75, 7_452_000, 26, 2_504_700},
-	{"ark-video-fast", "doubao-seedance-2-0-fast-260128", 40, 120, 11_988_000, 41, 4_029_300},
-	{"ark-video", "doubao-seedance-2-0-260128", 50, 150, 14_904_000, 51, 5_009_400},
-	{"ark-video-25-flash", "doubao-seedance-2-5-flash-261115", 50, 299, 29_808_000, 51, 5_009_400},
-	{"ark-video-25", "doubao-seedance-2-5-260628", 76, 454, 45_360_000, 77, 7_623_000},
-}
 
 const arkPresetVersion = "6da07a12-0000-4000-8000-000000000001/"
 
-func TestSeedancePresetsPrepareFromAnEmptyCatalogueOfCandidates(t *testing.T) {
-	db, store, _, actor := fixture(t, 1_000)
-	project := entrypointProject(t, db, actor)
-	ctx := t.Context()
-	for _, item := range seedancePresetCases {
+func TestSeedancePresetsCheckKeyAndEnableWithoutGeneratingOrCharging(t *testing.T) {
+	for _, item := range []struct{ key, upstream string }{
+		{"ark-video-mini", "doubao-seedance-2-0-mini-260615"},
+		{"ark-video-fast", "doubao-seedance-2-0-fast-260128"},
+		{"ark-video", "doubao-seedance-2-0-260128"},
+		{"ark-video-25-flash", "doubao-seedance-2-5-flash-261115"},
+		{"ark-video-25", "doubao-seedance-2-5-260628"},
+	} {
 		t.Run(item.key, func(t *testing.T) {
-			key := arkPresetVersion + item.key
-			req := domain.QuickOnboardingInput{PresetKey: key, ScopeID: actor.ScopeID, ProjectID: project}
-			first, err := store.PrepareFromPreset(ctx, req)
-			require.NoError(t, err)
-			require.Equal(t, item.upstream, first.Upstream)
-			require.Equal(t, "prepared", first.State)
-			require.Equal(t, item.maximum, first.Plan.Credits)
-			require.Equal(t, item.purchaseMaximum, first.Plan.PurchaseMicros)
-			require.Len(t, first.Plan.Probes, 1)
-			require.Equal(t, "text2video", first.Plan.Probes[0].Name)
-			var probe domain.MediaInput
-			require.NoError(t, json.Unmarshal(first.Plan.Probes[0].Raw, &probe))
-			require.EqualValues(t, 5, probe.Params["duration"])
-			require.Equal(t, "720p", probe.Params["resolution"])
-			require.Empty(t, probe.References)
-			again, err := store.PrepareFromPreset(ctx, req)
-			require.NoError(t, err)
-			require.Equal(t, first.ID, again.ID)
-			_, err = store.PrepareFromPreset(ctx, domain.QuickOnboardingInput{PresetKey: key, ScopeID: uuid.New(), ProjectID: project})
-			require.ErrorIs(t, err, domain.ErrForbidden)
-		})
-	}
-	var count int
-	require.NoError(t, db.Raw("SELECT count(*) FROM ai.request WHERE scope_id=?", actor.ScopeID).Scan(&count).Error)
-	require.Zero(t, count)
-	balance, err := store.Wallet(ctx, actor.ScopeID)
-	require.NoError(t, err)
-	require.EqualValues(t, 1_000, balance["available"])
-	require.EqualValues(t, 0, balance["held"])
-}
-
-func TestSeedancePresetsActivateOnlyAfterOriginalVideoAndUsage(t *testing.T) {
-	output, err := exec.CommandContext(t.Context(), "ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=s=1280x720:r=24",
-		"-t", "5", "-c:v", "libx264", "-movflags", "frag_keyframe+empty_moov", "-f", "mp4", "pipe:1").Output()
-	require.NoError(t, err)
-	for _, item := range seedancePresetCases {
-		t.Run(item.key, func(t *testing.T) {
-			db, fixtureStore, _, actor := fixture(t, 1000)
+			db, fixtureStore, _, actor := fixture(t)
 			ctx := t.Context()
 			project := entrypointProject(t, db, actor)
 			entrypointSession(t, db, actor)
 			store := pg.New(db, actor, aigateway.Authority)
+			require.NoError(t, db.Exec("UPDATE ai.account SET available=0 WHERE scope_id=?", actor.ScopeID).Error)
+			upstreamStatus := http.StatusUnauthorized
+			upstreamBody := `{"error":{"message":"provider-private-detail"}}`
+			readCount := 0
+			client := mediaClient(func(req *http.Request) (*http.Response, error) {
+				readCount++
+				require.Equal(t, http.MethodGet, req.Method)
+				require.Equal(t, "ark.cn-beijing.volces.com", req.Host)
+				require.Equal(t, "/api/v3/models", req.URL.Path)
+				require.Equal(t, "Bearer simulated-key", req.Header.Get("Authorization"))
+				require.True(t, req.Body == nil || req.Body == http.NoBody)
+				return mediaResponse(upstreamStatus, upstreamBody), nil
+			})
 			engine := gin.New()
 			api := engine.Group("/api")
 			session := api.Group("", func(c *gin.Context) { c.Set("principal", actor) })
-			gatewayhttp.New(db, aigateway.Authority, nil, onboardingSealer{}).Register(api, session)
+			gatewayhttp.New(db, aigateway.Authority, client, onboardingSealer{}, gatewayhttp.KeyVerification{Verify: client.VerifyProviderKey, MACKey: testProviderKeyMAC(t)}).Register(api, session)
 			post := func(path string, input any) *httptest.ResponseRecorder {
 				t.Helper()
 				raw, err := json.Marshal(input)
@@ -103,88 +66,81 @@ func TestSeedancePresetsActivateOnlyAfterOriginalVideoAndUsage(t *testing.T) {
 			require.Equal(t, 200, prepared.Code, prepared.Body.String())
 			var review pg.OnboardingReview
 			require.NoError(t, json.Unmarshal(prepared.Body.Bytes(), &review))
-			require.NotNil(t, review.Plan.EstimatedCredits)
-			require.EqualValues(t, item.estimate, *review.Plan.EstimatedCredits)
+			require.Equal(t, item.upstream, review.Upstream)
+			require.Equal(t, "prepared", review.State)
+			require.Equal(t, application.ReadOnlyKeyVerification, review.Plan.Method)
+			require.Zero(t, review.Plan.Credits)
+			require.Zero(t, review.Plan.PurchaseMicros)
+			require.NotNil(t, review.Plan.Probes)
+			require.Empty(t, review.Plan.Probes)
+			require.Nil(t, review.Plan.EstimatedCredits)
+			require.Zero(t, readCount)
 			_, err := fixtureStore.Model(ctx, review.Upstream, "media")
 			require.ErrorIs(t, err, domain.ErrUnavailable)
+
+			if item.key == "ark-video-fast" {
+				// Old unconfirmed drafts previously advertised a 120-credit video probe.
+				legacyID := uuid.New()
+				legacyCredential := uuid.NewSHA1(legacyID, []byte("credential"))
+				require.NoError(t, db.Exec(`INSERT INTO ai.onboarding(id,model_id,previous_model_id,document)
+				 SELECT ?,model_id,previous_model_id,
+				        jsonb_set(jsonb_set(jsonb_set(document-'verification','{route,id}',to_jsonb(?::text)),
+				            '{route,credential}',to_jsonb(?::text)),
+				            '{plan}','{"credits":120,"purchase_micros":11988000,"probes":[{"name":"text2video","input":{}}]}'::jsonb)
+				 FROM ai.onboarding WHERE id=?`, legacyID, legacyID.String(), legacyCredential.String(), review.ID).Error)
+				review.ID = legacyID
+				reread, err := store.ReviewOnboarding(ctx, review.ID)
+				require.NoError(t, err)
+				require.Equal(t, review.Plan, reread.Plan)
+			}
+			path := review.ID.String() + "/verify"
+			budget := map[string]any{"key": "simulated-key", "credits": 120, "purchase_micros": 11988000}
+			require.Equal(t, 402, post(path, budget).Code)
+			require.Zero(t, readCount)
+			budget["credits"], budget["purchase_micros"] = 0, 0
+			rejected := post(path, budget)
+			require.Equal(t, 422, rejected.Code)
+			require.Contains(t, rejected.Body.String(), "provider_key_rejected")
+			require.NotContains(t, rejected.Body.String(), "provider-private-detail")
+			upstreamStatus = http.StatusForbidden
+			denied := post(path, budget)
+			require.Equal(t, 422, denied.Code)
+			require.Contains(t, denied.Body.String(), "provider_key_scope")
+			stillPrepared, err := store.ReviewOnboarding(ctx, review.ID)
+			require.NoError(t, err)
+			require.Equal(t, "prepared", stillPrepared.State)
+			var routes int
+			require.NoError(t, db.Raw("SELECT count(*) FROM ai.route WHERE id=?", review.ID).Scan(&routes).Error)
+			require.Zero(t, routes)
+
+			upstreamStatus, upstreamBody = http.StatusOK, `{"object":"list","data":[]}`
+			confirmed := post(path, budget)
+			require.Equal(t, 200, confirmed.Code, confirmed.Body.String())
+			var active pg.OnboardingReview
+			require.NoError(t, json.Unmarshal(confirmed.Body.Bytes(), &active))
+			require.Equal(t, "active", active.State)
+			require.True(t, active.Available)
+			require.Equal(t, application.ReadOnlyKeyVerification, active.Plan.Method)
+			require.NotContains(t, confirmed.Body.String(), "simulated-key")
+			require.Equal(t, 200, post(path, budget).Code)
+			require.Equal(t, 3, readCount, "an active route reuses the verification")
 			otherProject := in
 			otherProject.ProjectID = entrypointProject(t, db, actor)
-			unconfirmed, err := store.PrepareFromPreset(ctx, otherProject)
+			reused, err := store.PrepareFromPreset(ctx, otherProject)
 			require.NoError(t, err)
-			require.NotEqual(t, review.ID, unconfirmed.ID)
-			budget := map[string]any{"key": "simulated-key", "credits": item.estimate, "purchase_micros": review.Plan.PurchaseMicros}
-			require.Equal(t, 402, post(review.ID.String()+"/verify", budget).Code)
-			budget["credits"] = review.Plan.Credits
-			confirmed := post(review.ID.String()+"/verify", budget)
-			require.Equal(t, 202, confirmed.Code, confirmed.Body.String())
-			inFlight, err := store.PrepareFromPreset(ctx, otherProject)
-			require.NoError(t, err)
-			require.Equal(t, review.ID, inFlight.ID)
-			require.Equal(t, "verifying", inFlight.State)
-			reused, err := store.ConfirmOnboarding(ctx, unconfirmed.ID, unconfirmed.Plan.Credits, unconfirmed.Plan.PurchaseMicros, func(uuid.UUID, uuid.UUID) ([]byte, string, error) {
-				t.Error("an equivalent verification must not seal a second credential")
-				return nil, "", domain.ErrInvalid
-			})
-			require.NoError(t, err)
-			require.Equal(t, review.ID, reused)
-			objects := &durableBytes{t: t, db: db, routes: pgmedia.NewStorageRoutes(db), files: map[string][]byte{}}
-			sends, polls := 0, 0
-			client := mediaClient(func(req *http.Request) (*http.Response, error) {
-				if req.Method == http.MethodPost {
-					sends++
-					var payload map[string]any
-					require.NoError(t, json.NewDecoder(req.Body).Decode(&payload))
-					require.Equal(t, review.Upstream, payload["model"])
-					require.EqualValues(t, 5, payload["duration"])
-					require.Equal(t, "720p", payload["resolution"])
-					require.Equal(t, "16:9", payload["ratio"])
-					return mediaResponse(200, `{"id":"seedance-quick-fixture"}`), nil
-				}
-				polls++
-				require.Equal(t, "/api/v3/contents/generations/tasks/seedance-quick-fixture", req.URL.Path)
-				return mediaResponse(200, `{"id":"seedance-quick-fixture","status":"succeeded","content":{"video_url":"https://fixture.tos-cn-beijing.volces.com/out.mp4"},"usage":{"completion_tokens":108900}}`), nil
-			})
-			runtime := &aigateway.Runtime{DB: db, Objects: fixtureMediaStorage(t, db), Provider: client,
-				ResultDownloads: videoBillingDownload{output},
-				MediaArchive:    mediaapp.NewGeneratedOutputArchiver(objects.routes, objects, mediaflow.FFProber{}, mediaflow.FFRenderer{}),
-			}
-			jobs := map[string]taskruntime.Handler{}
-			runtime.RegisterWorker(jobs)
-			run := func(kind string, id uuid.UUID) {
-				t.Helper()
-				_, err := jobs[kind](ctx, taskruntime.Job{Kind: kind, BusinessID: id.String()})
-				require.NoError(t, err)
-			}
-			run(pg.OnboardingKind, review.ID)
-			run(pg.OnboardingKind, review.ID)
-			pending, err := store.ReviewOnboarding(ctx, review.ID)
-			require.NoError(t, err)
-			require.Len(t, pending.Probes, 1)
-			require.Equal(t, "pending", pending.Probes[0].State)
-			request := pending.Probes[0].RequestID
-			run("ai.poll", request)
-			run("ai.deliver", request)
-			run("ai.settle", request)
-			run(pg.OnboardingKind, review.ID)
+			require.Equal(t, review.ID, reused.ID)
 			current, err := fixtureStore.Model(ctx, review.Upstream, "media")
 			require.NoError(t, err)
 			require.Equal(t, review.ModelID, current.ID)
-			var available int
-			require.NoError(t, db.Raw("SELECT count(*) FROM ai.available_model WHERE id=? AND route_id=?", current.ID, review.ID).Scan(&available).Error)
-			require.Equal(t, 1, available)
-			again, err := store.PrepareFromPreset(ctx, otherProject)
-			require.NoError(t, err)
-			require.Equal(t, review.ID, again.ID)
-			require.True(t, again.Available)
-			record, err := fixtureStore.Read(ctx, actor.ScopeID, request)
-			require.NoError(t, err)
-			require.Equal(t, "settled", record.State)
-			require.EqualValues(t, item.charged, record.Charged)
-			require.EqualValues(t, item.maximum-item.charged, record.Released)
-			require.EqualValues(t, item.purchaseActual, record.Receipt.PurchaseMicros)
-			require.Positive(t, objects.writes)
-			require.Equal(t, 1, sends)
-			require.Equal(t, 1, polls)
+
+			var requests, budgets, charges int
+			require.NoError(t, db.Raw(`SELECT
+			 (SELECT count(*) FROM ai.request WHERE run_id=?),
+			 (SELECT count(*) FROM ai.budget WHERE id=?),
+			 (SELECT count(*) FROM ai.money_event WHERE scope_id=? AND kind IN ('freeze','settle'))`, review.ID, review.ID, actor.ScopeID).Row().Scan(&requests, &budgets, &charges))
+			require.Zero(t, requests)
+			require.Zero(t, budgets)
+			require.Zero(t, charges)
 			require.NoError(t, store.RollbackOnboarding(ctx, review.ID))
 			_, err = fixtureStore.Model(ctx, review.Upstream, "media")
 			require.ErrorIs(t, err, domain.ErrUnavailable)
@@ -194,4 +150,22 @@ func TestSeedancePresetsActivateOnlyAfterOriginalVideoAndUsage(t *testing.T) {
 			require.Equal(t, "prepared", retry.State)
 		})
 	}
+}
+
+func TestSeedanceKeyVerificationRejectsCallerChosenEndpoint(t *testing.T) {
+	d := mediaDispatch(t, "volcengine_ark", "video.generate", "text2video", "doubao-seedance-2-0-fast-260128")
+	d.Route.BaseURL = "https://other.example/api/v3"
+	client := mediaClient(func(*http.Request) (*http.Response, error) {
+		t.Fatal("credentials must only be sent to the official Ark origin")
+		return nil, nil
+	})
+	require.ErrorIs(t, client.VerifyProviderKey(t.Context(), d.Route, "simulated-key"), domain.ErrInvalid)
+
+	db, store, _, actor := fixture(t)
+	input := domain.QuickOnboardingInput{
+		PresetKey: arkPresetVersion + "ark-video-fast",
+		ScopeID:   uuid.New(), ProjectID: entrypointProject(t, db, actor),
+	}
+	_, err := store.PrepareFromPreset(t.Context(), input)
+	require.ErrorIs(t, err, domain.ErrForbidden)
 }

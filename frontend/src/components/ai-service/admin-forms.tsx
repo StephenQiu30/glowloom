@@ -755,13 +755,15 @@ function PreparedRouteForm({
   );
   const [driverKey, setDriverKey] = useState(preset?.adapter ?? "");
   const [supplier, setSupplier] = useState("");
+  const [address, setAddress] = useState<{ source: string; value: string }>();
+  const [wantsTrial, setWantsTrial] = useState(false);
   const [groupOverride, setGroupOverride] = useState<string>();
   const draftRoute = configuration.routes.find(
     ({ route }) => route.supplier === supplier,
   )?.route;
   const group = (groupOverride ?? draftRoute?.group ?? "").trim();
   const quota = configuration.quotas.find((item) => item.name === group);
-  const noVerificationSlot =
+  const quotaFull =
     quota !== undefined &&
     (quota.concurrency <= 1 || quota.rpm <= 1) &&
     configuration.routes.some(
@@ -776,6 +778,26 @@ function PreparedRouteForm({
         ),
     );
   const driver = drivers.find((option) => option.key === driverKey);
+  const addressSource = `${driverKey}:${supplier}`;
+  const defaultAddress = embedding
+    ? arkEmbedding.baseURL
+    : (driver?.base_url ??
+      (preset?.text_tariff || preset?.media_tariff
+        ? preset.base_url
+        : (draftRoute?.base_url ?? preset?.base_url)));
+  const baseAddress =
+    address?.source === addressSource ? address.value : defaultAddress;
+  const canReadKey =
+    configuration.key_endpoints?.some(
+      ({ provider, base_url, media_only }) =>
+        (!media_only || media) &&
+        base_url === baseAddress?.trim().replace(/\/$/, "") &&
+        (!media || provider === driverKey) &&
+        (provider === "anthropic") === (model.protocol === "messages"),
+    ) ?? false;
+  const autoGroup = canReadKey && preset && !supplier;
+  const generationTrial = !canReadKey || wantsTrial;
+  const noVerificationSlot = generationTrial && quotaFull;
   const replacements = configuration.routes.filter(
     ({ route, enabled }) => enabled && route.model_id === model.id,
   );
@@ -809,7 +831,7 @@ function PreparedRouteForm({
       {(!media || driver) && (
         <FieldGroup className="grid sm:grid-cols-2">
           <InputField
-            key={`${driverKey}:${supplier}`}
+            key={addressSource}
             label="供应商地址"
             name="base_url"
             type="url"
@@ -819,13 +841,12 @@ function PreparedRouteForm({
               Boolean(driver && !driver.custom_url) ||
               Boolean(preset?.text_tariff || preset?.media_tariff)
             }
-            value={
-              embedding
-                ? arkEmbedding.baseURL
-                : (driver?.base_url ??
-                  (preset?.text_tariff || preset?.media_tariff
-                    ? preset.base_url
-                    : (draftRoute?.base_url ?? preset?.base_url)))
+            value={defaultAddress}
+            onChange={(event) =>
+              setAddress({
+                source: addressSource,
+                value: event.currentTarget.value,
+              })
             }
           />
           {driver && (
@@ -896,7 +917,9 @@ function PreparedRouteForm({
           const route = {
             model_id: model.id,
             supplier: supplier || newSupplier.current!,
-            group,
+            group:
+              group ||
+              (autoGroup ? `${preset.adapter}/${newSupplier.current}` : ""),
             base_url: baseURL,
             upstream_model: text(data, "upstream_model"),
             protocol: model.protocol,
@@ -919,7 +942,11 @@ function PreparedRouteForm({
             scope: text(data, "scope_id"),
             project: text(data, "project_id"),
             replacement: text(data, "replacement"),
-            mediaTests: media ? readMediaProbes(data, model) : undefined,
+            generationTrial,
+            mediaTests:
+              media && generationTrial
+                ? readMediaProbes(data, model)
+                : undefined,
             concurrency,
             rpm,
           };
@@ -932,7 +959,7 @@ function PreparedRouteForm({
           );
           attempt.current = null;
           onPrepared(review);
-        }, "采购价与验证计划已保存。");
+        }, "");
       }}
     >
       <FieldGroup>
@@ -1000,15 +1027,18 @@ function PreparedRouteForm({
             name="group"
             value={draftRoute?.group}
             onChange={(event) => setGroupOverride(event.currentTarget.value)}
-            placeholder="例如 ark-team"
+            placeholder={autoGroup ? "自动生成" : "例如 ark-team"}
+            required={!autoGroup}
             maxLength={160}
           />
           <InputField
-            label="验证付款空间 ID"
+            label={generationTrial ? "验证付款空间 ID" : "创作空间 ID"}
             name="scope_id"
             pattern={uuidPattern}
             value={defaultScope}
-            description="验证积分从这个空间扣除。"
+            description={
+              generationTrial ? "试跑积分从这个空间扣除。" : undefined
+            }
           />
         </FieldGroup>
         {noVerificationSlot && (
@@ -1043,7 +1073,23 @@ function PreparedRouteForm({
               : undefined
           }
         />
-        {media && (
+        {canReadKey && (
+          <SetupSelectField
+            label="验证方式"
+            value={generationTrial ? "trial" : "read-only"}
+            onValueChange={(value) => setWantsTrial(value === "trial")}
+            options={[
+              ["read-only", "只读鉴权 · 0 积分"],
+              ["trial", "生成试跑"],
+            ]}
+          />
+        )}
+        {!canReadKey && baseAddress && (
+          <FieldDescription>
+            该地址无只读鉴权，生成试跑需确认费用。
+          </FieldDescription>
+        )}
+        {media && generationTrial && (
           <>
             <Separator />
             <MediaProbeFields model={model} />
@@ -1053,7 +1099,7 @@ function PreparedRouteForm({
           <SubmitButton
             busy={busy}
             disabled={noVerificationSlot || (media && !driver)}
-            label="准备验证"
+            label={generationTrial ? "准备验证" : "准备接入"}
             icon={ClipboardCheck}
           />
         </div>

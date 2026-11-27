@@ -2,6 +2,7 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -33,11 +34,22 @@ type Handler struct {
 	auth     pg.Authority
 	provider application.Provider
 	sealer   Sealer
+	keyCheck KeyVerification
+}
+
+// KeyVerification supplies read-only upstream access and the secret used to fingerprint credentials.
+type KeyVerification struct {
+	Verify func(context.Context, domain.Route, string) error
+	MACKey []byte
 }
 
 // New binds transport, authority and credential encryption to the gateway.
-func New(db *gorm.DB, auth pg.Authority, transport application.Provider, sealer Sealer) *Handler {
-	return &Handler{db, auth, transport, sealer}
+func New(db *gorm.DB, auth pg.Authority, transport application.Provider, sealer Sealer, keyCheck ...KeyVerification) *Handler {
+	h := &Handler{db: db, auth: auth, provider: transport, sealer: sealer}
+	if len(keyCheck) > 0 {
+		h.keyCheck = keyCheck[0]
+	}
+	return h
 }
 func (h *Handler) store(a identity.Principal) *pg.Store { return pg.New(h.db, a, h.auth) }
 
@@ -377,6 +389,14 @@ func problem(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, domain.ErrInvalid):
 		status, kind = 400, "invalid_request_error"
+	case errors.Is(err, domain.ErrProviderKeyRejected):
+		status, kind = 422, "provider_key_rejected"
+	case errors.Is(err, domain.ErrProviderKeyScope):
+		status, kind = 422, "provider_key_scope"
+	case errors.Is(err, domain.ErrProviderKeyCheckUnsupported):
+		status, kind = 422, "provider_key_check_unsupported"
+	case errors.Is(err, domain.ErrTrialConfirmationRequired):
+		status, kind = 422, "trial_confirmation_required"
 	case errors.Is(err, domain.ErrForbidden):
 		status, kind = 403, "permission_error"
 	case errors.Is(err, domain.ErrConflict):

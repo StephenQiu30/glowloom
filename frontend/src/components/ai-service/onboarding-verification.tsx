@@ -27,6 +27,7 @@ import { FieldGroup } from "@/components/ui/field";
 import { AiServiceAction } from "./admin-action";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  isReadOnlyKeyCheck,
   loadOnboarding,
   rollbackOnboarding,
   verifyOnboarding,
@@ -35,6 +36,7 @@ import {
   type OnboardingSummary,
 } from "@/lib/ai-service-admin";
 import {
+  CheckField,
   FormDetails,
   InputField,
   SubmitButton,
@@ -42,6 +44,7 @@ import {
   priceSummary,
   type RunMutation,
 } from "./admin-fields";
+import { RequestError } from "@/lib/request";
 import { modeLabel } from "./media-fields";
 
 export const onboardingState: Record<OnboardingSummary["state"], string> = {
@@ -118,6 +121,8 @@ export function OnboardingPanel({
     };
   }, [readID, revision, refreshConfiguration]);
 
+  const keyCheck = review !== undefined && isReadOnlyKeyCheck(review.plan);
+  const [trialApproved, setTrialApproved] = useState(false);
   const unknown = review?.progress.some((record) => record.state === "unknown");
   const availability =
     review?.state === "active"
@@ -196,60 +201,95 @@ export function OnboardingPanel({
                   </p>
                 )}
               </div>
-              <dl className="flex flex-wrap gap-x-6 gap-y-3">
-                {typeof review.plan.estimated_credits === "number" && (
+              {!keyCheck && (
+                <dl className="flex flex-wrap gap-x-6 gap-y-3">
+                  {typeof review.plan.estimated_credits === "number" && (
+                    <Summary
+                      label="预计验证积分"
+                      value={`${review.plan.estimated_credits} 积分`}
+                    />
+                  )}
                   <Summary
-                    label="预计验证积分"
-                    value={`${review.plan.estimated_credits} 积分`}
+                    label="最高验证积分"
+                    value={`${review.plan.credits} 积分`}
                   />
-                )}
-                <Summary
-                  label="最高验证积分"
-                  value={`${review.plan.credits} 积分`}
-                />
-                <Summary
-                  label="采购上限"
-                  value={money(review.plan.purchase_micros)}
-                />
-              </dl>
-              <div className="flex flex-col gap-1">
-                <p className="text-sm font-medium">
-                  验证请求{" "}
-                  <span className="tabular-nums">
-                    {review.plan.probes.length} 次
-                  </span>
-                </p>
-                <ul
-                  aria-label="验证用例"
-                  className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground"
-                >
-                  {review.plan.probes.map((probe) => (
-                    <li key={probe.name}>{probeLabel(probe)}</li>
-                  ))}
-                </ul>
-              </div>
+                  <Summary
+                    label="采购上限"
+                    value={money(review.plan.purchase_micros)}
+                  />
+                </dl>
+              )}
+              {!keyCheck && (
+                <div className="flex flex-col gap-1">
+                  <p className="text-sm font-medium">
+                    验证请求{" "}
+                    <span className="tabular-nums">
+                      {review.plan.probes.length} 次
+                    </span>
+                  </p>
+                  <ul
+                    aria-label="验证用例"
+                    className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground"
+                  >
+                    {review.plan.probes.map((probe) => (
+                      <li key={probe.name}>{probeLabel(probe)}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </>
           )}
           {review.state === "prepared" && !readError && (
             <form
-              aria-label="保存接入"
+              aria-label={keyCheck ? "保存接入" : "确认生成试跑"}
               onSubmit={(event) => {
                 event.preventDefault();
                 const form = event.currentTarget;
                 const data = new FormData(form);
                 const key = String(data.get("key") ?? "").trim();
-                if (!key || busy) return;
+                if (!key || busy || (!keyCheck && !trialApproved)) return;
                 const input = form.elements.namedItem("key");
-                if (input instanceof HTMLInputElement) input.value = "";
-                setKeyEntered(false);
-                onKeyDirty?.(false);
-                void run(async () => {
-                  try {
-                    setReview(await verifyOnboarding(review, key));
-                  } finally {
-                    setRevision((value) => value + 1);
-                  }
-                }, "");
+                function clearKey() {
+                  if (input instanceof HTMLInputElement) input.value = "";
+                  setKeyEntered(false);
+                  onKeyDirty?.(false);
+                }
+                void run(
+                  async () => {
+                    try {
+                      setReview(
+                        await verifyOnboarding(
+                          review,
+                          key,
+                          !keyCheck && trialApproved,
+                        ),
+                      );
+                      clearKey();
+                    } catch (cause) {
+                      if (
+                        cause instanceof RequestError &&
+                        cause.code === "insufficient_credits"
+                      ) {
+                        throw new Error(
+                          `验证空间积分不足，需至少 ${review.plan.credits} 积分`,
+                        );
+                      }
+                      if (!(
+                        cause instanceof RequestError &&
+                        [
+                          "budget_exceeded",
+                          "provider_key_rejected",
+                          "provider_key_scope",
+                        ].includes(cause.code)
+                      )) {
+                        clearKey();
+                      }
+                      setRevision((value) => value + 1);
+                      throw cause;
+                    }
+                  },
+                  keyCheck ? "接入已保存" : "试跑已提交",
+                );
               }}
             >
               <FieldGroup className="gap-3">
@@ -259,18 +299,35 @@ export function OnboardingPanel({
                   name="key"
                   type="password"
                   maxLength={8192}
-                  description={`保存后自动验证，最多使用 ${review.plan.credits} 积分。`}
+                  description={keyCheck ? "只读鉴权 · 0 积分" : undefined}
                   onChange={(event) => {
                     const hasKey = Boolean(event.currentTarget.value.trim());
                     setKeyEntered(hasKey);
                     onKeyDirty?.(hasKey);
                   }}
                 />
+                {!keyCheck && !back && (
+                  <p className="text-sm text-muted-foreground">
+                    {typeof review.plan.estimated_credits === "number" &&
+                      `预计 ${review.plan.estimated_credits} 积分 · `}
+                    采购上限 {money(review.plan.purchase_micros)}
+                  </p>
+                )}
+                {!keyCheck && (
+                  <CheckField
+                    checked={trialApproved}
+                    onCheckedChange={(checked) =>
+                      setTrialApproved(checked === true)
+                    }
+                    disabled={busy}
+                    label={`确认生成试跑，最多使用 ${review.plan.credits} 积分`}
+                  />
+                )}
                 <div>
                   <SubmitButton
                     busy={busy}
-                    disabled={!keyEntered}
-                    label="保存接入"
+                    disabled={!keyEntered || (!keyCheck && !trialApproved)}
+                    label={keyCheck ? "保存接入" : "确认并试跑"}
                     icon={ShieldCheck}
                   />
                 </div>
@@ -279,15 +336,21 @@ export function OnboardingPanel({
           )}
           {back && (
             <FormDetails label="验证详情" keepMounted={false}>
-              <ul className="flex flex-col gap-4">
-                {review.plan.probes.map((probe, index) => (
-                  <ProbeSummary
-                    key={probe.name}
-                    probe={probe}
-                    progress={review.progress[index]}
-                  />
-                ))}
-              </ul>
+              {keyCheck ? (
+                <p className="text-sm text-muted-foreground">
+                  API Key 只读鉴权 · 0 积分
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-4">
+                  {review.plan.probes.map((probe, index) => (
+                    <ProbeSummary
+                      key={probe.name}
+                      probe={probe}
+                      progress={review.progress[index]}
+                    />
+                  ))}
+                </ul>
+              )}
               <dl className="mt-4 grid gap-3 sm:grid-cols-2">
                 <Summary label="测试付款空间" value={review.scope_id} compact />
                 <Summary label="模型版本" value={review.model_id} compact />

@@ -56,10 +56,11 @@ func public(a netip.Addr) bool {
 }
 
 type fenced struct {
-	client       *Client
-	route        domain.Route
-	key          string
-	mediaAdapter string
+	client             *Client
+	route              domain.Route
+	key                string
+	mediaAdapter       string
+	speechKeyHandshake bool
 }
 
 func (f fenced) Do(r *http.Request) (*http.Response, error) {
@@ -95,6 +96,11 @@ func (f fenced) Do(r *http.Request) (*http.Response, error) {
 	clone := r.Clone(r.Context())
 	clone.Header = http.Header{"Content-Type": []string{"application/json"}, "Accept": []string{"application/json, text/event-stream"}}
 	switch {
+	case f.speechKeyHandshake:
+		clone.Header.Set("X-Api-Key", f.key)
+		for _, name := range []string{"Connection", "Upgrade", "Sec-WebSocket-Key", "Sec-WebSocket-Version", "X-Api-Resource-Id", "X-Api-Connect-Id"} {
+			clone.Header.Set(name, r.Header.Get(name))
+		}
 	case f.mediaAdapter == "volcengine_speech":
 		clone.Header.Set("X-Api-Key", f.key)
 		for _, name := range []string{"X-Api-Resource-Id", "X-Api-Request-Id", "X-Control-Require-Usage-Tokens-Return"} {

@@ -24,6 +24,14 @@ var (
 	ErrBudget = errors.New("AI budget exceeded")
 	// ErrUnavailable indicates no eligible configured execution route.
 	ErrUnavailable = errors.New("AI supply unavailable")
+	// ErrProviderKeyRejected indicates that the provider rejected credential authentication.
+	ErrProviderKeyRejected = errors.New("provider API key rejected")
+	// ErrProviderKeyScope indicates that the key cannot use the provider's read-only endpoint.
+	ErrProviderKeyScope = errors.New("provider API key lacks required access")
+	// ErrProviderKeyCheckUnsupported identifies a route without an official read-only check.
+	ErrProviderKeyCheckUnsupported = errors.New("provider does not support read-only key verification")
+	// ErrTrialConfirmationRequired indicates a metered trial was not approved.
+	ErrTrialConfirmationRequired = errors.New("generation trial requires separate confirmation")
 	// ErrForbidden rejects missing or revoked caller authority.
 	ErrForbidden = errors.New("AI scope forbidden")
 	// ErrUnknown preserves funds until original evidence resolves the result.
@@ -223,19 +231,20 @@ func Protocol(s string) bool {
 
 // Route references its own purchase version and encrypted credential identity.
 type Route struct {
-	DriverConfig  json.RawMessage `json:"driver_config,omitempty"`
-	ID            uuid.UUID       `json:"id"`
-	ModelID       uuid.UUID       `json:"model_id"`
-	Supplier      uuid.UUID       `json:"supplier"`
-	Credential    uuid.UUID       `json:"credential"`
-	Group         string          `json:"group"`
-	BaseURL       string          `json:"base_url"`
-	UpstreamModel string          `json:"upstream_model"`
-	Protocol      string          `json:"protocol"`
-	Purchase      Price           `json:"purchase"`
-	KeyID         string          `json:"key_id"`
-	Ciphertext    []byte          `json:"-"`
-	Priority      int             `json:"priority"`
+	KeyVerification string          `json:"key_verification,omitempty"`
+	DriverConfig    json.RawMessage `json:"driver_config,omitempty"`
+	ID              uuid.UUID       `json:"id"`
+	ModelID         uuid.UUID       `json:"model_id"`
+	Supplier        uuid.UUID       `json:"supplier"`
+	Credential      uuid.UUID       `json:"credential"`
+	Group           string          `json:"group"`
+	BaseURL         string          `json:"base_url"`
+	UpstreamModel   string          `json:"upstream_model"`
+	Protocol        string          `json:"protocol"`
+	Purchase        Price           `json:"purchase"`
+	KeyID           string          `json:"key_id"`
+	Ciphertext      []byte          `json:"-"`
+	Priority        int             `json:"priority"`
 }
 
 // Call is a server-authorized logical operation. Its limit is credits, not money.

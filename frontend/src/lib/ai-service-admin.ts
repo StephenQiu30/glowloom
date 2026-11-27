@@ -153,6 +153,11 @@ export type GatewayPreset = {
 };
 export type AiServiceConfiguration = {
   model_presets?: GatewayPreset[];
+  key_endpoints?: {
+    provider: string;
+    base_url: string;
+    media_only?: boolean;
+  }[];
   credit_grants?: API.CreditGrantOrder[];
   models: { model: GatewayModel; enabled: boolean; draft?: boolean }[];
   onboarding: OnboardingSummary[];
@@ -200,6 +205,7 @@ export type OnboardingReview = OnboardingSummary & {
   project_id: string;
   available?: boolean;
   plan: {
+    method?: "ark_models" | "read_only_key";
     credits: number;
     estimated_credits?: number;
     purchase_micros: number;
@@ -208,11 +214,16 @@ export type OnboardingReview = OnboardingSummary & {
   progress: { request_id: string; state: string }[];
 };
 
+export function isReadOnlyKeyCheck(plan: OnboardingReview["plan"]) {
+  return plan.method === "read_only_key" || plan.method === "ark_models";
+}
+
 export async function prepareQuickOnboarding(
   input: API.QuickOnboardingInput,
 ): Promise<OnboardingReview> {
   const result = await prepareAiOnboardingPreset(input);
   const validStates = ["prepared", "verifying", "active"];
+  const plan = result.plan as OnboardingReview["plan"] | undefined;
   requireValue(
     uuid.test(result.id ?? "") &&
       uuid.test(result.model_id ?? "") &&
@@ -221,11 +232,15 @@ export async function prepareQuickOnboarding(
           result.project_id === input.project_id)) &&
       Boolean(result.upstream_model) &&
       validStates.includes(result.state ?? "") &&
-      result.plan !== undefined &&
-      integer(result.plan.credits ?? -1) &&
-      integer(result.plan.purchase_micros ?? -1) &&
-      Array.isArray(result.plan.probes) &&
-      result.plan.probes.length > 0 &&
+      plan !== undefined &&
+      integer(plan.credits ?? -1) &&
+      integer(plan.purchase_micros ?? -1) &&
+      Array.isArray(plan.probes) &&
+      (isReadOnlyKeyCheck(plan)
+        ? plan.credits === 0 &&
+          plan.purchase_micros === 0 &&
+          plan.probes.length === 0
+        : plan.method === undefined && plan.probes.length > 0) &&
       Array.isArray(result.progress),
     "接入计划响应无效",
   );
@@ -465,6 +480,7 @@ export async function loadAiServiceConfiguration(
     "quotas",
     "media_drivers",
     "model_presets",
+    "key_endpoints",
     "credit_grants",
     "unknown",
   ] as const) {
@@ -473,6 +489,17 @@ export async function loadAiServiceConfiguration(
       "AI 服务配置列表无效",
     );
   }
+  requireValue(
+    (result.key_endpoints ?? []).every(
+      (endpoint) =>
+        endpoint &&
+        typeof endpoint.provider === "string" &&
+        typeof endpoint.base_url === "string" &&
+        (endpoint.media_only === undefined ||
+          typeof endpoint.media_only === "boolean"),
+    ),
+    "供应商鉴权地址无效",
+  );
   const readablePrice = (price: GatewayPrice) =>
     price !== null &&
     typeof price === "object" &&
@@ -585,6 +612,7 @@ export async function loadAiServiceConfiguration(
             driver.parameters[preset.capability],
         ),
     ),
+    key_endpoints: result.key_endpoints ?? [],
     models: result.models ?? [],
     credit_grants: result.credit_grants ?? [],
     routes: result.routes ?? [],
@@ -614,11 +642,20 @@ export async function prepareRoute(
     project?: string;
     replacement?: string;
     mediaTests?: unknown[];
+    generationTrial?: boolean;
     concurrency: number;
     rpm: number;
   },
 ) {
-  const { scope, project, replacement, mediaTests, concurrency, rpm } = options;
+  const {
+    scope,
+    project,
+    replacement,
+    mediaTests,
+    generationTrial,
+    concurrency,
+    rpm,
+  } = options;
   id(value.model_id);
   id(value.supplier);
   id(scope);
@@ -744,6 +781,7 @@ export async function prepareRoute(
       scope_id: scope,
       ...(project ? { project_id: project } : {}),
       ...(replacement ? { replaces_route_id: replacement } : {}),
+      ...(generationTrial ? { verification: "generation_trial" } : {}),
       ...(mediaTests ? { media_tests: mediaTests } : {}),
       concurrency,
       rpm,
@@ -758,7 +796,11 @@ export function loadOnboarding(candidate: string, signal?: AbortSignal) {
   });
 }
 
-export function verifyOnboarding(review: OnboardingReview, key: string) {
+export function verifyOnboarding(
+  review: OnboardingReview,
+  key: string,
+  confirmTrial: boolean,
+) {
   id(review.id);
   return request<OnboardingReview>(`${prefix}/onboarding/${review.id}/verify`, {
     method: "POST",
@@ -766,6 +808,7 @@ export function verifyOnboarding(review: OnboardingReview, key: string) {
       key,
       credits: review.plan.credits,
       purchase_micros: review.plan.purchase_micros,
+      ...(confirmTrial ? { confirm_trial: true } : {}),
     },
   });
 }

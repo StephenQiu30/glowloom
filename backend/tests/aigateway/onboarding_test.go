@@ -118,7 +118,7 @@ func TestOnboardingChargesOnceAndSwitchesOnlyOnEvidence(t *testing.T) {
 	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 	in := application.Onboarding{
 		Route: domain.Route{ID: uuid.New(), ModelID: next.ID, Supplier: uuid.New(), Group: uuid.NewString(), Protocol: "chat", BaseURL: "https://8.8.8.8/v1", UpstreamModel: "actual-supplier", Purchase: live.Price},
-		Scope: actor.ScopeID, Concurrency: 2, RPM: 10000,
+		Scope: actor.ScopeID, Verification: application.GenerationTrial, Concurrency: 2, RPM: 10000,
 	}
 	require.Equal(t, http.StatusBadRequest, request(http.MethodPost, "routes", map[string]any{"route": in.Route, "key": "not-allowed-here"}).Code)
 	invalid := in
@@ -137,8 +137,13 @@ func TestOnboardingChargesOnceAndSwitchesOnlyOnEvidence(t *testing.T) {
 
 	path := "onboarding/" + in.Route.ID.String()
 	firstPath := path
-	approval := map[string]any{"key": "synthetic-api-key", "credits": review.Plan.Credits, "purchase_micros": review.Plan.PurchaseMicros}
-	badApproval := map[string]any{"key": "synthetic-api-key", "credits": review.Plan.Credits - 1, "purchase_micros": review.Plan.PurchaseMicros}
+	approval := map[string]any{"key": "synthetic-api-key", "credits": review.Plan.Credits, "purchase_micros": review.Plan.PurchaseMicros, "confirm_trial": true}
+	badApproval := map[string]any{"key": "synthetic-api-key", "credits": review.Plan.Credits - 1, "purchase_micros": review.Plan.PurchaseMicros, "confirm_trial": true}
+	delete(approval, "confirm_trial")
+	w = request(http.MethodPost, path+"/verify", approval)
+	require.Equal(t, http.StatusUnprocessableEntity, w.Code, w.Body.String())
+	require.Contains(t, w.Body.String(), "trial_confirmation_required")
+	approval["confirm_trial"] = true
 	require.Equal(t, http.StatusPaymentRequired, request(http.MethodPost, path+"/verify", badApproval).Code)
 	require.Zero(t, sends.Load())
 	for range 2 {

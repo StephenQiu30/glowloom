@@ -2,7 +2,6 @@
 
 import { useTheme } from "next-themes";
 import { useEffect } from "react";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { Toaster as Sonner, toast, type ToasterProps } from "sonner";
 import {
   CircleCheckIcon,
@@ -15,7 +14,6 @@ import {
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = "dark" } = useTheme();
-  const mobile = useIsMobile();
   useEffect(() => {
     function dismissCurrent(event: KeyboardEvent) {
       if (event.key !== "Escape" || event.defaultPrevented) return;
@@ -40,26 +38,15 @@ const Toaster = ({ ...props }: ToasterProps) => {
   return (
     <Sonner
       theme={theme as ToasterProps["theme"]}
-      position={mobile ? "top-center" : "top-right"}
-      offset={
-        mobile
-          ? {
-              top: "calc(max(76px, env(safe-area-inset-top)) + var(--global-announcement-height, 0px))",
-              left: 16,
-              right: 16,
-            }
-          : {
-              top: "calc(84px + var(--global-announcement-height, 0px))",
-              right: 24,
-            }
-      }
+      position="top-center"
+      offset={{ top: "calc(84px + var(--global-announcement-height, 0px))" }}
       mobileOffset={{
         top: "calc(max(76px, env(safe-area-inset-top)) + var(--global-announcement-height, 0px))",
         left: 16,
         right: 16,
       }}
       duration={5000}
-      visibleToasts={3}
+      visibleToasts={2}
       closeButton
       containerAriaLabel="通知"
       className="toaster group"
@@ -78,22 +65,10 @@ const Toaster = ({ ...props }: ToasterProps) => {
           "--normal-text": "var(--popover-foreground)",
           "--normal-border": "var(--border)",
           "--border-radius": "var(--radius)",
-          "--width": "400px",
         } as React.CSSProperties
       }
       toastOptions={{
         closeButtonAriaLabel: "关闭提示",
-        unstyled: true,
-        classNames: {
-          toast: "feedback-toast",
-          title: "feedback-toast-title",
-          description: "feedback-toast-description",
-          content: "feedback-toast-content",
-          icon: "feedback-toast-icon",
-          actionButton: "feedback-toast-action",
-          cancelButton: "feedback-toast-action",
-          closeButton: "feedback-toast-close",
-        },
       }}
       {...props}
     />

@@ -67,7 +67,7 @@ func (s *Store) PrepareFromPreset(ctx context.Context, req domain.QuickOnboardin
 		if config.Validate() != nil {
 			return domain.ErrInvalid
 		}
-		model, purchase, probe, err := preset.SeedanceDraft(req.PresetKey, row.Upstream, profile)
+		model, purchase, _, err := preset.SeedanceDraft(req.PresetKey, row.Upstream, profile)
 		if err != nil {
 			return err
 		}
@@ -99,8 +99,7 @@ func (s *Store) PrepareFromPreset(ctx context.Context, req domain.QuickOnboardin
 		}
 		candidate = uuid.New()
 		return bound.PrepareOnboarding(ctx, application.Onboarding{
-			Scope: req.ScopeID, Project: req.ProjectID, Concurrency: preset.Concurrency, RPM: preset.RPM,
-			MediaTests: []json.RawMessage{mustJSON(probe)},
+			Scope: req.ScopeID, Project: req.ProjectID, Verification: application.ReadOnlyKeyVerification, Concurrency: preset.Concurrency, RPM: preset.RPM,
 			Route: domain.Route{ID: candidate, ModelID: model.ID, Supplier: uuid.NewSHA1(uuid.NameSpaceURL, []byte(group)),
 				Group: group, BaseURL: config.BaseURL, UpstreamModel: row.Upstream, Protocol: model.Protocol,
 				Purchase: purchase, DriverConfig: mustJSON(config)},
@@ -110,4 +109,12 @@ func (s *Store) PrepareFromPreset(ctx context.Context, req domain.QuickOnboardin
 		return OnboardingReview{}, err
 	}
 	return s.ReviewOnboarding(ctx, candidate)
+}
+
+func quickArkRoute(in application.Onboarding, model domain.Model) bool {
+	group := quickOnboardingGroup(in.Scope)
+	return model.PresetKey != "" && model.VideoMetering != nil &&
+		model.Name == in.Route.UpstreamModel && catalog.IsSeedanceTokenModel(in.Route.UpstreamModel) &&
+		in.Replacement == uuid.Nil && in.Route.Group == group &&
+		in.Route.Supplier == uuid.NewSHA1(uuid.NameSpaceURL, []byte(group))
 }

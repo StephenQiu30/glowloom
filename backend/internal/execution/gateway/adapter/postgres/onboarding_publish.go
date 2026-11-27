@@ -33,7 +33,7 @@ func (s *Store) checkOnboardingCall(ctx context.Context, tx *gorm.DB, call domai
 	if err != nil {
 		return err
 	}
-	if row.State != "verifying" || work.Actor.ID != call.Actor || work.Input.Scope != call.Scope ||
+	if row.State != "verifying" || work.Plan.Method != "" || work.Actor.ID != call.Actor || work.Input.Scope != call.Scope ||
 		work.Input.Project != call.Project || work.Model.ID != call.Model.ID {
 		return domain.ErrForbidden
 	}
@@ -63,6 +63,9 @@ func (s *Store) PublishVerified(ctx context.Context, id uuid.UUID) error {
 		row, work, err := loadOnboarding(tx, id, true)
 		if err != nil || row.State != "verifying" {
 			return err
+		}
+		if work.Plan.Method != "" {
+			return domain.ErrForbidden
 		}
 		if err := s.check(ctx, tx, s.actor.ScopeID, uuid.Nil, true); err != nil {
 			return err
@@ -102,41 +105,46 @@ func (s *Store) PublishVerified(ctx context.Context, id uuid.UUID) error {
 			}
 		}
 
-		if err := lockOnboardingModels(tx, row); err != nil {
-			return err
-		}
-		// Check and hold the precise credential and route through alias activation.
-		route := work.Input.Route
-		var eligible struct{ ID uuid.UUID }
-		q := tx.Raw("SELECT r.id FROM ai.route r JOIN ai.credential c ON c.id=r.credential_id WHERE r.id=? AND r.deleted_at IS NULL AND r.model_id=? AND NOT r.enabled AND c.state='active' FOR UPDATE OF r FOR SHARE OF c", route.ID, work.Model.ID).Scan(&eligible)
-		if q.Error != nil {
-			return q.Error
-		}
-		if eligible.ID != route.ID {
-			return domain.ErrUnavailable
-		}
-		if work.Input.Replacement != uuid.Nil {
-			changed := tx.Exec("UPDATE ai.route SET enabled=false WHERE id=? AND model_id=? AND enabled", work.Input.Replacement, work.Model.ID)
-			if changed.Error != nil {
-				return changed.Error
-			}
-			if changed.RowsAffected != 1 {
-				return tx.Exec("UPDATE ai.onboarding SET state='stale' WHERE id=?", id).Error
-			}
-		}
-		if row.PreviousModelID != nil && *row.PreviousModelID != work.Model.ID {
-			if err := tx.Exec("UPDATE ai.model SET enabled=false WHERE id=? AND enabled", *row.PreviousModelID).Error; err != nil {
-				return err
-			}
-		}
-		if err := tx.Exec("UPDATE ai.model SET enabled=true,draft=false WHERE id=?", work.Model.ID).Error; err != nil {
-			return err
-		}
-		if err := tx.Exec("UPDATE ai.route SET enabled=true WHERE id=?", id).Error; err != nil {
-			return err
-		}
-		return tx.Exec("UPDATE ai.onboarding SET state='active' WHERE id=?", id).Error
+		return activateOnboarding(tx, row, work)
 	})
+}
+
+func activateOnboarding(tx *gorm.DB, row onboardingRow, work OnboardingWork) error {
+	id := row.ID
+	if err := lockOnboardingModels(tx, row); err != nil {
+		return err
+	}
+	// Check and hold the precise credential and route through alias activation.
+	route := work.Input.Route
+	var eligible struct{ ID uuid.UUID }
+	q := tx.Raw("SELECT r.id FROM ai.route r JOIN ai.credential c ON c.id=r.credential_id WHERE r.id=? AND r.deleted_at IS NULL AND r.model_id=? AND NOT r.enabled AND c.state='active' FOR UPDATE OF r FOR SHARE OF c", route.ID, work.Model.ID).Scan(&eligible)
+	if q.Error != nil {
+		return q.Error
+	}
+	if eligible.ID != route.ID {
+		return domain.ErrUnavailable
+	}
+	if work.Input.Replacement != uuid.Nil {
+		changed := tx.Exec("UPDATE ai.route SET enabled=false WHERE id=? AND model_id=? AND enabled", work.Input.Replacement, work.Model.ID)
+		if changed.Error != nil {
+			return changed.Error
+		}
+		if changed.RowsAffected != 1 {
+			return tx.Exec("UPDATE ai.onboarding SET state='stale' WHERE id=?", id).Error
+		}
+	}
+	if row.PreviousModelID != nil && *row.PreviousModelID != work.Model.ID {
+		if err := tx.Exec("UPDATE ai.model SET enabled=false WHERE id=? AND enabled", *row.PreviousModelID).Error; err != nil {
+			return err
+		}
+	}
+	if err := tx.Exec("UPDATE ai.model SET enabled=true,draft=false WHERE id=?", work.Model.ID).Error; err != nil {
+		return err
+	}
+	if err := tx.Exec("UPDATE ai.route SET enabled=true WHERE id=?", id).Error; err != nil {
+		return err
+	}
+	return tx.Exec("UPDATE ai.onboarding SET state='active' WHERE id=?", id).Error
 }
 
 // RollbackOnboarding stops this verified route and restores a still-qualified predecessor.
