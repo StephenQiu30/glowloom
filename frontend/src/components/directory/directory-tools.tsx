@@ -313,7 +313,7 @@ export function DirectoryTools({
           onClick={() =>
             setAction({
               title: "创建目录导出",
-              effect: `按当前筛选创建最多 10000 行的私有 CSV 快照。完成后 15 分钟到期，下载时重新检查权限。筛选：${filterDescription(filter)}`,
+              effect: `导出当前筛选结果，最多 10,000 行。文件保留 15 分钟。筛选条件为 ${filterDescription(filter)}`,
               run: async (_reason, signal, requestID) => {
                 const options = {
                   signal,
@@ -356,15 +356,12 @@ export function DirectoryTools({
           aria-label="当前导出"
         >
           <p>导出状态：{expired ? "已到期" : states[job.status]}</p>
-          <p>
-            快照时间：{new Date(job.as_of).toLocaleString()} · {job.row_count}{" "}
-            行
-          </p>
           {job.status === "completed" ? (
-            <p>下载有效期至：{new Date(job.expires_at).toLocaleString()}</p>
-          ) : (
-            <p>尚未生成可下载文件。</p>
-          )}
+            <p>
+              {job.row_count} 行 · 下载有效期至{" "}
+              {new Date(job.expires_at).toLocaleString()}
+            </p>
+          ) : null}
           {job.status === "failed" ? (
             <FeedbackToast
               message={

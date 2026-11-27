@@ -167,10 +167,10 @@ it("business exposes unavailable capability only, with disabled export and unkno
 });
 it("diagnostic zero denominator is inapplicable and never full traffic coverage", async () => {
   render(<Diagnostics />);
-  await screen.findByText("已观测请求");
+  await screen.findByText("后端请求");
   expect(screen.getAllByText("不适用").length).toBe(2);
-  expect(screen.getByText("仅后端")).toBeTruthy();
-  expect(screen.getByText(/不代表全站流量/)).toBeTruthy();
+  expect(screen.getByText("后端 HTTP 请求结果")).toBeTruthy();
+  expect(screen.queryByText(/快照/)).toBeNull();
   expect(screen.queryByText("4/4")).toBeNull();
 });
 it("audit detail uses safe authorized strings, pagination and closes/restores invoking focus", async () => {
@@ -225,7 +225,7 @@ it("identity switch immediately drops private analytics and ignores late old res
   expect(screen.queryByText("888")).toBeNull();
 });
 
-it("same-scope refresh retains content and a pending status, then replaces the snapshot", async () => {
+it("same-scope refresh retains content and marks the region busy until the new data arrives", async () => {
   let resolve!: (value: typeof creation) => void;
   mocks.creation.mockResolvedValueOnce(creation).mockImplementationOnce(
     () =>
@@ -238,9 +238,15 @@ it("same-scope refresh retains content and a pending status, then replaces the s
   fireEvent.click(screen.getByRole("button", { name: "刷新" }));
   await waitFor(() => expect(mocks.creation).toHaveBeenCalledTimes(2));
   expect(screen.getByText("已受理任务")).toBeTruthy();
-  expect(screen.getByText(/正在刷新，保留上次结果/)).toBeTruthy();
+  expect(
+    screen.getByRole("region", { name: "创作统计" }).getAttribute("aria-busy"),
+  ).toBe("true");
+  expect(screen.queryByText(/快照/)).toBeNull();
   await act(async () => resolve({ ...creation, accepted_operations: 7 }));
   expect(await screen.findByText("7")).toBeTruthy();
+  expect(
+    screen.getByRole("region", { name: "创作统计" }).getAttribute("aria-busy"),
+  ).toBe("false");
 });
 it("mobile filter sheet keeps unsubmitted draft when dismissed and applies explicitly", async () => {
   render(<Analytics />);
@@ -501,7 +507,8 @@ it.each(["audit", "logs"] as const)(
       "signed-next",
       undefined,
     ]);
-    expect(await screen.findByText(/新快照/)).toBeTruthy();
+    await screen.findByText("第 1 页");
+    expect(screen.queryByText(/快照/)).toBeNull();
   },
 );
 it("recovers from an expired second audit page by retrying the first page", async () => {
@@ -524,5 +531,5 @@ it("recovers from an expired second audit page by retrying the first page", asyn
   fireEvent.click(await screen.findByRole("button", { name: "重试" }));
   await screen.findByText("暂无安全事件");
   expect(mocks.audit.mock.calls.at(-1)![0].cursor).toBeUndefined();
-  expect(screen.getByText(/新快照/)).toBeTruthy();
+  expect(screen.queryByText(/快照/)).toBeNull();
 });

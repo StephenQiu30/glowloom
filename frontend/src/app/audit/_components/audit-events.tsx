@@ -33,7 +33,6 @@ import {
   Loading,
   Panel,
   ReadState,
-  Snapshot,
   CopyValue,
   useInsightIdentity,
   type FilterField,
@@ -83,7 +82,6 @@ function Events() {
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [cursors, setCursors] = useState([""]);
   const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
-  const [restarted, setRestarted] = useState(false);
   const [selected, setSelected] = useState<API.SecurityEventView | null>(null);
   const focus = useRef<HTMLButtonElement | null>(null);
   const read = useInsightRead(
@@ -105,7 +103,6 @@ function Events() {
   function restart() {
     clear();
     setCursors([""]);
-    setRestarted(true);
     read.refresh();
   }
   function clear() {
@@ -113,17 +110,16 @@ function Events() {
   }
   function applyFilters(value: Record<string, string>) {
     clear();
-    setRestarted(false);
     setCursors([""]);
     setQuery(value);
   }
   return (
     <PageLayout screen="audit" hideSearch>
-      <section className="insights">
+      <section className="admin-page">
         <h1 className="sr-only">审计日志</h1>
-        <div className="flex min-h-11 items-center gap-2">
+        <div className="admin-toolbar">
           <form
-            className="mr-auto flex min-w-0 items-center gap-1"
+            className="flex min-w-0 flex-[0_1_22rem] items-center gap-2 max-sm:w-full max-sm:flex-auto"
             onSubmit={(event) => {
               event.preventDefault();
               const next: Record<string, string> = {
@@ -135,6 +131,7 @@ function Events() {
             }}
           >
             <Input
+              className="min-w-0 flex-1"
               aria-label="搜索操作代码"
               placeholder="搜索操作代码"
               value={draft.action ?? ""}
@@ -169,16 +166,7 @@ function Events() {
           ) : null
         ) : (
           <>
-            {restarted &&
-              cursors[0] === "" &&
-              cursors.length === 1 &&
-              !read.pending &&
-              !read.error && (
-                <p className="insights-note" role="status">
-                  已读取首页新快照
-                </p>
-              )}
-            <div className="min-w-0 shrink-0 overflow-hidden rounded-md border">
+            <div className="min-w-0 shrink-0">
               {d.items.length ? (
                 <div className="insights-table">
                   <Table aria-label="安全事件">
@@ -202,9 +190,16 @@ function Events() {
                       {d.items.map((item) => (
                         <TableRow key={item.id}>
                           <TableCell>{checks.selectRow(item)}</TableCell>
-                          <TableCell>{timestamp(item.created_at)}</TableCell>
                           <TableCell>
-                            <div title={item.action}>
+                            <time
+                              dateTime={item.created_at}
+                              className="wrap-normal tabular-nums"
+                            >
+                              {timestamp(item.created_at)}
+                            </time>
+                          </TableCell>
+                          <TableCell>
+                            <div className="wrap-normal" title={item.action}>
                               {item.action === "session.refreshed"
                                 ? "会话续期"
                                 : item.action}
@@ -273,7 +268,6 @@ function Events() {
                 setCursors(next);
               }}
             />
-            <Snapshot at={d.as_of} pending={read.pending} />
           </>
         )}
         <Sheet

@@ -8,15 +8,9 @@ import { HeaderLinks } from "@/components/layout/header-navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { Toolbar, ToolbarGroup } from "@/components/ui/toolbar";
 
-const adminLinks = [
-  { id: "users", href: "/users", label: "用户管理" },
-  { id: "teams", href: "/platform/teams", label: "团队管理" },
-  { id: "models", href: "/models", label: "AI 服务" },
-  { id: "settings", href: "/platform/settings", label: "平台设置" },
-  { id: "notifications", href: "/platform/notifications", label: "通知管理" },
-  { id: "health", href: "/health", label: "运行日志", heading: "运行诊断" },
-  { id: "audit", href: "/audit", label: "审计日志" },
-];
+import { adminDestinations } from "./admin-destinations";
+import "./admin-workspace.css";
+
 const AdminNavigationTitle = createContext<string | undefined>(undefined);
 
 export const SelectionToolbarSlot = createContext<HTMLDivElement | null>(null);
@@ -42,7 +36,14 @@ function useAdminHeadingInNavigation(title: string) {
 }
 
 export function AdminNavigation({ active }: { active: AdminSection }) {
-  return <HeaderLinks active={active} label="管理页面" links={adminLinks} />;
+  return (
+    <HeaderLinks
+      active={active}
+      label="管理页面"
+      links={adminDestinations}
+      className="admin-navigation"
+    />
+  );
 }
 /** Owned by the persistent application shell, outside route loading boundaries. */
 export function AdminWorkspace({
@@ -53,11 +54,11 @@ export function AdminWorkspace({
   children: ReactNode;
 }) {
   const [slot, register] = useState<HTMLDivElement | null>(null);
-  const link = adminLinks.find((item) => item.id === active);
+  const link = adminDestinations.find((item) => item.id === active);
   return (
     <div className="admin-workspace">
       {link && <AdminNavigation active={active} />}
-      <AdminNavigationTitle.Provider value={link?.heading ?? link?.label}>
+      <AdminNavigationTitle.Provider value={link?.label}>
         <RegisterSelectionToolbar.Provider value={register}>
           <SelectionToolbarSlot.Provider value={slot}>
             {children}
@@ -82,6 +83,7 @@ export function AdminHeading({
   return (
     <PageHeader
       title={title}
+      className="admin-heading"
       description={description}
       hideTitle={inNavigation && !detail}
     >

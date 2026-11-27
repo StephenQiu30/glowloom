@@ -135,13 +135,11 @@ export function AdminTable<T extends Row, FilterKey extends string>({
   ) : null;
 
   return (
-    <div className="flex min-w-0 flex-col gap-5">
+    <div className="admin-page">
       {showHeading ? (
         <AdminHeading title={title}>{toolbar}</AdminHeading>
       ) : hasToolbar ? (
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          {toolbar}
-        </div>
+        <div className="admin-toolbar justify-end">{toolbar}</div>
       ) : null}
       {context}
       {filter && fields.length > 0 ? (

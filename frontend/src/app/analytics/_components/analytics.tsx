@@ -33,7 +33,6 @@ import {
   Notice,
   Panel,
   ReadState,
-  Snapshot,
   useInsightIdentity,
   type FilterField,
 } from "@/components/insights/shared";
@@ -102,7 +101,11 @@ function CreationView({
   const [view, setView] = useState("overview");
   const d = read.data;
   return (
-    <>
+    <section
+      aria-label="创作统计"
+      aria-busy={read.pending}
+      className="flex flex-col gap-5"
+    >
       {read.error ? (
         <ReadState error={read.error} retry={read.refresh} />
       ) : null}
@@ -138,7 +141,6 @@ function CreationView({
                   <Metric
                     label="终态成功率"
                     value={rateValue(d.terminal_success_rate)}
-                    context="部分完成、待核对任务除外"
                   />
                 </div>
                 <div className="insights-panels">
@@ -244,10 +246,9 @@ function CreationView({
               </div>
             </TabsContent>
           </Tabs>
-          <Snapshot at={d.as_of} pending={read.pending} />
         </>
       )}
-    </>
+    </section>
   );
 }
 function BusinessView({ revision }: { revision: number }) {
@@ -258,7 +259,11 @@ function BusinessView({ revision }: { revision: number }) {
     revision,
   );
   return (
-    <>
+    <section
+      aria-label="经营统计"
+      aria-busy={read.pending}
+      className="flex flex-col gap-5"
+    >
       {read.error ? (
         <ReadState error={read.error} retry={read.refresh} />
       ) : !read.data ? (
@@ -287,10 +292,9 @@ function BusinessView({ revision }: { revision: number }) {
               </Button>
             </div>
           </Panel>
-          <Snapshot at={read.data.as_of} pending={read.pending} />
         </>
       )}
-    </>
+    </section>
   );
 }
 function AnalyticsContent() {

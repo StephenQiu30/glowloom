@@ -73,6 +73,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+import "./user-directory.css";
+
 const defaultFilters = {
   search: "",
   status: "",
@@ -301,7 +303,7 @@ function UserAdministration() {
       />
     );
   return (
-    <div className="user-directory flex w-full min-w-0 flex-col gap-5">
+    <div className="admin-page user-directory">
       <h1 className="sr-only">用户管理</h1>
       {mobile && (
         <div
@@ -391,7 +393,7 @@ function UserAdministration() {
             }
           }}
         >
-          <div className="user-directory-filter-row flex flex-wrap items-center gap-2">
+          <div className="admin-toolbar user-directory-filter-row">
             <Field className="w-full sm:w-56 xl:w-60">
               <FieldLabel htmlFor={`${filterId}-search`} className="md:sr-only">
                 邮箱或显示名

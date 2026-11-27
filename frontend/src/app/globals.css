@@ -1087,9 +1087,6 @@ button:not(:disabled),
   flex-direction: column;
   padding-bottom: 0;
 }
-.admin-workspace:has(> .product-page > .product-footer) {
-  padding-bottom: 0;
-}
 .product-page > .product-footer {
   flex: none;
   margin-top: auto;
@@ -1100,12 +1097,6 @@ button:not(:disabled),
 }
 .workspace-page {
   padding: 8px var(--layout-content-x) var(--layout-content-y);
-}
-.admin-workspace > .product-page,
-.admin-workspace > .workspace-page {
-  min-height: 0;
-  flex: 1;
-  padding: 0;
 }
 /* UI-PC-DELETE-01: one compact confirmation for single and batch canvas commands. */
 .canvas-delete-overlay {
@@ -3512,64 +3503,6 @@ button:not(:disabled),
   }
 }
 
-/* Management uses the same workspace geometry and controls as product pages. */
-.admin-workspace {
-  display: flex;
-  min-height: 100%;
-  min-width: 0;
-  flex-direction: column;
-  gap: var(--layout-gap);
-  padding: 8px var(--layout-content-x) var(--layout-content-y);
-}
-.product-content:has(
-  .admin-workspace > :is([data-page="models"], [data-page="providers"])
-) {
-  --layout-content-x: 16px;
-}
-.admin-workspace:has(> :is([data-page="models"], [data-page="providers"])) {
-  gap: 8px;
-}
-@media (width < 768px) {
-  .product-content:has(
-    .admin-workspace > :is([data-page="models"], [data-page="providers"])
-  ) {
-    --layout-content-x: 12px;
-  }
-}
-@media (width < 768px) {
-  .user-directory-filters {
-    padding-block: 12px;
-  }
-  .user-directory-filter-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-  }
-  .user-directory-filter-selects {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px 12px;
-  }
-  .user-directory-filter-selects > p {
-    grid-column: 1 / -1;
-  }
-  .user-directory-filter-selects [data-slot="select-trigger"] {
-    width: 100%;
-    min-width: 0;
-  }
-  .user-directory-filters :is(input, [data-slot="select-trigger"], button) {
-    min-height: 44px;
-  }
-  .user-directory-filter-actions > button[type="submit"] {
-    margin-inline-start: auto;
-  }
-  .user-directory [data-slot="table"] :is(th, td) {
-    padding-inline: 8px;
-  }
-  .user-directory [data-slot="table"] :is(th, td):has([role="checkbox"]) {
-    padding-inline-end: 0;
-  }
-}
 .workspace-page-header {
   display: flex;
   flex-wrap: wrap;
@@ -3882,17 +3815,12 @@ body:has(.notification-application[data-announcement]) .notification-panel {
 }
 
 @media (max-width: 767px), (pointer: coarse) {
-  :is(.admin-workspace, .admin-detail, .admin-dialog, .notification-surface)
+  .notification-surface
     button:not([role="checkbox"]):not([data-slot="switch"]) {
     min-height: 44px;
     min-width: 44px;
   }
-  :is(.admin-workspace, .admin-detail, .admin-dialog)
-    input:not([type="checkbox"]):not([type="radio"]) {
-    min-height: 44px;
-  }
-  :is(.admin-workspace, .admin-detail, .admin-dialog, .notification-surface)
-    [data-slot="switch"]::after {
+  .notification-surface [data-slot="switch"]::after {
     content: "";
     top: 50%;
     left: 50%;

@@ -639,7 +639,7 @@ it("管理页切换与路由加载保留同一导航节点和焦点，正文按�
     </ApplicationLayout>,
   );
   const nav = await screen.findByRole("navigation", { name: "管理页面" });
-  const teamLink = within(nav).getByRole("link", { name: "团队管理" });
+  const teamLink = within(nav).getByRole("link", { name: "平台团队" });
   teamLink.focus();
   mocks.pathname = "/platform/teams";
   view.rerender(

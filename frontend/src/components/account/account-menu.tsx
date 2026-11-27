@@ -3,14 +3,9 @@
 import Link from "next/link";
 import { useRef, useState, type ReactNode } from "react";
 import {
-  Activity,
-  Bell,
-  Building2,
   ChevronLeft,
   ChevronRight,
-  ClipboardList,
   Coins,
-  Cpu,
   KeyRound,
   LayoutGrid,
   LogOut,
@@ -18,7 +13,6 @@ import {
   Monitor,
   Settings,
   Shield,
-  SlidersHorizontal,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -28,6 +22,7 @@ import {
   ThemeMenuItems,
   useThemeMenuSelection,
 } from "@/components/controls/theme-controls";
+import { adminDestinations } from "@/components/governance/admin-destinations";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -54,15 +49,6 @@ const accountLinks: readonly MenuLink[] = [
   { label: "我的团队", href: "/teams", icon: Users },
   { label: "邀请与授权", href: "/invitations", icon: MailPlus },
   { label: "修改密码", href: "/reset-password", icon: KeyRound },
-];
-const platformLinks: readonly MenuLink[] = [
-  { label: "AI 服务", href: "/models", icon: Cpu },
-  { label: "用户管理", href: "/users", icon: Users },
-  { label: "平台团队", href: "/platform/teams", icon: Building2 },
-  { label: "平台设置", href: "/platform/settings", icon: SlidersHorizontal },
-  { label: "通知管理", href: "/platform/notifications", icon: Bell },
-  { label: "运行诊断", href: "/health", icon: Activity },
-  { label: "审计日志", href: "/audit", icon: ClipboardList },
 ];
 type MenuSection = "账号设置" | "外观" | "平台管理";
 
@@ -249,7 +235,10 @@ export function AccountMenu({
               <MenuLinks links={accountLinks} disabled={navigationDisabled} />
             ) : null}
             {section === "平台管理" && isAdmin ? (
-              <MenuLinks links={platformLinks} disabled={navigationDisabled} />
+              <MenuLinks
+                links={adminDestinations}
+                disabled={navigationDisabled}
+              />
             ) : null}
             {section === "外观" ? (
               <div className="account-menu-theme">
@@ -321,7 +310,7 @@ export function AccountMenu({
                     "平台管理",
                     <Shield aria-hidden="true" />,
                     <MenuLinks
-                      links={platformLinks}
+                      links={adminDestinations}
                       disabled={navigationDisabled}
                     />,
                   )

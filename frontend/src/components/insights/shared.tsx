@@ -1,7 +1,7 @@
 "use client";
 import { IconAction } from "@/components/ui/icon-action";
 import { FunnelX } from "lucide-react";
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { RefreshCw, SlidersHorizontal, Copy, Info } from "lucide-react";
 import { useSession } from "@/components/auth/session";
 import { AdminHeading } from "@/components/governance/admin-layout";
@@ -31,7 +31,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { toast } from "@/components/feedback/notification";
-import { filterQuery, timestamp } from "./contracts";
+import { filterQuery } from "./contracts";
 import "./insights.css";
 export function useInsightIdentity() {
   const s = useSession();
@@ -82,15 +82,7 @@ export function Panel({
     </Card>
   );
 }
-export function Metric({
-  label,
-  value,
-  context,
-}: {
-  label: string;
-  value: string;
-  context?: string;
-}) {
+export function Metric({ label, value }: { label: string; value: string }) {
   return (
     <Card className="insights-metric">
       <CardHeader>
@@ -98,7 +90,6 @@ export function Metric({
       </CardHeader>
       <CardContent>
         <p className="insights-metric-value">{value}</p>
-        {context ? <p className="insights-note">{context}</p> : null}
       </CardContent>
     </Card>
   );
@@ -152,20 +143,6 @@ export function ReadState({
         </Button>
       }
     />
-  );
-}
-export function Snapshot({ at, pending }: { at: string; pending: boolean }) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 60000);
-    return () => clearInterval(timer);
-  }, []);
-  return (
-    <p className="insights-note" role="status">
-      快照 {timestamp(at)}
-      {pending ? " · 正在刷新，保留上次结果" : ""}
-      {now - Date.parse(at) > 15 * 60000 ? " · 快照较早，请刷新" : ""}
-    </p>
   );
 }
 export type FilterField = {

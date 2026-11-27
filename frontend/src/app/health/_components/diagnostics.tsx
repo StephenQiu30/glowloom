@@ -14,7 +14,6 @@ import {
 import { SessionGate } from "@/components/auth/session";
 import { PageLayout } from "@/components/layout/page-layout";
 import { ContentState } from "@/components/layout/content-state";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
@@ -25,11 +24,6 @@ import {
   TableRow,
   TableCell,
 } from "@/components/ui/table";
-import {
-  Collapsible,
-  CollapsibleTrigger,
-  CollapsibleContent,
-} from "@/components/ui/collapsible";
 import {
   Sheet,
   SheetContent,
@@ -43,10 +37,8 @@ import {
   dateFields,
   Loading,
   Metric,
-  Notice,
   Panel,
   ReadState,
-  Snapshot,
   CopyValue,
   useInsightIdentity,
   type FilterField,
@@ -80,32 +72,6 @@ const fields: FilterField[] = [
   { key: "request_id", label: "请求 UUID" },
   { key: "trace_id", label: "追踪 ID（小写）" },
 ];
-function Coverage({ value }: { value: API.ObservabilityCoverage }) {
-  return (
-    <Notice title="部分覆盖 · 当前后端实例">
-      <p>仅当前后端实例，不代表全站流量；重启丢失。</p>
-      <Collapsible>
-        <CollapsibleTrigger asChild>
-          <Button variant="ghost" size="sm">
-            查看保留范围
-          </Button>
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <p>
-            保留 {numberValue(value.retained)} / {numberValue(value.capacity)}{" "}
-            条 · 最长 {numberValue(value.retention_seconds / 3600)} 小时 · 淘汰{" "}
-            {numberValue(value.evicted)} 条。
-          </p>
-          <p>
-            启动 {timestamp(value.started_at)} · 最早{" "}
-            {timestamp(value.oldest_at)}。游标失效时请刷新。
-          </p>
-        </CollapsibleContent>
-      </Collapsible>
-    </Notice>
-  );
-}
-
 function Overview({
   query,
   revision,
@@ -131,13 +97,11 @@ function Overview({
         ) : null
       ) : (
         <>
-          <Coverage value={d.coverage} />
           <div className="insights-metrics">
-            <Metric label="已观测请求" value={numberValue(d.requests)} />
+            <Metric label="后端请求" value={numberValue(d.requests)} />
             <Metric
-              label="系统错误率"
+              label="后端 5xx 占比"
               value={rateValue(d.server_error_rate)}
-              context="HTTP 5xx 占比"
             />
             <Metric
               label="请求 P95"
@@ -145,27 +109,19 @@ function Overview({
                 d.p95_ms === null ? "不适用" : `${numberValue(d.p95_ms)} ms`
               }
             />
-            <Metric label="服务覆盖" value="仅后端" />
           </div>
-          <div className="insights-panels">
-            <Panel title="HTTP 请求结果">
-              <dl className="grid grid-cols-2 gap-4">
-                <dt>HTTP 5xx</dt>
-                <dd>{numberValue(d.server_errors)}</dd>
-                <dt>HTTP 4xx</dt>
-                <dd>{numberValue(d.client_errors)}</dd>
-                <dt>限流请求</dt>
-                <dd>{numberValue(d.rate_limited)}</dd>
-                <dt>Panic 记录</dt>
-                <dd>{numberValue(d.panics)}</dd>
-              </dl>
-              <p className="insights-note mt-4">Panic 不等同于 HTTP 5xx。</p>
-            </Panel>
-            <Panel title="请求趋势">
-              <ContentState className="min-h-40" title="趋势暂不可用" />
-            </Panel>
-          </div>
-          <Snapshot at={d.as_of} pending={read.pending} />
+          <Panel title="后端 HTTP 请求结果">
+            <dl className="grid grid-cols-2 gap-4">
+              <dt>HTTP 5xx</dt>
+              <dd>{numberValue(d.server_errors)}</dd>
+              <dt>HTTP 4xx</dt>
+              <dd>{numberValue(d.client_errors)}</dd>
+              <dt>限流请求</dt>
+              <dd>{numberValue(d.rate_limited)}</dd>
+              <dt>Panic 记录</dt>
+              <dd>{numberValue(d.panics)}</dd>
+            </dl>
+          </Panel>
         </>
       )}
     </>
@@ -263,7 +219,6 @@ function Logs({
   const [history, setHistory] = useState({ revision, cursors: [""] });
   const cursors = history.revision === revision ? history.cursors : [""];
   const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
-  const [restarted, setRestarted] = useState(false);
   const cursor = cursors.at(-1);
   const [selection, setSelection] = useState<{
     id: string;
@@ -297,7 +252,6 @@ function Logs({
           retry={() => {
             setSelected(null);
             setHistory({ revision, cursors: [""] });
-            setRestarted(true);
             read.refresh();
           }}
         />
@@ -308,17 +262,7 @@ function Logs({
         ) : null
       ) : (
         <>
-          {(restarted || revision > 0) &&
-            cursors[0] === "" &&
-            cursors.length === 1 &&
-            !read.pending &&
-            !read.error && (
-              <p className="insights-note" role="status">
-                已读取首页新快照
-              </p>
-            )}
-          <Coverage value={d.coverage} />
-          <div className="min-w-0 shrink-0 overflow-hidden rounded-md border">
+          <div className="min-w-0 shrink-0">
             {d.items.length ? (
               <div className="insights-table">
                 <Table aria-label="诊断日志">
@@ -341,7 +285,12 @@ function Logs({
                       <TableRow key={item.id}>
                         <TableCell>{checks.selectRow(item)}</TableCell>
                         <TableCell>
-                          <div>{timestamp(item.timestamp)}</div>
+                          <time
+                            dateTime={item.timestamp}
+                            className="block wrap-normal tabular-nums"
+                          >
+                            {timestamp(item.timestamp)}
+                          </time>
                           <Badge variant="outline">
                             {statusName[item.level] ?? item.level}
                           </Badge>
@@ -408,7 +357,6 @@ function Logs({
               setHistory({ revision, cursors: next });
             }}
           />
-          <Snapshot at={d.as_of} pending={read.pending} />
         </>
       )}
       <LogDetail
@@ -429,17 +377,17 @@ function DiagnosticsContent() {
   const [revision, setRevision] = useState(0);
   return (
     <PageLayout screen="health" hideSearch>
-      <section className="insights">
+      <section className="admin-page">
         <h1 className="sr-only">运行诊断</h1>
-        <Tabs value={tab} onValueChange={setTab}>
-          <TabsList variant="secondary" aria-label="运行日志视图">
+        <Tabs value={tab} onValueChange={setTab} className="admin-page">
+          <TabsList variant="secondary" aria-label="运行诊断视图">
             <TabsTrigger value="overview">概览</TabsTrigger>
             <TabsTrigger value="logs">日志</TabsTrigger>
           </TabsList>
           <div
             role="group"
             aria-label="运行诊断工具栏"
-            className="flex items-center gap-2"
+            className="admin-toolbar"
           >
             <Filters fields={fields} maxDays={7} onApply={setQuery} />
             <SelectionToolbar>

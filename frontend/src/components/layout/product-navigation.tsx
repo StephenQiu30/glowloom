@@ -39,17 +39,14 @@ export function ProductNavigation({
           <ProductHeader
             {...header}
             floating={screen === "home" && !header.isMobile}
-            inlineNavigation={
-              Boolean(adminSection) ||
-              [
-                "billing",
-                "conversations",
-                "explore",
-                "ai-tools",
-                "subjects",
-                "analytics",
-              ].includes(screen)
-            }
+            inlineNavigation={[
+              "billing",
+              "conversations",
+              "explore",
+              "ai-tools",
+              "subjects",
+              "analytics",
+            ].includes(screen)}
             showSearch={
               !hideSearch &&
               screen !== "home" &&

@@ -1,5 +1,6 @@
 "use client";
 
+import { AdminHeading } from "@/components/governance/admin-layout";
 import { GatewayAction } from "./gateway-action";
 import { GatewayModelList } from "./gateway-model-list";
 import { deleteAiRoutes } from "@/api/aiGateway";
@@ -332,22 +333,30 @@ function GatewayConfigurationPage({
   return (
     <TooltipProvider>
       <div
-        className="flex w-full min-w-0 flex-col gap-2"
+        className="admin-page"
         onChangeCapture={() => {
           if (stage) dirty.current = true;
         }}
       >
+        {inDetail ? (
+          <AdminHeading
+            title={entry === "providers" ? "供应商路由详情" : "模型详情"}
+            detail
+          />
+        ) : (
+          <h1 className="sr-only">{title}</h1>
+        )}
         <Tabs
           value={tab}
           onValueChange={(value) => requestNavigation(value as GatewayTab)}
-          className="min-w-0 gap-2"
+          className="admin-page"
         >
           <div
             ref={heading}
             tabIndex={-1}
             aria-label={title}
             role="group"
-            className="flex min-w-0 items-center gap-1"
+            className="admin-toolbar"
           >
             <TabsList variant="secondary" aria-label="网关管理">
               {tabs.map(([value, label]) => (

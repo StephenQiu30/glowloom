@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import type { LucideIcon } from "lucide-react";
 import { useLayoutEffect, useState, type ReactNode } from "react";
+import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { PageToolbar } from "./page-toolbar";
 
@@ -18,7 +20,9 @@ export function HeaderNavigation({
   label,
   active,
   children,
+  className,
 }: {
+  className?: string;
   label: string;
   active: string;
   children: ReactNode;
@@ -42,7 +46,7 @@ export function HeaderNavigation({
     <PageToolbar inHeader>
       <nav
         aria-label={label}
-        className="header-navigation"
+        className={cn("header-navigation", className)}
         ref={setViewport}
         onFocusCapture={(event) => reveal(event.currentTarget, event.target)}
       >
@@ -56,26 +60,35 @@ export function HeaderLinks({
   label,
   active,
   links,
+  className,
 }: {
+  className?: string;
   label: string;
   active: string;
-  links: readonly { id: string; href: string; label: string; title?: string }[];
+  links: readonly {
+    id: string;
+    href: string;
+    label: string;
+    title?: string;
+    icon?: LucideIcon;
+  }[];
 }) {
   return (
-    <HeaderNavigation label={label} active={active}>
-      {links.map((link) => (
+    <HeaderNavigation label={label} active={active} className={className}>
+      {links.map(({ id, href, label, title, icon: Icon }) => (
         <Button
-          key={link.id}
-          variant={link.id === active ? "secondary" : "ghost"}
+          key={id}
+          variant={id === active ? "secondary" : "ghost"}
           size="workspace"
           asChild
         >
           <Link
-            href={link.href}
-            aria-label={link.title}
-            aria-current={link.id === active ? "page" : undefined}
+            href={href}
+            aria-label={title}
+            aria-current={id === active ? "page" : undefined}
           >
-            {link.label}
+            {Icon ? <Icon aria-hidden="true" /> : null}
+            {label}
           </Link>
         </Button>
       ))}

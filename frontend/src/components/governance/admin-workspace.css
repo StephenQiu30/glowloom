@@ -1,0 +1,125 @@
+.admin-workspace {
+  display: flex;
+  flex: 1;
+  min-height: 100%;
+  min-width: 0;
+  flex-direction: column;
+  padding: calc(var(--spacing) * 2) var(--layout-content-x)
+    var(--layout-content-y);
+  font-size: var(--ui-text-body);
+  line-height: var(--ui-leading-body);
+}
+
+.admin-workspace:has(> .product-page > .product-footer) {
+  padding-bottom: 0;
+}
+
+.admin-workspace > :is(.product-page, .workspace-page) {
+  min-height: 0;
+  flex: 1;
+  padding: 0;
+}
+
+.admin-page {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex-direction: column;
+  gap: calc(var(--spacing) * 5);
+}
+
+.admin-toolbar {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(var(--spacing) * 2);
+}
+
+.admin-heading .workspace-page-heading h1 {
+  font-size: var(--ui-text-section);
+  line-height: var(--ui-leading-section);
+  letter-spacing: normal;
+}
+
+.admin-heading .workspace-page-description {
+  font-size: var(--ui-text-body);
+  line-height: var(--ui-leading-body);
+}
+
+.admin-workspace [data-slot="table-container"] {
+  min-width: 0;
+  border-radius: var(--radius-control);
+}
+
+.admin-workspace [data-slot="table-header"] {
+  background: var(--surface-2);
+}
+
+.admin-workspace [data-slot="table-head"] {
+  height: var(--ui-control-size-default);
+  font-size: var(--ui-text-caption);
+  line-height: var(--ui-leading-caption);
+}
+
+.admin-workspace [data-slot="table-body"] > [data-slot="table-row"] {
+  height: var(--ui-control-size-touch);
+}
+
+.admin-workspace .workspace-pagination {
+  min-height: var(--ui-control-size-default);
+}
+
+.admin-workspace
+  .workspace-pagination
+  [data-slot="pagination-item"][aria-live] {
+  min-width: 0;
+}
+
+@media (width < 768px) {
+  .admin-navigation {
+    padding-inline: calc(
+      var(--layout-content-x) - var(--product-header-mobile-inset)
+    );
+  }
+
+  .admin-page {
+    gap: calc(var(--spacing) * 4);
+  }
+
+  .admin-workspace :is([data-slot="table-head"], [data-slot="table-cell"]) {
+    padding-inline-start: calc(var(--spacing) * 2);
+  }
+
+  .admin-workspace .workspace-pagination > div {
+    width: 100%;
+    justify-content: space-between;
+    gap: calc(var(--spacing) * 1);
+  }
+}
+
+@media (width < 768px), (pointer: coarse) {
+  :is(.admin-workspace, .admin-detail, .admin-dialog)
+    button:not([role="checkbox"]):not([data-slot="switch"]) {
+    min-height: var(--ui-control-size-touch);
+    min-width: var(--ui-control-size-touch);
+  }
+
+  :is(.admin-workspace, .admin-detail, .admin-dialog)
+    :is(
+      input:not([type="checkbox"]):not([type="radio"]),
+      [data-slot="native-select"]
+    ) {
+    min-height: var(--ui-control-size-touch);
+  }
+
+  :is(.admin-workspace, .admin-detail, .admin-dialog)
+    [data-slot="switch"]::after {
+    content: "";
+    position: absolute;
+    inset: 50% auto auto 50%;
+    width: max(100%, var(--ui-control-size-touch));
+    height: var(--ui-control-size-touch);
+    transform: translate(-50%, -50%);
+  }
+}

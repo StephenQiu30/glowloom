@@ -186,7 +186,11 @@ export function GatewayTable({
 
   return (
     <div className="flex min-w-0 flex-col gap-3">
-      <Toolbar role="group" aria-label={`${label}工具栏`} className="flex-wrap">
+      <Toolbar
+        role="group"
+        aria-label={`${label}工具栏`}
+        className="admin-toolbar"
+      >
         {externalFilterKey === undefined ? (
           <Filters
             fields={fields}

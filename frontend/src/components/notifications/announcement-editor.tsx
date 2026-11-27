@@ -226,7 +226,7 @@ export function AnnouncementEditor({
     frequency: draft.frequency,
   };
   return (
-    <div className="notification-surface flex min-w-0 flex-col gap-6">
+    <div className="admin-page">
       <AdminHeading title={announcement ? "编辑通知" : "新建通知"} />
       {error ? (
         <Alert variant={conflict ? "default" : "destructive"}>

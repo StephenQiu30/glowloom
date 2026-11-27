@@ -274,8 +274,8 @@ function TeamAdministration() {
       />
     );
   return (
-    <div className="flex w-full flex-col gap-5">
-      <h1 className="sr-only">团队管理</h1>
+    <div className="admin-page">
+      <h1 className="sr-only">平台团队</h1>
       <Collapsible asChild open={advanced} onOpenChange={setAdvanced}>
         <form
           aria-label="团队筛选"
@@ -308,7 +308,7 @@ function TeamAdministration() {
             applyFilters({});
           }}
         >
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="admin-toolbar">
             <Input
               name="search"
               aria-label="搜索团队名称"

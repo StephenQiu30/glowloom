@@ -86,7 +86,7 @@ export function ListPagination(props: NumberedProps | CursorProps) {
             <SelectTrigger
               id={sizeId}
               size="sm"
-              className="w-20 shrink-0"
+              className="min-w-20 shrink-0"
               aria-label={cursor ? "每页条数" : `${label}每页数量`}
             >
               <SelectValue />

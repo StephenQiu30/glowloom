@@ -58,6 +58,13 @@
   --ui-ambient-strength: 5%;
 }
 
+@media (width < 768px), (pointer: coarse) {
+  :root {
+    --ui-icon-size: 1.125rem;
+    --workspace-navigation-icon-size: var(--ui-icon-size);
+  }
+}
+
 .dark {
   --ui-ambient-strength: 9%;
 }

@@ -1,10 +1,9 @@
 "use client";
-import { IconAction } from "@/components/ui/icon-action";
 import { Save } from "lucide-react";
 import { ContentState } from "@/components/layout/content-state";
 import { readErrorMessage } from "@/lib/read-error";
 import { Switch } from "@/components/ui/switch";
-import { Field, FieldLabel } from "@/components/ui/field";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { useEffect, useState } from "react";
 import { platformSettings, updatePlatformSettings } from "@/api/identity";
 import {
@@ -49,7 +48,7 @@ function PlatformSettingsAdministration() {
     return () => c.abort();
   }, [reload]);
   return (
-    <div className="flex w-full flex-col gap-5">
+    <div className="admin-page">
       <h1 className="sr-only">平台设置</h1>
       {error ? (
         <ContentState
@@ -72,7 +71,7 @@ function PlatformSettingsAdministration() {
       {settings && !error ? (
         <form
           aria-label="平台规则"
-          className="flex min-w-0 items-center gap-2"
+          className="flex w-full max-w-xl flex-col items-start gap-4"
           onSubmit={(e) => {
             e.preventDefault();
             setAction({
@@ -93,11 +92,8 @@ function PlatformSettingsAdministration() {
             });
           }}
         >
-          <div className="min-w-0 flex-1 divide-y rounded-md border">
-            <Field
-              orientation="horizontal"
-              className="justify-between px-4 py-4"
-            >
+          <FieldGroup className="gap-0 divide-y border-y">
+            <Field orientation="horizontal" className="justify-between py-4">
               <FieldLabel htmlFor="platform-registration">
                 允许公开注册
               </FieldLabel>
@@ -107,10 +103,7 @@ function PlatformSettingsAdministration() {
                 onCheckedChange={setRegistration}
               />
             </Field>
-            <Field
-              orientation="horizontal"
-              className="justify-between px-4 py-4"
-            >
+            <Field orientation="horizontal" className="justify-between py-4">
               <FieldLabel htmlFor="platform-team-creation">
                 允许创建团队
               </FieldLabel>
@@ -120,17 +113,17 @@ function PlatformSettingsAdministration() {
                 onCheckedChange={setCreation}
               />
             </Field>
-          </div>
-          <IconAction
+          </FieldGroup>
+          <Button
             type="submit"
-            variant="default"
-            label="保存平台设置"
-            icon={Save}
             disabled={
               registration === Boolean(settings.registration_enabled) &&
               creation === Boolean(settings.team_creation_enabled)
             }
-          />
+          >
+            <Save aria-hidden="true" data-icon="inline-start" />
+            保存平台设置
+          </Button>
         </form>
       ) : !error ? (
         <ContentState

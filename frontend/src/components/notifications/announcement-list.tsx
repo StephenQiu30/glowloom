@@ -98,11 +98,11 @@ export function AnnouncementList() {
   );
   return (
     <PageLayout screen="platform/notifications" hideSearch>
-      <div className="notification-surface flex min-w-0 flex-col gap-6">
+      <div className="admin-page">
         <h1 className="sr-only">通知管理</h1>
         <form
           aria-label="通知筛选"
-          className="flex flex-wrap items-center gap-2"
+          className="admin-toolbar"
           onSubmit={(event) => {
             event.preventDefault();
             setKeyword(query.trim());
@@ -183,60 +183,58 @@ export function AnnouncementList() {
           <ContentState title="没有符合条件的通知" />
         ) : (
           <>
-            <div className="min-w-0 overflow-hidden rounded-md border">
-              <Table aria-label="通知列表">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-10">{checks.selectAll}</TableHead>
-                    <TableHead>标题</TableHead>
-                    <TableHead className="hidden md:table-cell">
-                      展示位置
-                    </TableHead>
-                    <TableHead className="hidden md:table-cell">
-                      接收范围
-                    </TableHead>
-                    <TableHead>状态</TableHead>
-                    <TableHead className="hidden md:table-cell">
-                      生效时间
-                    </TableHead>
-                    <TableHead className="text-right">操作</TableHead>
+            <Table aria-label="通知列表">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-10">{checks.selectAll}</TableHead>
+                  <TableHead>标题</TableHead>
+                  <TableHead className="hidden md:table-cell">
+                    展示位置
+                  </TableHead>
+                  <TableHead className="hidden md:table-cell">
+                    接收范围
+                  </TableHead>
+                  <TableHead>状态</TableHead>
+                  <TableHead className="hidden md:table-cell">
+                    生效时间
+                  </TableHead>
+                  <TableHead className="text-right">操作</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {items.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell>{checks.selectRow(item)}</TableCell>
+                    <TableCell className="max-w-48 truncate md:max-w-80">
+                      {item.draft.title}
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      {optionLabel(positionOptions, item.draft.placement)}
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      {optionLabel(audienceOptions, item.draft.audience)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">
+                        {announcementStatus(item.status)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      {item.draft.starts_at
+                        ? notificationDate(item.draft.starts_at)
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <IconAction
+                        label={`查看 ${item.draft.title}`}
+                        href={`/platform/notifications/${item.id}`}
+                        icon={Eye}
+                      />
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {items.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell>{checks.selectRow(item)}</TableCell>
-                      <TableCell className="max-w-48 truncate md:max-w-80">
-                        {item.draft.title}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        {optionLabel(positionOptions, item.draft.placement)}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        {optionLabel(audienceOptions, item.draft.audience)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">
-                          {announcementStatus(item.status)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        {item.draft.starts_at
-                          ? notificationDate(item.draft.starts_at)
-                          : "—"}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <IconAction
-                          label={`查看 ${item.draft.title}`}
-                          href={`/platform/notifications/${item.id}`}
-                          icon={Eye}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                ))}
+              </TableBody>
+            </Table>
           </>
         )}
         {checks.actions}

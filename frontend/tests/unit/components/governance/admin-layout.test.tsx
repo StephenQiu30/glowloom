@@ -9,7 +9,7 @@ it("管理导航在日志与审计之间保留全部管理入口及当前项语�
   const { rerender } = render(<AdminNavigation active="health" />);
   expect(screen.getAllByRole("link")).toHaveLength(7);
   expect(
-    screen.getByRole("link", { name: "运行日志" }).getAttribute("aria-current"),
+    screen.getByRole("link", { name: "运行诊断" }).getAttribute("aria-current"),
   ).toBe("page");
   expect(
     screen.getByRole("link", { name: "用户管理" }).getAttribute("href"),
@@ -25,7 +25,7 @@ it("管理导航在日志与审计之间保留全部管理入口及当前项语�
     screen.getByRole("link", { name: "审计日志" }).getAttribute("aria-current"),
   ).toBe("page");
   expect(
-    screen.getByRole("link", { name: "运行日志" }).getAttribute("aria-current"),
+    screen.getByRole("link", { name: "运行诊断" }).getAttribute("aria-current"),
   ).toBeNull();
 });
 
