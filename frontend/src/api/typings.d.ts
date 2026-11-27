@@ -3931,6 +3931,7 @@ declare namespace API {
   type OnboardingPlan = {
     credits?: number;
     estimated_credits?: number;
+    method?: string;
     probes?: Probe[];
     purchase_micros?: number;
   };

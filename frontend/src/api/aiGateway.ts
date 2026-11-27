@@ -148,15 +148,18 @@ export async function verifyAiOnboarding(
   options?: RequestOptions,
 ) {
   const { id: param0, ...queryParams } = params;
-  return request<any>(`/api/ai/admin/onboarding/${param0}/verify`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+  return request<API.OnboardingReview>(
+    `/api/ai/admin/onboarding/${param0}/verify`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
     },
-    params: { ...queryParams },
-    data: body,
-    ...(options || {}),
-  });
+  );
 }
 
 /** 依审核预设准备无密钥验证候选 POST /api/ai/admin/onboarding/preset */
