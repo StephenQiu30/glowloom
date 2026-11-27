@@ -1,0 +1,47 @@
+.content {
+  gap: clamp(1.25rem, 4dvh, 2.75rem);
+  padding-block: 1.5rem 1rem;
+}
+
+.withStarters {
+  padding-block-start: clamp(2rem, 13dvh - 2rem, 6rem);
+}
+
+.heading {
+  font-size: var(--ui-text-section);
+  line-height: var(--ui-leading-section);
+}
+
+.starters {
+  gap: clamp(0.625rem, 2vw, 1.25rem);
+}
+
+.cover {
+  aspect-ratio: 2 / 1;
+}
+
+.details {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.action {
+  align-self: center;
+}
+
+@media (max-width: 767px) {
+  .withStarters {
+    padding-block-start: 1.5rem;
+  }
+
+  .cover {
+    aspect-ratio: 3 / 2;
+  }
+
+  .details > [data-slot="card-description"] {
+    grid-column: 1 / -1;
+  }
+
+  .details > .action {
+    grid-row: 1;
+  }
+}

@@ -2029,7 +2029,7 @@ function EditorWorkspace({
               <ComposerToolbarActions>
                 {creditDisplay}
                 <ComposerToolbarButton
-                  className="rounded-full max-md:size-11"
+                  className="rounded-full"
                   size="toolbar-icon"
                   variant="default"
                   aria-label={
@@ -2250,7 +2250,7 @@ function EditorWorkspace({
                   </ComposerToolbarButton>
                 ) : (
                   <ComposerToolbarButton
-                    className="rounded-full max-md:size-11"
+                    className="rounded-full"
                     size="toolbar-icon"
                     variant="default"
                     aria-label={presentation === "canvas" ? "生成" : "检查费用"}
@@ -2272,7 +2272,7 @@ function EditorWorkspace({
                     {pending ? (
                       <LoaderCircle className="animate-spin" />
                     ) : (
-                      <ArrowUp className="size-5" />
+                      <ArrowUp />
                     )}
                   </ComposerToolbarButton>
                 )}

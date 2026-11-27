@@ -53,7 +53,9 @@ export function ProductNavigation({
               (!adminSection || !header.isMobile || Boolean(header.search))
             }
             showUtilities={!adminSection || screen === "analytics"}
-            showCanvasHistory={screen !== "assets"}
+            showCanvasHistory={
+              screen !== "assets" && screen !== "conversations"
+            }
           />
           {children}
         </div>

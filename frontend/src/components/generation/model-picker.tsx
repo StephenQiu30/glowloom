@@ -227,7 +227,7 @@ export function ModelPicker({
             adapterKey={current.model.provider_adapter_key}
             logoAssetID={current.model.provider_logo_asset_id}
             iconOnly
-            className="size-4"
+            className="size-(--ui-icon-size)"
           />
         ) : !compact ? (
           <Box aria-hidden="true" />

@@ -13,7 +13,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { ToolbarGroup } from "@/components/ui/toolbar";
+import { Toolbar, ToolbarGroup } from "@/components/ui/toolbar";
 import { cn } from "cn";
 import { PageToolbar } from "@/components/layout/page-toolbar";
 import { useOptionalSession } from "@/components/auth/session";
@@ -94,50 +94,51 @@ export function ConversationPage({
   return (
     <div
       className={cn(
-        "flex h-full min-h-[22rem] min-w-0 flex-col px-3 pb-5 md:px-6",
-        sessionID ? "pt-3" : "pt-2 md:pt-11 md:pb-[21px]",
+        "flex h-full min-h-[22rem] min-w-0 flex-col px-3 pt-2 pb-3 md:px-6 md:pt-3 md:pb-6",
       )}
     >
       {sessionID && <h1 className="sr-only">对话</h1>}
       <PageToolbar inHeader slot="actions">
-        <ToolbarGroup aria-label="对话工具">
-          {session && !sessionID && (
-            <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
-              <DialogTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="toolbar-icon"
-                  aria-label="查看项目对话"
-                  title="查看项目对话"
-                >
-                  <History />
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogTitle>项目对话</DialogTitle>
-                <DialogDescription>选择项目查看已有对话。</DialogDescription>
-                <ProjectPicker
-                  value={projectID ? (selectedProject ?? null) : null}
-                  onChange={(next) => {
-                    setHistoryOpen(false);
-                    router.push(`/conversations?projectId=${next.id}`);
-                  }}
-                />
-              </DialogContent>
-            </Dialog>
-          )}
-          <Button
-            asChild
-            variant="ghost"
-            size="toolbar-adaptive"
-            aria-label="资产库"
-          >
-            <Link href="/assets?view=reference">
-              <Folder aria-hidden="true" data-icon="inline-start" />
-              <span className="max-md:sr-only">资产库</span>
-            </Link>
-          </Button>
-        </ToolbarGroup>
+        <Toolbar density="navigation">
+          <ToolbarGroup aria-label="对话工具">
+            {session && !sessionID && (
+              <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+                <DialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="toolbar-icon"
+                    aria-label="查看项目对话"
+                    title="查看项目对话"
+                  >
+                    <History />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogTitle>项目对话</DialogTitle>
+                  <DialogDescription>选择项目查看已有对话。</DialogDescription>
+                  <ProjectPicker
+                    value={projectID ? (selectedProject ?? null) : null}
+                    onChange={(next) => {
+                      setHistoryOpen(false);
+                      router.push(`/conversations?projectId=${next.id}`);
+                    }}
+                  />
+                </DialogContent>
+              </Dialog>
+            )}
+            <Button
+              asChild
+              variant="ghost"
+              size="toolbar-icon"
+              aria-label="资产库"
+              title="资产库"
+            >
+              <Link href="/assets?view=reference">
+                <Folder aria-hidden="true" />
+              </Link>
+            </Button>
+          </ToolbarGroup>
+        </Toolbar>
       </PageToolbar>
       {scope.error && (
         <div

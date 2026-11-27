@@ -213,10 +213,18 @@ export function ConversationComposer({
       compact
       label={textReference && !compactEntry ? "创意模型" : "对话模型"}
       triggerClassName={compactEntry ? "conversation-model-trigger" : undefined}
-      unavailableLabel={compactEntry ? "不可用" : undefined}
+      unavailableLabel={
+        c.loading
+          ? "正在读取模型…"
+          : c.modelCatalogError
+            ? "模型目录不可用"
+            : compactEntry
+              ? "不可用"
+              : undefined
+      }
       models={c.models}
       value={c.model?.current_version?.id}
-      disabled={c.denied}
+      disabled={c.denied || c.loading || Boolean(c.modelCatalogError)}
       onChooseProject={authorized ? undefined : onChooseProject}
       onSelect={(model) =>
         c.changeSettings({ ...c.settings, modelKey: model.key })
@@ -440,7 +448,7 @@ export function ConversationComposer({
             className="flex h-(--toolbar-control-size) items-center gap-1.5 px-2 text-sm data-[welcome=true]:text-[var(--navigation-accent)]"
             data-welcome={welcome}
           >
-            <Sparkles className="size-4" />
+            <Sparkles aria-hidden="true" className="size-(--ui-icon-size)" />
             Agent 模式
           </span>
         )}
@@ -453,7 +461,7 @@ export function ConversationComposer({
               size="toolbar"
               aria-label="创作设置"
             >
-              <SlidersHorizontal className="size-4" />
+              <SlidersHorizontal aria-hidden="true" />
               <span
                 className={cn(
                   "max-sm:sr-only",
@@ -515,7 +523,7 @@ export function ConversationComposer({
               aria-label="选择技能"
               size="toolbar"
             >
-              <WandSparkles className="size-4" />
+              <WandSparkles aria-hidden="true" />
               <span className={canvasPanel ? "sr-only" : "max-sm:sr-only"}>
                 技能
                 {c.settings.skills.length ? ` ${c.settings.skills.length}` : ""}
@@ -618,7 +626,7 @@ export function ConversationComposer({
             disabled={!session}
             onClick={mention}
           >
-            <AtSign className="size-4" />
+            <AtSign aria-hidden="true" />
           </ComposerToolbarButton>
         )}
         {homeGeneration && projectControl}
@@ -626,7 +634,7 @@ export function ConversationComposer({
         <ComposerToolbarActions
           appearance="plain"
           aria-label="模型与发送"
-          className="ml-auto max-w-full"
+          className="ml-auto max-w-full shrink-0"
         >
           <span className="sr-only">对话模型</span>
           {(!inlineReferences || canvasPanel) && modelPicker}
@@ -649,13 +657,13 @@ export function ConversationComposer({
             }}
           >
             {submitting || c.stopping ? (
-              <LoaderCircle className="size-5 animate-spin motion-reduce:animate-none" />
+              <LoaderCircle className="animate-spin motion-reduce:animate-none" />
             ) : c.active ? (
-              <Square className="size-4 fill-current" />
+              <Square className="fill-current" />
             ) : unknown ? (
-              <RefreshCw className="size-4" />
+              <RefreshCw />
             ) : (
-              <ArrowUp className="size-5" />
+              <ArrowUp />
             )}
           </ComposerToolbarButton>
         </ComposerToolbarActions>

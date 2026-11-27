@@ -79,6 +79,21 @@ it("发送结果待确认时，即使错误文本被刷新清空也保留查询�
   expect(c.send).not.toHaveBeenCalled();
 });
 
+it("模型目录读取失败时在输入区保留重试，且不会提交对话", () => {
+  const refresh = vi.fn();
+  const c = setup({ modelCatalogError: "服务暂时不可用", refresh });
+  const view = render(<ConversationWorkspace {...props} />);
+
+  expect(screen.getByRole("status").textContent).toContain("无法读取对话模型");
+  fireEvent.click(screen.getByRole("button", { name: "重试" }));
+  expect(refresh).toHaveBeenCalledOnce();
+  expect(c.send).not.toHaveBeenCalled();
+
+  useConversation.mockReturnValue({ ...c, modelCatalogError: "" });
+  view.rerender(<ConversationWorkspace {...props} />);
+  expect(screen.queryByText("无法读取对话模型")).toBeNull();
+});
+
 it("selects the exact enabled skill version without changing the draft or sending", () => {
   const c = setup({
     skills: [

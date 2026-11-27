@@ -1,15 +1,17 @@
 import Image from "next/image";
 import { cn } from "cn";
-import { Badge } from "@/components/ui/badge";
+import { ArrowUpRight, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
+  CardAction,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import type { ConversationSkillPin } from "./conversation-context";
 import { isSameSkillVersion, isVersionedSkill } from "./conversation-state";
+import styles from "./conversation-welcome.module.css";
 
 const starters = [
   {
@@ -51,21 +53,22 @@ export function ConversationWelcome({
     >
       <div
         className={cn(
-          "mx-auto flex w-full max-w-[800px] flex-col gap-7 pt-8 pb-4 md:gap-10",
+          styles.content,
+          "mx-auto flex w-full max-w-[800px] flex-col",
           showStarters
-            ? "md:pt-[clamp(2rem,calc(18dvh-3.375rem),9rem)]"
+            ? styles.withStarters
             : "md:pt-[clamp(4rem,calc(30dvh-2.5rem),18rem)]",
         )}
       >
         <h1
           id="conversation-welcome-title"
-          className="text-center text-2xl leading-8 font-normal"
+          className={cn(styles.heading, "text-center font-medium")}
         >
           你好，想创作什么？
         </h1>
         {showStarters && (
           <ul
-            className="grid snap-x snap-mandatory auto-cols-[min(86%,16.5rem)] grid-flow-col gap-2 overflow-x-auto pb-2 md:grid-flow-row md:grid-cols-[repeat(auto-fill,minmax(min(100%,14rem),1fr))] md:overflow-visible"
+            className={cn(styles.starters, "grid grid-cols-2")}
             aria-label="推荐技能"
           >
             {starters.map(({ name, cover, description, prompt }) => {
@@ -76,49 +79,47 @@ export function ConversationWelcome({
               const skill = chosen ?? matches[0];
               const action = chosen ? "已选用" : "试一试";
               return (
-                <li key={name} className="min-w-0 snap-start">
-                  <Card size="sm" className="h-full gap-0 p-0 ring-0">
-                    <div className="relative isolate flex h-[188px] flex-col justify-end bg-muted">
+                <li key={name} className="min-w-0">
+                  <Card variant="media" className="h-full gap-0">
+                    <div
+                      className={cn(
+                        styles.cover,
+                        "relative overflow-hidden rounded-xl bg-muted",
+                      )}
+                    >
                       <Image
                         src={cover}
                         alt=""
                         fill
-                        sizes="264px"
+                        sizes="(min-width: 1060px) 394px, (min-width: 768px) 33vw, 46vw"
                         className="object-cover"
                       />
-                      <CardHeader className="relative flex flex-col items-start gap-1 bg-linear-to-t from-black/70 to-transparent px-3.5 pt-7 pb-3 text-white">
-                        <Badge
-                          variant="ghost"
-                          className="h-auto px-0 text-[10px] font-normal"
-                        >
-                          {skill ? "热门技能" : "创作灵感"}
-                        </Badge>
-                        <div className="flex w-full items-center justify-between gap-2">
-                          <CardTitle title={name} className="truncate">
-                            {name}
-                          </CardTitle>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="xs"
-                            className="border-white/35 bg-black/50 text-white hover:bg-black/75 hover:text-white pointer-coarse:min-h-11"
-                            disabled={disabled}
-                            aria-label={`${action}：${name}`}
-                            onClick={() => onSelect(prompt, skill)}
-                          >
-                            {action}
-                          </Button>
-                        </div>
-                      </CardHeader>
                     </div>
-                    <div className="min-h-[68px] px-3.5 py-3">
-                      <CardDescription
-                        title={skill?.description || description}
-                        className="line-clamp-2 text-xs leading-5"
-                      >
-                        {skill?.description || description}
+                    <CardHeader className={cn(styles.details, "px-1 pt-3")}>
+                      <CardTitle>{name}</CardTitle>
+                      <CardDescription className="line-clamp-2">
+                        {description}
                       </CardDescription>
-                    </div>
+                      <CardAction className={styles.action}>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="toolbar-adaptive"
+                          disabled={disabled}
+                          aria-label={`${action}：${name}`}
+                          aria-pressed={skill ? Boolean(chosen) : undefined}
+                          title={action}
+                          onClick={() => onSelect(prompt, skill)}
+                        >
+                          <span className="max-md:sr-only">{action}</span>
+                          {chosen ? (
+                            <Check data-icon="inline-end" />
+                          ) : (
+                            <ArrowUpRight data-icon="inline-end" />
+                          )}
+                        </Button>
+                      </CardAction>
+                    </CardHeader>
                   </Card>
                 </li>
               );

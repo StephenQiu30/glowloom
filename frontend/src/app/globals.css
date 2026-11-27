@@ -3575,7 +3575,7 @@ button:not(:disabled),
 
 /* Shared creation controls, used by home, conversations and canvas composers. */
 .composer-toolbar {
-  --toolbar-control-size: 28px;
+  --toolbar-control-size: var(--ui-control-size-compact);
   display: flex;
   width: 100%;
   min-width: 0;

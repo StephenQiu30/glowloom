@@ -22,6 +22,7 @@ import {
 import { cn } from "cn";
 import { ConversationThread } from "./conversation-thread";
 import { useConversation, type ConversationOptions } from "./use-conversation";
+import { CircleAlert } from "lucide-react";
 import { FeedbackNotice } from "@/components/feedback/feedback-notice";
 import { ConversationMessageSkeleton } from "@/components/layout/loading-state";
 import { Button } from "@/components/ui/button";
@@ -95,7 +96,7 @@ export function ConversationWorkspace({
     authorized && options.projectID && !independent ? (
       <Button
         variant="ghost"
-        size="sm"
+        size="toolbar"
         aria-label="项目记忆"
         title="项目记忆"
         onClick={() => openMemory("")}
@@ -296,6 +297,27 @@ export function ConversationWorkspace({
           welcome ? "max-w-[800px]" : "max-w-[1014px]",
         )}
       >
+        {c.modelCatalogError && !alternateComposer && (
+          <div
+            className="mb-2 flex items-center gap-2 px-2 text-sm text-muted-foreground"
+            role="status"
+          >
+            <CircleAlert
+              className="size-4 shrink-0 text-destructive"
+              aria-hidden="true"
+            />
+            <span className="min-w-0 flex-1">无法读取对话模型</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="toolbar"
+              disabled={c.loading || c.phase !== "idle"}
+              onClick={c.refresh}
+            >
+              {c.loading ? "正在重试…" : "重试"}
+            </Button>
+          </div>
+        )}
         {options.writable === false ? (
           <p className="px-4 pb-4 text-sm text-muted-foreground">
             {panel ? "当前画布为只读。" : "当前空间为只读。"}

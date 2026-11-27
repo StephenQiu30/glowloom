@@ -55,10 +55,11 @@ export function ReferenceStack({
       ref={entries.length ? main : addButtonRef}
       type="button"
       variant="ghost"
+      size={inline ? "toolbar" : "default"}
       disabled={disabled}
       className={
         inline
-          ? "gap-1.5 max-lg:min-h-11"
+          ? undefined
           : "relative h-[84px] w-16 rounded-none bg-transparent p-0 hover:bg-transparent"
       }
       aria-label={
@@ -87,7 +88,7 @@ export function ReferenceStack({
             (entries.length ? (
               <ImageIcon className="m-auto mt-5 size-4" />
             ) : (
-              <Plus className="size-4" />
+              <Plus aria-hidden="true" />
             ))}
         </ReferenceThumbnail>
       )}
@@ -132,16 +133,13 @@ export function ReferenceStack({
           ref={addButtonRef}
           type="button"
           variant="secondary"
+          size="toolbar-icon"
           disabled={disabled}
           aria-label="继续添加参考"
           onClick={onAdd}
-          className={
-            inline
-              ? "size-6 p-0 max-lg:size-11"
-              : "absolute right-0 bottom-1 z-10 size-7 rounded-full p-0 max-md:size-11"
-          }
+          className="absolute right-0 bottom-1 z-10 rounded-full"
         >
-          <Plus className="size-4" />
+          <Plus aria-hidden="true" />
         </Button>
       ) : null}
       {!inline && !expanded && entries.length === 1 ? (

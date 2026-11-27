@@ -69,6 +69,7 @@ interface View {
   summaries: Summary[];
   runs: Record<string, ConversationRun>;
   models: API.ModelResponse[];
+  modelCatalogError: string;
   skills: API.SkillVersion[];
   activeRunID: string | null;
   control: API.ControlStatus | null;
@@ -104,6 +105,7 @@ function initialView(identity: string, sessionID?: string): View {
     summaries: [],
     runs: {},
     models: [],
+    modelCatalogError: "",
     skills: [],
     activeRunID: null,
     control: null,
@@ -387,7 +389,8 @@ export function useConversation({
                 )
               : [],
           skills: skills.status === "fulfilled" ? skills.value : [],
-          error: catalog.status === "rejected" ? message(catalog.reason) : "",
+          modelCatalogError:
+            catalog.status === "rejected" ? message(catalog.reason) : "",
           loading: false,
         }));
         if (history.status === "rejected") {
@@ -1070,6 +1073,7 @@ export function useConversation({
     settings,
     changeSettings,
     models: state.models,
+    modelCatalogError: state.modelCatalogError,
     model,
     skills: state.skills,
     session: state.session,
