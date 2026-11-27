@@ -5,6 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"image"
+	_ "image/jpeg" // Register JPEG dimension decoding.
+	_ "image/png"  // Register PNG dimension decoding.
 	"io"
 	"net"
 	"net/http"
@@ -108,6 +111,9 @@ func (c *Client) sendMedia(ctx context.Context, d application.Dispatch, key stri
 	if model.Capability == "audio.generate" && slices.Contains(model.Modes, "text2audio") && config.AdapterKey != "volcengine_speech" {
 		return domain.Receipt{}, mediaPreflightError(d)
 	}
+	if model.Price.MediaTariff != nil && !model.Price.MediaTariff.MatchesAdapter(config.AdapterKey) {
+		return domain.Receipt{}, mediaPreflightError(d)
+	}
 	if _, installed := providerhttp.GetDriver(config.AdapterKey); !installed {
 		return domain.Receipt{}, mediaPreflightError(d)
 	}
@@ -122,7 +128,11 @@ func (c *Client) sendMedia(ctx context.Context, d application.Dispatch, key stri
 		if inputErr != nil {
 			return domain.Receipt{}, application.ErrNotSent
 		}
-		result, err = driver.Submit(ctx, input, key)
+		if tariff := model.Price.MediaTariff; tariff != nil && tariff.Meter == domain.ReportedImageAmount && tariff.Adapter == "vercel" {
+			result, err = submitVercelImage(ctx, transport, input)
+		} else {
+			result, err = driver.Submit(ctx, input, key)
+		}
 		if transport.calls.Load() == 0 || transport.notSent.Load() {
 			return domain.Receipt{}, application.ErrNotSent
 		}
@@ -157,7 +167,7 @@ func (c *Client) mediaRequest(ctx context.Context, d application.Dispatch, confi
 			}
 		}
 	}
-	input := operation.GenerationRequest{Config: config, ModelID: d.Route.UpstreamModel, Capability: in.Capability, Mode: in.Mode, Prompt: in.Prompt, Params: in.Params, OutputCount: 1, ProviderRequestID: d.Call.ID.String(), StrictSpeechTerminal: true}
+	input := operation.GenerationRequest{Config: config, ModelID: d.Route.UpstreamModel, Capability: in.Capability, Mode: in.Mode, Prompt: in.Prompt, Params: in.Params, OutputCount: 1, ProviderRequestID: d.Call.ID.String(), StrictSpeechTerminal: true, RequireSpeechTerminalUsage: d.Call.Model.Price.MediaTariff != nil && d.Call.Model.Price.MediaTariff.Meter == domain.SpeechCharacters}
 	if len(in.References) > 0 {
 		if c.mediaReferences == nil {
 			return input, application.ErrNotSent
@@ -197,7 +207,7 @@ func mediaReceipt(d application.Dispatch, result operation.GenerationResult) (do
 		}
 		result.Outcome = operation.ProviderOutcomeCompleted
 	case operation.ProviderTaskFailed, operation.ProviderTaskCancelled, operation.ProviderTaskExpired:
-		if d.Call.Model.VideoMetering == nil || d.PollTask == "" {
+		if !d.Call.Model.UsesVideoDeliveryMeter() || d.PollTask == "" {
 			return receipt, domain.ErrUnknown
 		}
 		receipt.DeliveryFailed = true
@@ -213,6 +223,10 @@ func mediaReceipt(d application.Dispatch, result operation.GenerationResult) (do
 		receipt.UpstreamID = result.ProviderLogID
 	}
 	if !receipt.Pending {
+		if d.Call.Model.UsesOutputVideoDuration() {
+			receipt.PurchasePending = true
+			return receipt, nil
+		}
 		if d.Call.Model.VideoMetering != nil {
 			var usage struct {
 				CompletionTokens int64 `json:"completion_tokens"`
@@ -226,7 +240,53 @@ func mediaReceipt(d application.Dispatch, result operation.GenerationResult) (do
 				return receipt, nil
 			}
 		}
+		if tariff := d.Call.Model.Price.MediaTariff; tariff != nil {
+			if tariff.UsesAuthorizedCeiling() {
+				usage, actualErr := imageUsage(tariff.Meter, result.Usage)
+				if actualErr != nil {
+					receipt.PurchasePending = true
+					return receipt, nil
+				}
+				receipt.Usage = usage
+			}
+			var usage map[string]json.RawMessage
+			if !tariff.UsesAuthorizedCeiling() && tariff.Meter != domain.ArkImagePixels && json.Unmarshal(result.Usage, &usage) != nil {
+				return receipt, domain.ErrUnknown
+			}
+			switch tariff.Meter {
+			case domain.ArkImagePixels:
+				var intent domain.MediaInput
+				if len(result.Images) != 1 || json.Unmarshal(d.Call.Raw, &intent) != nil {
+					return receipt, domain.ErrUnknown
+				}
+				config, _, err := image.DecodeConfig(bytes.NewReader(result.Images[0].Bytes))
+				if err != nil || config.Width <= 0 || config.Height <= 0 || config.Width > 32768 || config.Height > 32768 {
+					return receipt, domain.ErrUnknown
+				}
+				receipt.Usage.Pixels = int64(config.Width) * int64(config.Height)
+				receipt.Usage.ReferenceImages = int64(len(intent.References))
+			case domain.SpeechCharacters:
+				if result.ProviderTerminalCode != 20000000 || json.Unmarshal(usage["text_words"], &receipt.Usage.Characters) != nil {
+					return receipt, domain.ErrUnknown
+				}
+			case domain.OriginalAudioSeconds:
+				seconds, err := operation.ParseAudioDurationSeconds(usage["original_duration"], tariff.MaxQuantity)
+				if err != nil {
+					return receipt, domain.ErrUnknown
+				}
+				receipt.Usage.OriginalSeconds = seconds
+			}
+		}
 		receipt.PurchaseMicros, err = d.Route.Purchase.Cost(receipt.Usage)
+		if err == nil && d.Call.Model.Price.MediaTariff != nil {
+			_, err = d.Call.Model.Price.Cost(receipt.Usage)
+		}
+		if err != nil && d.Call.Model.Price.MediaTariff != nil && d.Call.Model.Price.MediaTariff.UsesAuthorizedCeiling() {
+			receipt.Usage = domain.Usage{}
+			receipt.PurchasePending = true
+			receipt.PurchaseMicros = 0
+			return receipt, nil
+		}
 	}
 	return receipt, err
 }

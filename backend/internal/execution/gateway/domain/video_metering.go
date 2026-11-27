@@ -102,6 +102,10 @@ func (m Model) AcceptsMediaPrice(p Price) bool {
 	if p.Validate() != nil || p.ExplicitFree || p.Input != 0 || p.CacheRead != 0 || p.CacheWrite != 0 {
 		return false
 	}
+	if p.MediaTariff != nil || m.Price.MediaTariff != nil {
+		return m.VideoMetering == nil && p.MediaTariff != nil && m.Price.MediaTariff != nil &&
+			p.MediaTariff.Meter == m.Price.MediaTariff.Meter && p.MediaTariff.Adapter == m.Price.MediaTariff.Adapter && p.MediaTariff.MaxQuantity == m.Price.MediaTariff.MaxQuantity && p.MediaTariff.accepts(m)
+	}
 	if m.VideoMetering != nil {
 		return p.Request == 0 && p.Output > 0
 	}

@@ -14,6 +14,7 @@ type ProjectMediaObject struct {
 	LocationID                                 *uuid.UUID
 	ProfileID, Bucket, Key, SHA256, Kind, Role string
 	ByteSize                                   int64
+	DurationMS                                 *int64
 }
 
 // ProjectMediaSigner consumes proven same-project media, never client-selected keys.

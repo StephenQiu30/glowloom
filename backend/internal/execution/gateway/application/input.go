@@ -13,9 +13,13 @@ import (
 
 // Prepare accepts a documented native subset. Unsupported fields fail before funds or I/O.
 func Prepare(model domain.Model, actor, scope, project, run uuid.UUID, key, origin string, raw json.RawMessage) (domain.Call, error) {
-	c := domain.Call{ID: uuid.New(), Actor: actor, Scope: scope, Project: project, Run: run, Key: key, Origin: origin, Model: model, Deadline: time.Now().Add(180 * time.Second)}
+	now := time.Now()
+	c := domain.Call{ID: uuid.New(), Actor: actor, Scope: scope, Project: project, Run: run, Key: key, Origin: origin, Model: model, Deadline: now.Add(180 * time.Second)}
 	if model.Validate() != nil || len(raw) > 1<<20 || key == "" || len(key) > 160 {
 		return c, domain.ErrInvalid
+	}
+	if !model.Price.AvailableAt(now) || !model.Price.AvailableAt(c.Deadline) {
+		return c, domain.ErrUnavailable
 	}
 	if model.Protocol == domain.EmbeddingProtocol {
 		return prepareEmbedding(c, raw)
@@ -129,13 +133,7 @@ func Prepare(model domain.Model, actor, scope, project, run uuid.UUID, key, orig
 	c.Hash = domain.Digest(encoded)
 	// Reserve using the highest applicable input bucket. Supplier hard ceilings
 	// remain enforced by its reviewed model contract, not an SDK default.
-	price := model.Price
-	for _, v := range []int64{price.CacheRead, price.CacheWrite} {
-		if v > price.Input {
-			price.Input = v
-		}
-	}
-	amount, err := price.Cost(domain.Usage{Input: int64(len(canonical)) + 1024, Output: output})
+	amount, err := model.Price.UpperCost(int64(len(canonical))+1024, output)
 	if err != nil {
 		return c, err
 	}

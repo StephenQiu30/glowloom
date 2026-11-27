@@ -160,3 +160,19 @@ it("shows the video Token estimate and the independently confirmed cap", () => {
   expect(screen.getByText("93600")).toBeTruthy();
   expect(screen.queryByText(/不代表最终实扣或费用上限/)).toBeNull();
 });
+
+it("labels the image authorization cap as the maximum debit", () => {
+  render(
+    <QuoteCostDetail
+      amount={10_000_000}
+      detail={{
+        unit: "per_image",
+        amount_kind: "maximum",
+        exact_credits: "100",
+        max_charge_credits: "100",
+      }}
+    />,
+  );
+  expect(screen.getByText("最多扣 100 积分")).toBeTruthy();
+  expect(screen.queryByText("预计消耗 100 积分")).toBeNull();
+});

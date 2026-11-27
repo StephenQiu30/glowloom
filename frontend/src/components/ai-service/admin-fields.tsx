@@ -305,8 +305,33 @@ export function money(value: number, currency = "CNY") {
     .join("");
 }
 
+export function mediaTariffSummary(
+  tariff: NonNullable<GatewayPrice["media_tariff"]>,
+  currency: string,
+) {
+  if (tariff.meter === "ark_image_pixels_v1") {
+    return `${tariff.unit_price}–${tariff.high_price} ${currency} / 张 · 第 2 张起参考图 ${tariff.extra_reference_price} ${currency} / 张`;
+  }
+  if (tariff.meter === "reported_image_amount_v1") return "按供应商实际账单";
+  if (tariff.meter === "image_tokens_v1")
+    return `文本输入 ${tariff.unit_price} · 图像输出 ${tariff.output_token_price} ${currency} / 百万 Token`;
+  if (tariff.meter === "output_video_seconds_v1")
+    return `${tariff.unit_price} ${currency} / 输出视频秒`;
+  const unit = tariff.meter === "speech_characters_v1" ? "字符" : "原始音频秒";
+  return `${tariff.unit_price} ${currency} / ${tariff.unit_size?.toLocaleString("zh-CN")} ${unit}`;
+}
+
 export function priceSummary(price: GatewayPrice, protocol: string) {
   if (price.explicit_free === true) return "免费";
+  if (price.media_tariff)
+    return mediaTariffSummary(price.media_tariff, price.currency);
+  if (price.text_tariff) {
+    if (price.text_tariff.schedule) return "按峰谷费率";
+    if (price.text_tariff.tiers.length > 1) return "按输入长度分档";
+    const [rate] = price.text_tariff.tiers;
+    if (rate)
+      return `输入 ${rate.input} · 输出 ${rate.output} ${price.currency} / 百万 Token`;
+  }
   if (protocol === arkEmbedding.protocol)
     return `输入 ${money(price.input, price.currency)} / 百万 token`;
   if (protocol === "media" && price.output > 0 && price.request === 0)

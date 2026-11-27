@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/domain"
+	pg "github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/adapter/provider"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/domain"
@@ -453,4 +454,210 @@ func TestMediaSeedance25ImageToVideoRejectsRatioOverride(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestMediaSpeechTariffNeedsProviderCharacterReceipt(t *testing.T) {
+	d := mediaDispatch(t, "volcengine_speech", "audio.generate", "text2audio", "seed-tts-2.0")
+	d.Call.Model.Price.Request = 0
+	d.Call.Model.Price.MediaTariff = &domain.MediaTariff{Meter: domain.SpeechCharacters, UnitPrice: "3", UnitSize: 10000, MaxQuantity: 16384}
+	d.Route.Purchase = d.Call.Model.Price
+	for _, tc := range []struct {
+		name, usage string
+		wantCost    int64
+	}{
+		{"trusted character count", `,"usage":{"text_words":15}`, 4500},
+		{"missing character evidence", "", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := mediaClient(func(*http.Request) (*http.Response, error) {
+				mp3 := base64.StdEncoding.EncodeToString([]byte("ID3" + strings.Repeat("\x00", 64)))
+				res := mediaResponse(200, fmt.Sprintf("data: {\"code\":0,\"data\":%q}\n\ndata: {\"code\":20000000%s}\n\n", mp3, tc.usage))
+				res.Header.Set("Content-Type", "text/event-stream")
+				return res, nil
+			})
+			receipt, err := c.Send(t.Context(), d, nil)
+			if tc.wantCost == 0 {
+				require.ErrorIs(t, err, domain.ErrUnknown)
+				return
+			}
+			require.NoError(t, err)
+			require.EqualValues(t, 15, receipt.Usage.Characters)
+			require.Equal(t, tc.wantCost, receipt.PurchaseMicros)
+		})
+	}
+}
+
+func TestVercelProviderSpecificTariffPinsPublishedUpstream(t *testing.T) {
+	d := mediaDispatch(t, "vercel", "image.generate", "text2image", "ignored")
+	d.Route.DriverConfig = nil
+	d.Route.Protocol = "chat"
+	d.Route.BaseURL = "https://ai-gateway.vercel.sh/v1"
+	d.Route.UpstreamModel = "spacexai/grok-4.20-reasoning"
+	d.Route.Purchase.Request = 0
+	d.Route.Purchase.TextTariff = &domain.TextTariff{
+		VercelProvider: "xai",
+		Tiers:          []domain.TextTier{{TextRates: domain.TextRates{Input: "1.25", CacheRead: "0.2", CacheWrite: "1.25", Output: "2.5"}}},
+	}
+	d.Call.Model.Protocol, d.Call.Model.Price = "chat", d.Route.Purchase
+	d.Call.Raw = json.RawMessage(`{"model":"media-product","messages":[{"role":"user","content":"test"}],"max_tokens":5}`)
+	sends := 0
+	c := mediaClient(func(r *http.Request) (*http.Response, error) {
+		sends++
+		require.Equal(t, "ai-gateway.vercel.sh", r.Host)
+		require.Equal(t, "/v1/chat/completions", r.URL.Path)
+		var payload map[string]json.RawMessage
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+		require.JSONEq(t, `{"gateway":{"only":["xai"]}}`, string(payload["providerOptions"]))
+		return mediaResponse(200, `{"model":"spacexai/grok-4.20-reasoning","choices":[{"message":{"role":"assistant","content":"OK"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":3,"prompt_tokens_details":{"cached_tokens":2},"completion_tokens_details":{"reasoning_tokens":2}}}`), nil
+	})
+	result, err := c.Send(t.Context(), d, nil)
+	require.NoError(t, err)
+	require.EqualValues(t, 18, result.PurchaseMicros)
+	d.Route.BaseURL = "https://api.openai.com/v1"
+	_, err = c.Send(t.Context(), d, nil)
+	require.ErrorIs(t, err, app.ErrNotSent)
+	require.Equal(t, 1, sends)
+}
+
+func TestOfficialImagePresetsUseOriginalProviderReceipt(t *testing.T) {
+	const (
+		tokenUsage   = `{"input_tokens":19,"input_tokens_details":{"text_tokens":19,"image_tokens":0},"output_tokens":1173,"total_tokens":1192,"output_tokens_details":{"text_tokens":0,"image_tokens":1173}}`
+		generationID = "gen_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+	)
+	for _, tc := range []struct {
+		adapter, model, path, usage, purchase string
+		micros                                int64
+		lookup                                bool
+	}{
+		{"openai", "gpt-image-2.5-flare", "/v1/images/generations", tokenUsage, "", 246_995, false},
+		{"openai", "gpt-image-2.5-sunburst", "/v1/images/generations", tokenUsage, "", 246_995, false},
+		{"openrouter", "openai/gpt-image-2", "/api/v1/images", `{"cost":0.0605}`, "0.0605", 423_500, false},
+		{"openrouter", "google/gemini-3.1-flash-image", "/api/v1/images", `{"cost":0.066,"output_tokens":1100}`, "0.066", 462_000, false},
+		{"vercel", "openai/gpt-image-2.5-sunburst", "/v4/ai/image-model", "", "0.0605", 423_500, false},
+		{"vercel", "google/gemini-3.1-flash-image", "/v4/ai/image-model", "", "0.067", 469_000, true},
+		{"openai", "gpt-image-2.5-flare", "/v1/images/generations", `{"input_tokens":19,"output_tokens":1173}`, "", 0, false},
+		{"openrouter", "google/gemini-3.1-flash-image", "/api/v1/images", `{"output_tokens":1100}`, "", 0, false},
+		{"vercel", "google/gemini-3.1-flash-image", "/v4/ai/image-model", "", "", 0, true},
+	} {
+		t.Run(tc.adapter+"/"+tc.model, func(t *testing.T) {
+			d := mediaDispatch(t, tc.adapter, "image.generate", "text2image", tc.model)
+			tariff := &domain.MediaTariff{Meter: domain.ReportedImageAmount, Adapter: tc.adapter}
+			if tc.adapter == "openai" {
+				tariff = &domain.MediaTariff{Meter: domain.ImageTokens, UnitPrice: "5", UnitSize: 1_000_000, OutputTokenPrice: "30"}
+			}
+			price := domain.Price{Currency: "USD", FX: "7", Multiplier: "1", Discount: "1", MediaTariff: tariff}
+			d.Call.Model.Price, d.Route.Purchase = price, price
+			d.Call.Model.PurchaseCap = 10_000_000
+			var submissions, reads int
+			c := mediaClient(func(r *http.Request) (*http.Response, error) {
+				if r.Method == http.MethodGet {
+					reads++
+					require.True(t, tc.lookup)
+					require.Equal(t, "/v1/generation", r.URL.Path)
+					require.Equal(t, generationID, r.URL.Query().Get("id"))
+					if tc.purchase == "" {
+						return mediaResponse(200, fmt.Sprintf(`{"data":{"id":%q,"model":"other-model","total_cost":0.067}}`, generationID)), nil
+					}
+					return mediaResponse(200, fmt.Sprintf(`{"data":{"id":%q,"model":%q,"total_cost":%s}}`, generationID, tc.model, tc.purchase)), nil
+				}
+				submissions++
+				require.Equal(t, http.MethodPost, r.Method)
+				require.Equal(t, tc.path, r.URL.Path)
+				if tc.adapter == "vercel" {
+					require.Equal(t, tc.model, r.Header.Get("ai-model-id"))
+					require.Equal(t, "4", r.Header.Get("ai-image-model-specification-version"))
+					inlineCost := tc.purchase
+					if tc.lookup {
+						inlineCost = ""
+					}
+					return mediaResponse(200, fmt.Sprintf(`{"images":[%q],"providerMetadata":{"gateway":{"generationId":%q,"cost":%q}}}`, mediaPNG, generationID, inlineCost)), nil
+				}
+				response := mediaResponse(200, fmt.Sprintf(`{"data":[{"b64_json":%q}],"usage":%s}`, mediaPNG, tc.usage))
+				response.Header.Set("X-Request-Id", "test-original-image")
+				return response, nil
+			})
+			receipt, err := c.Send(t.Context(), d, nil)
+			require.NoError(t, err)
+			require.Equal(t, 1, submissions)
+			if tc.lookup {
+				require.Equal(t, 1, reads)
+			} else {
+				require.Zero(t, reads)
+			}
+			require.Equal(t, tc.micros == 0, receipt.PurchasePending)
+			require.Equal(t, tc.micros, receipt.PurchaseMicros)
+			require.Equal(t, json.Number(tc.purchase), receipt.Usage.ProviderAmount)
+			var result operation.GenerationResult
+			require.NoError(t, json.Unmarshal(receipt.Body, &result))
+			require.Len(t, result.Images, 1)
+			if tc.adapter == "openai" && tc.micros > 0 {
+				require.EqualValues(t, 19, receipt.Usage.Input)
+				require.EqualValues(t, 1173, receipt.Usage.Output)
+			}
+		})
+	}
+}
+
+func TestImageMissingSupplierAmountReconcilesOnlyTheOriginalResult(t *testing.T) {
+	ctx := t.Context()
+	db, store, _, actor := fixture(t, 200)
+	project := entrypointProject(t, db, actor)
+	d := mediaDispatch(t, "openrouter", "image.generate", "text2image", "google/gemini-3.1-flash-image")
+	m := d.Call.Model
+	m.Name, m.PurchaseCap = "image-"+uuid.NewString(), 10_000_000
+	m.Price = domain.Price{Currency: "USD", FX: "7", Multiplier: "1", Discount: "1",
+		MediaTariff: &domain.MediaTariff{Meter: domain.ReportedImageAmount, Adapter: "openrouter", MaxQuantity: 8}}
+	require.NoError(t, store.PublishModel(ctx, m))
+	route := d.Route
+	route.ID, route.Supplier, route.Credential, route.Group = uuid.New(), uuid.New(), uuid.New(), uuid.NewString()
+	route.Purchase = m.Price
+	require.NoError(t, store.PublishRoute(ctx, route, []byte("synthetic"), "fixture", 1, 60))
+	input := domain.MediaInput{Model: m.Name, Capability: m.Capability, Mode: "text2image", OutputCount: 1, Prompt: "original image"}
+	raw, err := json.Marshal(input)
+	require.NoError(t, err)
+	call, err := app.Prepare(m, actor.ID, actor.ScopeID, project, uuid.Nil, uuid.NewString(), "canvas", raw)
+	require.NoError(t, err)
+	quote, err := store.Quote(ctx, call)
+	require.NoError(t, err)
+	require.EqualValues(t, 100, quote.Credits)
+	require.EqualValues(t, 200, quote.Available)
+	d, err = store.Admit(ctx, call)
+	require.NoError(t, err)
+	const original = "test-original-image"
+	sends := 0
+	client := mediaClient(func(r *http.Request) (*http.Response, error) {
+		require.Equal(t, http.MethodPost, r.Method)
+		sends++
+		response := mediaResponse(200, fmt.Sprintf(`{"data":[{"b64_json":%q}],"usage":{"output_tokens":1722}}`, mediaPNG))
+		response.Header.Set("X-Request-Id", original)
+		return response, nil
+	})
+	receipt, err := client.Send(ctx, d, nil)
+	require.NoError(t, err)
+	require.True(t, receipt.PurchasePending)
+	require.Equal(t, original, receipt.UpstreamID)
+	require.NoError(t, store.SaveReceipt(ctx, call.ID, d.Attempt, receipt))
+	pending, err := store.Settle(ctx, call.ID)
+	require.NoError(t, err)
+	require.Equal(t, "unknown", pending.State)
+	require.EqualValues(t, 100, pending.Held)
+	require.Zero(t, pending.Charged)
+	require.Contains(t, string(pending.Receipt.Body), mediaPNG)
+
+	evidence := pg.Reconciliation{Request: call.ID, Attempt: d.Attempt, Reference: "other-image", Reason: "original supplier invoice",
+		Usage: &domain.Usage{ProviderAmount: "0.066"}}
+	_, err = store.Reconcile(ctx, evidence)
+	require.ErrorIs(t, err, domain.ErrConflict)
+	evidence.Reference = original
+	settled, err := store.Reconcile(ctx, evidence)
+	require.NoError(t, err)
+	require.Equal(t, "settled", settled.State)
+	require.EqualValues(t, 5, settled.Charged)
+	require.EqualValues(t, 95, settled.Released)
+	require.EqualValues(t, 462_000, settled.Receipt.PurchaseMicros)
+	require.JSONEq(t, string(receipt.Body), string(settled.Receipt.Body))
+	replayed, err := store.Reconcile(ctx, evidence)
+	require.NoError(t, err)
+	require.Equal(t, settled, replayed)
+	require.Equal(t, 1, sends)
 }

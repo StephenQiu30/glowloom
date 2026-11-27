@@ -135,6 +135,25 @@ func safeUsage(raw json.RawMessage) json.RawMessage {
 			}
 		}
 	}
+	for _, name := range []string{"input_tokens_details", "output_tokens_details"} {
+		var detail map[string]json.RawMessage
+		if json.Unmarshal(fields[name], &detail) != nil {
+			continue
+		}
+		quantities := map[string]int64{}
+		for _, key := range []string{"text_tokens", "image_tokens"} {
+			if raw, exists := detail[key]; exists {
+				var n int64
+				if string(raw) == "null" || json.Unmarshal(raw, &n) != nil || n < 0 || n > 1<<40 {
+					return nil
+				}
+				quantities[key] = n
+			}
+		}
+		if len(quantities) > 0 {
+			allowed[name], _ = json.Marshal(quantities)
+		}
+	}
 	if cached != nil {
 		raw, _ := json.Marshal(*cached)
 		allowed["cached_input_tokens"] = raw

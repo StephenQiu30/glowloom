@@ -12,6 +12,7 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/domain"
+	operation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
 	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/taskruntime"
 )
@@ -57,16 +58,16 @@ func (s *Store) Model(ctx context.Context, name, protocol string) (domain.Model,
 }
 func scanRecord(tx *gorm.DB, id uuid.UUID) (domain.Record, error) {
 	var row struct {
-		ID, Scope, ModelID      uuid.UUID
-		State                   string
-		Held, Charged, Released int64
-		Receipt, Reconciliation []byte
-		Created                 time.Time
+		ID, Scope, ModelID                              uuid.UUID
+		State                                           string
+		Held, Charged, Released                         int64
+		Receipt, Reconciliation, OutputDurationEvidence []byte
+		Created                                         time.Time
 	}
 	r := tx.Raw(`SELECT r.id,r.scope_id AS scope,r.model_id,r.state,h.amount AS held,h.charged,h.released,r.created_at AS created,
- a.receipt, evidence.evidence AS reconciliation
+ a.receipt, a.output_duration_evidence, evidence.evidence AS reconciliation
  FROM ai.request r JOIN ai.hold h ON h.request_id=r.id
- LEFT JOIN LATERAL (SELECT id,receipt FROM ai.attempt WHERE request_id=r.id AND receipt IS NOT NULL ORDER BY number DESC LIMIT 1) a ON true
+ LEFT JOIN LATERAL (SELECT id,receipt,output_duration_evidence FROM ai.attempt WHERE request_id=r.id AND receipt IS NOT NULL ORDER BY number DESC LIMIT 1) a ON true
  LEFT JOIN ai.reconciliation evidence ON evidence.attempt_id=a.id AND evidence.request_id=r.id
  WHERE r.id=?`, id).Scan(&row)
 	if r.Error != nil {
@@ -81,13 +82,24 @@ func scanRecord(tx *gorm.DB, id uuid.UUID) (domain.Record, error) {
 		if json.Unmarshal(row.Receipt, &receipt) != nil {
 			return result, domain.ErrInvalid
 		}
-		if receipt.PurchasePending && len(row.Reconciliation) > 0 {
+		if receipt.PurchasePending && len(row.OutputDurationEvidence) > 0 {
+			if err := applyOutputDuration(&receipt, row.OutputDurationEvidence); err != nil {
+				return result, err
+			}
+		}
+		if (receipt.PurchasePending || receipt.PurchaseEstimated) && len(row.Reconciliation) > 0 {
 			var evidence videoUsageEvidence
 			if json.Unmarshal(row.Reconciliation, &evidence) != nil {
 				return result, domain.ErrInvalid
 			}
-			if evidence.PurchaseMicros != nil {
-				if evidence.Usage == nil || !evidence.Usage.IsVideoUsage() || *evidence.PurchaseMicros < 0 {
+			if receipt.PurchaseEstimated && evidence.ReportedInvoice {
+				if evidence.PurchaseMicros == nil || *evidence.PurchaseMicros < 0 {
+					return result, domain.ErrInvalid
+				}
+				receipt.PurchaseMicros = *evidence.PurchaseMicros
+				receipt.PurchaseEstimated = false
+			} else if receipt.PurchasePending && evidence.PurchaseMicros != nil {
+				if evidence.Usage == nil || evidence.Usage.Validate() != nil || *evidence.PurchaseMicros < 0 {
 					return result, domain.ErrInvalid
 				}
 				receipt.Usage = *evidence.Usage
@@ -457,11 +469,23 @@ func (s *Store) SaveReceipt(ctx context.Context, request, attempt uuid.UUID, rec
 		if json.Unmarshal(row.Contract, &route) != nil {
 			return domain.ErrInvalid
 		}
-		if model.VideoMetering != nil {
-			return saveVideoReceipt(ctx, tx, request, attempt, row.State, route, receipt, raw, hash)
+		if model.UsesVideoDeliveryMeter() {
+			return saveVideoReceipt(ctx, tx, request, attempt, row.State, route, model.UsesOutputVideoDuration(), receipt, raw, hash)
 		}
 		if receipt.PurchasePending {
-			return domain.ErrInvalid
+			if tariff := model.Price.MediaTariff; tariff == nil || !tariff.UsesAuthorizedCeiling() ||
+				receipt.Usage != (domain.Usage{}) || receipt.PurchaseMicros != 0 || receipt.DeliveryFailed {
+				return domain.ErrInvalid
+			}
+			var result operation.GenerationResult
+			if json.Unmarshal(receipt.Body, &result) != nil || result.Outcome != operation.ProviderOutcomeCompleted ||
+				result.State != operation.ProviderTaskSucceeded || len(result.Images) != 1 || len(result.Audio)+len(result.URLs) != 0 {
+				return domain.ErrInvalid
+			}
+			if err := tx.Exec("UPDATE ai.attempt SET receipt=?::jsonb,digest=?,state='received' WHERE id=?", string(raw), hash, attempt).Error; err != nil {
+				return err
+			}
+			return tx.Exec("UPDATE ai.request SET state='unknown',updated_at=clock_timestamp() WHERE id=?", request).Error
 		}
 		cost, err := route.Purchase.Cost(receipt.Usage)
 		if err != nil || cost != receipt.PurchaseMicros {
@@ -523,10 +547,16 @@ func (s *Store) Settle(ctx context.Context, id uuid.UUID) (domain.Record, error)
 		if row.RunID != nil {
 			call.Run = *row.RunID
 		}
-		if model.VideoMetering != nil {
-			if record.Receipt.DeliveryFailed {
-				return releaseHeld(tx, call, &record)
+		if record.Receipt.DeliveryFailed && model.UsesVideoDeliveryMeter() {
+			return releaseHeld(tx, call, &record)
+		}
+		if model.UsesOutputVideoDuration() && record.Receipt.PurchasePending {
+			measured, err := measureDeliveredVideo(tx, id, record.Receipt)
+			if err != nil || !measured {
+				return err
 			}
+		}
+		if model.VideoMetering != nil {
 			if record.Receipt.PurchasePending || !record.Receipt.Usage.IsVideoUsage() {
 				return nil
 			}
@@ -534,6 +564,9 @@ func (s *Store) Settle(ctx context.Context, id uuid.UUID) (domain.Record, error)
 			if err != nil || !ready {
 				return err
 			}
+		}
+		if record.Receipt.PurchasePending {
+			return nil
 		}
 		micros, err := model.Price.Cost(record.Receipt.Usage)
 		if err != nil {
@@ -572,7 +605,7 @@ func (s *Store) Settle(ctx context.Context, id uuid.UUID) (domain.Record, error)
 		if err := tx.Exec("UPDATE ai.request SET state='settled',updated_at=clock_timestamp() WHERE id=?", id).Error; err != nil {
 			return err
 		}
-		if model.Protocol == "media" && model.VideoMetering == nil {
+		if model.Protocol == "media" && !model.UsesVideoDeliveryMeter() {
 			var flags struct {
 				ReconciliationOnly bool `json:"reconciliation_only"`
 			}

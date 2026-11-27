@@ -41,9 +41,10 @@ func (r *Runtime) referenceFact(ctx context.Context, tx *gorm.DB, a identity.Pri
 		ByteSize                                            int64
 		LocationSHA                                         *string
 		LocationSize                                        *int64
+		DurationMS                                          *int64
 		LocationKey                                         string
 	}
-	q := tx.Raw(`SELECT a.id,a.project_id,a.revision,a.kind,a.object_key AS key,a.sha256,a.object_location_id AS location_id,a.byte_size,l.profile_id,l.bucket,l.state AS location_state,l.sha256 AS location_sha,l.byte_size AS location_size,l.object_key AS location_key
+	q := tx.Raw(`SELECT a.id,a.project_id,a.revision,a.kind,a.object_key AS key,a.sha256,a.object_location_id AS location_id,a.byte_size,a.duration_ms,l.profile_id,l.bucket,l.state AS location_state,l.sha256 AS location_sha,l.byte_size AS location_size,l.object_key AS location_key
  FROM media.media_asset a JOIN media.object_location l ON l.id=a.object_location_id WHERE a.id=? AND NOT a.is_delete AND a.status='ready' AND a.moderation_status IN ('passed','skipped') AND NOT a.contains_real_person FOR SHARE OF a,l`, ref.ID).Scan(&row)
 	if q.Error != nil {
 		return ref, fact, q.Error
@@ -57,7 +58,7 @@ func (r *Runtime) referenceFact(ctx context.Context, tx *gorm.DB, a identity.Pri
 		}
 		ref.Version = row.SHA256
 	}
-	fact = operation.ProjectMediaObject{AssetID: ref.ID, ProjectID: p, LocationID: row.LocationID, ProfileID: row.ProfileID, Bucket: row.Bucket, Key: row.Key, SHA256: row.SHA256, Kind: row.Kind, Role: ref.Role, ByteSize: row.ByteSize}
+	fact = operation.ProjectMediaObject{AssetID: ref.ID, ProjectID: p, LocationID: row.LocationID, ProfileID: row.ProfileID, Bucket: row.Bucket, Key: row.Key, SHA256: row.SHA256, Kind: row.Kind, Role: ref.Role, ByteSize: row.ByteSize, DurationMS: row.DurationMS}
 	return ref, fact, nil
 }
 func (r *Runtime) freezeReferences(ctx context.Context, tx *gorm.DB, a identity.Principal, p uuid.UUID, model domain.Model, refs []domain.Reference) ([]domain.Reference, error) {
@@ -67,7 +68,7 @@ func (r *Runtime) freezeReferences(ctx context.Context, tx *gorm.DB, a identity.
 		if err != nil {
 			return nil, err
 		}
-		if model.VideoMetering != nil && fact.Kind != "image" {
+		if !matchesMeterReference(model, fact) {
 			return nil, domain.ErrInvalid
 		}
 		result = append(result, resolved)
@@ -102,7 +103,7 @@ func (r *Runtime) mediaReferences(ctx context.Context, d application.Dispatch, r
 			if err != nil {
 				return err
 			}
-			if current.Version != ref.Version {
+			if current.Version != ref.Version || !matchesMeterReference(d.Call.Model, fact) {
 				return domain.ErrConflict
 			}
 			facts = append(facts, fact)
@@ -122,4 +123,25 @@ func (r *Runtime) mediaReferences(ctx context.Context, d application.Dispatch, r
 		result = append(result, signed)
 	}
 	return result, nil
+}
+
+func matchesMeterReference(model domain.Model, fact operation.ProjectMediaObject) bool {
+	if model.VideoMetering != nil {
+		return fact.Kind == "image"
+	}
+	if !model.UsesOutputVideoDuration() {
+		return true
+	}
+	switch fact.Role {
+	case "character_image":
+		return fact.Kind == "image"
+	case "driving_video":
+		return fact.Kind == "video" && fact.DurationMS != nil && *fact.DurationMS > 0 &&
+			*fact.DurationMS <= (model.Price.MediaTariff.MaxQuantity-1)*1000
+	case "driving_audio":
+		return fact.Kind == "audio" && fact.DurationMS != nil && *fact.DurationMS > 0 &&
+			*fact.DurationMS < model.Price.MediaTariff.MaxQuantity*1000
+	default:
+		return false
+	}
 }

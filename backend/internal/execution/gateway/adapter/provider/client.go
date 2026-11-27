@@ -108,6 +108,12 @@ func (f fenced) Do(r *http.Request) (*http.Response, error) {
 		for _, name := range []string{"Authorization", "X-Date", "X-Content-Sha256"} {
 			clone.Header.Set(name, r.Header.Get(name))
 		}
+	case f.mediaAdapter == "vercel" && r.URL.Path == "/v4/ai/image-model":
+		clone.Header.Set("Authorization", "Bearer "+f.key)
+		clone.Header.Set("ai-gateway-protocol-version", "0.0.1")
+		clone.Header.Set("ai-gateway-auth-method", "api-key")
+		clone.Header.Set("ai-image-model-specification-version", "4")
+		clone.Header.Set("ai-model-id", f.route.UpstreamModel)
 	case f.route.Protocol == "messages":
 		clone.Header.Set("X-Api-Key", f.key)
 		clone.Header.Set("Anthropic-Version", "2023-06-01")
@@ -189,6 +195,14 @@ func (c *Client) Send(ctx context.Context, d application.Dispatch, emit func(jso
 		return domain.Receipt{}, application.ErrNotSent
 	}
 	payload["model"], _ = json.Marshal(d.Route.UpstreamModel)
+	if tariff := d.Route.Purchase.TextTariff; tariff != nil && tariff.VercelProvider != "" {
+		if !d.Route.AcceptsTextTariffRoute() {
+			return domain.Receipt{}, application.ErrNotSent
+		}
+		payload["providerOptions"], _ = json.Marshal(map[string]any{
+			"gateway": map[string]any{"only": []string{tariff.VercelProvider}},
+		})
+	}
 	if d.Call.Stream && d.Route.Protocol == "chat" {
 		payload["stream_options"] = json.RawMessage(`{"include_usage":true}`)
 	}
@@ -204,6 +218,10 @@ func (c *Client) Send(ctx context.Context, d application.Dispatch, emit func(jso
 	var connected atomic.Bool
 	ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{GotConn: func(httptrace.GotConnInfo) { connected.Store(true) }})
 	var response *http.Response
+	startedAt := time.Now().UTC()
+	if !d.Route.Purchase.AvailableAt(startedAt) || !d.Route.Purchase.AvailableAt(d.Call.Deadline) {
+		return domain.Receipt{}, application.ErrNotSent
+	}
 	if d.Route.Protocol == "messages" {
 		sdk := anthropic.NewClient(ao.WithAPIKey(envelope.APIKey), ao.WithBaseURL(base), ao.WithMaxRetries(0), ao.WithHTTPClient(fenced{client: c, route: d.Route, key: envelope.APIKey}))
 		err = sdk.Post(ctx, path, json.RawMessage(raw), &response)
@@ -302,6 +320,13 @@ func (c *Client) Send(ctx context.Context, d application.Dispatch, emit func(jso
 	}
 	if receipt.Usage.Input > d.Call.Model.MaxInput || receipt.Usage.Output > d.Call.Model.MaxOutput {
 		return receipt, domain.ErrUnknown
+	}
+	if routeTariff, saleTariff := d.Route.Purchase.TextTariff, d.Call.Model.Price.TextTariff; routeTariff != nil && routeTariff.Schedule != "" || saleTariff != nil && saleTariff.Schedule != "" {
+		receipt.Usage.BillingStartedAt = startedAt
+		receipt.Usage.BillingReceivedAt = time.Now().UTC()
+		if _, err := d.Call.Model.Price.Cost(receipt.Usage); err != nil {
+			return receipt, err
+		}
 	}
 	receipt.PurchaseMicros, err = d.Route.Purchase.Cost(receipt.Usage)
 	if err != nil {

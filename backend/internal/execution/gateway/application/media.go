@@ -17,7 +17,7 @@ func prepareMedia(c domain.Call, raw json.RawMessage) (domain.Call, error) {
 	var in domain.MediaInput
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
-	if dec.Decode(&in) != nil || dec.Decode(new(any)) != io.EOF || in.Model != c.Model.Name || in.Capability != c.Model.Capability || !slices.Contains(c.Model.Modes, in.Mode) || in.OutputCount != 1 || strings.TrimSpace(in.Prompt) == "" || len(in.Prompt) > 65536 || len(in.References) > 16 {
+	if dec.Decode(&in) != nil || dec.Decode(new(any)) != io.EOF || in.Model != c.Model.Name || in.Capability != c.Model.Capability || !slices.Contains(c.Model.Modes, in.Mode) || in.OutputCount != 1 || !c.Model.UsesOutputVideoDuration() && strings.TrimSpace(in.Prompt) == "" || len(in.Prompt) > 65536 || len(in.References) > 16 {
 		return c, domain.ErrInvalid
 	}
 	if in.Params == nil {
@@ -56,6 +56,9 @@ func prepareMedia(c domain.Call, raw json.RawMessage) (domain.Call, error) {
 	encoded, _ := json.Marshal(hashInput)
 	c.Hash = domain.Digest(encoded)
 	var bound domain.Usage
+	if m := c.Model.Price.MediaTariff; m != nil && m.Meter == domain.SpeechCharacters && (int64(len(in.Prompt)) > m.MaxQuantity || len(in.References) != 0) {
+		return c, domain.ErrInvalid
+	}
 	if c.Model.VideoMetering != nil {
 		if err := c.Model.ValidateVideoInput(c.Project, in); err != nil {
 			return c, err
@@ -67,7 +70,36 @@ func prepareMedia(c domain.Call, raw json.RawMessage) (domain.Call, error) {
 		}
 		bound.Output = c.Model.MaxOutput
 	}
-	amount, err := c.Model.Price.Cost(bound)
+	if c.Model.UsesOutputVideoDuration() {
+		if err := validateDrivenVideo(in); err != nil {
+			return c, err
+		}
+	}
+	if tariff := c.Model.Price.MediaTariff; tariff != nil && tariff.UsesAuthorizedCeiling() {
+		if int64(len(in.References)) > tariff.MaxQuantity || (in.Mode == "text2image") != (len(in.References) == 0) {
+			return c, domain.ErrInvalid
+		}
+		for _, ref := range in.References {
+			if !slices.Contains([]string{"reference_image", "reference", "subject"}, ref.Role) {
+				return c, domain.ErrInvalid
+			}
+		}
+		limit, err := domain.Credits(c.Model.PurchaseCap)
+		c.Limit = limit
+		return c, err
+	}
+	amount, err := c.Model.Price.UpperCost(bound.Input, bound.Output)
+	if tariff := c.Model.Price.MediaTariff; tariff != nil && tariff.Meter == domain.ArkImagePixels {
+		for _, ref := range in.References {
+			if ref.Role != "reference_image" {
+				return c, domain.ErrInvalid
+			}
+		}
+		if (in.Mode == "text2image") != (len(in.References) == 0) {
+			return c, domain.ErrInvalid
+		}
+		amount, err = c.Model.Price.ImageUpperCost(int64(len(in.References)))
+	}
 	if err != nil {
 		return c, err
 	}
@@ -109,6 +141,21 @@ func validateScalar(p domain.Parameter, v any) error {
 		if !found {
 			return domain.ErrInvalid
 		}
+	}
+	return nil
+}
+
+func validateDrivenVideo(in domain.MediaInput) error {
+	if len(in.References) != 2 || in.Mode == "motion" && in.Prompt != "" {
+		return domain.ErrInvalid
+	}
+	role := "driving_audio"
+	if in.Mode == "motion" {
+		role = "driving_video"
+	}
+	roles := map[string]bool{in.References[0].Role: true, in.References[1].Role: true}
+	if !roles["character_image"] || !roles[role] {
+		return domain.ErrInvalid
 	}
 	return nil
 }

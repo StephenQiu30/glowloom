@@ -8124,12 +8124,17 @@ CREATE TABLE catalog.model_price_preset (
     currency text NOT NULL CHECK (currency IN ('CNY', 'USD')),
     source_url text NOT NULL CHECK (source_url LIKE 'https://%'),
     reference_lines jsonb NOT NULL CHECK (jsonb_typeof(reference_lines) = 'array' AND jsonb_array_length(reference_lines) > 0),
+    official_price jsonb CHECK (official_price IS NULL OR jsonb_typeof(official_price) = 'object'),
+    official_price_observed_on date,
+    gateway_text_tariff jsonb CHECK (gateway_text_tariff IS NULL OR jsonb_typeof(gateway_text_tariff) = 'object'),
+    gateway_media_tariff jsonb CHECK (gateway_media_tariff IS NULL OR jsonb_typeof(gateway_media_tariff) = 'object'),
     unit text,
     rule jsonb,
     executable_until date,
     quick_onboarding jsonb CHECK (quick_onboarding IS NULL OR (currency = 'CNY' AND jsonb_typeof(quick_onboarding) = 'object')),
     video_estimate jsonb CHECK (video_estimate IS NULL OR (currency = 'CNY' AND jsonb_typeof(video_estimate) = 'object')),
     PRIMARY KEY (adapter_key, provider_model_id),
+    CHECK ((official_price IS NULL) = (official_price_observed_on IS NULL)),
     CHECK (executable_until IS NULL OR unit IS NOT NULL),
     CHECK ((unit IS NULL AND rule IS NULL) OR
            (unit IN ('per_image', 'per_1k_tokens', 'per_1k_chars', 'per_second') AND unit IS NOT NULL AND rule IS NOT NULL AND jsonb_typeof(rule) = 'object'))
@@ -9582,7 +9587,7 @@ CREATE TABLE ai.attempt (
  route_id uuid NOT NULL REFERENCES ai.route(id),credential_id uuid NOT NULL REFERENCES ai.credential(id),
  quota_group text NOT NULL REFERENCES ai.quota(name),contract jsonb NOT NULL,
  state text NOT NULL CHECK(state IN ('ready','sending','pending','unknown','not_sent','received','reconciled')),
- receipt jsonb,digest text,started_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ receipt jsonb,digest text,output_duration_evidence jsonb CHECK (output_duration_evidence IS NULL OR jsonb_typeof(output_duration_evidence)='object'),started_at timestamptz NOT NULL DEFAULT clock_timestamp(),
  UNIQUE(request_id,number),CHECK((receipt IS NULL)=(digest IS NULL))
 );
 CREATE INDEX ai_attempt_capacity ON ai.attempt(quota_group,state,started_at);

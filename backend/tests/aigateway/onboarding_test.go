@@ -585,6 +585,99 @@ func TestOnboardingConfigurationShowsActualProviderMetadata(t *testing.T) {
 	}))
 }
 
+func TestOnboardingConfigurationProjectsFlatSupplierTokenRates(t *testing.T) {
+	db, store, _, _ := fixture(t)
+	configuration, err := store.Configuration(t.Context())
+	require.NoError(t, err)
+	data, err := json.Marshal(configuration)
+	require.NoError(t, err)
+	type preset struct {
+		Adapter     string              `json:"adapter"`
+		Upstream    string              `json:"upstream"`
+		Currency    string              `json:"currency"`
+		TokenPrice  map[string]int64    `json:"token_price"`
+		FlatPrice   *int64              `json:"request_micros"`
+		VideoQuote  json.RawMessage     `json:"video_estimate"`
+		TextTariff  *domain.TextTariff  `json:"text_tariff"`
+		MediaTariff *domain.MediaTariff `json:"media_tariff"`
+		Observed    string              `json:"official_price_observed_on"`
+	}
+	var result struct {
+		Presets []preset `json:"model_presets"`
+	}
+	require.NoError(t, json.Unmarshal(data, &result))
+	require.Len(t, result.Presets, 81)
+	supplierRates := map[string]preset{}
+	for _, row := range result.Presets {
+		supplierRates[row.Adapter+"/"+row.Upstream] = row
+		require.True(t, row.FlatPrice != nil || row.TokenPrice != nil || row.TextTariff != nil || row.MediaTariff != nil ||
+			len(row.VideoQuote) > 0 && string(row.VideoQuote) != "null", "%s/%s has no executable billing contract", row.Adapter, row.Upstream)
+		if row.TextTariff != nil || row.MediaTariff != nil {
+			require.NotEmpty(t, row.Observed)
+			require.NoError(t, (domain.Price{TextTariff: row.TextTariff, MediaTariff: row.MediaTariff, Currency: row.Currency, FX: "1", Multiplier: "1", Discount: "1"}).Validate(), row.Upstream)
+		}
+	}
+	for _, tt := range []struct {
+		upstream string
+		price    map[string]int64
+	}{
+		{"doubao-seed-2-1-pro-260915", map[string]int64{"input": 6_000_000, "cache_read": 1_200_000, "output": 30_000_000}},
+		{"doubao-seed-2-1-lite-260915", map[string]int64{"input": 800_000, "cache_read": 160_000, "output": 2_700_000}},
+		{"doubao-seed-2-1-turbo-260628", map[string]int64{"input": 3_000_000, "cache_read": 600_000, "output": 15_000_000}},
+		{"kimi-k3-1-pro-261024", map[string]int64{"input": 13_000_000, "cache_read": 1_300_000, "output": 68_000_000}},
+	} {
+		row := supplierRates["volcengine_ark/"+tt.upstream]
+		require.Equal(t, "CNY", row.Currency, tt.upstream)
+		require.Equal(t, tt.price, row.TokenPrice, tt.upstream)
+	}
+	deepseek, found := supplierRates["deepseek/deepseek-v4-pro"]
+	require.True(t, found)
+	require.Nil(t, deepseek.TokenPrice)
+	require.NotNil(t, deepseek.TextTariff)
+	require.Equal(t, "13.5", deepseek.TextTariff.OffPeak.Output)
+	character := supplierRates["volcengine_ark/doubao-seed-character-251128"].TextTariff
+	require.NotNil(t, character)
+	require.EqualValues(t, 32001, character.Tiers[1].FromInput)
+	require.EqualValues(t, 96000, character.MaxInput)
+	arkFlash := supplierRates["volcengine_ark/deepseek-v4-1-flash-260910"].TextTariff
+	require.NotNil(t, arkFlash)
+	require.Equal(t, "ark_weekday_cn", arkFlash.Schedule)
+	require.Equal(t, "0.02", arkFlash.OffPeak.CacheRead)
+	require.Equal(t, domain.ArkImagePixels, supplierRates["volcengine_ark/doubao-seedream-5-0-pro-260628"].MediaTariff.Meter)
+	require.Equal(t, domain.OriginalAudioSeconds, supplierRates["volcengine_speech/seed-audio-1.0"].MediaTariff.Meter)
+	require.Equal(t, domain.SpeechCharacters, supplierRates["volcengine_speech/seed-tts-2.0"].MediaTariff.Meter)
+	require.Equal(t, "xai", supplierRates["vercel/spacexai/grok-4.20-reasoning"].TextTariff.VercelProvider)
+	for key, meter := range map[string]string{
+		"openai/gpt-image-2.5-flare":                               domain.ImageTokens,
+		"openai/gpt-image-2.5-sunburst":                            domain.ImageTokens,
+		"openrouter/openai/gpt-image-2":                            domain.ReportedImageAmount,
+		"openrouter/google/gemini-3.1-flash-image":                 domain.ReportedImageAmount,
+		"vercel/openai/gpt-image-2.5-sunburst":                     domain.ReportedImageAmount,
+		"vercel/google/gemini-3.1-flash-image":                     domain.ReportedImageAmount,
+		"volcengine_motion/jimeng_dreamactor_m20_gen_video":        domain.OutputVideoSeconds,
+		"volcengine_avatar/jimeng_realman_avatar_picture_omni_v15": domain.OutputVideoSeconds,
+	} {
+		row := supplierRates[key]
+		require.NotNil(t, row.MediaTariff, key)
+		require.Equal(t, meter, row.MediaTariff.Meter, key)
+		require.True(t, row.MediaTariff.MatchesAdapter(row.Adapter), key)
+	}
+
+	for _, adapter := range []string{"vercel", "openrouter"} {
+		flat := supplierRates[adapter+"/anthropic/claude-sonnet-4.6"]
+		require.Equal(t, "USD", flat.Currency)
+		require.Equal(t, map[string]int64{"input": 3_000_000, "output": 15_000_000, "cache_read": 300_000, "cache_write": 3_750_000}, flat.TokenPrice)
+		sol := supplierRates[adapter+"/openai/gpt-6.1-sol"]
+		require.Nil(t, sol.TokenPrice)
+		require.NotNil(t, sol.TextTariff)
+		require.EqualValues(t, 272001, sol.TextTariff.Tiers[1].FromInput)
+	}
+	var tiers bool
+	require.NoError(t, db.Raw(`SELECT jsonb_exists(official_price,'input_tiers') AND official_price_observed_on IS NOT NULL
+FROM catalog.model_price_preset WHERE adapter_key='vercel' AND provider_model_id='openai/gpt-6.1-sol'`).Row().Scan(&tiers))
+	require.True(t, tiers)
+}
+
 func TestOnboardingConfigurationExcludesHistoricalLocalSpeech(t *testing.T) {
 	db, store, model, actor := fixture(t)
 	legacy := model

@@ -46,6 +46,7 @@ func (c Creation) auth() pg.Authority {
 func (c Creation) store(tx *gorm.DB, a identity.Principal) *pg.Store {
 	return pg.New(tx, a, c.auth()).WithRunLimit(c.RunLimit).WithWorkerPermit(c.Permit)
 }
+
 func canonical(v any) []byte {
 	raw, _ := json.Marshal(v)
 	normalized, err := domain.CanonicalJSON(raw)
@@ -167,6 +168,20 @@ func (c Creation) Quote(ctx context.Context, a identity.Principal, p uuid.UUID, 
 			details["estimated_credits"] = credits
 			details["exact_credits"] = strconv.FormatInt(credits, 10)
 			details["max_charge_credits"] = strconv.FormatInt(quote.Credits, 10)
+		}
+		if tariff := call.Model.Price.MediaTariff; tariff != nil &&
+			(tariff.UsesAuthorizedCeiling() || call.Model.UsesOutputVideoDuration()) {
+			details["amount_kind"] = "maximum"
+			details["max_charge_credits"] = strconv.FormatInt(quote.Credits, 10)
+			details["currency"] = call.Model.Price.Currency
+			details["fx_rate_to_cny"] = call.Model.Price.FX
+			details["unit"] = "per_image"
+			if call.Model.UsesOutputVideoDuration() {
+				details["unit"] = "per_second"
+				details["unit_quantity"] = tariff.UnitSize
+				details["unit_price"] = tariff.UnitPrice
+				details["quantity"] = tariff.MaxQuantity
+			}
 		}
 		detail := canonical(details)
 		out = operation.CreateFreeQuoteResult{OperationID: quote.ID, QuoteMicros: quote.Credits * 100000, QuoteDetail: detail, AvailableMicros: quote.Available * 100000, ExpiresAt: quote.Expires, Confirmable: quote.Available >= quote.Credits, EditorDraft: draft, ConfirmKey: &confirm, FinalPrompt: nativePrompt(model, raw)}

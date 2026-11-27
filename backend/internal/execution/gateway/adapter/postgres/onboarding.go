@@ -98,6 +98,17 @@ func (s *Store) StageModel(ctx context.Context, m domain.Model) error {
 			return err
 		}
 		raw := string(mustJSON(m))
+		if m.PresetKey != "" && (m.Price.TextTariff != nil || m.Price.MediaTariff != nil) {
+			var alreadyStaged bool
+			if err := tx.Raw("SELECT EXISTS(SELECT 1 FROM ai.model WHERE id=? AND document=?::jsonb)", m.ID, raw).Row().Scan(&alreadyStaged); err != nil {
+				return err
+			}
+			if !alreadyStaged {
+				if err := validatePresetTariff(tx, m.PresetKey, m.Price, nil); err != nil {
+					return err
+				}
+			}
+		}
 		if err := tx.Exec("INSERT INTO ai.model(id,name,document,draft) VALUES(?,?,?::jsonb,true) ON CONFLICT DO NOTHING", m.ID, m.Name, raw).Error; err != nil {
 			return err
 		}
@@ -135,6 +146,9 @@ func (s *Store) PrepareOnboarding(ctx context.Context, in application.Onboarding
 			return domain.ErrInvalid
 		}
 		if err := validateRoute(model, in.Route, in.Concurrency, in.RPM); err != nil {
+			return err
+		}
+		if err := validatePresetTariff(tx, model.PresetKey, in.Route.Purchase, &in.Route); err != nil {
 			return err
 		}
 		var incompatibleQuota bool

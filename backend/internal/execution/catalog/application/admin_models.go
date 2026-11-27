@@ -51,11 +51,13 @@ type AdminPrice struct {
 
 // ModelPricePreset describes the supplier's public reference and an optional supported default.
 type ModelPricePreset struct {
-	Currency       string          `json:"currency"`
-	SourceURL      string          `json:"source_url"`
-	ReferenceLines []string        `json:"reference_lines"`
-	Unit           *string         `json:"unit,omitempty"`
-	Rule           json.RawMessage `json:"rule,omitempty" swaggertype:"object"`
+	Currency                string          `json:"currency"`
+	SourceURL               string          `json:"source_url"`
+	ReferenceLines          []string        `json:"reference_lines"`
+	Unit                    *string         `json:"unit,omitempty"`
+	Rule                    json.RawMessage `json:"rule,omitempty" swaggertype:"object"`
+	OfficialPrice           json.RawMessage `json:"official_price,omitempty" swaggertype:"object"`
+	OfficialPriceObservedOn string          `json:"official_price_observed_on,omitempty"`
 }
 
 // ModelPriceCandidate is a public supplier snapshot awaiting an administrator decision.

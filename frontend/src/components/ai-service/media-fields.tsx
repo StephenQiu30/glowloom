@@ -23,6 +23,7 @@ import {
   FormDetails,
   InputField,
   SelectField,
+  SetupSelectField,
   TextField,
   num,
   text,
@@ -128,7 +129,15 @@ export function MediaModelFields({
   );
 }
 
-export function VideoMeterFields() {
+export function VideoMeterFields({
+  resolutions,
+  resolution,
+  onResolutionChange,
+}: {
+  resolutions: string[];
+  resolution: string;
+  onResolutionChange: (resolution: string) => void;
+}) {
   const [rows, setRows] = useState(["initial"]);
   return (
     <FieldSet>
@@ -137,7 +146,23 @@ export function VideoMeterFields() {
         填写已核验的估量参数。输出分辨率和画幅从这里生成，时长由创作者选择。
       </FieldDescription>
       <FieldGroup className="grid sm:grid-cols-2">
-        <InputField label="输出分辨率" name="video_resolution" />
+        {resolutions.length > 0 ? (
+          <SetupSelectField
+            label="输出分辨率"
+            name="video_resolution"
+            value={resolution}
+            options={resolutions.map((option) => [option, option])}
+            placeholder="选择分辨率"
+            onValueChange={onResolutionChange}
+            required
+          />
+        ) : (
+          <InputField
+            label="输出分辨率"
+            name="video_resolution"
+            onChange={(event) => onResolutionChange(event.currentTarget.value)}
+          />
+        )}
         <InputField label="计量帧率" name="meter_fps" type="number" min={1} />
         <InputField
           label="每 Token 像素量"
@@ -557,6 +582,9 @@ const referenceRoles = [
   "reference_image",
   "reference_video",
   "reference_audio",
+  "character_image",
+  "driving_video",
+  "driving_audio",
 ] as const;
 
 export function MediaProbeFields({ model }: { model: GatewayModel }) {
@@ -637,13 +665,15 @@ function ProbeFields({
     <FieldSet className="min-w-0">
       <FieldLegend>{modeLabel(mode)} · 验证用例</FieldLegend>
       <FieldGroup>
-        <TextField
-          label="验证提示词"
-          name={`${prefix}_prompt`}
-          defaultValue="Glowloom 模型接入验证"
-          required
-          maxLength={16000}
-        />
+        {mode !== "motion" && (
+          <TextField
+            label="验证提示词"
+            name={`${prefix}_prompt`}
+            defaultValue="Glowloom 模型接入验证"
+            required={mode !== "avatar"}
+            maxLength={mode === "avatar" ? 300 : 16000}
+          />
+        )}
         {!!Object.keys(parameters).length && (
           <FieldGroup className="grid sm:grid-cols-2">
             {Object.entries(parameters).map(([key, parameter]) => (
@@ -713,6 +743,9 @@ function ReferenceRole({ name }: { name: string }) {
     "参考图像",
     "参考视频",
     "参考音频",
+    "角色图像",
+    "驱动视频",
+    "驱动音频",
   ];
   return (
     <FieldGroup>

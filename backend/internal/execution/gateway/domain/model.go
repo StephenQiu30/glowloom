@@ -33,29 +33,48 @@ var (
 // Price holds immutable micro-currency rates per million tokens and per request.
 // Input includes both cache buckets. Output includes reasoning tokens.
 type Price struct {
-	ExplicitFree bool   `json:"explicit_free,omitempty"`
-	Input        int64  `json:"input"`
-	CacheRead    int64  `json:"cache_read"`
-	CacheWrite   int64  `json:"cache_write"`
-	Output       int64  `json:"output"`
-	Request      int64  `json:"request"`
-	Currency     string `json:"currency"`
-	FX           string `json:"fx"`
-	Multiplier   string `json:"multiplier"`
-	Discount     string `json:"discount"`
+	ExplicitFree bool         `json:"explicit_free,omitempty"`
+	Input        int64        `json:"input"`
+	CacheRead    int64        `json:"cache_read"`
+	CacheWrite   int64        `json:"cache_write"`
+	Output       int64        `json:"output"`
+	Request      int64        `json:"request"`
+	Currency     string       `json:"currency"`
+	FX           string       `json:"fx"`
+	Multiplier   string       `json:"multiplier"`
+	Discount     string       `json:"discount"`
+	TextTariff   *TextTariff  `json:"text_tariff,omitempty"`
+	MediaTariff  *MediaTariff `json:"media_tariff,omitempty"`
 }
 
 // Usage contains normalized disjoint billing evidence, with cache within Input.
 type Usage struct {
-	Input      int64 `json:"input"`
-	CacheRead  int64 `json:"cache_read"`
-	CacheWrite int64 `json:"cache_write"`
-	Output     int64 `json:"output"`
+	Input             int64       `json:"input"`
+	CacheRead         int64       `json:"cache_read"`
+	CacheWrite        int64       `json:"cache_write"`
+	Output            int64       `json:"output"`
+	VideoDurationMS   int64       `json:"video_duration_ms,omitempty"`
+	ProviderAmount    json.Number `json:"provider_amount,omitempty"`
+	Pixels            int64       `json:"pixels,omitempty"`
+	ReferenceImages   int64       `json:"reference_images,omitempty"`
+	Characters        int64       `json:"characters,omitempty"`
+	OriginalSeconds   json.Number `json:"original_seconds,omitempty"`
+	Reasoning         int64       `json:"reasoning,omitempty"`
+	BillingStartedAt  time.Time   `json:"billing_started_at,omitzero"`
+	BillingReceivedAt time.Time   `json:"billing_received_at,omitzero"`
 }
 
 // Validate checks exact rates, currency and commercial multipliers.
 func (p Price) Validate() error {
-	if (!p.ExplicitFree && p.Input == 0 && p.CacheRead == 0 && p.CacheWrite == 0 && p.Output == 0 && p.Request == 0) || p.Currency == "" || p.Input < 0 || p.CacheRead < 0 || p.CacheWrite < 0 || p.Output < 0 || p.Request < 0 {
+	structured := p.TextTariff != nil || p.MediaTariff != nil
+	if structured && (p.ExplicitFree || p.Input != 0 || p.Output != 0 || p.CacheRead != 0 || p.CacheWrite != 0 || p.Request != 0) {
+		return ErrInvalid
+	}
+	if p.TextTariff != nil && !p.TextTariff.valid() || p.MediaTariff != nil &&
+		(p.TextTariff != nil || !p.MediaTariff.valid() || (p.MediaTariff.Meter == ReportedImageAmount || p.MediaTariff.Meter == ImageTokens) && p.Currency != "USD" || p.MediaTariff.Meter == OutputVideoSeconds && p.Currency != "CNY") {
+		return ErrInvalid
+	}
+	if (!structured && !p.ExplicitFree && p.Input == 0 && p.CacheRead == 0 && p.CacheWrite == 0 && p.Output == 0 && p.Request == 0) || p.Currency == "" || p.Input < 0 || p.CacheRead < 0 || p.CacheWrite < 0 || p.Output < 0 || p.Request < 0 {
 		return ErrInvalid
 	}
 	for _, s := range []string{p.FX, p.Multiplier, p.Discount} {
@@ -73,7 +92,7 @@ func (p Price) Validate() error {
 
 // Validate enforces disjoint cache buckets within total input usage.
 func (u Usage) Validate() error {
-	if u.Input < 0 || u.Output < 0 || u.CacheRead < 0 || u.CacheWrite < 0 || u.Input > 1<<40 || u.Output > 1<<40 || u.CacheRead > u.Input || u.CacheWrite > u.Input-u.CacheRead {
+	if u.VideoDurationMS < 0 || u.VideoDurationMS > 600000 || len(u.ProviderAmount) > 33 || u.Characters < 0 || u.Characters > 1<<40 || len(u.OriginalSeconds) > 64 || u.Input < 0 || u.Output < 0 || u.Reasoning < 0 || u.Reasoning > u.Output || u.CacheRead < 0 || u.CacheWrite < 0 || u.Input > 1<<40 || u.Output > 1<<40 || u.CacheRead > u.Input || u.CacheWrite > u.Input-u.CacheRead {
 		return ErrInvalid
 	}
 	return nil
@@ -84,12 +103,30 @@ func (p Price) Cost(u Usage) (int64, error) {
 	if p.Validate() != nil || u.Validate() != nil {
 		return 0, ErrInvalid
 	}
+	if p.MediaTariff != nil {
+		amount, err := p.MediaTariff.cost(u)
+		if err != nil {
+			return 0, err
+		}
+		return p.convert(amount)
+	}
+	if p.TextTariff != nil {
+		rates, err := p.TextTariff.rates(u)
+		if err != nil {
+			return 0, err
+		}
+		return p.convert(rates.amountMicros(u, false))
+	}
 	sum := new(big.Int).SetInt64(0)
 	for _, v := range [][2]int64{{u.Input - u.CacheRead - u.CacheWrite, p.Input}, {u.CacheRead, p.CacheRead}, {u.CacheWrite, p.CacheWrite}, {u.Output, p.Output}} {
 		sum.Add(sum, new(big.Int).Mul(big.NewInt(v[0]), big.NewInt(v[1])))
 	}
 	amount := new(big.Rat).SetFrac(sum, big.NewInt(1000000))
 	amount.Add(amount, new(big.Rat).SetInt64(p.Request))
+	return p.convert(amount)
+}
+
+func (p Price) convert(amount *big.Rat) (int64, error) {
 	for _, s := range []string{p.FX, p.Multiplier, p.Discount} {
 		r, _ := new(big.Rat).SetString(s)
 		amount.Mul(amount, r)
@@ -148,7 +185,10 @@ func (m Model) Validate() error {
 	if len(m.PresetKey) > 200 || m.ID == uuid.Nil || m.Name == "" || !Protocol(m.Protocol) || m.Price.Validate() != nil || m.MaxInput < 1 || m.MaxInput > 1<<20 || m.MaxOutput < 1 || m.MaxOutput > 1<<20 || m.PurchaseCap < 0 {
 		return ErrInvalid
 	}
-	if m.Price.ExplicitFree {
+	if t := m.Price.TextTariff; t != nil && (m.Protocol == "media" || m.Protocol == EmbeddingProtocol || t.VercelProvider != "" && m.Protocol != "chat" || t.MaxInput > 0 && m.MaxInput > t.MaxInput) {
+		return ErrInvalid
+	}
+	if m.Price.ExplicitFree || m.Price.MediaTariff != nil && m.Protocol != "media" {
 		return ErrInvalid
 	}
 	if m.OutputPolicy != "" && (m.Protocol != "media" || m.OutputPolicy != "provider_success_v1") {
@@ -218,14 +258,15 @@ type Call struct {
 
 // Receipt persists protocol output before settlement so crash recovery never buys it again.
 type Receipt struct {
-	Pending         bool              `json:"pending,omitempty"`
-	Body            json.RawMessage   `json:"body"`
-	Events          []json.RawMessage `json:"events,omitempty"`
-	Usage           Usage             `json:"usage"`
-	UpstreamID      string            `json:"upstream_id"`
-	PurchaseMicros  int64             `json:"purchase_micros"`
-	PurchasePending bool              `json:"purchase_pending,omitempty"`
-	DeliveryFailed  bool              `json:"delivery_failed,omitempty"`
+	Pending           bool              `json:"pending,omitempty"`
+	Body              json.RawMessage   `json:"body"`
+	Events            []json.RawMessage `json:"events,omitempty"`
+	Usage             Usage             `json:"usage"`
+	UpstreamID        string            `json:"upstream_id"`
+	PurchaseMicros    int64             `json:"purchase_micros"`
+	PurchaseEstimated bool              `json:"purchase_estimated,omitempty"`
+	PurchasePending   bool              `json:"purchase_pending,omitempty"`
+	DeliveryFailed    bool              `json:"delivery_failed,omitempty"`
 }
 
 // Record is the durable response returned by submission, replay or recovery.

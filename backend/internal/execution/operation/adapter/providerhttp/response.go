@@ -41,6 +41,9 @@ func parseStandardGenerationResponse(input application.GenerationRequest, data [
 		}
 		result.Text = response.Choices[0].Message.Content
 	case "image.generate":
+		if validTaskID(response.ID) {
+			result.ProviderLogID = response.ID
+		}
 		if len(response.Data) != input.OutputCount {
 			return unknownResult(), false
 		}

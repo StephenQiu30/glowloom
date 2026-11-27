@@ -24,9 +24,11 @@ import {
   type GatewayPrice,
   type MediaDriverOption,
   type OnboardingReview,
+  type TextRates,
 } from "@/lib/ai-service-admin";
 import {
   CheckField,
+  mediaTariffSummary,
   FormDetails,
   InputField,
   SelectField,
@@ -62,12 +64,28 @@ const currencyOptions = [
   ["USD", "美元 USD"],
 ] as const;
 
+function rateInCurrency(micros: number | null | undefined) {
+  if (micros == null || !Number.isSafeInteger(micros) || micros < 0)
+    return undefined;
+  const digits = String(micros).padStart(7, "0");
+  const fraction = digits.slice(-6).replace(/0+$/, "");
+  const amount = digits.slice(0, -6);
+  return fraction ? `${amount}.${fraction}` : amount;
+}
+
+function formatTextRates(rate: TextRates) {
+  const base = `输入 ${rate.input} · 缓存读 ${rate.cache_read} · 缓存写 ${rate.cache_write} · 输出 ${rate.output}`;
+  return rate.reasoning ? `${base} · 推理 ${rate.reasoning}` : base;
+}
+
 function PriceFields({
   kind,
   preset,
   embedding = false,
   media,
   videoTokens,
+  videoResolution,
+  defaultFX,
   advanced,
 }: {
   kind: "销售" | "采购";
@@ -75,9 +93,30 @@ function PriceFields({
   media: boolean;
   embedding?: boolean;
   videoTokens?: boolean;
+  videoResolution?: string;
+  defaultFX?: string;
   advanced?: ReactNode;
 }) {
   const [currency, setCurrency] = useState(preset?.currency ?? "CNY");
+  const sameCurrency = currency === preset?.currency;
+  const textTariff = !media && !embedding && preset?.text_tariff;
+  const mediaTariff = media && preset?.media_tariff;
+  const tokenPrice =
+    sameCurrency && !media && !embedding ? preset.token_price : undefined;
+  const requestPrice =
+    sameCurrency && media && !videoTokens
+      ? rateInCurrency(preset.request_micros)
+      : undefined;
+  const videoRate =
+    videoTokens && currency === "CNY" && videoResolution
+      ? preset?.video_estimate?.resolutions[videoResolution]
+          ?.cny_per_million_without_video
+      : undefined;
+  const videoPrice =
+    videoRate === undefined ? undefined : rateInCurrency(videoRate * 1_000_000);
+  const hasDefault = Boolean(
+    textTariff || mediaTariff || tokenPrice || requestPrice || videoPrice,
+  );
   const unit = currency === "USD" ? "美元" : "元";
   const common = {
     type: "text",
@@ -86,51 +125,130 @@ function PriceFields({
     maxLength: 18,
     value: "0",
   };
+  const fx =
+    currency === "CNY"
+      ? "1"
+      : sameCurrency
+        ? preset?.price_fx || defaultFX
+        : undefined;
+  const needsFX = Boolean(mediaTariff && currency === "USD" && !fx);
+  const fxField = (
+    <InputField
+      key={currency}
+      name="fx"
+      label={`${kind}汇率`}
+      inputMode="decimal"
+      value={fx}
+      description="1 美元折合的人民币金额"
+    />
+  );
   return (
     <FieldSet className="gap-3">
       <FieldLegend>{kind}价</FieldLegend>
       <FieldDescription>
         {kind === "销售" ? "用户计费" : "上游成本"} · {unit}{" "}
-        {videoTokens ? "/ 百万视频 Token" : media ? "/ 次" : "/ 百万 Token"}
+        {mediaTariff
+          ? "· 按实际用量"
+          : videoTokens
+            ? "/ 百万视频 Token"
+            : media
+              ? "/ 次"
+              : "/ 百万 Token"}
+        {hasDefault && " · 默认使用供应商费率"}
+        {!hasDefault &&
+          preset &&
+          (!sameCurrency && preset.currency
+            ? " · 请填写当前币种的费率"
+            : preset.price_unit === "per_1k_chars" ||
+                preset.price_unit === "per_second"
+              ? " · 供应商按字符或时长收费，需确认按次合同"
+              : preset.video_estimate && videoTokens
+                ? " · 选择供应商支持的分辨率"
+                : preset.rates.length || preset.price_unit
+                  ? " · 官方费率暂无法自动计费"
+                  : " · 待补充供应商费率")}
       </FieldDescription>
-      <FieldGroup className="grid gap-3 md:grid-cols-2">
-        <SetupSelectField
-          name="currency"
-          label={`${kind}币种`}
-          options={currencyOptions}
-          value={currency}
-          onValueChange={setCurrency}
-        />
-        {videoTokens ? (
-          <InputField
-            label={`${kind}视频 Token 单价`}
-            name="output"
-            {...common}
+      {mediaTariff ? (
+        <>
+          <p className="text-sm">{mediaTariffSummary(mediaTariff, currency)}</p>
+        </>
+      ) : textTariff ? (
+        <>
+          <dl className="grid gap-3 text-sm">
+            {textTariff.tiers.map((tier) => (
+              <div
+                key={tier.from_input}
+                className="flex flex-wrap gap-x-3 gap-y-1"
+              >
+                <dt className="font-medium">
+                  {textTariff.schedule
+                    ? "高峰"
+                    : textTariff.tiers.length === 1
+                      ? "标准"
+                      : `≥ ${tier.from_input.toLocaleString("zh-CN")} 输入 Token`}
+                </dt>
+                <dd className="text-muted-foreground">
+                  {formatTextRates(tier)}
+                </dd>
+              </div>
+            ))}
+            {textTariff.off_peak && (
+              <div className="flex flex-wrap gap-x-3 gap-y-1">
+                <dt className="font-medium">空闲</dt>
+                <dd className="text-muted-foreground">
+                  {formatTextRates(textTariff.off_peak)}
+                </dd>
+              </div>
+            )}
+          </dl>
+        </>
+      ) : (
+        <FieldGroup className="grid gap-3 md:grid-cols-2">
+          <SetupSelectField
+            name="currency"
+            label={`${kind}币种`}
+            options={currencyOptions}
+            value={currency}
+            onValueChange={setCurrency}
           />
-        ) : embedding ? (
-          <InputField label={`${kind}输入价`} name="input" {...common} />
-        ) : media ? (
-          <InputField
-            key={currency}
-            label={`${kind}按次价`}
-            name="request"
-            placeholder={`填写${kind}价`}
-            {...common}
-            value={
-              kind === "采购" &&
-              currency === preset?.currency &&
-              preset.request_micros != null
-                ? preset.request_micros / 1_000_000
-                : undefined
-            }
-          />
-        ) : (
-          <FieldGroup className="grid sm:grid-cols-2">
+          {videoTokens ? (
+            <InputField
+              key={JSON.stringify([currency, videoResolution])}
+              label={`${kind}视频 Token 单价`}
+              name="output"
+              {...common}
+              value={videoPrice ?? common.value}
+            />
+          ) : embedding ? (
             <InputField label={`${kind}输入价`} name="input" {...common} />
-            <InputField label={`${kind}输出价`} name="output" {...common} />
-          </FieldGroup>
-        )}
-      </FieldGroup>
+          ) : media ? (
+            <InputField
+              key={currency}
+              label={`${kind}按次价`}
+              name="request"
+              placeholder={`填写${kind}价`}
+              {...common}
+              value={requestPrice}
+            />
+          ) : (
+            <FieldGroup key={currency} className="grid sm:grid-cols-2">
+              <InputField
+                label={`${kind}输入价`}
+                name="input"
+                {...common}
+                value={rateInCurrency(tokenPrice?.input) ?? common.value}
+              />
+              <InputField
+                label={`${kind}输出价`}
+                name="output"
+                {...common}
+                value={rateInCurrency(tokenPrice?.output) ?? common.value}
+              />
+            </FieldGroup>
+          )}
+        </FieldGroup>
+      )}
+      {needsFX && fxField}
       {(Boolean(preset?.rates.length) || preset?.price_source_url) && (
         <FormDetails label="供应商参考价" keepMounted={false}>
           <div className="flex flex-col items-start gap-2 px-2 text-sm text-muted-foreground">
@@ -141,6 +259,9 @@ function PriceFields({
                 ))}
               </ul>
             ) : null}
+            {preset?.official_price_observed_on && (
+              <p>价目核对日期 {preset.official_price_observed_on}</p>
+            )}
             {preset?.price_source_url && (
               <a
                 href={preset.price_source_url}
@@ -165,18 +286,24 @@ function PriceFields({
       >
         <FieldGroup>
           {advanced}
-          {!media && !embedding && (
-            <FieldGroup className="grid sm:grid-cols-3">
+          {!textTariff && !media && !embedding && (
+            <FieldGroup key={currency} className="grid sm:grid-cols-3">
               <InputField
                 name="cache_read"
                 label={`${kind}缓存读取价`}
                 {...common}
+                value={rateInCurrency(tokenPrice?.cache_read) ?? common.value}
                 description={`${unit} / 百万 token`}
               />
               <InputField
                 name="cache_write"
                 label={`${kind}缓存写入价`}
                 {...common}
+                value={
+                  rateInCurrency(
+                    tokenPrice?.cache_write ?? tokenPrice?.input,
+                  ) ?? common.value
+                }
                 description={`${unit} / 百万 token`}
               />
               <InputField
@@ -188,13 +315,7 @@ function PriceFields({
             </FieldGroup>
           )}
           <FieldGroup className="grid sm:grid-cols-3">
-            <InputField
-              name="fx"
-              label={`${kind}汇率`}
-              inputMode="decimal"
-              value="1"
-              description="折算人民币"
-            />
+            {!needsFX && fxField}
             <InputField
               name="multiplier"
               label={`${kind}倍率`}
@@ -215,15 +336,21 @@ function PriceFields({
   );
 }
 
-function readPrice(form: FormData): GatewayPrice {
+function readPrice(form: FormData, preset?: GatewayPreset): GatewayPrice {
+  const currency =
+    (preset?.text_tariff || preset?.media_tariff
+      ? preset.currency
+      : text(form, "currency")) ?? "";
   return {
+    text_tariff: preset?.text_tariff ?? undefined,
+    media_tariff: preset?.media_tariff ?? undefined,
     input: micros(form, "input"),
     output: micros(form, "output"),
     request: micros(form, "request"),
     cache_read: micros(form, "cache_read"),
     cache_write: micros(form, "cache_write"),
-    currency: text(form, "currency"),
-    fx: text(form, "fx") || "1",
+    currency,
+    fx: text(form, "fx") || (currency === "CNY" ? "1" : ""),
     multiplier: text(form, "multiplier") || "1",
     discount: text(form, "discount") || "1",
   };
@@ -250,11 +377,31 @@ export function ModelSettings({
   const [billingUnit, setBillingUnit] = useState(
     !preset || preset.adapter === "volcengine_ark" ? "video_tokens" : "request",
   );
+  const videoResolutions = Object.keys(
+    preset?.video_estimate?.resolutions ?? {},
+  );
+  const [videoResolution, setVideoResolution] = useState("");
   const attempt = useRef<{ payload: string; id: string } | null>(null);
   const media = protocol === "media";
   const embedding = protocol === arkEmbedding.protocol;
   const video = media && capability === "video.generate";
-  const videoTokens = video && billingUnit === "video_tokens";
+  const videoSeconds =
+    preset?.media_tariff?.meter === "output_video_seconds_v1";
+  const imageBudget =
+    preset?.media_tariff?.meter === "reported_image_amount_v1" ||
+    preset?.media_tariff?.meter === "image_tokens_v1";
+  const videoTokens = video && !videoSeconds && billingUnit === "video_tokens";
+  const mediaTariff = preset?.media_tariff;
+  const presetPurchaseCap =
+    videoSeconds && mediaTariff?.max_quantity
+      ? rateInCurrency(
+          Math.round(
+            Number(mediaTariff.unit_price) *
+              mediaTariff.max_quantity *
+              1_000_000,
+          ),
+        )
+      : "10";
   const fields =
     preset?.fields.filter(
       (field) =>
@@ -273,9 +420,12 @@ export function ModelSettings({
   const purchaseCap = (
     <InputField
       key={videoTokens ? "video-procurement-cap" : "default-procurement-cap"}
-      label="单次采购上限（元）"
+      label={imageBudget ? "单次授权上限（元）" : "单次采购上限（元）"}
       name="purchase_cap"
-      value={videoTokens ? undefined : "10"}
+      value={videoTokens ? undefined : presetPurchaseCap}
+      description={
+        imageBudget ? "确认时冻结此金额对应的积分，核销按实际用量。" : undefined
+      }
       inputMode="decimal"
       maxLength={18}
       pattern="[0-9]+([.][0-9]{1,6})?"
@@ -359,7 +509,7 @@ export function ModelSettings({
   );
   const limits = (
     <FieldGroup className="grid sm:grid-cols-2">
-      {!videoTokens && purchaseCap}
+      {!videoTokens && !videoSeconds && !imageBudget && purchaseCap}
       {!media && (
         <>
           <InputField
@@ -382,7 +532,13 @@ export function ModelSettings({
           )}
         </>
       )}
-      {media && <CheckField label="已审核供应商成功输出策略" name="reviewed" />}
+      {media && (
+        <CheckField
+          label="已审核供应商成功输出策略"
+          name="reviewed"
+          defaultChecked={videoSeconds}
+        />
+      )}
     </FieldGroup>
   );
   return (
@@ -424,7 +580,7 @@ export function ModelSettings({
             preset_key: preset?.key,
             name: text(form, "name"),
             protocol,
-            price: readPrice(form),
+            price: readPrice(form, preset),
             max_input: Number(text(form, "max_input") || "32768"),
             max_output: embedding
               ? 1
@@ -447,7 +603,7 @@ export function ModelSettings({
     >
       <FieldGroup>
         {!preset && modelFields}
-        {video && (
+        {video && !videoSeconds && (
           <SetupSelectField
             label="视频计费方式"
             value={billingUnit}
@@ -458,7 +614,13 @@ export function ModelSettings({
             ]}
           />
         )}
-        {videoTokens && <VideoMeterFields />}
+        {videoTokens && (
+          <VideoMeterFields
+            resolutions={videoResolutions}
+            resolution={videoResolution}
+            onResolutionChange={setVideoResolution}
+          />
+        )}
         {!preset && <FormDetails label="能力与使用限制">{limits}</FormDetails>}
         <PriceFields
           kind="销售"
@@ -474,8 +636,9 @@ export function ModelSettings({
           embedding={embedding}
           media={media}
           videoTokens={videoTokens}
+          videoResolution={videoResolution}
         />
-        {videoTokens && purchaseCap}
+        {(videoTokens || videoSeconds || imageBudget) && purchaseCap}
         <div className="flex justify-end">
           <SubmitButton busy={busy} label="保存模型" />
         </div>
@@ -651,11 +814,18 @@ function PreparedRouteForm({
             name="base_url"
             type="url"
             placeholder="https://api.example.com/v1"
-            readOnly={embedding || Boolean(driver && !driver.custom_url)}
+            readOnly={
+              embedding ||
+              Boolean(driver && !driver.custom_url) ||
+              Boolean(preset?.text_tariff || preset?.media_tariff)
+            }
             value={
               embedding
                 ? arkEmbedding.baseURL
-                : (driver?.base_url ?? draftRoute?.base_url ?? preset?.base_url)
+                : (driver?.base_url ??
+                  (preset?.text_tariff || preset?.media_tariff
+                    ? preset.base_url
+                    : (draftRoute?.base_url ?? preset?.base_url)))
             }
           />
           {driver && (
@@ -730,7 +900,7 @@ function PreparedRouteForm({
             base_url: baseURL,
             upstream_model: text(data, "upstream_model"),
             protocol: model.protocol,
-            purchase: readPrice(data),
+            purchase: readPrice(data, preset),
             priority: num(data, "priority"),
             ...(driver
               ? {
@@ -798,7 +968,9 @@ function PreparedRouteForm({
             label="供应商模型号"
             name="upstream_model"
             value={embedding ? arkEmbedding.model : preset?.upstream}
-            readOnly={embedding}
+            readOnly={
+              embedding || Boolean(preset?.text_tariff || preset?.media_tariff)
+            }
             placeholder="供应商返回的精确型号"
             maxLength={160}
           />
@@ -864,6 +1036,12 @@ function PreparedRouteForm({
           embedding={embedding}
           media={media}
           videoTokens={Boolean(model.video_metering)}
+          videoResolution={model.video_metering?.resolution}
+          defaultFX={
+            preset?.media_tariff && model.price.currency === preset.currency
+              ? model.price.fx
+              : undefined
+          }
         />
         {media && (
           <>
@@ -1011,35 +1189,50 @@ export function ReconciliationForm({
   const [billingResult, setBillingResult] = useState("");
   const [selected, setSelected] = useState(initialAttempt);
   const pending = unknown.find((record) => record.attempt_id === selected);
+  const videoInvoice =
+    pending?.state === "settled" &&
+    pending.tariff_meter === "output_video_seconds_v1";
+  const outcome = videoInvoice ? "charged" : billingResult;
   return (
     <form
       aria-label="凭供应商证据对账"
       onSubmit={(event) => {
         event.preventDefault();
-        if (!billingResult) return;
+        if (!outcome) return;
         const data = new FormData(event.currentTarget);
-        const notCharged = billingResult === "not_charged";
-        void run(
-          () =>
-            reconcileGateway({
-              request_id: text(data, "request_id"),
-              attempt_id: text(data, "attempt_id"),
-              reference: text(data, "reference"),
-              reason: text(data, "reason"),
-              not_charged: notCharged,
-              ...(!notCharged
-                ? {
-                    usage: {
-                      input: num(data, "input"),
-                      cache_read: num(data, "cache_read"),
-                      cache_write: num(data, "cache_write"),
-                      output: num(data, "output"),
-                    },
-                  }
-                : {}),
-            }),
-          "原请求已按供应商证据对账。",
-        );
+        const notCharged = outcome === "not_charged";
+        void run(() => {
+          const billedAt = text(data, "billed_at");
+          const evidenceTime = billedAt
+            ? new Date(billedAt).toISOString()
+            : undefined;
+          return reconcileGateway({
+            request_id: text(data, "request_id"),
+            attempt_id: text(data, "attempt_id"),
+            reference: text(data, "reference"),
+            reason: text(data, "reason"),
+            not_charged: notCharged,
+            ...(!notCharged
+              ? {
+                  usage: {
+                    input: num(data, "input"),
+                    cache_read: num(data, "cache_read"),
+                    cache_write: num(data, "cache_write"),
+                    output: num(data, "output"),
+                    reasoning: num(data, "reasoning") || undefined,
+                    characters: num(data, "characters") || undefined,
+                    original_seconds:
+                      text(data, "original_seconds") || undefined,
+                    pixels: num(data, "pixels") || undefined,
+                    reference_images:
+                      num(data, "reference_images") || undefined,
+                    billing_started_at: evidenceTime,
+                    billing_received_at: evidenceTime,
+                  },
+                }
+              : {}),
+          });
+        }, "原请求已按供应商证据对账。");
       }}
     >
       <FieldGroup>
@@ -1090,25 +1283,43 @@ export function ReconciliationForm({
           }
         />
         <InputField label="核对原因" name="reason" />
-        <SelectField
-          label="供应商账单结果"
-          value={billingResult}
-          required
-          onChange={(event) => setBillingResult(event.currentTarget.value)}
-          options={[
-            ["", "选择账单结果"],
-            ["not_charged", "供应商证实未收费"],
-            ["charged", "供应商已收费，填写用量"],
-          ]}
-        />
-        {billingResult === "charged" ? (
+        {!videoInvoice && (
+          <SelectField
+            label="供应商账单结果"
+            value={billingResult}
+            required
+            onChange={(event) => setBillingResult(event.currentTarget.value)}
+            options={[
+              ["", "选择账单结果"],
+              ["not_charged", "供应商证实未收费"],
+              ["charged", "供应商已收费，填写用量"],
+            ]}
+          />
+        )}
+        {outcome === "charged" ? (
           <FieldGroup className="grid sm:grid-cols-2">
-            {[
-              ["input", "实际输入 token"],
-              ["cache_read", "实际缓存读取 token"],
-              ["cache_write", "实际缓存写入 token"],
-              ["output", "实际输出 token"],
-            ].map(([name, label]) => (
+            {(!pending?.tariff_meter
+              ? [
+                  ["input", "实际输入 token"],
+                  ["cache_read", "实际缓存读取 token"],
+                  ["cache_write", "实际缓存写入 token"],
+                  ["output", "实际输出 token"],
+                  ["reasoning", "实际推理 token"],
+                ]
+              : pending.tariff_meter === "image_tokens_v1"
+                ? [
+                    ["input", "实际文本输入 Token"],
+                    ["output", "实际图像输出 Token"],
+                  ]
+                : pending.tariff_meter === "speech_characters_v1"
+                  ? [["characters", "实际计费字符数"]]
+                  : pending.tariff_meter === "ark_image_pixels_v1"
+                    ? [
+                        ["pixels", "实际输出像素数"],
+                        ["reference_images", "提交的参考图数"],
+                      ]
+                    : []
+            ).map(([name, label]) => (
               <InputField
                 key={name}
                 name={name}
@@ -1119,9 +1330,45 @@ export function ReconciliationForm({
                 value={0}
               />
             ))}
+            {(videoInvoice ||
+              pending?.tariff_meter === "reported_image_amount_v1") && (
+              <InputField
+                name="provider_amount"
+                label={
+                  videoInvoice
+                    ? "供应商实际扣款（元）"
+                    : "供应商实际扣款（USD）"
+                }
+                required
+                inputMode="decimal"
+                pattern="[0-9]+([.][0-9]{1,24})?"
+              />
+            )}
+            {pending?.tariff_meter === "original_audio_seconds_v1" && (
+              <InputField
+                name="original_seconds"
+                label="原始音频时长（秒）"
+                required
+                inputMode="decimal"
+                pattern="[0-9]+([.][0-9]{1,24})?"
+              />
+            )}
+            {pending?.timed_tariff && (
+              <InputField
+                name="billed_at"
+                label="供应商计费时间"
+                required
+                placeholder="2026-11-27T09:00:00+08:00"
+                pattern=".+(Z|[+\-][0-9]{2}:[0-9]{2})"
+              />
+            )}
           </FieldGroup>
         ) : null}
-        <SubmitButton busy={busy} label="凭证据结算原请求" icon={ReceiptText} />
+        <SubmitButton
+          busy={busy}
+          label={videoInvoice ? "记录供应商实账" : "凭证据结算原请求"}
+          icon={ReceiptText}
+        />
       </FieldGroup>
     </form>
   );

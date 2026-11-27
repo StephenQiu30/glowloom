@@ -87,6 +87,17 @@ func (c Creation) Estimate(ctx context.Context, a identity.Principal, p uuid.UUI
 				}
 				return nil
 			}
+			if tariff := m.Price.MediaTariff; tariff != nil {
+				basis := "per_second"
+				switch tariff.Meter {
+				case domain.SpeechCharacters:
+					basis = "per_1k_chars"
+				case domain.ArkImagePixels, domain.ImageTokens, domain.ReportedImageAmount:
+					basis = "per_image"
+				}
+				out = operation.GenerationEstimate{Credits: strconv.FormatInt(call.Limit, 10), Kind: "maximum", Basis: basis}
+				return nil
+			}
 			out = operation.GenerationEstimate{Credits: strconv.FormatInt(call.Limit, 10), Kind: "estimate", Basis: "per_request", Quantity: "1"}
 			return nil
 		}

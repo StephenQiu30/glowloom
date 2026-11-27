@@ -941,6 +941,120 @@ it("uses actual supplier logos for published and pending models and filters by c
   expect(await screen.findByText("没有符合条件的模型")).toBeTruthy();
 });
 
+it("defaults text model sale rates to the supplier tariff and saves an override", async () => {
+  const preset = {
+    key: "version/seed-pro",
+    provider: "火山方舟",
+    adapter: "volcengine_ark",
+    name: "Doubao Seed 2.1 Pro",
+    upstream: "doubao-seed-2-1-pro-260915",
+    base_url: "https://ark.cn-beijing.volces.com/api/v3",
+    capability: "text.generate",
+    modes: ["text_to_text"],
+    fields: [],
+    rates: ["缓存存储 ¥0.017 / 百万 Token / 小时"],
+    currency: "CNY",
+    request_micros: null,
+    token_price: {
+      input: 6_000_000,
+      cache_read: 1_200_000,
+      output: 30_000_000,
+    },
+    concurrency: 2,
+    rpm: 30,
+  };
+  send.mockImplementation(async (path: string) =>
+    path.endsWith("/configuration") ? { model_presets: [preset] } : undefined,
+  );
+  render(<AiServiceAdmin />);
+  fireEvent.click(await screen.findByRole("button", { name: "新增接入" }));
+  const dialog = screen.getByRole("dialog", { name: "新增接入" });
+  fireEvent.click(
+    within(dialog).getByRole("option", { name: /^Doubao Seed 2\.1 Pro/ }),
+  );
+  expect(
+    within(dialog).getByLabelText<HTMLInputElement>("销售输入价").value,
+  ).toBe("6");
+  const output = within(dialog).getByLabelText<HTMLInputElement>("销售输出价");
+  expect(output.value).toBe("30");
+  fireEvent.click(within(dialog).getByRole("button", { name: "更多设置" }));
+  expect(
+    within(dialog).getByLabelText<HTMLInputElement>("销售缓存读取价").value,
+  ).toBe("1.2");
+  fireEvent.change(output, { target: { value: "31" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "保存模型" }));
+  await waitFor(() =>
+    expect(send).toHaveBeenCalledWith(
+      "/api/ai/admin/models",
+      expect.objectContaining({
+        data: expect.objectContaining({
+          price: expect.objectContaining({
+            input: 6_000_000,
+            output: 31_000_000,
+            cache_read: 1_200_000,
+            currency: "CNY",
+          }),
+        }),
+      }),
+    ),
+  );
+});
+
+it("uses the supplier video price for the selected output resolution", async () => {
+  const preset = {
+    key: "version/seedance",
+    provider: "火山方舟",
+    adapter: "volcengine_ark",
+    name: "Seedance 2.5",
+    upstream: "doubao-seedance-2-5-260628",
+    base_url: "https://ark.cn-beijing.volces.com/api/v3",
+    capability: "video.generate",
+    modes: ["text2video"],
+    fields: [],
+    rates: [],
+    currency: "CNY",
+    request_micros: null,
+    video_estimate: {
+      resolutions: {
+        "720p": { cny_per_million_without_video: 70, geometries: {} },
+        "1080p": { cny_per_million_without_video: 77, geometries: {} },
+      },
+    },
+    concurrency: 2,
+    rpm: 30,
+  };
+  send.mockResolvedValueOnce({
+    model_presets: [preset],
+    media_drivers: [
+      {
+        key: preset.adapter,
+        name: preset.provider,
+        base_url: preset.base_url,
+        region: "domestic",
+        parameters: { "video.generate": [] },
+        custom_url: false,
+      },
+    ],
+  });
+  render(<AiServiceAdmin />);
+  fireEvent.click(await screen.findByRole("button", { name: "新增接入" }));
+  const dialog = screen.getByRole("dialog", { name: "新增接入" });
+  fireEvent.click(
+    within(dialog).getByRole("option", { name: /^Seedance 2\.5/ }),
+  );
+  expect(within(dialog).getByText(/选择供应商支持的分辨率/)).toBeTruthy();
+  await chooseOption("输出分辨率", "720p");
+  expect(
+    within(dialog).getByLabelText<HTMLInputElement>("销售视频 Token 单价")
+      .value,
+  ).toBe("70");
+  await chooseOption("输出分辨率", "1080p");
+  expect(
+    within(dialog).getByLabelText<HTMLInputElement>("销售视频 Token 单价")
+      .value,
+  ).toBe("77");
+});
+
 it("carries a selected supplier preset through draft and procurement without a key", async () => {
   const preset = {
     key: "version/seed-tts",
@@ -1001,7 +1115,9 @@ it("carries a selected supplier preset through draft and procurement without a k
   expect(
     screen.getByRole("link", { name: "供应商价目" }).getAttribute("href"),
   ).toBe(preset.price_source_url);
-  expect(screen.getByLabelText<HTMLInputElement>("销售按次价").value).toBe("");
+  expect(screen.getByLabelText<HTMLInputElement>("销售按次价").value).toBe(
+    "0.123456",
+  );
   const settings = screen.getByRole("button", { name: "更多设置" });
   expect(settings.getAttribute("aria-expanded")).toBe("false");
   fireEvent.click(settings);

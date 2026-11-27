@@ -19,6 +19,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/domain"
 	operationhttp "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/adapter/http"
+	operation "github.com/StephenQiu30/glowloom-server/backend/internal/execution/operation/application"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
@@ -230,4 +231,115 @@ func TestVideoTokenQuoteRequiresPublishedGeometry(t *testing.T) {
 	mediaChange(t, &d, func(in *domain.MediaInput) { in.Params["ratio"] = "adaptive" })
 	_, err = application.Prepare(d.Call.Model, d.Call.Actor, d.Call.Scope, d.Call.Project, uuid.Nil, "video-quote", "test", d.Call.Raw)
 	require.ErrorIs(t, err, domain.ErrInvalid)
+}
+
+func TestJimengOriginalVideoDurationBillsOnceAndKeepsSupplierInvoiceSeparate(t *testing.T) {
+	output, err := exec.CommandContext(t.Context(), "ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=s=128x128:r=8", "-t", "1.125", "-c:v", "libx264", "-movflags", "frag_keyframe+empty_moov", "-f", "mp4", "pipe:1").Output()
+	require.NoError(t, err)
+	for _, tc := range []struct {
+		mode, model, rate, drivingRole, drivingKind, suffix string
+		maxSeconds, maximum, charge, estimatedMicros        int64
+		invoice                                             json.Number
+	}{
+		{"motion", "jimeng_dreamactor_m20_gen_video", "0.4", "driving_video", "video", "_v2", 31, 124, 5, 450000, "0.48"},
+		{"avatar", "jimeng_realman_avatar_picture_omni_v15", "1", "driving_audio", "audio", "", 60, 600, 12, 1125000, "1.15"},
+	} {
+		t.Run(tc.mode, func(t *testing.T) {
+			ctx := t.Context()
+			db, store, _, actor := fixture(t, 1000)
+			project := entrypointProject(t, db, actor)
+			adapter := "volcengine_" + tc.mode
+			d := mediaDispatch(t, adapter, "video.generate", tc.mode, tc.model)
+			m := d.Call.Model
+			m.Name, m.OutputPolicy, m.PurchaseCap = "video-"+uuid.NewString(), "provider_success_v1", tc.maximum*100000
+			m.Price.Request = 0
+			m.Price.MediaTariff = &domain.MediaTariff{Meter: domain.OutputVideoSeconds, Adapter: adapter, UnitPrice: tc.rate, UnitSize: 1, MaxQuantity: tc.maxSeconds}
+			require.NoError(t, store.PublishModel(ctx, m))
+			route := d.Route
+			route.ID, route.Supplier, route.Credential, route.Group, route.Purchase = uuid.New(), uuid.New(), uuid.New(), uuid.NewString(), m.Price
+			require.NoError(t, store.PublishRoute(ctx, route, []byte("synthetic"), "fixture", 1, 60))
+			const task = "jimeng-original-task"
+			var submissions, polls int
+			client := mediaClient(func(req *http.Request) (*http.Response, error) {
+				require.Equal(t, http.MethodPost, req.Method)
+				var payload map[string]any
+				require.NoError(t, json.NewDecoder(req.Body).Decode(&payload))
+				require.Equal(t, tc.model, payload["req_key"])
+				if req.URL.Path == "/api/common/v3/submit_task"+tc.suffix {
+					submissions++
+					return mediaResponse(200, `{"code":10000,"data":{"task_id":"jimeng-original-task"}}`), nil
+				}
+				require.Equal(t, "/api/common/v3/get_result"+tc.suffix, req.URL.Path)
+				require.Equal(t, task, payload["task_id"])
+				polls++
+				return mediaResponse(200, `{"code":10000,"data":{"task_id":"jimeng-original-task","status":"done","video_url":"https://fixture.tos-cn-beijing.volces.com/out.mp4"}}`), nil
+			}).WithMediaReferences(func(_ context.Context, _ application.Dispatch, refs []domain.Reference) ([]operation.ProviderReference, error) {
+				require.Len(t, refs, 2)
+				return []operation.ProviderReference{
+					{Role: "character_image", MediaKind: "image", URL: "https://fixture.example/portrait.png"},
+					{Role: tc.drivingRole, MediaKind: tc.drivingKind, URL: "https://fixture.example/driving"},
+				}, nil
+			})
+			objects := &durableBytes{t: t, db: db, routes: pgmedia.NewStorageRoutes(db), files: map[string][]byte{}}
+			runtime := &aigateway.Runtime{
+				DB: db, Objects: fixtureMediaStorage(t, db), ResultDownloads: videoBillingDownload{output},
+				MediaArchive: mediaapp.NewGeneratedOutputArchiver(objects.routes, objects, mediaflow.FFProber{}, mediaflow.FFRenderer{}),
+			}
+			input := domain.MediaInput{Model: m.Name, Capability: m.Capability, Mode: tc.mode, OutputCount: 1,
+				References: []domain.Reference{{ID: uuid.New(), Version: "fixture", Role: "character_image"}, {ID: uuid.New(), Version: "fixture", Role: tc.drivingRole}}}
+			raw, err := json.Marshal(input)
+			require.NoError(t, err)
+			call, err := application.Prepare(m, actor.ID, actor.ScopeID, project, uuid.Nil, uuid.NewString(), "canvas", raw)
+			require.NoError(t, err)
+			quote, err := store.Quote(ctx, call)
+			require.NoError(t, err)
+			require.Equal(t, tc.maximum, quote.Credits)
+			require.NoError(t, runtime.PinMediaOutput(ctx, db, call))
+			d, err = store.Admit(ctx, call)
+			require.NoError(t, err)
+			require.True(t, d.Send)
+			receipt, err := client.Send(ctx, d, nil)
+			require.NoError(t, err)
+			require.True(t, receipt.Pending)
+			_, err = store.SavePending(ctx, d, receipt)
+			require.NoError(t, err)
+			d.PollTask = receipt.UpstreamID
+			require.Equal(t, task, d.PollTask)
+			receipt, err = client.Send(ctx, d, nil)
+			require.NoError(t, err)
+			require.NoError(t, store.SaveReceipt(ctx, call.ID, d.Attempt, receipt))
+			held, err := store.Settle(ctx, call.ID)
+			require.NoError(t, err)
+			require.Equal(t, tc.maximum, held.Held)
+			require.Zero(t, held.Charged)
+			require.NoError(t, runtime.Deliver(ctx, call.ID))
+			paid, err := store.Settle(ctx, call.ID)
+			require.NoError(t, err)
+			require.Equal(t, "settled", paid.State)
+			require.Equal(t, tc.charge, paid.Charged)
+			require.Equal(t, tc.maximum-tc.charge, paid.Released)
+			require.EqualValues(t, 1125, paid.Receipt.Usage.VideoDurationMS)
+			require.Equal(t, tc.estimatedMicros, paid.Receipt.PurchaseMicros)
+			require.True(t, paid.Receipt.PurchaseEstimated)
+			repeated, err := store.Settle(ctx, call.ID)
+			require.NoError(t, err)
+			require.Equal(t, paid, repeated)
+			evidence := pg.Reconciliation{Request: call.ID, Attempt: d.Attempt, Reference: task, Reason: "original supplier invoice", Usage: &domain.Usage{ProviderAmount: tc.invoice}}
+			reconciled, err := store.Reconcile(ctx, evidence)
+			require.NoError(t, err)
+			require.False(t, reconciled.Receipt.PurchaseEstimated)
+			invoiceMicros, err := domain.CNYInvoiceMicros(string(tc.invoice))
+			require.NoError(t, err)
+			require.Equal(t, invoiceMicros, reconciled.Receipt.PurchaseMicros)
+			require.Equal(t, paid.Charged, reconciled.Charged)
+			repeated, err = store.Reconcile(ctx, evidence)
+			require.NoError(t, err)
+			require.Equal(t, reconciled, repeated)
+			var charges int64
+			require.NoError(t, db.Raw("SELECT count(*) FROM ai.money_event WHERE request_id=? AND kind='settle'", call.ID).Row().Scan(&charges))
+			require.EqualValues(t, 1, charges)
+			require.Equal(t, 1, submissions)
+			require.Equal(t, 1, polls)
+		})
+	}
 }

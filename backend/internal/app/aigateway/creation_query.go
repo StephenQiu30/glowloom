@@ -216,7 +216,7 @@ func (c Creation) Task(ctx context.Context, a identity.Principal, p, id uuid.UUI
 			}
 		case "received":
 			out.Status = "succeeded"
-			if call.Model.VideoMetering != nil {
+			if call.Model.UsesVideoDeliveryMeter() {
 				out.BillingOutcome.ReconciliationRequired = false
 				out.BillingOutcome.EvidencePresent = record.Receipt != nil
 				return projectMediaDelivery(tx, p, id, record, &out)
@@ -229,7 +229,7 @@ func (c Creation) Task(ctx context.Context, a identity.Principal, p, id uuid.UUI
 			out.BillingOutcome.ProviderSettlementState = "released"
 			out.BillingOutcome.ReconciliationRequired = false
 			out.BillingOutcome.Regenerate = "confirm"
-			if call.Model.VideoMetering != nil && record.Receipt != nil && record.Receipt.DeliveryFailed {
+			if call.Model.UsesVideoDeliveryMeter() && record.Receipt != nil && record.Receipt.DeliveryFailed {
 				out.Status = "failed"
 				out.BillingOutcome.DeliveryState = "unrecoverable"
 				out.BillingOutcome.ProviderSettlementState = "unknown"
@@ -240,7 +240,7 @@ func (c Creation) Task(ctx context.Context, a identity.Principal, p, id uuid.UUI
 			out.SettledMicros = &charged
 			out.BillingOutcome.ChargeState = "settled"
 			out.BillingOutcome.ProviderSettlementState = "settled"
-			if call.Model.VideoMetering != nil {
+			if call.Model.VideoMetering != nil || record.Receipt != nil && record.Receipt.PurchaseEstimated {
 				out.BillingOutcome.ProviderSettlementState = "unknown"
 			}
 			out.BillingOutcome.DeliveryState = "ready"

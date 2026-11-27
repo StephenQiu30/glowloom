@@ -6,7 +6,44 @@ import {
   submitAiCreditGrant,
 } from "@/api/aiGateway";
 
+export type TextRates = {
+  input: string;
+  cache_read: string;
+  cache_write: string;
+  output: string;
+  reasoning?: string;
+};
+export type GatewayTextTariff = {
+  tiers: (TextRates & { from_input: number })[];
+  max_input?: number;
+  schedule?: string;
+  vercel_provider?: string;
+  off_peak?: TextRates;
+  source_url?: string;
+  observed_on?: string;
+};
+export type GatewayMediaTariff = {
+  meter:
+    | "speech_characters_v1"
+    | "original_audio_seconds_v1"
+    | "ark_image_pixels_v1"
+    | "image_tokens_v1"
+    | "reported_image_amount_v1"
+    | "output_video_seconds_v1";
+  unit_price?: string;
+  unit_size?: number;
+  max_quantity?: number;
+  output_token_price?: string;
+  adapter?: string;
+  cutoff_pixels?: number;
+  high_price?: string;
+  extra_reference_price?: string;
+  source_url?: string;
+  observed_on?: string;
+};
 export type GatewayPrice = {
+  media_tariff?: GatewayMediaTariff;
+  text_tariff?: GatewayTextTariff;
   explicit_free?: boolean;
   input: number;
   cache_read: number;
@@ -78,7 +115,12 @@ export type ArkVideoEstimateSpec = {
   max_reference_seconds: number;
   min_output_seconds: number;
   max_output_seconds: number;
-  resolutions: Record<string, Pick<GatewayVideoMetering, "geometries">>;
+  resolutions: Record<
+    string,
+    Pick<GatewayVideoMetering, "geometries"> & {
+      cny_per_million_without_video?: number;
+    }
+  >;
 };
 export type GatewayPreset = {
   key: string;
@@ -93,6 +135,16 @@ export type GatewayPreset = {
   rates: string[];
   currency: string | null;
   request_micros: number | null;
+  price_unit?: string | null;
+  price_fx?: string | null;
+  official_price_observed_on?: string | null;
+  token_price?:
+    | (Pick<GatewayPrice, "input" | "cache_read" | "output"> & {
+        cache_write?: number;
+      })
+    | null;
+  text_tariff?: GatewayTextTariff | null;
+  media_tariff?: GatewayMediaTariff | null;
   video_estimate?: ArkVideoEstimateSpec | null;
   price_source_url?: string | null;
   quick_onboarding?: { resolution: string } | null;
@@ -114,6 +166,8 @@ export type AiServiceConfiguration = {
     scope_id: string;
     state: string;
     upstream_id?: string;
+    tariff_meter?: GatewayMediaTariff["meter"];
+    timed_tariff?: boolean;
   }[];
 };
 export type OnboardingSummary = {
@@ -210,11 +264,16 @@ export function validatePrice(price: GatewayPrice): GatewayPrice {
     fx,
     multiplier,
     discount,
+    text_tariff,
+    media_tariff,
   } = price;
+  const rates = [input, cache_read, cache_write, output, fixed];
+  const structured = Boolean(text_tariff || media_tariff);
   requireValue(
-    [input, cache_read, cache_write, output, fixed].every((n) => integer(n)) &&
-      [input, cache_read, cache_write, output, fixed].some((n) => n > 0),
-    "价格须为非负安全整数，且至少一项大于零",
+    rates.every((n) => integer(n)) &&
+      (structured ? rates.every((n) => n === 0) : rates.some((n) => n > 0)) &&
+      !(text_tariff && media_tariff),
+    "请选择一种有效的计费规则",
   );
   requireValue(
     currency === "CNY" || currency === "USD",
@@ -231,6 +290,8 @@ export function validatePrice(price: GatewayPrice): GatewayPrice {
     "汇率和倍率须为正十进制字符串；折扣不得超过 1",
   );
   return {
+    ...(text_tariff && { text_tariff }),
+    ...(media_tariff && { media_tariff }),
     input,
     cache_read,
     cache_write,
@@ -300,6 +361,14 @@ export function validateModel(
     tools: value.tools,
     stream: value.stream,
   };
+  requireValue(
+    (!price.media_tariff || value.protocol === "media") &&
+      (!price.text_tariff ||
+        (!["media", arkEmbedding.protocol].includes(value.protocol) &&
+          (!price.text_tariff.vercel_provider || value.protocol === "chat") &&
+          value.max_input <= (price.text_tariff.max_input ?? 1048576))),
+    "模型协议或输入上限与供应商费率不符",
+  );
   if (value.protocol === arkEmbedding.protocol) {
     requireValue(
       !value.tools &&
@@ -328,12 +397,15 @@ export function validateModel(
     requireValue(
       !value.tools &&
         !value.stream &&
+        !price.text_tariff &&
         price.input === 0 &&
         price.cache_read === 0 &&
         price.cache_write === 0 &&
-        (video
-          ? price.request === 0 && price.output > 0
-          : price.request > 0 && price.output === 0),
+        (price.media_tariff
+          ? !video && price.request === 0 && price.output === 0
+          : video
+            ? price.request === 0 && price.output > 0
+            : price.request > 0 && price.output === 0),
       "请填写与媒体计费方式匹配的正数单价",
     );
     requireValue(
@@ -739,6 +811,14 @@ export async function reconcileGateway(value: {
     cache_read: number;
     cache_write: number;
     output: number;
+    reasoning?: number;
+    characters?: number;
+    original_seconds?: string;
+    provider_amount?: string;
+    pixels?: number;
+    reference_images?: number;
+    billing_started_at?: string;
+    billing_received_at?: string;
   };
 }) {
   id(value.request_id);
@@ -754,7 +834,17 @@ export async function reconcileGateway(value: {
   if (value.usage) {
     const u = value.usage;
     requireValue(
-      Object.values(u).every((n) => integer(n, 0, 2 ** 40)) &&
+      [
+        u.input,
+        u.cache_read,
+        u.cache_write,
+        u.output,
+        u.reasoning ?? 0,
+        u.characters ?? 0,
+        u.pixels ?? 0,
+        u.reference_images ?? 0,
+      ].every((n) => integer(n, 0, 2 ** 40)) &&
+        (u.reasoning ?? 0) <= u.output &&
         u.cache_read + u.cache_write <= u.input,
       "用量须为有效整数，缓存用量不能超过输入用量",
     );

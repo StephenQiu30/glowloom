@@ -46,8 +46,13 @@ func PurchaseBound(m domain.Model, p domain.Price) (int64, error) {
 	if m.Protocol == "media" && !m.AcceptsMediaPrice(p) {
 		return 0, domain.ErrInvalid
 	}
-	p.Input = max(p.Input, p.CacheRead, p.CacheWrite)
-	return p.Cost(domain.Usage{Input: m.MaxInput, Output: m.MaxOutput})
+	if m.Protocol == domain.EmbeddingProtocol && p.TextTariff != nil || m.Protocol != "media" && p.MediaTariff != nil {
+		return 0, domain.ErrInvalid
+	}
+	if p.MediaTariff != nil && p.MediaTariff.UsesAuthorizedCeiling() {
+		return m.PurchaseCap, nil
+	}
+	return p.UpperCost(m.MaxInput, m.MaxOutput)
 }
 
 // PlanOnboarding constructs probes from the actual enabled product contract.

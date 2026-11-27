@@ -5,7 +5,9 @@ import { AiServiceAdmin } from "../../src/components/ai-service/ai-service-admin
 import { SpaceContext } from "../../src/components/spaces/space-context";
 import { installDevelopmentTransport } from "../../src/lib/development-transport";
 import type {
+  GatewayModel,
   GatewayPreset,
+  GatewayRoute,
   OnboardingReview,
 } from "../../src/lib/ai-service-admin";
 import "../../src/app/globals.css";
@@ -48,7 +50,14 @@ const arkPreset = {
     min_output_seconds: 4,
     max_output_seconds: 30,
     resolutions: {
-      "720p": { geometries: { "16:9": { width: 1280, height: 720 } } },
+      "720p": {
+        cny_per_million_without_video: 70,
+        geometries: { "16:9": { width: 1280, height: 720 } },
+      },
+      "1080p": {
+        cny_per_million_without_video: 77,
+        geometries: { "16:9": { width: 1920, height: 1080 } },
+      },
     },
   },
   price_source_url: "https://docs.volcengine.com/docs/ark/model-pricing",
@@ -164,6 +173,98 @@ const textProviderPresets = [
     }) satisfies GatewayPreset,
 );
 
+const arkTextPreset = {
+  key: "fixture-text/doubao-seed-2-1-pro-260915",
+  adapter: arkPreset.adapter,
+  provider: arkPreset.provider,
+  name: "Doubao Seed 2.1 Pro",
+  upstream: "doubao-seed-2-1-pro-260915",
+  base_url: arkPreset.base_url,
+  capability: "text.generate",
+  modes: ["text_to_text"],
+  fields: [],
+  rates: ["每百万 Token：输入 ¥6、缓存命中 ¥1.20、输出 ¥30"],
+  currency: "CNY",
+  request_micros: null,
+  token_price: { input: 6_000_000, cache_read: 1_200_000, output: 30_000_000 },
+  concurrency: 2,
+  rpm: 30,
+} satisfies GatewayPreset;
+
+const tariffFixture = {
+  ...arkTextPreset,
+  key: "fixture-text/character",
+  name: "Doubao Seed Character · 251128",
+  upstream: "doubao-seed-character-251128",
+  token_price: undefined,
+  text_tariff: {
+    max_input: 96000,
+    tiers: [
+      {
+        from_input: 0,
+        input: "0.8",
+        cache_read: "0.16",
+        cache_write: "0.8",
+        output: "2",
+      },
+      {
+        from_input: 32001,
+        input: "1.2",
+        cache_read: "0.16",
+        cache_write: "1.2",
+        output: "6",
+      },
+    ],
+  },
+} satisfies GatewayPreset;
+
+const imageTariffFixture = {
+  key: "fixture-image/sunburst",
+  provider: "OpenAI",
+  name: "GPT Image 2.5 Sunburst",
+  upstream: "gpt-image-2.5-sunburst",
+  adapter: "openai",
+  base_url: "https://api.openai.com/v1",
+  capability: "image.generate",
+  modes: ["text2image"],
+  fields: [],
+  rates: ["文本输入 $5、图像输出 $30 / 百万 Token"],
+  currency: "USD",
+  price_fx: "7",
+  request_micros: null,
+  media_tariff: {
+    meter: "image_tokens_v1",
+    unit_price: "5",
+    unit_size: 1000000,
+    output_token_price: "30",
+  },
+  concurrency: 1,
+  rpm: 60,
+} satisfies GatewayPreset;
+
+const videoTariffFixture = {
+  ...imageTariffFixture,
+  key: "fixture-video/motion",
+  provider: "即梦动作模仿",
+  name: "动作模仿 2.0",
+  upstream: "jimeng_dreamactor_m20_gen_video",
+  adapter: "volcengine_motion",
+  base_url: "https://openapi.cv.volces.com",
+  capability: "video.generate",
+  modes: ["motion"],
+  rates: ["¥0.40 / 秒"],
+  currency: "CNY",
+  price_fx: "1",
+  media_tariff: {
+    meter: "output_video_seconds_v1",
+    adapter: "volcengine_motion",
+    unit_price: "0.4",
+    unit_size: 1,
+    max_quantity: 31,
+  },
+} satisfies GatewayPreset;
+
+let stagedTariffModel: GatewayModel | null = null;
 let quickCandidate: typeof candidate | null = null;
 let quickSends = 0;
 let quickVerificationReads = 0;
@@ -176,6 +277,41 @@ installDevelopmentTransport({
       "/tests/browser/pool-sale.html",
     ].includes(path),
   request: async (url, options) => {
+    if (
+      showQuick &&
+      url === "/api/ai/admin/models" &&
+      options.method === "POST"
+    ) {
+      const model = options.data as GatewayModel;
+      if (
+        model.preset_key !== tariffFixture.key ||
+        model.price.currency !== "CNY" ||
+        model.price.input !== 0 ||
+        model.price.text_tariff?.tiers[1]?.from_input !== 32001
+      ) {
+        throw new Error("Expected a structured sale tariff");
+      }
+      stagedTariffModel = model;
+      return undefined;
+    }
+    if (
+      showQuick &&
+      url === "/api/ai/admin/routes" &&
+      options.method === "POST"
+    ) {
+      const { route } = options.data as { route: GatewayRoute };
+      if (
+        route.model_id !== stagedTariffModel?.id ||
+        route.upstream_model !== tariffFixture.upstream ||
+        route.purchase.text_tariff?.tiers[1]?.output !== "6"
+      ) {
+        throw new Error(
+          "Expected a structured purchase tariff for the same model",
+        );
+      }
+      quickCandidate = { ...candidate, model_id: route.model_id };
+      return quickCandidate;
+    }
     if (
       showArkEstimate &&
       url === "/api/ai/admin/ark-video-estimate" &&
@@ -295,7 +431,9 @@ installDevelopmentTransport({
     if (url !== "/api/ai/admin/configuration")
       throw new Error("Unexpected fixture endpoint");
     return {
-      models: [],
+      models: stagedTariffModel
+        ? [{ model: stagedTariffModel, enabled: false, draft: true }]
+        : [],
       routes: [],
       credentials: [],
       quotas: [],
@@ -309,9 +447,24 @@ installDevelopmentTransport({
       ...(showArkEstimate || showQuick
         ? {
             model_presets: showQuick
-              ? [...quickPresets, ...textProviderPresets]
+              ? [
+                  ...quickPresets,
+                  arkTextPreset,
+                  tariffFixture,
+                  ...textProviderPresets,
+                  imageTariffFixture,
+                  videoTariffFixture,
+                ]
               : [arkPreset],
             media_drivers: [
+              ...[imageTariffFixture, videoTariffFixture].map((preset) => ({
+                key: preset.adapter,
+                name: preset.provider,
+                base_url: preset.base_url,
+                region: "domestic",
+                parameters: { [preset.capability]: [] },
+                custom_url: false,
+              })),
               {
                 key: arkPreset.adapter,
                 name: arkPreset.provider,

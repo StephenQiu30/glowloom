@@ -112,7 +112,7 @@ func (s *OpenRouterStrategy) Submit(ctx context.Context, c *Client, input applic
 		return invalidSubmissionResult(), nil
 	}
 
-	data, status, err := c.request(ctx, input.Config, key, http.MethodPost, path, payload, 64<<20)
+	data, status, requestID, err := c.requestWithID(ctx, input.Config, key, http.MethodPost, path, payload, 64<<20)
 	if err != nil {
 		return submissionTransportFailure(err), nil
 	}
@@ -122,6 +122,9 @@ func (s *OpenRouterStrategy) Submit(ctx context.Context, c *Client, input applic
 	result, ok := parseStandardGenerationResponse(input, data)
 	if !ok {
 		return unknownResult(), nil
+	}
+	if result.ProviderLogID == "" {
+		result.ProviderLogID = requestID
 	}
 	return result, nil
 }

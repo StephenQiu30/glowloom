@@ -117,7 +117,7 @@ func (r *Runtime) deliverySource(ctx context.Context, id uuid.UUID) (deliverySou
 	if json.Unmarshal(row.Contract, &out.Call) != nil || out.Call.ID != id || out.Call.Model.Protocol != "media" || json.Unmarshal(row.Receipt, &out.Receipt) != nil || out.Receipt.Pending || json.Unmarshal(row.Route, &out.Route) != nil {
 		return out, domain.ErrInvalid
 	}
-	if row.State != "settled" && (out.Call.Model.VideoMetering == nil || row.State != "received" && row.State != "unknown") {
+	if row.State != "settled" && (!out.Call.Model.UsesVideoDeliveryMeter() || row.State != "received" && row.State != "unknown") {
 		return out, domain.ErrUnavailable
 	}
 	// Hash the canonical saved receipt; the original transport digest remains in ai.attempt.
@@ -221,7 +221,7 @@ func (r *Runtime) Deliver(ctx context.Context, id uuid.UUID) error {
 		if err := finishDelivery(tx, id, token, state, summary); err != nil {
 			return err
 		}
-		if source.Call.Model.VideoMetering != nil && state == "ready" {
+		if source.Call.Model.UsesVideoDeliveryMeter() && state == "ready" {
 			return taskruntime.Enqueue(ctx, tx, pggateway.SettlementKind, id.String(), time.Now())
 		}
 		return nil

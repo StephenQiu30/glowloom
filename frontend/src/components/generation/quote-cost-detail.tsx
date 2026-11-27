@@ -77,7 +77,8 @@ export function QuoteCostDetail({
         {cap !== null &&
         cap === exactCredits &&
         !knownCredits &&
-        detail?.pricing_strategy === "original_duration_v1"
+        (detail?.amount_kind === "maximum" ||
+          detail?.pricing_strategy === "original_duration_v1")
           ? `最多扣 ${exactCredits} 积分`
           : exactCredits !== null
             ? `预计消耗 ${exactCredits} 积分`
@@ -132,8 +133,10 @@ export function QuoteCostDetail({
                       ? `每${detail.unit_quantity}秒`
                       : (unitLabels[detail.unit] ?? detail.unit)
                     : undefined,
+                "单价（原币）": detail?.unit_price,
                 "单价（原币微单位）": detail?.unit_price_micros,
-                数量: detail?.quantity,
+                [detail?.amount_kind === "maximum" ? "报价用量上限" : "数量"]:
+                  detail?.quantity,
                 输出数: detail?.outputs,
                 币种: detail?.currency,
                 冻结汇率: detail?.fx_rate_to_cny,

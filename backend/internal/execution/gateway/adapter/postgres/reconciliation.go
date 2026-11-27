@@ -69,10 +69,22 @@ func (s *Store) Reconcile(ctx context.Context, in Reconciliation) (domain.Record
 		if json.Unmarshal(row.Contract, &model) != nil {
 			return domain.ErrInvalid
 		}
-		if model.VideoMetering != nil && !in.NotCharged {
+		if state == "settled" && !in.NotCharged && model.UsesOutputVideoDuration() {
 			var err error
-			out, err = s.reconcileVideoUsage(ctx, tx, in, digest, state)
+			out, err = s.reconcileVideoInvoice(tx, in, digest)
 			return err
+		}
+		if !in.NotCharged && (model.VideoMetering != nil ||
+			model.Price.MediaTariff != nil && model.Price.MediaTariff.UsesAuthorizedCeiling()) {
+			var saved bool
+			if err := tx.Raw("SELECT EXISTS(SELECT 1 FROM ai.attempt WHERE id=? AND request_id=? AND state='received')", in.Attempt, in.Request).Row().Scan(&saved); err != nil {
+				return err
+			}
+			if saved || model.VideoMetering != nil {
+				var err error
+				out, err = s.reconcileSavedUsage(ctx, tx, model, in, digest, state)
+				return err
+			}
 		}
 		var attempt struct {
 			Contract []byte

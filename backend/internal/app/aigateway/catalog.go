@@ -116,14 +116,18 @@ func (c Catalog) ListModelsForProject(ctx context.Context, a identity.Principal,
 			}
 			// This display price is not accepted for charging. All actual quotes come
 			// from the new money contract and are frozen in ai.request.
-			input, _ := m.Price.Cost(domain.Usage{Input: 1000})
-			output, _ := m.Price.Cost(domain.Usage{Output: 1000})
+			input, _ := m.Price.UpperCost(1000, 0)
+			output, _ := m.Price.UpperCost(0, 1000)
 			price, _ := json.Marshal(map[string]any{"input_micros_per_1k": input, "output_micros_per_1k": output, "gateway_quote_required": true})
 			unit := "per_1k_tokens"
 			if m.Protocol == "media" {
 				unit = "per_request"
-				amount, _ := m.Price.Cost(domain.Usage{})
-				price, _ = json.Marshal(map[string]any{"micros": amount, "gateway_quote_required": true})
+				if m.Price.MediaTariff != nil {
+					price = json.RawMessage(`{"gateway_quote_required":true}`)
+				} else {
+					amount, _ := m.Price.Cost(domain.Usage{})
+					price, _ = json.Marshal(map[string]any{"micros": amount, "gateway_quote_required": true})
+				}
 			}
 			region := catalogdomain.RegionOverseas
 			limits := json.RawMessage(`{"max_outputs":1}`)

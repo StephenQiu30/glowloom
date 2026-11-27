@@ -221,9 +221,11 @@ WHERE model_profile_id=?::uuid AND NOT is_delete ORDER BY version_no DESC LIMIT 
 				var preset struct {
 					Currency, SourceURL, ReferenceLines string
 					Unit                                *string
-					Rule                                []byte
+					Rule, OfficialPrice                 []byte
+					OfficialPriceObservedOn             string
 				}
 				read := tx.Raw(`SELECT currency, source_url, reference_lines::text AS reference_lines,
+  official_price, official_price_observed_on::text AS official_price_observed_on,
   CASE WHEN available THEN rule END AS rule, CASE WHEN available THEN unit END AS unit
 FROM (SELECT *, executable_until IS NULL OR executable_until > (now() AT TIME ZONE 'Asia/Shanghai')::date AS available
       FROM catalog.model_price_preset) AS pricing WHERE adapter_key=? AND provider_model_id=?`,
@@ -235,6 +237,8 @@ FROM (SELECT *, executable_until IS NULL OR executable_until > (now() AT TIME ZO
 					item := &application.ModelPricePreset{
 						Currency: preset.Currency, SourceURL: preset.SourceURL,
 						Unit: preset.Unit, Rule: json.RawMessage(preset.Rule),
+						OfficialPrice:           json.RawMessage(preset.OfficialPrice),
+						OfficialPriceObservedOn: preset.OfficialPriceObservedOn,
 					}
 					if err := json.Unmarshal([]byte(preset.ReferenceLines), &item.ReferenceLines); err != nil {
 						return fmt.Errorf("decode model price preset: %w", err)
