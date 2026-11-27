@@ -54,7 +54,11 @@ func (r *Runtime) Wallet(ctx context.Context, a identity.Principal, cursor *uuid
 			AvailableDelta, HeldDelta, SpentDelta int64
 			CreatedAt                             time.Time
 		}
-		query := `SELECT e.id,e.request_id,e.kind,e.available_delta,e.held_delta,e.spent_delta,e.created_at,r.origin,r.contract->>'capability' AS capability,r.contract->>'name' AS model_key FROM ai.money_event e LEFT JOIN ai.request r ON r.id=e.request_id WHERE e.scope_id=?`
+		query := `SELECT e.id,e.request_id,e.kind,e.available_delta,e.held_delta,e.spent_delta,e.created_at,
+			CASE WHEN gr.approved THEN 'promotional' ELSE coalesce(r.origin,'') END AS origin,
+			r.contract->>'capability' AS capability,r.contract->>'name' AS model_key
+			FROM ai.money_event e LEFT JOIN ai.request r ON r.id=e.request_id
+			LEFT JOIN ai.credit_grant_review gr ON gr.event_id=e.id WHERE e.scope_id=?`
 		args := []any{a.ScopeID}
 		if cursor != nil {
 			query += " AND (e.created_at,e.id)<(SELECT created_at,id FROM ai.money_event WHERE id=? AND scope_id=?)"

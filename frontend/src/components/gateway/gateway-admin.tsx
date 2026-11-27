@@ -2,8 +2,11 @@
 
 import { AdminHeading } from "@/components/governance/admin-layout";
 import { GatewayAction } from "./gateway-action";
+import { GatewayArkVideoEstimate } from "./gateway-ark-video-estimate";
 import { GatewayModelList } from "./gateway-model-list";
+import { GatewayCreditGrants } from "./gateway-credit-grants";
 import { deleteAiRoutes } from "@/api/aiGateway";
+import { ensureIndependentCreation } from "@/api/projects";
 import { GatewayTable } from "./gateway-table";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -71,6 +74,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   loadGatewayConfiguration,
+  prepareQuickOnboarding,
   setCredentialState,
   type CredentialState,
   type GatewayConfiguration,
@@ -99,6 +103,7 @@ const tabs = [
   ["onboarding", "验证"],
   ["quotas", "配额"],
   ["credentials", "凭据"],
+  ["credit-grants", "赠送单"],
   ["credits", "对账"],
 ] as const;
 
@@ -126,6 +131,7 @@ export function GatewayAdmin({
   return (
     <GatewayConfigurationPage
       key={`${session.actor.id}:${entry}:${entityID ?? ""}:${initialTab ?? ""}`}
+      actorID={session.actor.id}
       entry={entry}
       entityID={entityID}
       initialTab={initialTab}
@@ -134,10 +140,12 @@ export function GatewayAdmin({
 }
 
 function GatewayConfigurationPage({
+  actorID,
   entry,
   entityID,
   initialTab,
 }: {
+  actorID: string;
   entry: Entry;
   entityID?: string;
   initialTab?: string;
@@ -152,7 +160,7 @@ function GatewayConfigurationPage({
       (entry === "providers" ? "routes" : "models"),
   );
   const [stage, setStage] = useState<
-    "model" | "route" | "fund" | "reconcile"
+    "preset" | "model" | "route" | "fund" | "reconcile"
   >();
   const [discard, setDiscard] = useState<GatewayTab>();
   const [selectedModel, setSelectedModel] = useState<string>();
@@ -248,9 +256,31 @@ function GatewayConfigurationPage({
     go(next);
   }
 
+  const readyCandidates =
+    configuration?.onboarding.filter(
+      (item) =>
+        item.state === "prepared" &&
+        (!defaultScope || !item.scope_id || item.scope_id === defaultScope),
+    ) ?? [];
+  const quickPresets =
+    configuration?.model_presets?.filter((preset) => preset.quick_onboarding) ??
+    [];
+  const readyPresetKeys = new Set(
+    configuration?.models
+      .filter(({ model }) =>
+        readyCandidates.some(({ model_id }) => model_id === model.id),
+      )
+      .map(({ model }) => model.preset_key) ?? [],
+  );
+  const newQuickPresets = quickPresets.filter(
+    ({ key }) => !readyPresetKeys.has(key),
+  );
+
   function startModel() {
     go(tab);
-    setStage("model");
+    setStage(
+      readyCandidates.length || newQuickPresets.length ? "preset" : "model",
+    );
   }
 
   function startRoute(id?: string) {
@@ -265,14 +295,35 @@ function GatewayConfigurationPage({
     requestAnimationFrame(() => heading.current?.focus());
   }
 
+  async function selectOnboardingPreset(value: string) {
+    if (readyCandidates.some((item) => item.id === value)) {
+      openCandidate(value);
+      return;
+    }
+    if (!newQuickPresets.some(({ key }) => key === value)) return;
+    await run(async () => {
+      if (!defaultScope) throw new Error("请先选择可写的验证空间。");
+      const project = await ensureIndependentCreation();
+      if (!project.id) throw new Error("当前空间的独立创作容器不可用。");
+      const review = await prepareQuickOnboarding({
+        preset_key: value,
+        scope_id: defaultScope,
+        project_id: project.id,
+      });
+      setPrepared(review);
+      openCandidate(review.id);
+    }, "已准备验证计划。");
+  }
+
   function openBilling(action: "fund" | "reconcile", attempt = "") {
-    go("credits");
+    go(action === "fund" ? "credit-grants" : "credits");
     setSelectedAttempt(attempt);
     setStage(action);
     requestAnimationFrame(() => heading.current?.focus());
   }
   const title = "AI 服务";
-  const setupOpen = stage === "model" || stage === "route";
+  const setupOpen =
+    stage === "preset" || stage === "model" || stage === "route";
   const showListing = !inDetail && (!stage || setupOpen) && !candidate;
   const currentStep =
     stage === "model" ? 0 : stage === "route" ? 1 : candidate ? 2 : undefined;
@@ -302,6 +353,9 @@ function GatewayConfigurationPage({
           onClick={reload}
         />
       )}
+      {tab === "models" && (
+        <GatewayArkVideoEstimate presets={configuration?.model_presets} />
+      )}
       {(tab === "models" || tab === "routes") && (
         <GatewayAction
           icon={Plus}
@@ -311,21 +365,21 @@ function GatewayConfigurationPage({
           onClick={startModel}
         />
       )}
+      {tab === "credit-grants" && (
+        <GatewayAction
+          icon={Coins}
+          label="赠送积分"
+          disabled={busy}
+          onClick={() => openBilling("fund")}
+        />
+      )}
       {tab === "credits" && (
-        <>
-          <GatewayAction
-            icon={Coins}
-            label="增加积分"
-            disabled={busy}
-            onClick={() => openBilling("fund")}
-          />
-          <GatewayAction
-            icon={ClipboardCheck}
-            label="手动对账"
-            disabled={busy}
-            onClick={() => openBilling("reconcile")}
-          />
-        </>
+        <GatewayAction
+          icon={ClipboardCheck}
+          label="手动对账"
+          disabled={busy}
+          onClick={() => openBilling("reconcile")}
+        />
       )}
     </>
   );
@@ -335,7 +389,7 @@ function GatewayConfigurationPage({
       <div
         className="admin-page"
         onChangeCapture={() => {
-          if (stage) dirty.current = true;
+          if (stage && stage !== "preset") dirty.current = true;
         }}
       >
         {inDetail ? (
@@ -504,14 +558,14 @@ function GatewayConfigurationPage({
                   <Card>
                     <CardHeader>
                       <CardTitle>
-                        {stage === "fund" ? "增加积分" : "供应商账单对账"}
+                        {stage === "fund" ? "提交积分赠送单" : "供应商账单对账"}
                       </CardTitle>
                       <CardAction>
                         <GatewayAction
                           label="返回列表"
                           icon={ArrowLeft}
                           disabled={busy}
-                          onClick={() => requestNavigation("credits")}
+                          onClick={() => requestNavigation(tab)}
                         />
                       </CardAction>
                     </CardHeader>
@@ -532,6 +586,14 @@ function GatewayConfigurationPage({
                       )}
                     </CardContent>
                   </Card>
+                ) : tab === "credit-grants" ? (
+                  <GatewayCreditGrants
+                    actorID={actorID}
+                    orders={configuration.credit_grants ?? []}
+                    busy={busy}
+                    run={run}
+                    toolbarActions={toolbarActions}
+                  />
                 ) : (
                   <GatewayTable
                     toolbarActions={toolbarActions}
@@ -578,14 +640,69 @@ function GatewayConfigurationPage({
             >
               <DialogHeader>
                 <DialogTitle>
-                  {stage === "model" ? "新增接入" : "采购配置"}
+                  {stage === "route" ? "采购配置" : "新增接入"}
                 </DialogTitle>
                 <DialogDescription>
-                  {stage === "model" ? "1 / 3 · 模型预设" : "2 / 3 · 采购路由"}
+                  {stage === "preset"
+                    ? "选择已准备好的模型，填写 API Key 后验证。"
+                    : stage === "model"
+                      ? "1 / 3 · 模型预设"
+                      : "2 / 3 · 采购路由"}
                 </DialogDescription>
               </DialogHeader>
               {operationError}
-              {stage === "model" ? (
+              {stage === "preset" ? (
+                <form
+                  className="grid gap-4"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const id = new FormData(event.currentTarget).get("preset");
+                    if (typeof id === "string") void selectOnboardingPreset(id);
+                  }}
+                >
+                  <SelectField
+                    label="已准备的模型"
+                    name="preset"
+                    required
+                    defaultValue=""
+                    options={[
+                      ["", "选择型号"],
+                      ...newQuickPresets.map(
+                        ({ key, provider, name, quick_onboarding }) =>
+                          [
+                            key,
+                            `${provider} · ${name} · ${quick_onboarding?.resolution} 文生视频`,
+                          ] as const,
+                      ),
+                      ...readyCandidates.map((item) => {
+                        const model = configuration.models.find(
+                          ({ model }) => model.id === item.model_id,
+                        )?.model;
+                        const name = model?.name ?? item.upstream_model;
+                        return [
+                          item.id,
+                          name === item.upstream_model
+                            ? name
+                            : `${name} · ${item.upstream_model}`,
+                        ] as const;
+                      }),
+                    ]}
+                  />
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => setStage("model")}
+                    >
+                      准备其他型号
+                    </Button>
+                    <Button type="submit" disabled={busy}>
+                      继续填写 API Key
+                    </Button>
+                  </div>
+                </form>
+              ) : stage === "model" ? (
                 <>
                   {tab === "routes" &&
                     configuration.models.some(

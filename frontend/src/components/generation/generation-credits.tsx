@@ -132,13 +132,23 @@ export function GenerationCredits({ preview }: { preview: CreditPreview }) {
         ? "补全生成输入后估算"
         : "暂时无法估算";
   const basis = estimate?.basis && units[estimate.basis];
+  const maximum =
+    estimate?.kind === "estimate" &&
+    !estimate.reused &&
+    estimate.maximum_credits !== estimate.credits &&
+    typeof estimate.maximum_credits === "string" &&
+    /^(0|[1-9]\d*)$/.test(estimate.maximum_credits)
+      ? estimate.maximum_credits
+      : null;
   return (
     <Popover>
       <PopoverTrigger asChild>
         <InputGroupButton
           variant="ghost"
           size="toolbar"
-          aria-label={description}
+          aria-label={
+            maximum ? `${description}，最多冻结 ${maximum} 积分` : description
+          }
           className="shrink-0 gap-1 px-1.5 text-muted-foreground tabular-nums max-md:h-11"
         >
           {estimate ? (
@@ -163,6 +173,7 @@ export function GenerationCredits({ preview }: { preview: CreditPreview }) {
         className="w-fit max-w-[calc(100vw-32px)] gap-1 px-3 py-2 text-xs"
       >
         <span>{description}</span>
+        {maximum && <span>最多冻结 {maximum} 积分</span>}
         {estimate?.quantity && basis && !estimate.reused && (
           <span className="text-muted-foreground">
             计量 {estimate.quantity} {basis}

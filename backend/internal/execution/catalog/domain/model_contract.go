@@ -18,7 +18,7 @@ type ParameterContract struct {
 // IsSeedanceTokenModel identifies the exact reviewed video SKUs. Model-name
 // prefixes must not grant new versions a pricing or estimation contract.
 func IsSeedanceTokenModel(model string) bool {
-	return slices.Contains([]string{"doubao-seedance-2-0-260128", "doubao-seedance-2-0-fast-260128", "doubao-seedance-2-0-mini-260615", "doubao-seedance-2-5-260628"}, model)
+	return slices.Contains([]string{"doubao-seedance-2-0-260128", "doubao-seedance-2-0-fast-260128", "doubao-seedance-2-0-mini-260615", "doubao-seedance-2-5-260628", "doubao-seedance-2-5-flash-261115"}, model)
 }
 
 // ModelParameterContract returns fresh data for the currently installed model
@@ -27,10 +27,10 @@ func ModelParameterContract(model string) (map[string]ParameterContract, bool) {
 	if IsSeedanceTokenModel(model) {
 		maxDuration := int64(15000)
 		resolutions := []string{"480p", "720p", "1080p"}
-		if model == "doubao-seedance-2-5-260628" {
+		if model == "doubao-seedance-2-5-260628" || model == "doubao-seedance-2-5-flash-261115" {
 			maxDuration = 30000
 		}
-		if model == "doubao-seedance-2-0-fast-260128" || model == "doubao-seedance-2-0-mini-260615" {
+		if model == "doubao-seedance-2-0-fast-260128" || model == "doubao-seedance-2-0-mini-260615" || model == "doubao-seedance-2-5-flash-261115" {
 			resolutions = []string{"480p", "720p"}
 		}
 		return map[string]ParameterContract{

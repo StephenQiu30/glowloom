@@ -1,7 +1,32 @@
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 import { QuoteCostDetail } from "@/components/generation/quote-cost-detail";
+import { GenerationCredits } from "@/components/generation/generation-credits";
 afterEach(cleanup);
+it("shows the generation preview and confirmation maximum together", async () => {
+  render(
+    <GenerationCredits
+      preview={{
+        status: "ready",
+        estimate: {
+          credits: "25",
+          maximum_credits: "75",
+          kind: "estimate",
+          basis: "video_tokens",
+          quantity: "108000",
+        },
+      }}
+    />,
+  );
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: "预计消耗 25 积分，最多冻结 75 积分",
+    }),
+  );
+  expect(await screen.findByText("最多冻结 75 积分")).toBeTruthy();
+  expect(screen.getByText("计量 108000 视频 Token")).toBeTruthy();
+});
+
 it("shows the server credit estimate and keeps billing rules collapsed", () => {
   render(
     <QuoteCostDetail

@@ -1032,7 +1032,13 @@ async function proxy(
       query: [],
     },
     {
-      pattern: "ai/admin/(models|routes|routes/delete|credits|reconciliations)",
+      pattern:
+        "ai/admin/(models|routes|routes/delete|credits|reconciliations|ark-video-estimate|onboarding/preset)",
+      methods: ["POST"],
+      query: [],
+    },
+    {
+      pattern: `ai/admin/credits/${identityUUID}/review`,
       methods: ["POST"],
       query: [],
     },

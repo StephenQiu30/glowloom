@@ -69,6 +69,29 @@ func (h *Handler) route(c *gin.Context) {
 	writeOnboardingReview(c, store, in.Route.ID, http.StatusCreated)
 }
 
+// quickOnboarding 依审核预设准备无密钥验证候选.
+// @Summary 依审核预设准备无密钥验证候选
+// @ID prepareAiOnboardingPreset
+// @Tags ai-gateway
+// @Accept json
+// @Produce json
+// @Param input body domain.QuickOnboardingInput true "模型预设与验证空间"
+// @Success 200 {object} pg.OnboardingReview
+// @Router /api/ai/admin/onboarding/preset [post]
+func (h *Handler) quickOnboarding(c *gin.Context) {
+	var in domain.QuickOnboardingInput
+	if err := bindOnboarding(c, 4096, &in); err != nil {
+		problem(c, err)
+		return
+	}
+	out, err := h.store(identityhttp.Principal(c)).PrepareFromPreset(c.Request.Context(), in)
+	if err != nil {
+		problem(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
 // onboarding 读取候选的验证计划或回执.
 // @Summary 读取候选的验证计划或回执
 // @ID getAiOnboarding

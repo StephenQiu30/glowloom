@@ -163,9 +163,15 @@ export function OnboardingPanel({
                   value={money(review.plan.purchase_micros)}
                 />
                 <Summary
-                  label="平台积分"
+                  label="最高验证积分"
                   value={`${review.plan.credits} 积分`}
                 />
+                {typeof review.plan.estimated_credits === "number" && (
+                  <Summary
+                    label="预计验证积分"
+                    value={`${review.plan.estimated_credits} 积分`}
+                  />
+                )}
                 <Summary
                   label="供应商验证请求"
                   value={`${review.plan.probes.length} 次`}

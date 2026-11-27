@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
   arkEmbedding,
-  fundCredits,
+  submitCreditGrant,
   modelPreset,
   prepareModel,
   prepareRoute,
@@ -966,10 +966,11 @@ export function CreditsForm({
     scope: string;
     reference: string;
     credits: number;
+    reason: string;
   } | null>(null);
   return (
     <form
-      aria-label="管理员增加积分"
+      aria-label="提交积分赠送单"
       onChange={() => setPreview(null)}
       onSubmit={(event) => {
         event.preventDefault();
@@ -978,14 +979,21 @@ export function CreditsForm({
           scope: text(data, "scope"),
           reference: text(data, "reference"),
           credits: num(data, "credits"),
+          reason: text(data, "reason"),
         };
         if (!preview) {
           setPreview(next);
           return;
         }
         void run(
-          () => fundCredits(next.scope, next.reference, next.credits),
-          "积分已记入唯一账本。",
+          () =>
+            submitCreditGrant({
+              scope_id: next.scope,
+              key: next.reference,
+              credits: next.credits,
+              reason: next.reason,
+            }),
+          "已提交赠送单，等待另一位管理员复核。",
         ).then((ok) => {
           if (ok) setPreview(null);
         });
@@ -1002,26 +1010,29 @@ export function CreditsForm({
           <InputField
             label="唯一业务凭据"
             name="reference"
-            description="填入可持久核对的原始业务编号，重复提交相同凭据不得重复入账。"
+            description="业务编号全局唯一。"
+            maxLength={120}
           />
           <InputField
-            label="增加积分"
+            label="赠送积分"
             name="credits"
             type="number"
             min={1}
             max={1000000000}
+            step={1}
           />
         </FieldGroup>
+        <InputField label="赠送原因" name="reason" maxLength={500} />
         {preview ? (
           <p role="status" className="break-all">
-            确认给空间 {preview.scope} 增加 {preview.credits} 积分，业务凭据：
+            向空间 {preview.scope} 申请赠送 {preview.credits} 通用积分，凭据为
             {preview.reference}。
           </p>
         ) : null}
         <SubmitButton
           busy={busy}
           icon={Coins}
-          label={preview ? "确认增加积分" : "核对入账信息"}
+          label={preview ? "提交复核" : "核对赠送信息"}
         />
       </FieldGroup>
     </form>

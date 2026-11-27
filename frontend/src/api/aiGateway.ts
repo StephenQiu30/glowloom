@@ -3,6 +3,21 @@
 import { request } from "@/lib/request";
 import type { RequestOptions } from "@/lib/request";
 
+/** 按方舟公开规则估算视频费用 POST /api/ai/admin/ark-video-estimate */
+export async function estimateArkVideo(
+  body: API.ArkVideoEstimateInput,
+  options?: RequestOptions,
+) {
+  return request<API.ArkVideoEstimate>("/api/ai/admin/ark-video-estimate", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    data: body,
+    ...(options || {}),
+  });
+}
+
 /** 设置项目积分上限 PUT /api/ai/admin/budgets */
 export async function setAiProjectBudget(
   body: Record<string, any>,
@@ -45,12 +60,12 @@ export async function changeAiCredentialState(
   });
 }
 
-/** 按业务凭证发放积分 POST /api/ai/admin/credits */
-export async function grantAiCredits(
-  body: Record<string, any>,
+/** 提交积分赠送单 POST /api/ai/admin/credits */
+export async function submitAiCreditGrant(
+  body: API.CreditGrantInput,
   options?: RequestOptions,
 ) {
-  return request<any>("/api/ai/admin/credits", {
+  return request<API.CreditGrantOrder>("/api/ai/admin/credits", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -58,6 +73,28 @@ export async function grantAiCredits(
     data: body,
     ...(options || {}),
   });
+}
+
+/** 复核并处理积分赠送单 POST /api/ai/admin/credits/${param0}/review */
+export async function reviewAiCreditGrant(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.reviewAiCreditGrantParams,
+  body: API.CreditGrantReview,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<API.CreditGrantOrder>(
+    `/api/ai/admin/credits/${param0}/review`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    },
+  );
 }
 
 /** 保存未启用的模型预设与销售价 POST /api/ai/admin/models */
@@ -117,6 +154,21 @@ export async function verifyAiOnboarding(
       "Content-Type": "application/json",
     },
     params: { ...queryParams },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+/** 依审核预设准备无密钥验证候选 POST /api/ai/admin/onboarding/preset */
+export async function prepareAiOnboardingPreset(
+  body: API.QuickOnboardingInput,
+  options?: RequestOptions,
+) {
+  return request<API.OnboardingReview>("/api/ai/admin/onboarding/preset", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
     data: body,
     ...(options || {}),
   });

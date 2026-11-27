@@ -50,16 +50,21 @@ func (m Model) EstimateVideo(in MediaInput) (int64, error) {
 		seconds > 1<<40 || seconds != float64(int64(seconds)) {
 		return 0, ErrInvalid
 	}
-	tokens := big.NewInt(int64(seconds))
-	for _, factor := range []int64{size.Width, size.Height, v.FramesPerSecond} {
-		tokens.Mul(tokens, big.NewInt(factor))
-	}
-	quantity, err := ceil(new(big.Rat).SetFrac(tokens, big.NewInt(v.PixelsPerToken)))
+	quantity, err := ceil(videoFrameTokens(int64(seconds), size, v.FramesPerSecond, v.PixelsPerToken))
 	quantity = max(quantity, v.MinimumTokens)
 	if err != nil || quantity <= 0 || quantity > m.MaxOutput {
 		return 0, ErrInvalid
 	}
 	return quantity, nil
+}
+
+// videoFrameTokens keeps the frame-based estimate exact until the caller's rounding boundary.
+func videoFrameTokens(seconds int64, size VideoGeometry, fps, divisor int64) *big.Rat {
+	tokens := big.NewInt(seconds)
+	for _, factor := range []int64{size.Width, size.Height, fps} {
+		tokens.Mul(tokens, big.NewInt(factor))
+	}
+	return new(big.Rat).SetFrac(tokens, big.NewInt(divisor))
 }
 
 // ValidateVideoInput restricts this meter to project-scoped outputs and at most an image first frame.

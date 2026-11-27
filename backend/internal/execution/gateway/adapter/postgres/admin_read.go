@@ -41,12 +41,17 @@ func (s *Store) Configuration(ctx context.Context) (map[string]any, error) {
 			return err
 		}
 		out["model_presets"] = presets
+		grants, err := listCreditGrants(tx)
+		if err != nil {
+			return err
+		}
+		out["credit_grants"] = grants
 		var candidateRows []struct {
 			OnboardingSummary
 			RouteDocument []byte
 		}
 		if err := tx.Raw(`SELECT id,model_id,state,document->'route'->>'upstream_model' AS upstream,
- document->'route' AS route_document FROM ai.onboarding WHERE deleted_at IS NULL
+ document->>'scope_id' AS scope_id,document->'route' AS route_document FROM ai.onboarding WHERE deleted_at IS NULL
  ORDER BY created_at DESC,id LIMIT 100`).Scan(&candidateRows).Error; err != nil {
 			return err
 		}

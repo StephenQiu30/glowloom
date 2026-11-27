@@ -78,7 +78,13 @@ func (c Creation) Estimate(ctx context.Context, a identity.Principal, p uuid.UUI
 				if err != nil {
 					return err
 				}
-				out = operation.GenerationEstimate{Credits: strconv.FormatInt(credits, 10), Kind: "estimate", Basis: "video_tokens", Quantity: strconv.FormatInt(call.EstimatedVideoTokens, 10)}
+				out = operation.GenerationEstimate{
+					Credits:        strconv.FormatInt(credits, 10),
+					MaximumCredits: strconv.FormatInt(call.Limit, 10),
+					Kind:           "estimate",
+					Basis:          "video_tokens",
+					Quantity:       strconv.FormatInt(call.EstimatedVideoTokens, 10),
+				}
 				return nil
 			}
 			out = operation.GenerationEstimate{Credits: strconv.FormatInt(call.Limit, 10), Kind: "estimate", Basis: "per_request", Quantity: "1"}

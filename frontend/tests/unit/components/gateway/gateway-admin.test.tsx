@@ -13,7 +13,7 @@ import {
   arkEmbedding,
   prepareModel,
   prepareRoute,
-  fundCredits,
+  submitCreditGrant,
   loadGatewayConfiguration,
   reconcileGateway,
 } from "@/lib/ai-gateway-admin";
@@ -113,6 +113,36 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+it("opens a prepared model at API Key verification without requesting manual pricing", async () => {
+  send.mockResolvedValueOnce({
+    models: [{ model, enabled: false, draft: true }],
+    onboarding: [review],
+    routes: [],
+    credentials: [],
+    quotas: [],
+    unknown: [],
+  });
+  render(<GatewayAdmin />);
+  fireEvent.click(await screen.findByRole("button", { name: "新增接入" }));
+  fireEvent.change(screen.getByLabelText("已准备的模型"), {
+    target: { value: verificationID },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "继续填写 API Key" }));
+
+  expect(await screen.findByLabelText("API Key")).toBeTruthy();
+  expect(screen.queryByLabelText("销售输入价")).toBeNull();
+  expect(screen.queryByLabelText("采购输入价")).toBeNull();
+  expect(
+    screen.getByRole<HTMLButtonElement>("button", {
+      name: "确认预算并验证",
+    }).disabled,
+  ).toBe(true);
+  expect(send.mock.calls.map(([path]) => path)).toEqual([
+    "/api/ai/admin/configuration",
+    `/api/ai/admin/onboarding/${verificationID}`,
+  ]);
+});
+
 it("shows one resource table per provider tab and opens the selected billing attempt", async () => {
   send.mockResolvedValueOnce({
     models: [{ model, enabled: true }],
@@ -165,6 +195,7 @@ it("shows one resource table per provider tab and opens the selected billing att
     ["验证", "接入验证"],
     ["配额", "共享配额"],
     ["凭据", "供应商凭据"],
+    ["赠送单", "积分赠送单"],
     ["对账", "待对账请求"],
   ]) {
     fireEvent.mouseDown(screen.getByRole("tab", { name: tab }), {
@@ -329,9 +360,19 @@ it("keeps supplier procurement independent from sale and refuses invalid amounts
     ),
   ).rejects.toThrow();
   await expect(
-    fundCredits(supplier, "invoice-1", 1000000001),
+    submitCreditGrant({
+      scope_id: supplier,
+      key: "order-1",
+      reason: "test",
+      credits: 1000000001,
+    }),
   ).rejects.toThrow();
-  await fundCredits(supplier, "invoice-1", 100);
+  await submitCreditGrant({
+    scope_id: supplier,
+    key: "order-1",
+    reason: "test",
+    credits: 100,
+  });
   expect(send.mock.lastCall?.[0]).toBe("/api/ai/admin/credits");
 });
 
@@ -398,6 +439,7 @@ it("normalizes empty configuration and discards any credential read-back fields"
   });
   expect(await loadGatewayConfiguration()).toEqual({
     model_presets: [],
+    credit_grants: [],
     models: [],
     routes: [],
     onboarding: [],
@@ -414,33 +456,41 @@ it("normalizes empty configuration and discards any credential read-back fields"
   });
 });
 
-it("requires concrete credit preview before manual funding and keeps business reference", async () => {
+it("previews a promotional grant and submits it for independent review", async () => {
   render(<GatewayAdmin entry="providers" />);
   await screen.findByRole("table", { name: "供应商路由" });
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "对账" }), {
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "赠送单" }), {
     button: 0,
     ctrlKey: false,
   });
-  fireEvent.click(screen.getByRole("button", { name: "增加积分" }));
+  fireEvent.click(screen.getByRole("button", { name: "赠送积分" }));
   fireEvent.change(screen.getByLabelText("积分空间 ID"), {
     target: { value: supplier },
   });
   fireEvent.change(screen.getByLabelText("唯一业务凭据"), {
     target: { value: "admin-invoice-001" },
   });
-  fireEvent.change(screen.getByLabelText("增加积分"), {
+  fireEvent.change(screen.getByLabelText("赠送积分"), {
     target: { value: "100" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "核对入账信息" }));
+  fireEvent.change(screen.getByLabelText("赠送原因"), {
+    target: { value: "测试积分" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "核对赠送信息" }));
   expect(send).toHaveBeenCalledTimes(1);
   expect(screen.getByRole("status").textContent).toContain(supplier);
-  expect(screen.getByRole("status").textContent).toContain("100 积分");
-  fireEvent.click(screen.getByRole("button", { name: "确认增加积分" }));
+  expect(screen.getByRole("status").textContent).toContain("100 通用积分");
+  fireEvent.click(screen.getByRole("button", { name: "提交复核" }));
   await waitFor(() =>
     expect(send).toHaveBeenCalledWith(
       "/api/ai/admin/credits",
       expect.objectContaining({
-        data: { scope_id: supplier, key: "admin-invoice-001", credits: 100 },
+        data: {
+          scope_id: supplier,
+          key: "admin-invoice-001",
+          credits: 100,
+          reason: "测试积分",
+        },
       }),
     ),
   );

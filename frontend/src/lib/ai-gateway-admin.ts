@@ -1,6 +1,11 @@
 // eslint-disable-next-line no-restricted-syntax -- 新网关 MVP 经授权使用现有 request；生成目录保持只读。
 import { request } from "@/lib/request";
 
+import {
+  prepareAiOnboardingPreset,
+  submitAiCreditGrant,
+} from "@/api/aiGateway";
+
 export type GatewayPrice = {
   explicit_free?: boolean;
   input: number;
@@ -68,6 +73,13 @@ export type GatewayRoute = {
   driver_config?: Record<string, unknown>;
 };
 export type CredentialState = "active" | "draining" | "revoked";
+export type ArkVideoEstimateSpec = {
+  min_reference_seconds: number;
+  max_reference_seconds: number;
+  min_output_seconds: number;
+  max_output_seconds: number;
+  resolutions: Record<string, Pick<GatewayVideoMetering, "geometries">>;
+};
 export type GatewayPreset = {
   key: string;
   provider: string;
@@ -81,11 +93,15 @@ export type GatewayPreset = {
   rates: string[];
   currency: string | null;
   request_micros: number | null;
+  video_estimate?: ArkVideoEstimateSpec | null;
+  price_source_url?: string | null;
+  quick_onboarding?: { resolution: string } | null;
   concurrency: number;
   rpm: number;
 };
 export type GatewayConfiguration = {
   model_presets?: GatewayPreset[];
+  credit_grants?: API.CreditGrantOrder[];
   models: { model: GatewayModel; enabled: boolean; draft?: boolean }[];
   onboarding: OnboardingSummary[];
   routes: { route: GatewayRoute; enabled: boolean; provider_key?: string }[];
@@ -106,6 +122,7 @@ export type OnboardingSummary = {
   state:
     "prepared" | "verifying" | "active" | "failed" | "stale" | "rolled_back";
   upstream_model: string;
+  scope_id?: string;
   provider_key?: string;
 };
 
@@ -129,11 +146,35 @@ export type OnboardingReview = OnboardingSummary & {
   project_id: string;
   plan: {
     credits: number;
+    estimated_credits?: number;
     purchase_micros: number;
     probes: { name: string; input: unknown }[];
   };
   progress: { request_id: string; state: string }[];
 };
+
+export async function prepareQuickOnboarding(
+  input: API.QuickOnboardingInput,
+): Promise<OnboardingReview> {
+  const result = await prepareAiOnboardingPreset(input);
+  const validStates = ["prepared", "verifying", "active"];
+  requireValue(
+    uuid.test(result.id ?? "") &&
+      uuid.test(result.model_id ?? "") &&
+      result.scope_id === input.scope_id &&
+      result.project_id === input.project_id &&
+      Boolean(result.upstream_model) &&
+      validStates.includes(result.state ?? "") &&
+      result.plan !== undefined &&
+      integer(result.plan.credits ?? -1) &&
+      integer(result.plan.purchase_micros ?? -1) &&
+      Array.isArray(result.plan.probes) &&
+      result.plan.probes.length > 0 &&
+      Array.isArray(result.progress),
+    "接入计划响应无效",
+  );
+  return result as OnboardingReview;
+}
 
 export const arkEmbedding = {
   protocol: "ark_embedding",
@@ -350,6 +391,7 @@ export async function loadGatewayConfiguration(
     "quotas",
     "media_drivers",
     "model_presets",
+    "credit_grants",
     "unknown",
   ] as const) {
     requireValue(
@@ -442,6 +484,23 @@ export async function loadGatewayConfiguration(
     ),
     "待对账记录无效",
   );
+  requireValue(
+    (result.credit_grants ?? []).every(
+      (order) =>
+        order &&
+        uuid.test(order.id) &&
+        uuid.test(order.scope_id) &&
+        uuid.test(order.proposer_id) &&
+        integer(order.credits, 1, 1000000000) &&
+        typeof order.key === "string" &&
+        typeof order.reason === "string" &&
+        typeof order.recipient_label === "string" &&
+        ["personal", "team"].includes(order.recipient_kind) &&
+        ["pending", "issued", "rejected"].includes(order.state) &&
+        (order.event_id === undefined || uuid.test(order.event_id)),
+    ),
+    "积分发放单无效",
+  );
   return {
     model_presets: (result.model_presets ?? []).filter(
       (preset) =>
@@ -453,6 +512,7 @@ export async function loadGatewayConfiguration(
         ),
     ),
     models: result.models ?? [],
+    credit_grants: result.credit_grants ?? [],
     routes: result.routes ?? [],
     quotas: result.quotas ?? [],
     media_drivers: result.media_drivers ?? [],
@@ -656,20 +716,15 @@ export async function setCredentialState(
     data: { state },
   });
 }
-export async function fundCredits(
-  scope: string,
-  reference: string,
-  credits: number,
-) {
-  id(scope);
+export async function submitCreditGrant(input: API.CreditGrantInput) {
+  id(input.scope_id);
+  const key = input.key.trim();
+  const reason = input.reason.trim();
   requireValue(
-    Boolean(reference.trim()) && integer(credits, 1, 1000000000),
-    "请填写唯一业务凭据，积分为 1–1000000000 的整数",
+    Boolean(key) && Boolean(reason) && integer(input.credits, 1, 1000000000),
+    "请填写业务凭据和赠送原因，积分为 1–1000000000 的整数",
   );
-  return request<void>(`${prefix}/credits`, {
-    method: "POST",
-    data: { scope_id: scope, key: reference.trim(), credits },
-  });
+  return submitAiCreditGrant({ ...input, key, reason });
 }
 export async function reconcileGateway(value: {
   request_id: string;

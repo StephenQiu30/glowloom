@@ -100,6 +100,8 @@ $model_presets$
 {"slug":"volcengine-ark","ordinal":28,"model":{"adapter_key":"volcengine_ark","capability":"video.generate","display_name":"Seedance 2.0 Fast","execution":{"expected_max_ms":600000,"limits":{"max_outputs":1,"roles":{"_total_images":9,"first_frame":{"max_count":1,"min_count":1,"types":["image"],"for_modes":["image2video"]},"last_frame":{"max_count":1,"types":["image"],"for_modes":["image2video"]},"reference_image":{"max_count":9,"types":["image"],"for_modes":["omni_reference"]},"subject":{"max_count":9,"types":["image"],"for_modes":["omni_reference"]}}},"param_schema":[{"field":"duration_ms","label":"视频时长（毫秒）","component":"input","type":"integer","min":4000,"max":15000,"step":1000,"default":5000},{"field":"resolution","label":"分辨率","component":"select","type":"string","enum":["480p","720p"],"default":"720p"},{"field":"aspect_ratio","label":"画面比例","component":"select","type":"string","enum":["16:9","9:16","1:1"],"default":"16:9"}],"supports_query":true},"key":"ark-video-fast","lifecycle":"active","modes":["text2video","image2video","omni_reference"],"provider_model_id":"doubao-seedance-2-0-fast-260128","requires_model_selection":false,"reviewed_at":"2026-10-28","source_url":"https://docs.volcengine.com/docs/ark/model-list?lang=zh","metering_strategy":"seedance_video_tokens_v1"},"preset_version_id":"6da07a12-0000-4000-8000-000000000001"},
 {"slug":"volcengine-ark","ordinal":29,"model":{"adapter_key":"volcengine_ark","capability":"video.generate","display_name":"Seedance 2.0 Mini","execution":{"expected_max_ms":600000,"limits":{"max_outputs":1,"roles":{"_total_images":9,"first_frame":{"max_count":1,"min_count":1,"types":["image"],"for_modes":["image2video"]},"last_frame":{"max_count":1,"types":["image"],"for_modes":["image2video"]},"reference_image":{"max_count":9,"types":["image"],"for_modes":["omni_reference"]},"subject":{"max_count":9,"types":["image"],"for_modes":["omni_reference"]}}},"param_schema":[{"field":"duration_ms","label":"视频时长（毫秒）","component":"input","type":"integer","min":4000,"max":15000,"step":1000,"default":5000},{"field":"resolution","label":"分辨率","component":"select","type":"string","enum":["480p","720p"],"default":"720p"},{"field":"aspect_ratio","label":"画面比例","component":"select","type":"string","enum":["16:9","9:16","1:1"],"default":"16:9"}],"supports_query":true},"key":"ark-video-mini","lifecycle":"active","modes":["text2video","image2video","omni_reference"],"provider_model_id":"doubao-seedance-2-0-mini-260615","requires_model_selection":false,"reviewed_at":"2026-10-28","source_url":"https://docs.volcengine.com/docs/ark/model-list?lang=zh","metering_strategy":"seedance_video_tokens_v1"},"preset_version_id":"6da07a11-0000-4000-8000-000000000001"},
 {"slug":"volcengine-ark","ordinal":29,"model":{"adapter_key":"volcengine_ark","capability":"video.generate","display_name":"Seedance 2.0 Mini","execution":{"expected_max_ms":600000,"limits":{"max_outputs":1,"roles":{"_total_images":9,"first_frame":{"max_count":1,"min_count":1,"types":["image"],"for_modes":["image2video"]},"last_frame":{"max_count":1,"types":["image"],"for_modes":["image2video"]},"reference_image":{"max_count":9,"types":["image"],"for_modes":["omni_reference"]},"subject":{"max_count":9,"types":["image"],"for_modes":["omni_reference"]}}},"param_schema":[{"field":"duration_ms","label":"视频时长（毫秒）","component":"input","type":"integer","min":4000,"max":15000,"step":1000,"default":5000},{"field":"resolution","label":"分辨率","component":"select","type":"string","enum":["480p","720p"],"default":"720p"},{"field":"aspect_ratio","label":"画面比例","component":"select","type":"string","enum":["16:9","9:16","1:1"],"default":"16:9"}],"supports_query":true},"key":"ark-video-mini","lifecycle":"active","modes":["text2video","image2video","omni_reference"],"provider_model_id":"doubao-seedance-2-0-mini-260615","requires_model_selection":false,"reviewed_at":"2026-10-28","source_url":"https://docs.volcengine.com/docs/ark/model-list?lang=zh","metering_strategy":"seedance_video_tokens_v1"},"preset_version_id":"6da07a12-0000-4000-8000-000000000001"},
+{"slug":"volcengine-ark","ordinal":32,"model":{"adapter_key":"volcengine_ark","capability":"video.generate","display_name":"Seedance 2.5 Flash","execution":{"expected_max_ms":600000,"limits":{"max_outputs":1,"roles":{"_total_images":30,"_total_videos":10,"_total_audios":10,"first_frame":{"max_count":1,"min_count":1,"types":["image"],"for_modes":["image2video"]},"last_frame":{"max_count":1,"types":["image"],"for_modes":["image2video"]},"reference_image":{"max_count":30,"types":["image"],"for_modes":["omni_reference"]},"reference_video":{"max_count":10,"types":["video"],"for_modes":["omni_reference"]},"reference_audio":{"max_count":10,"types":["audio"],"for_modes":["omni_reference"]},"subject":{"max_count":30,"types":["image","video","audio"],"for_modes":["omni_reference"]}}},"param_schema":[{"field":"duration_ms","label":"视频时长（毫秒）","component":"input","type":"integer","min":4000,"max":30000,"step":1000,"default":5000},{"field":"resolution","label":"分辨率","component":"select","type":"string","enum":["480p","720p"],"default":"720p"},{"field":"aspect_ratio","label":"画面比例","component":"select","type":"string","for_modes":["text2video","omni_reference"],"enum":["16:9","9:16","1:1","4:3","3:4","21:9"],"default":"16:9"},{"field":"generate_audio","label":"生成声音","component":"switch","type":"boolean","default":true}],"supports_query":true},"key":"ark-video-25-flash","lifecycle":"active","modes":["text2video","image2video","omni_reference"],"provider_model_id":"doubao-seedance-2-5-flash-261115","requires_model_selection":false,"reviewed_at":"2026-11-27","source_url":"https://docs.volcengine.com/docs/ark/model-list?lang=zh","metering_strategy":"seedance_video_tokens_v1"},"preset_version_id":"6da07a11-0000-4000-8000-000000000001"},
+{"slug":"volcengine-ark","ordinal":32,"model":{"adapter_key":"volcengine_ark","capability":"video.generate","display_name":"Seedance 2.5 Flash","execution":{"expected_max_ms":600000,"limits":{"max_outputs":1,"roles":{"_total_images":30,"_total_videos":10,"_total_audios":10,"first_frame":{"max_count":1,"min_count":1,"types":["image"],"for_modes":["image2video"]},"last_frame":{"max_count":1,"types":["image"],"for_modes":["image2video"]},"reference_image":{"max_count":30,"types":["image"],"for_modes":["omni_reference"]},"reference_video":{"max_count":10,"types":["video"],"for_modes":["omni_reference"]},"reference_audio":{"max_count":10,"types":["audio"],"for_modes":["omni_reference"]},"subject":{"max_count":30,"types":["image","video","audio"],"for_modes":["omni_reference"]}}},"param_schema":[{"field":"duration_ms","label":"视频时长（毫秒）","component":"input","type":"integer","min":4000,"max":30000,"step":1000,"default":5000},{"field":"resolution","label":"分辨率","component":"select","type":"string","enum":["480p","720p"],"default":"720p"},{"field":"aspect_ratio","label":"画面比例","component":"select","type":"string","for_modes":["text2video","omni_reference"],"enum":["16:9","9:16","1:1","4:3","3:4","21:9"],"default":"16:9"},{"field":"generate_audio","label":"生成声音","component":"switch","type":"boolean","default":true}],"supports_query":true},"key":"ark-video-25-flash","lifecycle":"active","modes":["text2video","image2video","omni_reference"],"provider_model_id":"doubao-seedance-2-5-flash-261115","requires_model_selection":false,"reviewed_at":"2026-11-27","source_url":"https://docs.volcengine.com/docs/ark/model-list?lang=zh","metering_strategy":"seedance_video_tokens_v1"},"preset_version_id":"6da07a12-0000-4000-8000-000000000001"},
 {"slug":"volcengine-ark","ordinal":30,"model":{"adapter_key":"volcengine_ark","capability":"video.generate","display_name":"Seedance 1.0 Pro","execution":{"expected_max_ms":600000,"limits":{"max_outputs":1,"roles":{"_total_images":2,"first_frame":{"max_count":1,"min_count":1,"types":["image"],"for_modes":["image2video"]},"last_frame":{"max_count":1,"types":["image"],"for_modes":["image2video"]}}},"param_schema":[{"field":"duration_ms","label":"视频时长（毫秒）","component":"input","type":"integer","min":2000,"max":12000,"step":1000,"default":5000},{"field":"resolution","label":"分辨率","component":"select","type":"string","enum":["480p","720p","1080p"],"default":"720p"},{"field":"aspect_ratio","label":"画面比例","component":"select","type":"string","enum":["16:9","9:16","1:1"],"default":"16:9"}],"supports_query":true},"key":"ark-video-10","lifecycle":"sunsetting","modes":["text2video","image2video"],"provider_model_id":"doubao-seedance-1-0-pro-250528","requires_model_selection":false,"reviewed_at":"2026-10-28","source_url":"https://docs.volcengine.com/docs/ark/model-list?lang=zh","metering_strategy":"unverified_metering_v1"},"preset_version_id":"6da07a11-0000-4000-8000-000000000001"},
 {"slug":"volcengine-ark","ordinal":30,"model":{"adapter_key":"volcengine_ark","capability":"video.generate","display_name":"Seedance 1.0 Pro","execution":{"expected_max_ms":600000,"limits":{"max_outputs":1,"roles":{"_total_images":2,"first_frame":{"max_count":1,"min_count":1,"types":["image"],"for_modes":["image2video"]},"last_frame":{"max_count":1,"types":["image"],"for_modes":["image2video"]}}},"param_schema":[{"field":"duration_ms","label":"视频时长（毫秒）","component":"input","type":"integer","min":2000,"max":12000,"step":1000,"default":5000},{"field":"resolution","label":"分辨率","component":"select","type":"string","enum":["480p","720p","1080p"],"default":"720p"},{"field":"aspect_ratio","label":"画面比例","component":"select","type":"string","enum":["16:9","9:16","1:1"],"default":"16:9"}],"supports_query":true},"key":"ark-video-10","lifecycle":"sunsetting","modes":["text2video","image2video"],"provider_model_id":"doubao-seedance-1-0-pro-250528","requires_model_selection":false,"reviewed_at":"2026-10-28","source_url":"https://docs.volcengine.com/docs/ark/model-list?lang=zh","metering_strategy":"unverified_metering_v1"},"preset_version_id":"6da07a12-0000-4000-8000-000000000001"},
 {"slug":"volcengine-ark","ordinal":31,"model":{"adapter_key":"volcengine_ark","capability":"video.generate","display_name":"Seedance 1.0 Pro Fast","execution":{"expected_max_ms":600000,"limits":{"max_outputs":1,"roles":{"_total_images":1,"first_frame":{"max_count":1,"min_count":1,"types":["image"],"for_modes":["image2video"]}}},"param_schema":[{"field":"duration_ms","label":"视频时长（毫秒）","component":"input","type":"integer","min":2000,"max":12000,"step":1000,"default":5000},{"field":"resolution","label":"分辨率","component":"select","type":"string","enum":["480p","720p","1080p"],"default":"720p"},{"field":"aspect_ratio","label":"画面比例","component":"select","type":"string","enum":["16:9","9:16","1:1"],"default":"16:9"}],"supports_query":true},"key":"ark-video-10-fast","lifecycle":"sunsetting","modes":["text2video","image2video"],"provider_model_id":"doubao-seedance-1-0-pro-fast-251015","requires_model_selection":false,"reviewed_at":"2026-10-28","source_url":"https://docs.volcengine.com/docs/ark/model-list?lang=zh","metering_strategy":"unverified_metering_v1"},"preset_version_id":"6da07a11-0000-4000-8000-000000000001"},
@@ -202,7 +204,9 @@ WITH sources AS (
                  '480p / 720p：¥46 / ¥28；1080p：¥51 / ¥31；4K：¥26 / ¥16'], NULL, NULL, NULL FROM sources
     UNION ALL SELECT 'volcengine_ark', 'doubao-seedance-2-5-260628', 'CNY', ark,
            ARRAY['正式生成，每百万视频 Token（无视频参考 / 有视频参考）',
-                 '480p / 720p：¥70 / ¥42；1080p：¥77 / ¥46', 'Draft 样片与正式生成分开计费'], NULL, NULL, NULL FROM sources
+                 '480p / 720p：¥70 / ¥42；1080p：¥77 / ¥46；4K：¥31 / ¥19', 'Draft 样片与正式生成分开计费'], NULL, NULL, NULL FROM sources
+    UNION ALL SELECT 'volcengine_ark', 'doubao-seedance-2-5-flash-261115', 'CNY', ark,
+           ARRAY['480p / 720p，每百万视频 Token：无视频参考 ¥46，有视频参考 ¥28'], NULL, NULL, NULL FROM sources
     UNION ALL SELECT 'volcengine_ark', 'doubao-seed-2-1-lite-260915', 'CNY', ark,
            ARRAY['每百万 Token：文本输入 ¥0.80、缓存命中 ¥0.16、输出 ¥2.70',
                  '音频输入 ¥12、缓存命中 ¥2.40；缓存存储 ¥0.017 / 百万 Token / 小时'], NULL, NULL, NULL FROM sources
@@ -246,6 +250,78 @@ SELECT adapter_key, provider_model_id, currency, source_url, to_jsonb(reference_
 ON CONFLICT (adapter_key, provider_model_id) DO UPDATE
 SET currency=EXCLUDED.currency, source_url=EXCLUDED.source_url, reference_lines=EXCLUDED.reference_lines,
     unit=EXCLUDED.unit, rule=EXCLUDED.rule, executable_until=EXCLUDED.executable_until;
+
+-- Ark fixed-spec video calculator. Public estimates do not set executable prices.
+-- https://docs.volcengine.com/docs/ark/model-pricing?lang=zh
+-- https://docs.volcengine.com/docs/ark/create-video-generation-task-api?lang=zh
+WITH dimensions(resolution, base_width, base_height, four_width, four_height, square, wide_width, wide_height) AS (
+    VALUES ('480p', 854, 480, 752, 560, 640, 992, 432),
+           ('720p', 1280, 720, 1112, 834, 960, 1470, 630),
+           ('1080p', 1920, 1080, 1664, 1248, 1440, 2206, 946),
+           ('4k', 3840, 2160, 3326, 2494, 2880, 4398, 1886)
+), model_rates(model_id, max_seconds, resolution, without_video, with_video) AS (
+    VALUES ('doubao-seedance-2-0-mini-260615', 15, '480p', 23, 14),
+           ('doubao-seedance-2-0-mini-260615', 15, '720p', 23, 14),
+           ('doubao-seedance-2-0-fast-260128', 15, '480p', 37, 22),
+           ('doubao-seedance-2-0-fast-260128', 15, '720p', 37, 22),
+           ('doubao-seedance-2-0-260128', 15, '480p', 46, 28),
+           ('doubao-seedance-2-0-260128', 15, '720p', 46, 28),
+           ('doubao-seedance-2-0-260128', 15, '1080p', 51, 31),
+           ('doubao-seedance-2-0-260128', 15, '4k', 26, 16),
+           ('doubao-seedance-2-5-260628', 30, '480p', 70, 42),
+           ('doubao-seedance-2-5-260628', 30, '720p', 70, 42),
+           ('doubao-seedance-2-5-260628', 30, '1080p', 77, 46),
+           ('doubao-seedance-2-5-260628', 30, '4k', 31, 19),
+           ('doubao-seedance-2-5-flash-261115', 30, '480p', 46, 28),
+           ('doubao-seedance-2-5-flash-261115', 30, '720p', 46, 28)
+), profiles AS (
+    SELECT model_id, jsonb_build_object(
+        'frames_per_second', 24, 'pixels_per_token', 1024,
+        'reference_floor_numerator', 2, 'reference_floor_denominator', 3,
+        'min_reference_seconds', 2, 'max_reference_seconds', max_seconds,
+        'min_output_seconds', 4, 'max_output_seconds', max_seconds,
+        'resolutions', jsonb_object_agg(rate.resolution, jsonb_build_object(
+            'cny_per_million_without_video', without_video,
+            'cny_per_million_with_video', with_video,
+            'geometries', geometry.ratios
+        ))
+    ) AS estimate
+    FROM model_rates rate
+    JOIN dimensions size USING (resolution)
+    CROSS JOIN LATERAL (
+        SELECT CASE WHEN rate.resolution = '480p' AND model_id LIKE 'doubao-seedance-2-0-%'
+                    THEN 864 ELSE base_width END AS width,
+               CASE WHEN rate.resolution = '480p' AND model_id LIKE 'doubao-seedance-2-0-%'
+                    THEN 496 ELSE base_height END AS height
+    ) landscape
+    CROSS JOIN LATERAL (
+        SELECT jsonb_object_agg(ratio, jsonb_build_object('width', w, 'height', h)) AS ratios
+        FROM (VALUES ('16:9', landscape.width, landscape.height), ('9:16', landscape.height, landscape.width),
+                     ('4:3', four_width, four_height), ('3:4', four_height, four_width),
+                     ('1:1', square, square), ('21:9', wide_width, wide_height)) AS pixels(ratio, w, h)
+    ) geometry
+    GROUP BY model_id, max_seconds
+)
+UPDATE catalog.model_price_preset price
+SET video_estimate = profiles.estimate
+FROM profiles
+WHERE price.adapter_key = 'volcengine_ark' AND price.provider_model_id = profiles.model_id;
+
+-- Reviewed initial sale tiers are independent snapshots of the public purchase reference.
+-- media probes have no assets and enable only the text-to-video release contract.
+UPDATE catalog.model_price_preset p
+SET quick_onboarding = jsonb_build_object(
+    'resolution','720p','ratio','16:9','test_duration_seconds',5,
+    'test_prompt','固定机位，窗边的白色陶瓷杯冒着蒸汽，背景虚化，自然日光。',
+    'sale_micros_per_million', seed.sale_micros_per_million,
+    'concurrency',2,'rpm',30
+)
+FROM (VALUES ('doubao-seedance-2-0-mini-260615',23000000),
+             ('doubao-seedance-2-0-fast-260128',37000000),
+             ('doubao-seedance-2-0-260128',46000000),
+             ('doubao-seedance-2-5-flash-261115',46000000),
+             ('doubao-seedance-2-5-260628',70000000)) seed(model_id,sale_micros_per_million)
+WHERE p.provider_model_id=seed.model_id AND p.adapter_key='volcengine_ark';
 
 -- https://www.volcengine.com/docs/82379/1330310 (2026-11-13), images/minute.
 INSERT INTO catalog.model_image_limit(adapter_key,provider_model_id,images_per_minute) VALUES

@@ -1,6 +1,6 @@
 # Agent 服务架构与技术选型调研
 
-> 观察日期：2026-11-25 ～ 2026-11-26  
+> 观察日期：2026-11-25 ～ 2026-11-27\
 > 研究对象：生产级 Agent 框架（Mastra / `@earendil-works/pi-durable` / Vercel AI SDK）、AI 网关（Bifrost / LiteLLM / Portkey / New-API）、同赛道开源项目（[`glanderness/BeefTV`](https://github.com/glanderness/BeefTV) / [`HBAI-Ltd/Toonflow-app`](https://github.com/HBAI-Ltd/Toonflow-app)）、异步编排引擎（Temporal / Restate / DBOS）与双轨 Evals  
 > 关联文档：[需求33](../requirement/33-Agent服务架构重构与技术选型需求.md) · [设计48](../design/48-Agent服务Mastra架构与技术选型设计.md) · [PRD34](../prd/34-Agent服务架构重构与技术选型.md) · [Plan43](../plan/43-Agent服务Mastra架构重构执行计划.md)  
 > 适用边界：本文记录公开源码事实、架构对比与选型依据，不替代用户确认，不作为工程实现或验收证明。
@@ -88,5 +88,11 @@ BeefTV 定位**本地优先桌面工作台**（Wails + Go + SQLite），内置�
 | Temporal | Pinned Worker 将运行绑定到特定 Worker 发布版本，旧运行可在旧构建排空。 [Worker Versioning](https://docs.temporal.io/worker-versioning#pinned-workflows) | 公开机制用于对照不同的升级模型。织光采用同一个 Agent 服务合同、同一个持久化真源和每次运行的资源快照。 |
 
 目录资源发布和检查点生命周期由[设计48 §7.8](../design/48-Agent服务Mastra架构与技术选型设计.md#agent-resource-layout)维护。模型、工具与计费的业务权威见[设计33](../design/33-多设计模式驱动的模型与供应商接入扩展体系设计.md#agent-gateway-billing)。
+
+## 7. Toonflow 的 Agent 资源与工具装配
+
+2026-11-27 通过 GitHub 核对 Toonflow 提交 `eecf51547`。其 Agent 入口使用 Pi 的会话运行时，装配模型、工具和资源。子 Agent 创建独立会话，向父会话转发工具与进展事件。 [运行入口](https://github.com/HBAI-Ltd/Toonflow-app/blob/eecf51547af47eb504822186bd3f2dee369125ff/apps/server/src/agent/runtime/index.ts#L1-L50) · [委派](https://github.com/HBAI-Ltd/Toonflow-app/blob/eecf51547af47eb504822186bd3f2dee369125ff/apps/server/src/agent/runtime/delegation.ts#L19-L51)
+
+其资源装配组合工作区约定、系统 Prompt、当轮工具和 Skill 目录。默认 Prompt 指导模型按需读 Skill 正文及相关附件，并检查当前工具权限。织光沿用 Mastra，以独立角色指令、按需 Skill 加载和运行授权实现对应能力。计费归其独立的多租户模块，接入与用量证据见专项研究。 [资源装配](https://github.com/HBAI-Ltd/Toonflow-app/blob/eecf51547af47eb504822186bd3f2dee369125ff/apps/server/src/agent/runtime/resources.ts#L12-L47) · [Prompt](https://github.com/HBAI-Ltd/Toonflow-app/blob/eecf51547af47eb504822186bd3f2dee369125ff/apps/server/src/agent/runtime/prompt.ts#L13-L19) · [计费调研](06-模型号池与多供应商路由调研.md#agent-gateway-billing)
 
 [调研导航](00-调研导航.md) · [需求33](../requirement/33-Agent服务架构重构与技术选型需求.md) · [设计48](../design/48-Agent服务Mastra架构与技术选型设计.md)

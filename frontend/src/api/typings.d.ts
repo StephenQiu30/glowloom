@@ -155,6 +155,19 @@ declare namespace API {
     id: string;
   };
 
+  type ArkVideoEstimate = {
+    amount_cny?: string;
+  };
+
+  type ArkVideoEstimateInput = {
+    count: number;
+    model: string;
+    output_seconds: number;
+    ratio: string;
+    reference_seconds?: number;
+    resolution: string;
+  };
+
   type Artifact = {
     attempt?: number;
     byte_size?: number;
@@ -1017,6 +1030,33 @@ declare namespace API {
     timezone: string;
     to: string;
     unknown_operations: number;
+  };
+
+  type CreditGrantInput = {
+    credits: number;
+    key: string;
+    reason: string;
+    scope_id: string;
+  };
+
+  type CreditGrantOrder = {
+    created_at: string;
+    credits: number;
+    event_id?: string;
+    id: string;
+    key: string;
+    proposer_id: string;
+    reason: string;
+    recipient_kind: string;
+    recipient_label: string;
+    reviewed_at?: string;
+    reviewer_id?: string;
+    scope_id: string;
+    state: "pending" | "issued" | "rejected";
+  };
+
+  type CreditGrantReview = {
+    approve: boolean;
   };
 
   type currentPromptSubmissionParams = {
@@ -2014,6 +2054,7 @@ declare namespace API {
     basis?: string;
     credits?: string;
     kind?: string;
+    maximum_credits?: string;
     quantity?: string;
     reused?: boolean;
   };
@@ -3889,6 +3930,7 @@ declare namespace API {
 
   type OnboardingPlan = {
     credits?: number;
+    estimated_credits?: number;
     probes?: Probe[];
     purchase_micros?: number;
   };
@@ -4797,6 +4839,12 @@ declare namespace API {
     | "failed"
     | "cancelled";
 
+  type QuickOnboardingInput = {
+    preset_key: string;
+    project_id: string;
+    scope_id: string;
+  };
+
   type QuotedMessage = {
     content_hash: string;
     message_id: string;
@@ -5191,6 +5239,11 @@ declare namespace API {
     /** Project UUID */
     pid: string;
     /** Import UUID */
+    id: string;
+  };
+
+  type reviewAiCreditGrantParams = {
+    /** 发放单 */
     id: string;
   };
 

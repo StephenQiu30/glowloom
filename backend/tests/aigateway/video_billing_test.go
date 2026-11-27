@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/aigateway"
+	prompt "github.com/StephenQiu30/glowloom-server/backend/internal/creation/prompt/domain"
 	catalog "github.com/StephenQiu30/glowloom-server/backend/internal/execution/catalog/domain"
 	pg "github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/application"
@@ -25,6 +26,37 @@ import (
 )
 
 const videoBillingProfile = `{"resolution":"720p","frames_per_second":24,"pixels_per_token":1024,"geometries":{"16:9":{"width":1280,"height":720}}}`
+
+func TestVideoTokenEstimateUsesConfirmationMaximumWithoutReservingCredits(t *testing.T) {
+	db, store, _, actor := fixture(t, 300)
+	model := videoBillingModel(t, store)
+	project := entrypointProject(t, db, actor)
+	version, mode := model.ID.String(), "text2video"
+	creation := aigateway.Creation{
+		Runtime: &aigateway.Runtime{DB: db}, Authorize: fixtureAuthority,
+	}
+	draft := prompt.Draft{
+		SchemaVersion: 1, ModelVersion: &version, Mode: &mode,
+		Params: map[string]any{"duration": float64(4)},
+		Document: prompt.Document{Type: "doc", Content: []prompt.Paragraph{{
+			Type: "paragraph", Content: []prompt.Inline{{Type: "text", Text: "A silent test scene"}},
+		}}},
+		References: []prompt.Reference{},
+		LabelState: prompt.LabelState{
+			HighWater:   map[string]int64{"image": 0, "video": 0, "audio": 0, "subject": 0},
+			Allocations: map[string]prompt.LabelAllocation{},
+		},
+	}
+	estimate, err := creation.Estimate(t.Context(), actor, project, draft)
+	require.NoError(t, err)
+	require.Equal(t, "87", estimate.Credits)
+	require.Equal(t, "100", estimate.MaximumCredits)
+	require.Equal(t, "86400", estimate.Quantity)
+	balance, err := store.Wallet(t.Context(), actor.ScopeID)
+	require.NoError(t, err)
+	require.EqualValues(t, 300, balance["available"])
+	require.EqualValues(t, 0, balance["held"])
+}
 
 func videoBillingModel(t *testing.T, store *pg.Store) domain.Model {
 	t.Helper()

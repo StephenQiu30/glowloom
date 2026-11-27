@@ -18,7 +18,10 @@ func modelPresets(tx *gorm.DB) ([]json.RawMessage, error) {
  'fields',COALESCE(m.payload->'execution'->'param_schema','[]'::jsonb),
  'concurrency',v.payload->'config'->'concurrency_limit','rpm',v.payload->'config'->'rate_limit_per_min',
  'rates',COALESCE(price.reference_lines,'[]'::jsonb),
- 'currency',price.currency,'request_micros',CASE WHEN price.unit IN ('per_image','per_request')
+ 'currency',price.currency,'video_estimate',price.video_estimate,
+ 'price_source_url',price.source_url,'quick_onboarding', CASE WHEN p.origin='builtin' AND price.quick_onboarding IS NOT NULL AND price.video_estimate IS NOT NULL
+ AND m.payload->'modes' @> '["text2video"]'::jsonb THEN
+ jsonb_strip_nulls(jsonb_build_object('resolution',price.quick_onboarding->>'resolution')) END,'request_micros',CASE WHEN price.unit IN ('per_image','per_request')
  AND (price.executable_until IS NULL OR price.executable_until>=CURRENT_DATE)
  THEN price.rule->'base_micros' END) AS document
  FROM catalog.provider_preset p

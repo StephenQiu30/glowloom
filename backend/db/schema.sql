@@ -8127,6 +8127,8 @@ CREATE TABLE catalog.model_price_preset (
     unit text,
     rule jsonb,
     executable_until date,
+    quick_onboarding jsonb CHECK (quick_onboarding IS NULL OR (currency = 'CNY' AND jsonb_typeof(quick_onboarding) = 'object')),
+    video_estimate jsonb CHECK (video_estimate IS NULL OR (currency = 'CNY' AND jsonb_typeof(video_estimate) = 'object')),
     PRIMARY KEY (adapter_key, provider_model_id),
     CHECK (executable_until IS NULL OR unit IS NOT NULL),
     CHECK ((unit IS NULL AND rule IS NULL) OR
@@ -9596,6 +9598,26 @@ CREATE INDEX ai_money_request ON ai.money_event(request_id);
 CREATE FUNCTION ai.immutable_fact() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN RAISE EXCEPTION 'AI immutable fact cannot be rewritten'; END $$;
 CREATE TRIGGER ai_money_immutable BEFORE UPDATE OR DELETE ON ai.money_event FOR EACH ROW EXECUTE FUNCTION ai.immutable_fact();
+CREATE TABLE ai.credit_grant_order (
+ id uuid PRIMARY KEY,source_key text NOT NULL UNIQUE CHECK(length(source_key) BETWEEN 1 AND 120),
+ scope_id uuid NOT NULL REFERENCES workspace.creation_scope(id),proposer_id uuid NOT NULL,
+ credits bigint NOT NULL CHECK(credits BETWEEN 1 AND 1000000000),reason text NOT NULL CHECK(length(reason) BETWEEN 1 AND 500),
+ recipient_kind text NOT NULL CHECK(recipient_kind IN ('personal','team')),recipient_label text NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ UNIQUE(id,proposer_id)
+);
+CREATE INDEX ai_credit_grant_order_recent ON ai.credit_grant_order(created_at DESC,id DESC);
+CREATE TABLE ai.credit_grant_review (
+ order_id uuid PRIMARY KEY,proposer_id uuid NOT NULL,reviewer_id uuid NOT NULL CHECK (reviewer_id<>proposer_id),
+ approved boolean NOT NULL,event_id uuid UNIQUE REFERENCES ai.money_event(id),
+ reviewed_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ FOREIGN KEY(order_id,proposer_id) REFERENCES ai.credit_grant_order(id,proposer_id),
+ CHECK (approved=(event_id IS NOT NULL))
+);
+CREATE TRIGGER ai_credit_grant_order_immutable BEFORE UPDATE OR DELETE ON ai.credit_grant_order FOR EACH ROW EXECUTE FUNCTION ai.immutable_fact();
+CREATE TRIGGER ai_credit_grant_review_immutable BEFORE UPDATE OR DELETE ON ai.credit_grant_review FOR EACH ROW EXECUTE FUNCTION ai.immutable_fact();
+GRANT SELECT,INSERT ON ai.credit_grant_order,ai.credit_grant_review TO glowloom_app;
+
 CREATE FUNCTION ai.immutable_document() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
  IF OLD.document IS DISTINCT FROM NEW.document THEN RAISE EXCEPTION 'AI published document is immutable'; END IF;

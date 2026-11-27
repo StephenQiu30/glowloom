@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -25,13 +26,13 @@ type OnboardingSummary struct {
 	ModelID  uuid.UUID `json:"model_id"`
 	State    string    `json:"state"`
 	Upstream string    `json:"upstream_model"`
+	ScopeID  uuid.UUID `json:"scope_id"`
 }
 
 // OnboardingReview is the persisted verification plan and its current progress.
 type OnboardingReview struct {
 	OnboardingSummary
 	Plan    application.OnboardingPlan `json:"plan"`
-	Scope   uuid.UUID                  `json:"scope_id"`
 	Project uuid.UUID                  `json:"project_id"`
 	Probes  []OnboardingProgress       `json:"progress"`
 }
@@ -231,14 +232,22 @@ func (s *Store) ReviewOnboarding(ctx context.Context, id uuid.UUID) (OnboardingR
 			return err
 		}
 		result = OnboardingReview{
-			OnboardingSummary: OnboardingSummary{ID: id, ModelID: row.ModelID, State: row.State, Upstream: work.Input.Route.UpstreamModel},
-			Plan:              work.Plan, Scope: work.Input.Scope, Project: work.Input.Project,
+			OnboardingSummary: OnboardingSummary{ID: id, ModelID: row.ModelID, State: row.State, Upstream: work.Input.Route.UpstreamModel, ScopeID: work.Input.Scope},
+			Plan:              work.Plan, Project: work.Input.Project,
 			Probes: make([]OnboardingProgress, 0, len(work.Plan.Probes)),
 		}
+		var estimated int64
 		for i, probe := range work.Plan.Probes {
 			call, err := application.OnboardingCall(work.Input, work.Model, work.Actor.ID, probe, i)
 			if err != nil {
 				return err
+			}
+			if work.Model.VideoMetering != nil {
+				credits, err := call.VideoEstimatedCredits()
+				if err != nil || credits > math.MaxInt64-estimated {
+					return domain.ErrInvalid
+				}
+				estimated += credits
 			}
 			var state string
 			if err := tx.Raw("SELECT state FROM ai.request WHERE id=? AND origin=? AND run_id=?", call.ID, application.OnboardingOrigin, id).Scan(&state).Error; err != nil {
@@ -247,6 +256,9 @@ func (s *Store) ReviewOnboarding(ctx context.Context, id uuid.UUID) (OnboardingR
 			if state != "" {
 				result.Probes = append(result.Probes, OnboardingProgress{RequestID: call.ID, State: state})
 			}
+		}
+		if work.Model.VideoMetering != nil {
+			result.Plan.EstimatedCredits = &estimated
 		}
 		return nil
 	})

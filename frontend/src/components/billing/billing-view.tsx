@@ -34,6 +34,11 @@ function TransactionRow({ entry }: { entry: API.WalletEntry }) {
           {time}
         </time>
       )}
+      {entry.source === "promotional" && entry.id && (
+        <span className="col-span-2 text-xs wrap-anywhere text-muted-foreground">
+          流水号 {entry.id}
+        </span>
+      )}
     </li>
   );
 }

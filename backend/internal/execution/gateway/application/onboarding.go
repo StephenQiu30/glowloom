@@ -35,9 +35,10 @@ type Probe struct {
 
 // OnboardingPlan is the plan shown to a payer before uploading a key.
 type OnboardingPlan struct {
-	Probes         []Probe `json:"probes"`
-	Credits        int64   `json:"credits"`
-	PurchaseMicros int64   `json:"purchase_micros"`
+	Probes           []Probe `json:"probes"`
+	Credits          int64   `json:"credits"`
+	EstimatedCredits *int64  `json:"estimated_credits,omitempty"`
+	PurchaseMicros   int64   `json:"purchase_micros"`
 }
 
 // PurchaseBound uses the full reviewed limits, including the most expensive input bucket.

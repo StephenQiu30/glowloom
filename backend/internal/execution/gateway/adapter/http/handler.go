@@ -54,14 +54,17 @@ func (h *Handler) Register(api, session *gin.RouterGroup) {
 	session.GET("/ai/bills", h.bills)
 	session.GET("/ai/requests/:id", h.read)
 	session.GET("/ai/admin/configuration", h.configuration)
+	session.POST("/ai/admin/ark-video-estimate", h.arkVideoEstimate)
 	session.PUT("/ai/admin/budgets", h.budget)
 	session.POST("/ai/admin/models", h.model)
 	session.POST("/ai/admin/routes", h.route)
 	session.POST("/ai/admin/routes/delete", h.deleteRoutes)
+	session.POST("/ai/admin/onboarding/preset", h.quickOnboarding)
 	session.GET("/ai/admin/onboarding/:id", h.onboarding)
 	session.POST("/ai/admin/onboarding/:id/verify", h.verifyOnboarding)
 	session.POST("/ai/admin/onboarding/:id/rollback", h.rollbackOnboarding)
 	session.POST("/ai/admin/credits", h.credits)
+	session.POST("/ai/admin/credits/:id/review", h.reviewCredits)
 	session.POST("/ai/admin/reconciliations", h.reconcile)
 	session.PUT("/ai/admin/credentials/:id", h.credential)
 }
@@ -295,30 +298,52 @@ func (h *Handler) read(c *gin.Context) {
 	c.JSON(200, out)
 }
 
-// credits 按业务凭证发放积分.
-// @Summary 按业务凭证发放积分
-// @ID grantAiCredits
+// credits 提交积分赠送单.
+// @Summary 提交积分赠送单
+// @ID submitAiCreditGrant
 // @Tags ai-gateway
 // @Accept json
 // @Produce json
-// @Param input body object true "合同或协议原始 JSON；仅支持明确公布的字段"
-// @Success 201
+// @Param input body domain.CreditGrantInput true "赠送凭证与受款空间"
+// @Success 201 {object} domain.CreditGrantOrder
 // @Router /api/ai/admin/credits [post]
 func (h *Handler) credits(c *gin.Context) {
-	var in struct {
-		Scope   uuid.UUID `json:"scope_id"`
-		Key     string    `json:"key"`
-		Credits int64     `json:"credits"`
-	}
-	if c.ShouldBindJSON(&in) != nil {
-		problem(c, domain.ErrInvalid)
-		return
-	}
-	if err := h.store(identityhttp.Principal(c)).Grant(c.Request.Context(), in.Scope, in.Key, in.Credits); err != nil {
+	var in domain.CreditGrantInput
+	if err := bindOnboarding(c, 4096, &in); err != nil {
 		problem(c, err)
 		return
 	}
-	c.Status(201)
+	out, err := h.store(identityhttp.Principal(c)).SubmitCreditGrant(c.Request.Context(), in)
+	if err != nil {
+		problem(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, out)
+}
+
+// reviewCredits 复核并处理积分赠送单.
+// @Summary 复核并处理积分赠送单
+// @ID reviewAiCreditGrant
+// @Tags ai-gateway
+// @Accept json
+// @Produce json
+// @Param id path string true "发放单"
+// @Param input body domain.CreditGrantReview true "复核决定"
+// @Success 200 {object} domain.CreditGrantOrder
+// @Router /api/ai/admin/credits/{id}/review [post]
+func (h *Handler) reviewCredits(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	var in domain.CreditGrantReview
+	if err != nil || id == uuid.Nil || bindOnboarding(c, 4096, &in) != nil || in.Approve == nil {
+		problem(c, domain.ErrInvalid)
+		return
+	}
+	out, err := h.store(identityhttp.Principal(c)).ReviewCreditGrant(c.Request.Context(), id, *in.Approve)
+	if err != nil {
+		problem(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
 }
 
 // credential 调整账号可用状态.
@@ -454,6 +479,29 @@ func (h *Handler) configuration(c *gin.Context) {
 	}
 	out["media_drivers"] = provider.MediaDriverOptions()
 	c.JSON(200, out)
+}
+
+// arkVideoEstimate 按方舟公开规则估算视频费用.
+// @Summary 按方舟公开规则估算视频费用
+// @ID estimateArkVideo
+// @Tags ai-gateway
+// @Accept json
+// @Produce json
+// @Param input body domain.ArkVideoEstimateInput true "方舟模型与输出规格"
+// @Success 200 {object} domain.ArkVideoEstimate
+// @Router /api/ai/admin/ark-video-estimate [post]
+func (h *Handler) arkVideoEstimate(c *gin.Context) {
+	var in domain.ArkVideoEstimateInput
+	if err := bindOnboarding(c, 4096, &in); err != nil {
+		problem(c, err)
+		return
+	}
+	out, err := h.store(identityhttp.Principal(c)).EstimateArkVideo(c.Request.Context(), in)
+	if err != nil {
+		problem(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
 }
 
 // budget 设置项目积分上限.

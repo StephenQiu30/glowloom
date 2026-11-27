@@ -138,7 +138,7 @@ func (s *Store) Read(ctx context.Context, scope, id uuid.UUID) (domain.Record, e
 
 // Grant is an explicit audited administrator event, never implicit account funding.
 func (s *Store) Grant(ctx context.Context, scope uuid.UUID, key string, credits int64) error {
-	if scope == uuid.Nil || key == "" || len(key) > 120 || credits < 1 || credits > 1000000000 {
+	if scope == uuid.Nil || key == "" || len(key) > 120 || credits < 1 || credits > domain.MaxCreditGrant {
 		return domain.ErrInvalid
 	}
 	hash := domain.Digest([]byte(fmt.Sprintf("%s/%d", scope, credits)))
@@ -146,36 +146,49 @@ func (s *Store) Grant(ctx context.Context, scope uuid.UUID, key string, credits 
 		if err := s.check(ctx, tx, scope, uuid.Nil, true); err != nil {
 			return err
 		}
-		if err := tx.Exec("INSERT INTO ai.account(scope_id) VALUES(?) ON CONFLICT DO NOTHING", scope).Error; err != nil {
-			return err
-		}
-		var version int64
-		if err := tx.Raw("SELECT version FROM ai.account WHERE scope_id=? FOR UPDATE", scope).Row().Scan(&version); err != nil {
-			return err
-		}
-		var prior string
-		r := tx.Raw("SELECT source_hash FROM ai.money_event WHERE scope_id=? AND event_key=?", scope, "grant/"+key).Scan(&prior)
-		if r.Error != nil {
-			return r.Error
-		}
-		if r.RowsAffected > 0 {
-			if prior != hash {
-				return domain.ErrConflict
-			}
-			return nil
-		}
-		if err := tx.Exec(`INSERT INTO ai.money_event(id,scope_id,actor_id,source_reference,event_key,kind,available_delta,held_delta,spent_delta,source_hash) VALUES(?,?,?,?,?,'grant',?,0,0,?)`, uuid.New(), scope, s.actor.ID, key, "grant/"+key, credits, hash).Error; err != nil {
-			return err
-		}
-		r = tx.Exec("UPDATE ai.account SET available=available+?,version=version+1 WHERE scope_id=? AND version=? AND available+held<=92233720368547-?", credits, scope, version, credits)
-		if r.Error != nil {
-			return r.Error
-		}
-		if r.RowsAffected != 1 {
-			return domain.ErrConflict
-		}
-		return nil
+		_, err := s.grantCredits(tx, scope, key, "grant/"+key, hash, credits)
+		return err
 	})
+}
+
+func (s *Store) grantCredits(tx *gorm.DB, scope uuid.UUID, reference, eventKey, hash string, credits int64) (uuid.UUID, error) {
+	if err := tx.Exec("INSERT INTO ai.account(scope_id) VALUES(?) ON CONFLICT DO NOTHING", scope).Error; err != nil {
+		return uuid.Nil, err
+	}
+	var account struct{ Available, Held, Version int64 }
+	if err := tx.Raw("SELECT available,held,version FROM ai.account WHERE scope_id=? FOR UPDATE", scope).Scan(&account).Error; err != nil {
+		return uuid.Nil, err
+	}
+	var prior struct {
+		ID         uuid.UUID
+		SourceHash string
+	}
+	r := tx.Raw("SELECT id,source_hash FROM ai.money_event WHERE scope_id=? AND event_key=?", scope, eventKey).Scan(&prior)
+	if r.Error != nil {
+		return uuid.Nil, r.Error
+	}
+	if r.RowsAffected > 0 {
+		if prior.SourceHash != hash {
+			return uuid.Nil, domain.ErrConflict
+		}
+		return prior.ID, nil
+	}
+	if account.Available > 92233720368547-account.Held-credits {
+		return uuid.Nil, domain.ErrConflict
+	}
+	eventID := uuid.New()
+	if err := tx.Exec(`INSERT INTO ai.money_event(id,scope_id,actor_id,source_reference,event_key,kind,available_delta,held_delta,spent_delta,source_hash)
+		VALUES(?,?,?,?,?,'grant',?,0,0,?)`, eventID, scope, s.actor.ID, reference, eventKey, credits, hash).Error; err != nil {
+		return uuid.Nil, err
+	}
+	r = tx.Exec("UPDATE ai.account SET available=?,version=version+1 WHERE scope_id=? AND version=?", account.Available+credits, scope, account.Version)
+	if r.Error != nil {
+		return uuid.Nil, r.Error
+	}
+	if r.RowsAffected != 1 {
+		return uuid.Nil, domain.ErrConflict
+	}
+	return eventID, nil
 }
 
 // Admit commits request identity, one hold and one independently audited attempt.
