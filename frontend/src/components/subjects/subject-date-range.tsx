@@ -161,7 +161,8 @@ export function SubjectDateRange({
       <div className="group relative inline-flex min-w-0">
         <PopoverTrigger asChild>
           <Button
-            variant={active ? "secondary" : "ghost"}
+            variant="filter"
+            data-active={active || undefined}
             size="toolbar"
             disabled={disabled}
             aria-label="时间"

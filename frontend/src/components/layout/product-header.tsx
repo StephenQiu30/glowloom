@@ -19,6 +19,7 @@ export function ProductHeader({
   search,
   showSearch,
   showUtilities,
+  showCanvasHistory,
   actor,
   isMobile,
   navigationOpen,
@@ -53,6 +54,7 @@ export function ProductHeader({
       search={search}
       showSearch={showSearch && !replaceBase}
       showUtilities={showUtilities}
+      showCanvasHistory={showCanvasHistory}
       actor={actor}
       onLogin={onLogin}
       onLogout={onLogout}

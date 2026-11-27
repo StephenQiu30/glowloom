@@ -10,6 +10,7 @@ export type ProductHeaderActionsProps = ProductAccountActionsProps & {
   search?: PageSearch;
   showSearch?: boolean;
   showUtilities?: boolean;
+  showCanvasHistory?: boolean;
 };
 
 /** Page-specific tools never change the shared account area's composition or identity. */
@@ -17,12 +18,15 @@ export function ProductHeaderActions({
   search,
   showSearch = true,
   showUtilities = false,
+  showCanvasHistory = true,
   ...accountProps
 }: ProductHeaderActionsProps) {
   return (
     <Toolbar density="navigation" className="product-header-actions">
       {showSearch && <ProductSearch search={search} />}
-      {showUtilities && <ProductUtilityNavigation />}
+      {showUtilities && (
+        <ProductUtilityNavigation showCanvasHistory={showCanvasHistory} />
+      )}
       <ProductAccountActions key="account" {...accountProps} />
     </Toolbar>
   );

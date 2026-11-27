@@ -134,7 +134,6 @@ function StudioWorkspace() {
             onClear={noop}
             onLock={setLocked}
             onBatchMode={noop}
-            toolbarTarget={null}
           />
         ) : (
           <div className="flex flex-wrap items-center gap-3 rounded-xl bg-muted/50 p-3">

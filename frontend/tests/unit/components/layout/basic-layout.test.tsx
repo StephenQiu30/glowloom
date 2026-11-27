@@ -715,14 +715,23 @@ it("asset header options stay stable under the shared login context", async () =
   expect(
     within(header).getByRole("button", { name: "搜索本人生成历史" }),
   ).toBeTruthy();
+  const batch = within(header).getByRole("button", { name: "批量操作" });
+  fireEvent.click(batch);
+  const cancel = screen.getByRole("button", { name: "取消选择" });
+  expect(cancel.closest("main")).toBeTruthy();
+  expect(document.activeElement).toBe(cancel);
+  expect(screen.queryByRole("button", { name: "搜索本人生成历史" })).toBeNull();
+  fireEvent.click(cancel);
+  expect(document.activeElement).toBe(
+    within(header).getByRole("button", { name: "批量操作" }),
+  );
   expect(
-    screen
-      .getByRole("button", { name: "批量操作" })
-      .closest('[aria-label="资产筛选"]'),
+    within(header).getByRole("button", { name: "搜索本人生成历史" }),
   ).toBeTruthy();
   expect(within(header).getByRole("tab", { name: "生成历史" })).toBeTruthy();
   expect(within(header).getByRole("tab", { name: "画布" })).toBeTruthy();
   expect(within(header).getByRole("tab", { name: "短剧工作室" })).toBeTruthy();
+  expect(within(header).queryByRole("link", { name: "历史画布" })).toBeNull();
   const account = within(header).getByRole("group", { name: "通知与账号" });
   expect(
     within(account).getByRole("button", { name: "账号菜单" }),

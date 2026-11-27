@@ -7,7 +7,7 @@ import { ListChecks } from "lucide-react";
 import { useBatchToolbarFocus } from "./use-batch-toolbar-focus";
 import { Toolbar } from "@/components/ui/toolbar";
 import { AssetToolbarButton } from "./asset-toolbar-button";
-import { createPortal } from "react-dom";
+import { PageToolbar } from "@/components/layout/page-toolbar";
 import Link from "next/link";
 import { MoreHorizontal, Pencil, Plus, Star, Trash2, X } from "lucide-react";
 import { applyCanvasAssetCommand, listAssetCanvases } from "@/api/canvases";
@@ -67,7 +67,7 @@ export function AssetCanvasList({
   onClear,
   onLock,
   onBatchMode,
-  toolbarTarget,
+  toolbarInHeader = false,
   recent = false,
 }: {
   kind: "canvas" | "short_drama";
@@ -76,7 +76,7 @@ export function AssetCanvasList({
   onClear: () => void;
   onLock: (locked: boolean) => void;
   onBatchMode: (batch: boolean) => void;
-  toolbarTarget: HTMLElement | null;
+  toolbarInHeader?: boolean;
   recent?: boolean;
 }) {
   const [page, setPage] = useState<ReturnType<
@@ -402,10 +402,11 @@ export function AssetCanvasList({
   );
   return (
     <div className="grid min-w-0 gap-6">
-      {!recent &&
-        (toolbarTarget && !batch
-          ? createPortal(toolbar, toolbarTarget)
-          : toolbar)}
+      {!recent && (
+        <PageToolbar inHeader={toolbarInHeader && !batch} slot="actions">
+          {toolbar}
+        </PageToolbar>
+      )}
       {intent && !deleting && !renaming && (
         <Button
           className="justify-self-start"

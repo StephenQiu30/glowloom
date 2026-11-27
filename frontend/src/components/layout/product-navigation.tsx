@@ -15,7 +15,7 @@ export function ProductNavigation({
   ...header
 }: Omit<
   ComponentProps<typeof ProductHeader>,
-  "inlineNavigation" | "showSearch" | "showUtilities"
+  "inlineNavigation" | "showSearch" | "showUtilities" | "showCanvasHistory"
 > & {
   screen: Screen;
   hideSearch?: boolean;
@@ -44,7 +44,6 @@ export function ProductNavigation({
               [
                 "billing",
                 "conversations",
-                "assets",
                 "explore",
                 "ai-tools",
                 "subjects",
@@ -57,6 +56,7 @@ export function ProductNavigation({
               (!adminSection || !header.isMobile || Boolean(header.search))
             }
             showUtilities={!adminSection || screen === "analytics"}
+            showCanvasHistory={screen !== "assets"}
           />
           {children}
         </div>

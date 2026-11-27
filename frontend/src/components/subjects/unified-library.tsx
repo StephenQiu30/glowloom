@@ -129,6 +129,7 @@ export function UnifiedSubjectLibrary({
   const [exporting, setExporting] = useState(false);
   const exportBusy = useRef(false);
   const locked = pending || uncertain || exporting;
+  const searching = Boolean(query.trim());
   useEffect(() => {
     onLockChange?.(locked || !!editing);
     return () => onLockChange?.(false);
@@ -467,14 +468,18 @@ export function UnifiedSubjectLibrary({
             className="resource-card-grid unified-subject-grid"
             data-mobile-columns="1"
           >
-            {!query && !filter.favorite && !onSelect ? (
+            {!searching && !filter.favorite && !batch && !onSelect ? (
               <Button
-                variant="ghost"
-                className="unified-subject-new h-auto min-w-0 flex-col items-stretch justify-start text-left"
+                variant="asset-card"
+                size="asset-card"
+                className="unified-subject-new"
                 disabled={locked}
                 onClick={() => setEditing("new")}
               >
-                <span className="unified-subject-cover unified-subject-create">
+                <span
+                  className="unified-subject-cover unified-subject-create"
+                  data-asset-cover
+                >
                   <Plus className="size-5 text-muted-foreground" />
                 </span>
                 <span className="resource-card-info unified-subject-info">
@@ -605,7 +610,7 @@ export function UnifiedSubjectLibrary({
               </ContextMenu>
             ))}
           </div>
-          {!page?.items.length && (query || filter.favorite) ? (
+          {!page?.items.length && (searching || filter.favorite) ? (
             <ContentState
               variant="workspace"
               className="unified-subject-empty"

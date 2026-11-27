@@ -3,7 +3,6 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import Image from "next/image";
 import { ChevronDown } from "lucide-react";
 import { useOptionalSession } from "@/components/auth/session";
 import { useSpace } from "@/components/spaces/space-context";
@@ -13,8 +12,10 @@ import { PageLayout } from "@/components/layout/page-layout";
 import { HeaderNavigation } from "@/components/layout/header-navigation";
 import { ContentState } from "@/components/layout/content-state";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Toolbar, ToolbarGroup } from "@/components/ui/toolbar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +23,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -129,9 +131,6 @@ function WorkspaceScope({
   const login = useLoginDialog();
   const [locked, setLocked] = useState(false);
   const [batch, setBatch] = useState(false);
-  const [toolbarTarget, setToolbarTarget] = useState<HTMLDivElement | null>(
-    null,
-  );
   const [collection, setCollection] = useState<"current" | "legacy">(
     initialLocation?.collection ?? "current",
   );
@@ -227,7 +226,11 @@ function WorkspaceScope({
     }));
   };
   return (
-    <PageLayout screen="assets" search={pageSearch} hideSearch={!authenticated}>
+    <PageLayout
+      screen="assets"
+      search={pageSearch}
+      hideSearch={!authenticated || batch}
+    >
       <PageHeader title="资产和主体" hideTitle />
       <Tabs
         value={view}
@@ -235,7 +238,7 @@ function WorkspaceScope({
         className="asset-workspace-tabs gap-6"
       >
         <HeaderNavigation label="资产分类" active={view}>
-          <TabsList variant="workspace" aria-label="资产来源">
+          <TabsList variant="secondary" aria-label="资产来源">
             {sources.map((source) => (
               <TabsTrigger key={source.id} value={source.id} disabled={locked}>
                 {source.label}
@@ -244,11 +247,16 @@ function WorkspaceScope({
           </TabsList>
         </HeaderNavigation>
         {authenticated && view !== "subjects" && (
-          <div aria-label="资产筛选" className="asset-filter-bar">
+          <Toolbar
+            role="group"
+            aria-label="资产筛选"
+            className="asset-filter-bar"
+          >
             {(view === "history" ||
               view === "motion" ||
               view === "marketing") && (
               <ToggleGroup
+                variant="text"
                 size="toolbar"
                 spacing={1}
                 type="single"
@@ -283,6 +291,7 @@ function WorkspaceScope({
             )}
             {view === "canvas" && (
               <ToggleGroup
+                variant="text"
                 size="toolbar"
                 spacing={1}
                 type="single"
@@ -300,7 +309,14 @@ function WorkspaceScope({
                 </ToggleGroupItem>
               </ToggleGroup>
             )}
-            <div className="flex flex-wrap items-center">
+            {view !== "short_drama" && (
+              <Separator orientation="vertical" className="max-md:hidden" />
+            )}
+            <ToolbarGroup
+              appearance="plain"
+              className="flex-wrap"
+              aria-label="筛选与排序"
+            >
               <AssetFilterMenu
                 kind={view === "history" ? kind : undefined}
                 value={filters}
@@ -345,25 +361,28 @@ function WorkspaceScope({
                     </DropdownMenuRadioGroup>
                   </DropdownMenuGroup>
                   {view !== "history" && (
-                    <DropdownMenuGroup>
-                      <DropdownMenuLabel>排序方式</DropdownMenuLabel>
-                      <DropdownMenuRadioGroup
-                        value={filters.sort}
-                        onValueChange={(value) =>
-                          setFilters((current) => ({
-                            ...current,
-                            sort: value as AssetFilters["sort"],
-                          }))
-                        }
-                      >
-                        <DropdownMenuRadioItem value="updated">
-                          修改时间
-                        </DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem value="created">
-                          创建时间
-                        </DropdownMenuRadioItem>
-                      </DropdownMenuRadioGroup>
-                    </DropdownMenuGroup>
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuGroup>
+                        <DropdownMenuLabel>排序方式</DropdownMenuLabel>
+                        <DropdownMenuRadioGroup
+                          value={filters.sort}
+                          onValueChange={(value) =>
+                            setFilters((current) => ({
+                              ...current,
+                              sort: value as AssetFilters["sort"],
+                            }))
+                          }
+                        >
+                          <DropdownMenuRadioItem value="updated">
+                            修改时间
+                          </DropdownMenuRadioItem>
+                          <DropdownMenuRadioItem value="created">
+                            创建时间
+                          </DropdownMenuRadioItem>
+                        </DropdownMenuRadioGroup>
+                      </DropdownMenuGroup>
+                    </>
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -377,11 +396,8 @@ function WorkspaceScope({
                   清除筛选
                 </Button>
               )}
-            </div>
-            {view !== "motion" && view !== "marketing" && (
-              <div ref={setToolbarTarget} className="ml-auto min-w-0" />
-            )}
-          </div>
+            </ToolbarGroup>
+          </Toolbar>
         )}
         <TabsContent value={view} className="min-w-0">
           {!authenticated ? (
@@ -398,6 +414,7 @@ function WorkspaceScope({
                 scopeID={space.selected.id}
                 query={filters.search}
                 embedded
+                toolbarInHeader
                 onLockChange={setLocked}
                 onBatchMode={setBatch}
               />
@@ -405,26 +422,18 @@ function WorkspaceScope({
               <ContentState title="请选择空间" />
             )
           ) : view === "motion" || view === "marketing" ? (
-            <section
-              className="studio-asset-empty flex min-h-[480px] flex-col items-center justify-center gap-4 text-center"
-              aria-label={view === "motion" ? "动效资产" : "营销资产"}
-            >
-              <Image
-                src="/design/reference/studios/empty.png"
-                alt=""
-                width={120}
-                height={120}
-              />
-              <p className="text-sm text-muted-foreground">暂无相关资产</p>
-              {view === "motion" && (
-                <Button asChild variant="outline">
-                  <Link href="/motion-studio">进入动效工作室开启创作</Link>
-                </Button>
-              )}
-              <p className="text-xs text-muted-foreground">
-                {view === "motion" ? "动效" : "营销"}生成暂未开放
-              </p>
-            </section>
+            <ContentState
+              variant="workspace"
+              title="暂无相关资产"
+              description={`${view === "motion" ? "动效" : "营销"}生成暂未开放`}
+              actions={
+                view === "motion" ? (
+                  <Button asChild variant="outline">
+                    <Link href="/motion-studio">进入动效工作室</Link>
+                  </Button>
+                ) : undefined
+              }
+            />
           ) : view === "history" ? (
             <PersonalHistoryList
               key={JSON.stringify([kind, filters])}
@@ -433,7 +442,6 @@ function WorkspaceScope({
               onClear={clear}
               onLock={setLocked}
               onBatchMode={setBatch}
-              toolbarTarget={toolbarTarget}
             />
           ) : (
             <AssetCanvasList
@@ -444,7 +452,7 @@ function WorkspaceScope({
               onClear={clear}
               onLock={setLocked}
               onBatchMode={setBatch}
-              toolbarTarget={toolbarTarget}
+              toolbarInHeader
             />
           )}
         </TabsContent>

@@ -7,7 +7,7 @@ import { ListChecks } from "lucide-react";
 import { useBatchToolbarFocus } from "./use-batch-toolbar-focus";
 import { Toolbar } from "@/components/ui/toolbar";
 import { AssetToolbarButton } from "./asset-toolbar-button";
-import { createPortal } from "react-dom";
+import { PageToolbar } from "@/components/layout/page-toolbar";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
@@ -93,14 +93,12 @@ export function PersonalHistoryList({
   onClear,
   onLock,
   onBatchMode,
-  toolbarTarget,
 }: {
   kind: AssetKind;
   filters: AssetFilters;
   onClear: () => void;
   onLock: (locked: boolean) => void;
   onBatchMode: (batch: boolean) => void;
-  toolbarTarget: HTMLElement | null;
 }) {
   const [page, setPage] = useState<ReturnType<
     typeof requirePersonalHistory
@@ -550,7 +548,9 @@ export function PersonalHistoryList({
   );
   return (
     <div className="grid min-w-0 gap-6">
-      {toolbarTarget && !batch ? createPortal(toolbar, toolbarTarget) : toolbar}
+      <PageToolbar inHeader={!batch} slot="actions">
+        {toolbar}
+      </PageToolbar>
       {intent && !deleting && (
         <Button
           disabled={writing}
