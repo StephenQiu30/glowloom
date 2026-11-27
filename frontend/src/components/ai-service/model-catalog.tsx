@@ -20,11 +20,14 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ReactNode } from "react";
-import { modelPreset, type GatewayConfiguration } from "@/lib/ai-gateway-admin";
-import { GatewayAction } from "./gateway-action";
-import { priceSummary } from "./gateway-fields";
-import { protocolLabels } from "./gateway-forms";
-import { GatewayTable } from "./gateway-table";
+import {
+  modelPreset,
+  type AiServiceConfiguration,
+} from "@/lib/ai-service-admin";
+import { AiServiceAction } from "./admin-action";
+import { priceSummary } from "./admin-fields";
+import { protocolLabels } from "./admin-forms";
+import { AiServiceTable } from "./admin-table";
 
 const categories = [
   ["all", "全部"],
@@ -43,14 +46,14 @@ const capabilityLabels: Record<string, string> = {
   "text.generate": "文本生成",
 };
 
-type RouteRow = GatewayConfiguration["routes"][number];
+type RouteRow = AiServiceConfiguration["routes"][number];
 
-export function GatewayModelList({
+export function ModelCatalog({
   configuration,
   startRoute,
   toolbarActions,
 }: {
-  configuration: GatewayConfiguration;
+  configuration: AiServiceConfiguration;
   startRoute: (id: string) => void;
   toolbarActions: ReactNode;
 }) {
@@ -72,7 +75,7 @@ export function GatewayModelList({
   );
   const candidates = new Map<
     string,
-    GatewayConfiguration["onboarding"][number]
+    AiServiceConfiguration["onboarding"][number]
   >();
   for (const candidate of configuration.onboarding) {
     if (
@@ -164,7 +167,7 @@ export function GatewayModelList({
           ))}
         </TabsList>
         <TabsContent value={category} className="flex min-w-0 flex-col gap-2">
-          <GatewayTable
+          <AiServiceTable
             toolbarActions={toolbarActions}
             filters={
               <>
@@ -190,7 +193,7 @@ export function GatewayModelList({
                       className="py-0 has-[>button]:mr-0"
                     >
                       {draft && (
-                        <GatewayAction
+                        <AiServiceAction
                           icon={X}
                           label="清空模型搜索"
                           className="size-7 max-md:size-11"
@@ -200,7 +203,7 @@ export function GatewayModelList({
                           }}
                         />
                       )}
-                      <GatewayAction
+                      <AiServiceAction
                         icon={Search}
                         className="size-7 max-md:size-11"
                         label="搜索模型"
@@ -303,13 +306,13 @@ export function GatewayModelList({
                       {available ? "可用" : "不可用"}
                     </Badge>,
                     <>
-                      <GatewayAction
+                      <AiServiceAction
                         label="查看版本"
                         icon={Eye}
                         href={`/models/${model.id}`}
                       />
                       {(enabled || draft) && (
-                        <GatewayAction
+                        <AiServiceAction
                           onClick={() => startRoute(model.id)}
                           label="准备采购"
                           icon={Route}

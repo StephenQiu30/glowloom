@@ -6,7 +6,7 @@ import { estimateArkVideo } from "@/api/aiGateway";
 import type {
   ArkVideoEstimateSpec,
   GatewayPreset,
-} from "@/lib/ai-gateway-admin";
+} from "@/lib/ai-service-admin";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { FieldSet } from "@/components/ui/field";
@@ -18,11 +18,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { InputField, SelectField } from "./gateway-fields";
+import { InputField, SelectField } from "./admin-fields";
 
 type ArkPreset = GatewayPreset & { video_estimate: ArkVideoEstimateSpec };
 
-export function GatewayArkVideoEstimate({
+export function ArkVideoEstimate({
   presets,
 }: {
   presets: GatewayPreset[] | undefined;

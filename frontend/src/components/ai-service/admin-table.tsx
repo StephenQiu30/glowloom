@@ -19,10 +19,10 @@ import { toast } from "@/components/feedback/notification";
 import { DataTable } from "@/components/canvas/runtime/components/account/list/data-table";
 import { ListPagination } from "@/components/canvas/runtime/components/layout/workspace/list-pagination";
 import { DEFAULT_PAGE_SIZE, paginationRange } from "@/lib/pagination";
-import { GatewayAction } from "./gateway-action";
+import { AiServiceAction } from "./admin-action";
 import { Toolbar } from "@/components/ui/toolbar";
 
-export type GatewayTableRow = {
+export type AiServiceTableRow = {
   id: string;
   label: string;
   deleteID?: string;
@@ -31,7 +31,7 @@ export type GatewayTableRow = {
   cells: ReactNode[];
 };
 
-export function GatewayTable({
+export function AiServiceTable({
   label,
   columns,
   rows,
@@ -44,7 +44,7 @@ export function GatewayTable({
 }: {
   label: string;
   columns: string[];
-  rows: GatewayTableRow[];
+  rows: AiServiceTableRow[];
   empty: string;
   onDelete?: (ids: string[]) => Promise<void>;
   externalFilterKey?: string;
@@ -75,7 +75,7 @@ export function GatewayTable({
           value.toLowerCase().includes(keyword),
         )),
   );
-  const [targets, setTargets] = useState<GatewayTableRow[]>([]);
+  const [targets, setTargets] = useState<AiServiceTableRow[]>([]);
   const [deleting, setDeleting] = useState(false);
   const pending = useRef(false);
   const [error, setError] = useState("");
@@ -101,7 +101,7 @@ export function GatewayTable({
   if (!filterChanged && page !== current) setCurrent(page);
   const visible = matching.slice(Math.max(0, start - 1), end);
 
-  function updateSelection(update: SetStateAction<GatewayTableRow[]>) {
+  function updateSelection(update: SetStateAction<AiServiceTableRow[]>) {
     setSelectedIds((previous) => {
       const pageSelection = visible.filter((row) => previous.has(row.id));
       const nextPage =
@@ -124,7 +124,7 @@ export function GatewayTable({
     }
   }
 
-  function confirmDelete(rows: GatewayTableRow[]) {
+  function confirmDelete(rows: AiServiceTableRow[]) {
     setError("");
     setTargets(rows);
   }
@@ -167,13 +167,13 @@ export function GatewayTable({
         disabled={deleting}
         onClear={() => setSelectedIds(new Set())}
       >
-        <GatewayAction
+        <AiServiceAction
           label="复制所选条目"
           icon={Copy}
           onClick={copySelected}
         />
         {onDelete && (
-          <GatewayAction
+          <AiServiceAction
             label="删除所选渠道"
             icon={Trash2}
             variant="destructive"
@@ -210,7 +210,7 @@ export function GatewayTable({
         )}
       </Toolbar>
       {summary}
-      <DataTable<GatewayTableRow>
+      <DataTable<AiServiceTableRow>
         label={label}
         data={visible}
         emptyTitle={Object.keys(filter).length ? "没有符合条件的记录" : empty}
@@ -231,7 +231,7 @@ export function GatewayTable({
             >
               {row.original.cells[index]}
               {title === "操作" && onDelete && row.original.deleteID && (
-                <GatewayAction
+                <AiServiceAction
                   label={`删除渠道 ${row.original.label}`}
                   icon={Trash2}
                   onClick={() => confirmDelete([row.original])}

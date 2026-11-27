@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, type ReactNode } from "react";
-import { ArrowRight, Coins, ReceiptText } from "lucide-react";
+import { ClipboardCheck, Coins, ReceiptText } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   FieldDescription,
@@ -18,25 +18,26 @@ import {
   prepareModel,
   prepareRoute,
   reconcileGateway,
-  type GatewayConfiguration,
+  type AiServiceConfiguration,
   type GatewayModel,
   type GatewayPreset,
   type GatewayPrice,
   type MediaDriverOption,
   type OnboardingReview,
-} from "@/lib/ai-gateway-admin";
+} from "@/lib/ai-service-admin";
 import {
   CheckField,
   FormDetails,
   InputField,
   SelectField,
+  SetupSelectField,
   SubmitButton,
   micros,
   num,
   text,
   uuidPattern,
   type RunMutation,
-} from "./gateway-fields";
+} from "./admin-fields";
 import {
   MediaModelFields,
   modeLabel,
@@ -45,7 +46,7 @@ import {
   readMediaModel,
   readMediaProbes,
   readVideoMetering,
-} from "./gateway-media-fields";
+} from "./media-fields";
 
 export const protocolLabels: Record<string, string> = {
   chat: "Chat Completions",
@@ -105,12 +106,12 @@ function PriceFields({
         </FieldDescription>
       )}
       <FieldGroup className="grid gap-3 min-[360px]:grid-cols-2">
-        <SelectField
+        <SetupSelectField
           name="currency"
           label={`${kind}币种`}
           options={currencyOptions}
           value={currency}
-          onChange={(event) => setCurrency(event.currentTarget.value)}
+          onValueChange={setCurrency}
         />
         {videoTokens ? (
           <InputField
@@ -222,57 +223,7 @@ type ModelFormProps = {
   busy: boolean;
   onPrepared: (id: string) => void;
 };
-export function ModelForm({
-  configuration,
-  ...props
-}: ModelFormProps & { configuration: GatewayConfiguration }) {
-  const presets = configuration.model_presets ?? [];
-  const [provider, setProvider] = useState(presets.length ? "" : "custom");
-  const [modelKey, setModelKey] = useState("");
-  const choices = presets.filter((item) => item.adapter === provider);
-  const preset = choices.find((item) => item.key === modelKey);
-  const providers = new Map(
-    presets.map((item) => [item.adapter, item.provider]),
-  );
-  return (
-    <FieldGroup>
-      <FieldGroup className="grid gap-3 min-[360px]:grid-cols-2">
-        <SelectField
-          label="供应商"
-          value={provider}
-          onChange={(event) => {
-            setProvider(event.currentTarget.value);
-            setModelKey("");
-          }}
-          options={[["", "选择供应商"], ...providers, ["custom", "自定义接入"]]}
-        />
-        {choices.length > 0 && (
-          <SelectField
-            label="模型预设"
-            value={modelKey}
-            onChange={(event) => setModelKey(event.currentTarget.value)}
-            options={[
-              ["", "选择型号"],
-              ...choices.map((item) => [item.key, item.name] as const),
-            ]}
-          />
-        )}
-      </FieldGroup>
-      {(preset || provider === "custom") && (
-        <ModelSettings
-          key={preset?.key ?? "custom"}
-          preset={preset}
-          driver={configuration.media_drivers.find(
-            (d) => d.key === preset?.adapter,
-          )}
-          {...props}
-        />
-      )}
-    </FieldGroup>
-  );
-}
-
-function ModelSettings({
+export function ModelSettings({
   run,
   busy,
   onPrepared,
@@ -331,7 +282,7 @@ function ModelSettings({
           maxLength={160}
           description="同名同协议的新版本通过验证后才会切换。"
         />
-        <SelectField
+        <SetupSelectField
           label="模型协议"
           name="protocol"
           options={
@@ -344,7 +295,7 @@ function ModelSettings({
               : protocolOptions
           }
           value={protocol}
-          onChange={(event) => setProtocol(event.currentTarget.value)}
+          onValueChange={setProtocol}
         />
       </FieldGroup>
       {media && preset ? (
@@ -488,10 +439,10 @@ function ModelSettings({
       <FieldGroup>
         {!preset && modelFields}
         {video && (
-          <SelectField
+          <SetupSelectField
             label="视频计费方式"
             value={billingUnit}
-            onChange={(event) => setBillingUnit(event.currentTarget.value)}
+            onValueChange={setBillingUnit}
             options={[
               ["request", "已有按次合同"],
               ["video_tokens", "按实际视频 Token"],
@@ -517,11 +468,7 @@ function ModelSettings({
         />
         {videoTokens && purchaseCap}
         <div className="flex justify-end">
-          <SubmitButton
-            busy={busy}
-            label="保存并继续采购配置"
-            icon={ArrowRight}
-          />
+          <SubmitButton busy={busy} label="保存模型" />
         </div>
       </FieldGroup>
     </form>
@@ -534,13 +481,15 @@ export function RouteForm({
   busy,
   onPrepared,
   initialModelID,
+  fixedModel = false,
   defaultScope,
 }: {
-  configuration: GatewayConfiguration;
+  configuration: AiServiceConfiguration;
   run: RunMutation;
   busy: boolean;
   onPrepared: (review: OnboardingReview) => void;
   initialModelID?: string;
+  fixedModel?: boolean;
   defaultScope?: string;
 }) {
   const models = configuration.models.filter(
@@ -549,7 +498,7 @@ export function RouteForm({
   const [selected, setSelected] = useState(initialModelID ?? "");
   const model =
     models.find(({ model }) => model.id === selected)?.model ??
-    models[0]?.model;
+    (fixedModel ? undefined : models[0]?.model);
 
   if (!model)
     return (
@@ -590,7 +539,7 @@ export function RouteForm({
       preset={preset}
       model={model}
       models={models}
-      chooseModel={setSelected}
+      chooseModel={fixedModel ? undefined : setSelected}
       configuration={configuration}
       run={run}
       busy={busy}
@@ -613,9 +562,9 @@ function PreparedRouteForm({
 }: {
   model: GatewayModel;
   preset?: GatewayPreset;
-  models: GatewayConfiguration["models"];
-  chooseModel: (id: string) => void;
-  configuration: GatewayConfiguration;
+  models: AiServiceConfiguration["models"];
+  chooseModel?: (id: string) => void;
+  configuration: AiServiceConfiguration;
   run: RunMutation;
   busy: boolean;
   onPrepared: (review: OnboardingReview) => void;
@@ -670,14 +619,12 @@ function PreparedRouteForm({
     <>
       {media && (
         <>
-          <SelectField
+          <SetupSelectField
             label="媒体驱动"
             value={driverKey}
-            onChange={(event) => setDriverKey(event.currentTarget.value)}
-            options={[
-              ["", "选择已安装的驱动"],
-              ...drivers.map((option) => [option.key, option.name] as const),
-            ]}
+            onValueChange={setDriverKey}
+            placeholder="选择已安装的驱动"
+            options={drivers.map((option) => [option.key, option.name])}
             required
           />
           {!drivers.length && (
@@ -810,25 +757,27 @@ function PreparedRouteForm({
       }}
     >
       <FieldGroup>
-        <SelectField
-          label="销售模型版本"
-          value={model.id}
-          onChange={(event) => chooseModel(event.currentTarget.value)}
-          options={models.map(({ model, draft }) => [
-            model.id,
-            `${model.name} · ${draft ? "草稿" : "已启用"} · ${model.id.slice(0, 8)}`,
-          ])}
-        />
+        {chooseModel && (
+          <SetupSelectField
+            label="销售模型版本"
+            value={model.id}
+            onValueChange={chooseModel}
+            options={models.map(({ model, draft }) => [
+              model.id,
+              `${model.name} · ${draft ? "草稿" : "已启用"} · ${model.id.slice(0, 8)}`,
+            ])}
+          />
+        )}
         <FieldGroup className="grid sm:grid-cols-2">
-          <SelectField
+          <SetupSelectField
             label="供应商账号"
-            value={supplier}
-            onChange={(event) => {
-              setSupplier(event.currentTarget.value);
+            value={supplier || "new"}
+            onValueChange={(value) => {
+              setSupplier(value === "new" ? "" : value);
               setGroupOverride(undefined);
             }}
             options={[
-              ["", "新建供应商账号"],
+              ["new", "新建供应商账号"],
               ...[...supplierRoutes].map(
                 ([id, route]) =>
                   [id, `${route.group} · ${id.slice(0, 8)}`] as const,
@@ -917,8 +866,8 @@ function PreparedRouteForm({
           <SubmitButton
             busy={busy}
             disabled={noVerificationSlot || (media && !driver)}
-            label="保存并查看验证预算"
-            icon={ArrowRight}
+            label="准备验证"
+            icon={ClipboardCheck}
           />
         </div>
       </FieldGroup>
@@ -1047,7 +996,7 @@ export function ReconciliationForm({
 }: {
   run: RunMutation;
   busy: boolean;
-  unknown: GatewayConfiguration["unknown"];
+  unknown: AiServiceConfiguration["unknown"];
   initialAttempt?: string;
 }) {
   const [billingResult, setBillingResult] = useState("");

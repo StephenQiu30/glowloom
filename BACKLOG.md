@@ -6,6 +6,7 @@
 | --- | --- | --- |
 | 首条真实云模型接入：方舟 Seedance | 校准运行镜像与数据库目录，验证一个获授权的 720p 文生视频型号。交付可选择的模型、原任务回执、可播放视频及按实际 Token 核对的流水。 | [Plan29 首条真实线路](workspace/content/plan/29-模型与供应商接入扩展实施计划.md#first-live-seedance) |
 | 内置模型预设覆盖 | 继续补齐 Seedance 720p 文生视频之外的可售型号和收费规格。每个规格具备审核后的计量、采购、销售及验证计划，并能从快捷入口录入 Key。 | [PRD03 接入验收](workspace/content/prd/03-AI平台接入与预设管理.md#key-only-model-onboarding) |
+| Agent AI 网关与 Go 钱包联通 | T-AGV2-11 先隔离验收 Seedance 单镜的预算、用量和一次扣费，再联验文本授权段及各公共调用入口。 | [Plan43 统一运行时网关](workspace/content/plan/43-Agent服务Mastra架构重构执行计划.md#ai-runtime-gateway-rollout) |
 | 积分钱包发放与充值 | T-CREDIT-15 补齐来源批次、模型适用范围、有效期和冻结分摊。T-CREDIT-17 验收单一支付渠道、幂等到账和原单退款。 | [Plan32 统一钱包](workspace/content/plan/32-模型商业计费与积分系统实施计划.md#credit-service-foundation) |
 | 资产工作台两级导航与游标续载 | 完成来源和筛选行的桌面与窄屏验收，生成历史按日合组，资产列表按游标滚动续载并取消每页控件。 | [Plan22](workspace/content/plan/22-资产对齐即梦实施计划.md#两级导航按日历史与游标续载) |
 | 短剧 Skill 生产链路 | 接入隔离脚本执行、结构化项目成果写回、媒体审批与真实生成渲染，并验证中断后的续跑。 | [设计49](workspace/content/design/49-AI短剧制作三层Agent与六阶段Workflow设计.md) · [研究02](workspace/content/research/02-短剧开源Skill套件接入调研.md) |

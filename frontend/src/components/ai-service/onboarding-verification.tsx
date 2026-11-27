@@ -31,7 +31,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { GatewayAction } from "./gateway-action";
+import { AiServiceAction } from "./admin-action";
 import {
   Card,
   CardContent,
@@ -48,7 +48,7 @@ import {
   verifyOnboarding,
   type OnboardingReview,
   type OnboardingSummary,
-} from "@/lib/ai-gateway-admin";
+} from "@/lib/ai-service-admin";
 import {
   CheckField,
   FormDetails,
@@ -56,8 +56,8 @@ import {
   SubmitButton,
   money,
   type RunMutation,
-} from "./gateway-fields";
-import { modeLabel } from "./gateway-media-fields";
+} from "./admin-fields";
+import { modeLabel } from "./media-fields";
 
 export const onboardingState: Record<OnboardingSummary["state"], string> = {
   prepared: "待验证",
@@ -85,14 +85,16 @@ export function OnboardingPanel({
   refreshConfiguration,
   back,
   retryRoute,
+  onKeyDirty,
 }: {
   id: string;
   initial?: OnboardingReview;
   run: RunMutation;
   busy: boolean;
   refreshConfiguration: () => void;
-  back: () => void;
+  back?: () => void;
   retryRoute: (model: string) => void;
+  onKeyDirty?: (dirty: boolean) => void;
 }) {
   const [review, setReview] = useState(initial);
   const [readError, setReadError] = useState(false);
@@ -129,15 +131,25 @@ export function OnboardingPanel({
   const unknown = review?.progress.some((record) => record.state === "unknown");
   return (
     <div className="flex min-w-0 flex-col gap-4">
-      <div className="flex flex-wrap justify-between gap-2">
-        <GatewayAction onClick={back} label="返回验证列表" icon={ArrowLeft} />
-        <GatewayAction
-          disabled={busy}
-          onClick={() => setRevision((value) => value + 1)}
-          label="读取最新回执"
-          icon={RefreshCw}
-        />
-      </div>
+      {(back || readError || (review && review.state !== "prepared")) && (
+        <div className="flex flex-wrap justify-between gap-2">
+          {back && (
+            <AiServiceAction
+              onClick={back}
+              label="返回验证列表"
+              icon={ArrowLeft}
+            />
+          )}
+          <div className="ml-auto">
+            <AiServiceAction
+              disabled={busy}
+              onClick={() => setRevision((value) => value + 1)}
+              label="读取最新回执"
+              icon={RefreshCw}
+            />
+          </div>
+        </div>
+      )}
       {readError && (
         <Alert variant="destructive">
           <AlertTitle>无法读取验证回执</AlertTitle>
@@ -242,6 +254,7 @@ export function OnboardingPanel({
                     const input = form.elements.namedItem("key");
                     if (input instanceof HTMLInputElement) input.value = "";
                     setConfirmed(false);
+                    onKeyDirty?.(false);
                     void run(async () => {
                       try {
                         setReview(await verifyOnboarding(review, key));
@@ -257,6 +270,9 @@ export function OnboardingPanel({
                       name="key"
                       type="password"
                       maxLength={8192}
+                      onChange={(event) =>
+                        onKeyDirty?.(Boolean(event.currentTarget.value))
+                      }
                     />
                     <CheckField
                       label="确认以上测试和费用上限"
@@ -292,7 +308,7 @@ export function OnboardingPanel({
               <AlertDescription>
                 当前线上版本继续服务。
                 {!unknown && (
-                  <GatewayAction
+                  <AiServiceAction
                     onClick={() => retryRoute(review.model_id)}
                     label="重新准备采购路由"
                     icon={Route}
@@ -304,7 +320,7 @@ export function OnboardingPanel({
           {review.state === "active" && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <GatewayAction label="回退该候选" icon={Undo2} />
+                <AiServiceAction label="回退该候选" icon={Undo2} />
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>

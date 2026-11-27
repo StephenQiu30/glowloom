@@ -1,4 +1,4 @@
-import { GatewayAdmin } from "@/components/gateway/gateway-admin";
+import { AiServiceAdmin } from "@/components/ai-service/ai-service-admin";
 import { PageLayout } from "@/components/layout/page-layout";
 
 export const metadata = { title: "模型版本 · 织光" };
@@ -11,7 +11,7 @@ export default async function Page({
   const { id } = await params;
   return (
     <PageLayout screen="models">
-      <GatewayAdmin entry="models" entityID={id} />
+      <AiServiceAdmin entry="models" entityID={id} />
     </PageLayout>
   );
 }

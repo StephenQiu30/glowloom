@@ -13,9 +13,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { GatewayAction } from "./gateway-action";
-import type { RunMutation } from "./gateway-fields";
-import { GatewayTable } from "./gateway-table";
+import { AiServiceAction } from "./admin-action";
+import type { RunMutation } from "./admin-fields";
+import { AiServiceTable } from "./admin-table";
 
 const orderStates = {
   pending: "待复核",
@@ -23,7 +23,7 @@ const orderStates = {
   rejected: "已拒绝",
 } satisfies Record<API.CreditGrantOrder["state"], string>;
 
-export function GatewayCreditGrants({
+export function CreditGrants({
   actorID,
   orders,
   busy,
@@ -54,7 +54,7 @@ export function GatewayCreditGrants({
 
   return (
     <>
-      <GatewayTable
+      <AiServiceTable
         toolbarActions={toolbarActions}
         label="积分赠送单"
         columns={["受款空间", "积分", "业务凭据", "状态", "操作"]}
@@ -69,7 +69,7 @@ export function GatewayCreditGrants({
             row.credits,
             row.key,
             orderStates[row.state],
-            <GatewayAction
+            <AiServiceAction
               key="inspect"
               icon={ClipboardCheck}
               label={

@@ -99,7 +99,7 @@ export type GatewayPreset = {
   concurrency: number;
   rpm: number;
 };
-export type GatewayConfiguration = {
+export type AiServiceConfiguration = {
   model_presets?: GatewayPreset[];
   credit_grants?: API.CreditGrantOrder[];
   models: { model: GatewayModel; enabled: boolean; draft?: boolean }[];
@@ -372,16 +372,16 @@ export function validateModel(
   }
   return result;
 }
-export async function loadGatewayConfiguration(
+export async function loadAiServiceConfiguration(
   signal?: AbortSignal,
-): Promise<GatewayConfiguration> {
-  const result = await request<GatewayConfiguration>(
+): Promise<AiServiceConfiguration> {
+  const result = await request<AiServiceConfiguration>(
     `${prefix}/configuration`,
     { signal },
   );
   requireValue(
     result !== null && typeof result === "object",
-    "网关配置响应无效",
+    "AI 服务配置响应无效",
   );
   for (const key of [
     "models",
@@ -396,7 +396,7 @@ export async function loadGatewayConfiguration(
   ] as const) {
     requireValue(
       result[key] == null || Array.isArray(result[key]),
-      "网关配置列表无效",
+      "AI 服务配置列表无效",
     );
   }
   const readablePrice = (price: GatewayPrice) =>

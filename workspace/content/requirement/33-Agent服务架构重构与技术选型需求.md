@@ -76,13 +76,27 @@
 
 [运行设计](../design/48-Agent服务Mastra架构与技术选型设计.md#first-agent-run) · [授权段计费](../design/41-模型销售定价与结算设计.md#agent-text-billing) · [首条模型线路](04-AI平台接入与预设管理需求.md#src-ai-57)
 
+<a id="src-agv2-06"></a>
+
+### SRC-AGV2-06（2026-11-27，模型接入与运行时网关分工）
+
+> 并且我们的ai服务的接入的命名方式为gateway，我们的命名方式是存在问题的，ai接入和计费的网管服务我认为整理到agent服务中，go服务制作模型的接入和预设
+
+**问答确认**
+
+1. Agent 负责运行时预估、预算校验、用量归集和结算编排。Go 钱包唯一写入余额、充值、赠送及积分流水。
+2. 画布、创作工作台和 Agent 的模型调用共用 Agent 服务内的 AI 网关。普通生成直接调用网关，无需启动对话 Agent。
+3. Go 管理供应商、连接、凭据、模型预设及验证发布。管理台沿用「AI 服务」「模型接入」命名，「AI 网关」指运行时服务。
+
+本轮确认更新 SRC-AGV2-02、SRC-AGV2-03 的网关运行归属。已确认的按量付费与审批规则继续适用。 [职责设计](../design/48-Agent服务Mastra架构与技术选型设计.md#ai-runtime-ownership-review)
+
 ## 2. 明确要求
 
 | ID          | 要求                                                                     | 确认边界                                                                                             |
 | ----------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
 | FR-AGV2-01  | 基于 Node 24 + TypeScript + Mastra 原地重建独立 `agent/` 服务             | 移除 NestJS、Fastify、Pi Durable、Prisma、TypeBox 与 OpenAPI 双向胶水，不保留旧实现兼容分支          |
 | FR-AGV2-02  | 重构 Go ↔ Agent 跨服务通信为“强类型 gRPC + 内部 MCP 业务工具”            | Go→Agent 与 Agent→Go 鉴权/计费走强类型 Protobuf/gRPC；Go 业务工具暴露为内部 MCP 供 `@mastra/mcp` 消费 |
-| FR-AGV2-03  | 演进 Go `execution/gateway` 为统一渠道 AI 网关                           | 支持文本 LLM 原生协议透传与图/视/音异步多模态生成，联动 `catalog`/`billing` 账本，上游可灵活配置中转 |
+| FR-AGV2-03 | Agent 服务承载统一模型运行时网关和计费编排 | Go 管理供应商、模型预设与验证发布，并唯一写入积分钱包。所有调用入口共用 Agent 网关 |
 | FR-AGV2-04  | 落地混合编排（主/子 Agent + Mastra Workflow HITL）与声明式 Skill          | 收费与多阶段审批走 Workflow `suspend/resume`；Skill 仅声明式装配，Agent 容器内禁止执行第三方脚本     |
 | FR-AGV2-05  | 落地分离式记忆、可续传事件流与崩溃恢复                                   | Mastra Memory 与业务真源分离；PG 关键事件日志 + Run 租约锁 + 可插拔内存/Redis 实时总线                |
 | FR-AGV2-06  | 落地“离线 CI 轨迹评测 + 线上 Langfuse 观测与 Prompt 治理”双轨体系        | CI 跑 Mastra Scorers + Vitest；线上对接自托管 Langfuse（OTel Trace / Prompt 管理 / Dataset / 采样）  |
@@ -112,12 +126,13 @@
 | AC-AGV2-01 | 完成知识库需求33、设计48、PRD34、Plan43、研究71 及全部导航/索引更新，通过 Workspace 校验无断链        | SRC-AGV2-01、SRC-AGV2-02 |
 | AC-AGV2-02 | `runtime.proto` 升级为强类型语义化 RPC；`agent/` 移除 NestJS/Pi Durable/Prisma 并以 Mastra 稳定运行  | FR-AGV2-01、FR-AGV2-02  |
 | AC-AGV2-03 | Go 内部 MCP Server 暴露核心业务工具，`@mastra/mcp` 可动态发现并完成受控鉴权调用                      | FR-AGV2-02、FR-AGV2-04  |
-| AC-AGV2-04 | Go `execution/gateway` 支持文本原生协议透传（保留 Prompt Cache/Thinking/流式）并闭环计费预冻结与结算 | FR-AGV2-03              |
+| AC-AGV2-04 | Agent 网关保留受支持的原生协议能力，并贯通 Go 钱包冻结与结算 | FR-AGV2-03 |
 | AC-AGV2-05 | `@mastra/pg` 关闭运行时 DDL，全部框架表与服务表静态声明于 `backend/db/schema.sql` 且通过 DB 门禁     | NFR-AGV2-01             |
 | AC-AGV2-06 | 混合编排（主/子 Agent + Workflow `suspend/resume`）、断线 `Last-Event-ID` 重放与崩溃租约恢复验证通过 | FR-AGV2-04、FR-AGV2-05  |
 | AC-AGV2-07 | Mastra Scorers + Vitest 离线轨迹评测门禁与自托管 Langfuse OTel Trace / Prompt 兜底链路验证通过       | FR-AGV2-06、BR-AGV2-01  |
 | AC-AGV2-08 | `agent/src/` 全部出网零手写 `fetch/http`；多协议原生透传、`wrapLanguageModel` Cache 锚点、原生 `chunkMs` 超时与 PG 派发前原子预算验证通过 | FR-AGV2-08、NFR-AGV2-02 |
 | AC-AGV2-09 | 画布 `<40KB` 分层投影与同轮局部写链 Rebase、`operationId` 防重扣费、混合 `task.wait` 异步等待及 Mock MCP 结果态离线评测全部通过 | FR-AGV2-07、FR-AGV2-08  |
 | AC-AGV2-10 | 开发与容器的资源加载有明确配置，同一运行在资源更新后可按原版本恢复，项目资源和执行权限继续受业务授权约束 | FR-AGV2-09 |
+| AC-AGV2-11 | 画布、工作台和 Agent 调用同一运行时网关。普通生成无需创建对话 Run。Go 钱包对同一请求只核销一次 | SRC-AGV2-06、FR-AGV2-03 |
 
 [需求导航](00-需求导航.md) · [设计48](../design/48-Agent服务Mastra架构与技术选型设计.md)

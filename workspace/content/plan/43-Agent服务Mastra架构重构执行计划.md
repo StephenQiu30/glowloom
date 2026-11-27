@@ -15,7 +15,7 @@
 | --------- | ---- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | T-AGV2-01 | P0   | AC-AGV2-01 | 沉淀需求33、设计48、PRD34、Plan43、研究71，同步 `index.mdx` 与各目录导航                                                                    | Workspace `format:check`、`types:check`、`lint` 全通过，无断链；不改动业务源码      |
 | T-AGV2-02 | P1   | AC-AGV2-02、AC-AGV2-05 | 同步更新 `workspace/PROJECT.md`、`agent/AGENTS.md`、`backend/db/schema.sql`（移除旧 `runtime_*` 表，静态声明 Mastra 表与 Kysely 控制表）及 `backend/api/proto/glowloom/agent/runtime.proto`（强类型 `AgentRuntime` / `AgentBusiness`） | `buf lint`/`buf generate` 零漂移，`backend/tests/db/schema_source_test.go` 通过     |
-| T-AGV2-03 | P2   | AC-AGV2-03、AC-AGV2-04 | 改造 Go `backend/`：升级 `execution/gateway` 原生协议透传端点与账本闭环；实现 Go 内部 MCP Server 暴露核心业务工具；对接强类型 `AgentRuntime` 客户端与 `AgentBusiness` 服务端 | Go 单元测试与 `go test -race` 全绿；透传网关与 MCP 鉴权隔离测试通过                 |
+| T-AGV2-03 | P2   | AC-AGV2-03 | 改造 Go `backend/`：升级 `execution/gateway` 原生协议透传端点与账本闭环；实现 Go 内部 MCP Server 暴露核心业务工具；对接强类型 `AgentRuntime` 客户端与 `AgentBusiness` 服务端 | Go 单元测试与 `go test -race` 全绿；透传网关与 MCP 鉴权隔离测试通过                 |
 | T-AGV2-04 | P3   | AC-AGV2-02、AC-AGV2-05 | 原地清空重建 `agent/`：初始化 Mastra + Vercel AI SDK + Kysely + Zod + `@grpc/grpc-js` + `@mastra/mcp` + `@mastra/pg`（`disableInit`），实现 `transport/`、`database/`、`business/` 与 `sessions/`（租约锁、事件日志、可插拔 EventBus、恢复泵） | `agent/` 无 NestJS/Fastify/Prisma/Pi Durable 残留；受限 DB 角色冷启动与读写测试通过 |
 | T-AGV2-05 | P4   | AC-AGV2-06、AC-AGV2-07 | 实现 `mastra/`（Producer 主 Agent、专家子 Agent、HITL Workflow `suspend/resume`、分离式 Memory）、声明式 `skills/`、Langfuse OTel/Prompt 集成（带本地兜底）及 `evals/`（Mastra Scorers + Vitest） | 审批跨重启恢复、`Last-Event-ID` 断线重放、轨迹评测与 Langfuse 兜底测试全绿        |
 | T-AGV2-06 | P5   | AC-AGV2-01～07 | 同步 `docker-compose.yml` / `docker-compose.dev.yml` 与 CI 工作流；执行 Go、Agent、Frontend、Canvas 全仓门禁与端到端联调验收                 | 全仓 lint/typecheck/build/race/evals 通过，Compose 健康启动，公开 `/api`/SSE 零破坏 |
@@ -53,9 +53,26 @@ T-AGV2-10 承接 [PRD34 AC-AGV2-10](../prd/34-Agent服务架构重构与技术�
 
 **2026-11-27 隔离验收。** 以受限 `glowloom_agent` 角色连接全新 PostgreSQL 18。编译 Agent 后，子进程 A 加载 v1 并在审批点挂起，退出后替换工作流 JSON、Skill 正文与附件、Prompt。子进程 B 加载 v2，对同一存储中的原工作流批准并恢复，执行器实际读取 v1 的阶段、附件和 Prompt，已完成的准备步骤没有重跑。新 Run 读取 v2。另从包目录之外启动编译后的 Agent，缺失扩展目录时启动失败，默认资源及隔离库有效时 `/healthz` 和 `/readyz` 返回成功。文件工作流使用注入的隔离执行器，Go 产品级费用审批与真实供应商回执仍待产品接入验证。
 
+<a id="ai-runtime-gateway-rollout"></a>
+
+### 3.4 统一模型运行时网关
+
+T-AGV2-11 承接 [PRD34 AC-AGV2-04、AC-AGV2-11](../prd/34-Agent服务架构重构与技术选型.md#ai-runtime-gateway-acceptance)。现有 Go 执行链作为基线，本任务验收 Agent 网关和 Go 钱包分工后的运行路径。
+
+| 顺序 | 工作 | 退出条件 |
+| --- | --- | --- |
+| 1 | 明确 Go 已发布模型和计价快照的读取接口、Go 钱包命令，以及 Agent 网关的内部提交与查询契约。沿现有强类型服务通信实施 | 权限、报价版本、调用身份、冻结与结算回执均可验证。Agent 角色无钱包表写权限 |
+| 2 | 用受控 Seedance 2.0 Mini、720p、16:9、5 秒单镜覆盖报价、单次批准、冻结、派发、用量、核销与释放 | 可核对原生成与资金回执。重复提交、上游受理后超时和回退均保持同一身份且零重复扣费 |
+| 3 | 接入文本授权段计费并验证已支持的原生协议 | Producer 与专家共享授权段预算。并发预算上限、精确汇总、一次整数取整和未知用量待核对通过 |
+| 4 | 逐个切换画布、工作台、对话及 SDK 调用入口 | 同一已发布版本和计价合同在各入口一致。普通生成无需对话 Run。切换与回退仅改变新请求归属 |
+
+接入前核对在途记录及余额，切换时以原请求身份区分执行所有者。实际供应商试跑与积分账单以受控验收证据为准，单元或模拟测试单独记录。
+
 ## 4. 迁移与回退边界
 
 - **P0（文档）**：纯知识库变更，不影响现有运行代码，可直接按 Git 提交回退。
 - **P1～P5（全量原地重构）**：在独立开发分支完成一次性切换与全仓门禁验收后再合入主干；合并前不破坏主干现有可运行状态。已有存量库升级须由管理员依据最新 `backend/db/schema.sql` diff 离线执行受控事务变更，严禁对存量库直接重放空库 SQL。
+
+- **T-AGV2-11 运行时入口切换。** 按 §3.4 对新请求逐入口切换或回退。已经受理的请求和资金冻结由原执行路径恢复。
 
 [Plan导航](00-Plan导航.md) · [唯一来源PRD34](../prd/34-Agent服务架构重构与技术选型.md)

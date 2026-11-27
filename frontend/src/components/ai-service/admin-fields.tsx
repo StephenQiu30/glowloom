@@ -5,7 +5,7 @@ import { ChevronDown, Save, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 
-import { arkEmbedding, type GatewayPrice } from "@/lib/ai-gateway-admin";
+import { arkEmbedding, type GatewayPrice } from "@/lib/ai-service-admin";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Collapsible,
@@ -18,6 +18,14 @@ import {
   NativeSelect,
   NativeSelectOption,
 } from "@/components/ui/native-select";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
 export type RunMutation = (
@@ -85,6 +93,71 @@ export function SelectField({
           </NativeSelectOption>
         ))}
       </NativeSelect>
+      {description && (
+        <FieldDescription id={`${id}-hint`}>{description}</FieldDescription>
+      )}
+    </Field>
+  );
+}
+
+export function SetupSelectField({
+  label,
+  options,
+  placeholder,
+  description,
+  displayValue,
+  ...props
+}: ComponentProps<typeof Select> & {
+  label: string;
+  options: readonly (readonly [
+    value: string,
+    title: string,
+    detail?: { description: string; icon: ReactNode },
+  ])[];
+  placeholder?: string;
+  description?: string;
+  displayValue?: string;
+}) {
+  const id = useId();
+  return (
+    <Field data-disabled={props.disabled || undefined} className="min-w-0">
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <Select {...props}>
+        <SelectTrigger
+          id={id}
+          aria-describedby={description ? `${id}-hint` : undefined}
+          className="w-full max-md:text-base"
+        >
+          <SelectValue placeholder={placeholder}>{displayValue}</SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            {options.map(([value, title, detail]) => (
+              <SelectItem
+                key={value}
+                value={value}
+                textValue={detail ? `${title} ${detail.description}` : title}
+              >
+                {detail ? (
+                  <span className="flex min-w-0 items-center gap-2.5">
+                    <span className="flex shrink-0 items-center justify-center rounded-md bg-muted p-1.5">
+                      {detail.icon}
+                    </span>
+                    <span className="flex min-w-0 flex-col">
+                      <span className="font-medium">{title}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {detail.description}
+                      </span>
+                    </span>
+                  </span>
+                ) : (
+                  title
+                )}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
       {description && (
         <FieldDescription id={`${id}-hint`}>{description}</FieldDescription>
       )}

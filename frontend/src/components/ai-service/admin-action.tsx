@@ -6,7 +6,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-export function GatewayAction(props: ComponentProps<typeof IconAction>) {
+export function AiServiceAction(props: ComponentProps<typeof IconAction>) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>

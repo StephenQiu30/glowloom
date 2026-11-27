@@ -4,7 +4,7 @@
 
 ## 1. 目标与边界
 
-通过**一步到位全量原地重构**，将 `agent/` 从当前的“NestJS + Fastify + Pi Durable + Prisma + 双向 OpenAPI/HTTP-over-gRPC 隧道”重构为**“Node 24 + TypeScript + Mastra + 强类型 gRPC + Go 内部 MCP + Kysely/Zod + 自托管 Langfuse + 离线 Scorers 评测”**架构，并同步演进 Go `execution/gateway` 为统一渠道 AI 网关（文本原生透传 + 图/视/音异步多模态 + 多租户账本）。
+通过**一步到位全量原地重构**，将 `agent/` 从当前的“NestJS + Fastify + Pi Durable + Prisma + 双向 OpenAPI/HTTP-over-gRPC 隧道”重构为**“Node 24 + TypeScript + Mastra + 强类型 gRPC + Go 内部 MCP + Kysely/Zod + 自托管 Langfuse + 离线 Scorers 评测”**架构。按[设计48 §7.4.1](../design/48-Agent服务Mastra架构与技术选型设计.md#ai-runtime-ownership-review)把模型调用与计费编排统一到 Agent 服务。Go 管理模型目录、验证发布及积分钱包。
 
 本 PRD 聚焦**架构重构与工程底座交付**，不削减既有创作者对话、多 Agent 协作、画布/剧本/分镜联动、审批与计费等产品功能。
 
@@ -12,7 +12,7 @@
 
 - **终端创作者**：获得更稳定的流式创作体验、基于最新项目真源（无脏缓存幻觉）的精准工具调用、刷新或重启后不丢失进度的审批与长任务恢复。
 - **Agent 与后端研发者**：摆脱四套传输层与三套数据访问层的历史包袱；以 Mastra + MCP + 强类型 gRPC + Kysely 统一开发心智，并具备 CI 轨迹回归门禁与线上 Langfuse 全链路排障能力。
-- **平台运维与成本治理者**：Go 统一渠道网关集中掌控文本与多模态的预冻结/精确结算账本，上游渠道可按需切换直连厂商或外部聚合路由，数据库继续保持单一 `schema.sql` 离线受控治理。
+- **平台运维与成本治理者**：Agent 网关统一提供预估和用量回执，Go 钱包提供统一的冻结、核销和流水。供应商配置支持官方直连和聚合路由。
 
 ## 3. 验收标准
 
@@ -21,7 +21,7 @@
 | AC-AGV2-01 | 审查知识库文档链与 Workspace 站点检查                            | 需求33 → 设计48 → PRD34 → Plan43 与研究71 链条完整、导航与 `index.mdx` 同步，Workspace 格式/类型/Lint 检查通过           | 设计48 §1、§8.2         |
 | AC-AGV2-02 | 检查 `agent/` 依赖、目录与强类型 gRPC 契约                       | `agent/` 已清除 NestJS、Fastify、Prisma、Pi Durable、TypeBox 与双向 OpenAPI 胶水；`runtime.proto` 强类型 RPC 经 Buf 校验一致 | 设计48 §7.2、§7.3、§7.8 |
 | AC-AGV2-03 | 在隔离环境中验证 Go 内部 MCP Server 与 `@mastra/mcp` 调用        | Agent 可发现并调用 Go 暴露的剧本/设定/分镜/画布/媒体 MCP 工具，鉴权与项目隔离生效，未授权调用被拒绝                      | 设计48 §7.3、§7.6       |
-| AC-AGV2-04 | 验证 Go 统一渠道网关的文本原生透传与计费闭环                     | Vercel AI SDK 通过 Go 网关发起流式调用，完整保留流式增量/Prompt Cache/Usage 统计，并完成预算预冻结与真实结算回写         | 设计48 §7.4             |
+| AC-AGV2-04 | 验证 Agent 网关的原生协议和计费闭环 | 受支持的协议保留流式增量、Prompt Cache 和实际用量。Go 钱包返回可核对的冻结与结算回执 | [设计48 §7.4.1](../design/48-Agent服务Mastra架构与技术选型设计.md#ai-runtime-ownership-review) |
 | AC-AGV2-05 | 在受限 `agent` 数据库角色下执行冷启动与读写测试                  | `@mastra/pg` 关闭运行时 DDL，所有表由 `backend/db/schema.sql` 静态初始化，旧 `runtime_*` 表已移除，DB 唯一来源门禁通过   | 设计48 §7.5、§8.1       |
 | AC-AGV2-06 | 验证混合编排、Workflow HITL 审批、断线重放与崩溃恢复             | 主/子 Agent 委派正常；高成本步骤挂起审批并支持跨重启 `resume`；带 `Last-Event-ID` 断线重放无漏事件；租约过期可安全恢复   | 设计48 §7.5、§7.6       |
 | AC-AGV2-07 | 验证声明式 Skill 安全边界、离线 CI 轨迹评测与自托管 Langfuse 链路 | Agent 容器无动态脚本执行；Mastra Scorers + Vitest 轨迹评测通过；Langfuse 接收完整 `traceparent` Trace，不可达时本地兜底 | 设计48 §7.6、§7.7       |
@@ -39,6 +39,19 @@
 | 项目成员选用私有 Skill 或读取同名资料 | 资源访问沿当前项目授权和明确的版本引用；跨项目、任意宿主机路径或未授权工具调用被拒绝 |
 
 来源 [设计48 §7.8](../design/48-Agent服务Mastra架构与技术选型设计.md#agent-resource-layout)。
+
+<a id="ai-runtime-gateway-acceptance"></a>
+
+### AC-AGV2-11 统一模型入口与积分钱包
+
+| 场景 | 可观察结果 |
+| --- | --- |
+| 从画布、创作工作台或对话发起模型请求 | 都经 Agent 网关执行。普通生成直接返回生成操作及状态，无需启动对话 |
+| 管理员选择供应商和模型预设，验证接入 | Go 管理配置及发布。调用使用通过验证并发布的版本 |
+| 重试同一请求或恢复已受理任务 | Go 钱包只有一次有效冻结和一次核销。上游受理或用量未确定时可查原请求和冻结 |
+| 一轮多次文本推理或批准一次媒体生成 | 文本按授权段合计取整。媒体逐次确认，按原批准上限及实际可信用量结算 |
+
+来源 [设计48 §7.4.1](../design/48-Agent服务Mastra架构与技术选型设计.md#ai-runtime-ownership-review)。
 
 ## 4. 排除范围与接受边界
 

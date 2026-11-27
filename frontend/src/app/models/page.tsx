@@ -1,5 +1,5 @@
 import { PageLayout } from "@/components/layout/page-layout";
-import { GatewayAdmin } from "@/components/gateway/gateway-admin";
+import { AiServiceAdmin } from "@/components/ai-service/ai-service-admin";
 export const metadata = { title: "AI 服务 · 织光" };
 export default async function Page({
   searchParams,
@@ -9,7 +9,7 @@ export default async function Page({
   const { tab } = await searchParams;
   return (
     <PageLayout screen="models">
-      <GatewayAdmin initialTab={typeof tab === "string" ? tab : undefined} />
+      <AiServiceAdmin initialTab={typeof tab === "string" ? tab : undefined} />
     </PageLayout>
   );
 }

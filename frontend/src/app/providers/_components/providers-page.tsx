@@ -1,6 +1,6 @@
 "use client";
-import { GatewayAdmin } from "@/components/gateway/gateway-admin";
+import { AiServiceAdmin } from "@/components/ai-service/ai-service-admin";
 export function ProvidersPage(props: { search?: string }) {
   void props;
-  return <GatewayAdmin entry="providers" />;
+  return <AiServiceAdmin entry="providers" />;
 }

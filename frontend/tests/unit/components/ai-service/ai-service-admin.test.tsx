@@ -7,16 +7,16 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { GatewayAdmin } from "@/components/gateway/gateway-admin";
+import { AiServiceAdmin } from "@/components/ai-service/ai-service-admin";
 import { SpaceContext } from "@/components/spaces/space-context";
 import {
   arkEmbedding,
   prepareModel,
   prepareRoute,
   submitCreditGrant,
-  loadGatewayConfiguration,
+  loadAiServiceConfiguration,
   reconcileGateway,
-} from "@/lib/ai-gateway-admin";
+} from "@/lib/ai-service-admin";
 
 const send = vi.hoisted(() => vi.fn());
 const actor = vi.hoisted(() => ({ role: "platform_admin" }));
@@ -113,6 +113,13 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+async function chooseOption(label: string, name: string | RegExp) {
+  const trigger = screen.getByRole("combobox", { name: label });
+  fireEvent.keyDown(trigger, { key: "ArrowDown" });
+  const option = await screen.findByRole("option", { name });
+  fireEvent.keyDown(option, { key: "Enter" });
+}
+
 it("opens a prepared model at API Key verification without requesting manual pricing", async () => {
   send.mockResolvedValueOnce({
     models: [{ model, enabled: false, draft: true }],
@@ -122,14 +129,16 @@ it("opens a prepared model at API Key verification without requesting manual pri
     quotas: [],
     unknown: [],
   });
-  render(<GatewayAdmin />);
+  render(<AiServiceAdmin />);
   fireEvent.click(await screen.findByRole("button", { name: "新增接入" }));
-  fireEvent.change(screen.getByLabelText("已准备的模型"), {
-    target: { value: verificationID },
-  });
-  fireEvent.click(screen.getByRole("button", { name: "继续填写 API Key" }));
+  const dialog = screen.getByRole("dialog", { name: "新增接入" });
+  fireEvent.click(
+    within(dialog).getByRole("option", { name: /^text\/default/ }),
+  );
 
-  expect(await screen.findByLabelText("API Key")).toBeTruthy();
+  expect(await within(dialog).findByLabelText("API Key")).toBeTruthy();
+  expect(screen.getByRole("dialog", { name: "新增接入" })).toBe(dialog);
+  expect(document.querySelector('[aria-current="step"]')).toBeNull();
   expect(screen.queryByLabelText("销售输入价")).toBeNull();
   expect(screen.queryByLabelText("采购输入价")).toBeNull();
   expect(
@@ -161,7 +170,7 @@ it("shows one resource table per provider tab and opens the selected billing att
       },
     ],
   });
-  render(<GatewayAdmin entry="providers" />);
+  render(<AiServiceAdmin entry="providers" />);
   expect(await screen.findByRole("table", { name: "供应商路由" })).toBeTruthy();
   expect(screen.getAllByRole("table")).toHaveLength(1);
   expect(
@@ -219,7 +228,7 @@ it("shows one resource table per provider tab and opens the selected billing att
 
 it("does not request gateway configuration for a non-admin account", () => {
   actor.role = "member";
-  render(<GatewayAdmin />);
+  render(<AiServiceAdmin />);
   expect(screen.getByText("暂无访问权限")).toBeTruthy();
   expect(send).not.toHaveBeenCalled();
 });
@@ -244,7 +253,7 @@ it("starts the provider entry on procurement and asks before discarding an edite
         select: async () => {},
       }}
     >
-      <GatewayAdmin entry="providers" />
+      <AiServiceAdmin entry="providers" />
     </SpaceContext.Provider>,
   );
   const procurement = await screen.findByRole("tab", {
@@ -319,18 +328,17 @@ it.each([
       credentials: [{ id: credential, supplier_id: supplier, state: "active" }],
       quotas: [{ name: group, ...limits }],
     });
-    render(<GatewayAdmin entry="providers" />);
+    render(<AiServiceAdmin entry="providers" />);
     fireEvent.click(await screen.findByRole("button", { name: "新增接入" }));
     fireEvent.click(screen.getByRole("button", { name: "使用已有模型" }));
-    const account = screen.getByRole("combobox", { name: "供应商账号" });
     const save = screen.getByRole<HTMLButtonElement>("button", {
-      name: "保存并查看验证预算",
+      name: "准备验证",
     });
-    fireEvent.change(account, { target: { value: supplier } });
+    await chooseOption("供应商账号", /serving-account/);
     expect(screen.getByText("共享配额暂时无法验证")).toBeTruthy();
     expect(save.disabled).toBe(true);
 
-    fireEvent.change(account, { target: { value: "" } });
+    await chooseOption("供应商账号", "新建供应商账号");
     expect(screen.queryByText("共享配额暂时无法验证")).toBeNull();
     expect(save.disabled).toBe(false);
   },
@@ -377,7 +385,7 @@ it("keeps supplier procurement independent from sale and refuses invalid amounts
 });
 
 it("saves the keyless procurement plan before showing API Key and budget confirmation", async () => {
-  render(<GatewayAdmin entry="providers" />);
+  render(<AiServiceAdmin entry="providers" />);
   await screen.findByRole("table", { name: "供应商路由" });
   expect(send.mock.calls[0][0]).toBe("/api/ai/admin/configuration");
   expect(screen.queryByText("must-not-render")).toBeNull();
@@ -396,8 +404,11 @@ it("saves the keyless procurement plan before showing API Key and budget confirm
     ["采购输入价", "0.20"],
   ])
     fireEvent.change(screen.getByLabelText(label), { target: { value } });
-  fireEvent.click(screen.getByRole("button", { name: "保存并查看验证预算" }));
-  const secret = await screen.findByLabelText<HTMLInputElement>("API Key");
+  const dialog = screen.getByRole("dialog", { name: "新增接入" });
+  fireEvent.click(screen.getByRole("button", { name: "准备验证" }));
+  const secret =
+    await within(dialog).findByLabelText<HTMLInputElement>("API Key");
+  expect(screen.getByRole("dialog", { name: "新增接入" })).toBe(dialog);
   expect(screen.getByText("¥0.0005")).toBeTruthy();
   expect(screen.getByText("2 积分")).toBeTruthy();
   expect(
@@ -427,6 +438,10 @@ it("saves the keyless procurement plan before showing API Key and budget confirm
   expect(localStorage.length).toBe(0);
   expect(sessionStorage.length).toBe(0);
   expect(screen.queryByText("secret-once")).toBeNull();
+  await screen.findByText("cannot-save");
+  fireEvent.click(within(dialog).getByRole("button", { name: "关闭对话框" }));
+  expect(screen.queryByRole("alertdialog")).toBeNull();
+  expect(screen.queryByRole("dialog", { name: "新增接入" })).toBeNull();
 });
 
 it("normalizes empty configuration and discards any credential read-back fields", async () => {
@@ -437,7 +452,7 @@ it("normalizes empty configuration and discards any credential read-back fields"
     quotas: null,
     unknown: null,
   });
-  expect(await loadGatewayConfiguration()).toEqual({
+  expect(await loadAiServiceConfiguration()).toEqual({
     model_presets: [],
     credit_grants: [],
     models: [],
@@ -448,7 +463,7 @@ it("normalizes empty configuration and discards any credential read-back fields"
     unknown: [],
     media_drivers: [],
   });
-  const configuration = await loadGatewayConfiguration();
+  const configuration = await loadAiServiceConfiguration();
   expect(configuration.credentials[0]).toEqual({
     id: credential,
     supplier_id: supplier,
@@ -457,7 +472,7 @@ it("normalizes empty configuration and discards any credential read-back fields"
 });
 
 it("previews a promotional grant and submits it for independent review", async () => {
-  render(<GatewayAdmin entry="providers" />);
+  render(<AiServiceAdmin entry="providers" />);
   await screen.findByRole("table", { name: "供应商路由" });
   fireEvent.mouseDown(screen.getByRole("tab", { name: "赠送单" }), {
     button: 0,
@@ -559,7 +574,7 @@ it("prepares a supported media driver with an explicit probe and no key", async 
       },
     ],
   });
-  render(<GatewayAdmin entry="providers" />);
+  render(<AiServiceAdmin entry="providers" />);
   await screen.findByRole("table", { name: "供应商路由" });
   fireEvent.mouseDown(screen.getByRole("tab", { name: "渠道" }), {
     button: 0,
@@ -567,9 +582,7 @@ it("prepares a supported media driver with an explicit probe and no key", async 
   });
   fireEvent.click(screen.getByRole("button", { name: "新增接入" }));
   fireEvent.click(screen.getByRole("button", { name: "使用已有模型" }));
-  fireEvent.change(screen.getByLabelText("媒体驱动"), {
-    target: { value: "openai" },
-  });
+  await chooseOption("媒体驱动", /OpenAI/i);
   for (const [label, value] of [
     ["验证付款空间 ID", supplier],
     ["验证项目 ID", credential],
@@ -585,7 +598,7 @@ it("prepares a supported media driver with an explicit probe and no key", async 
   fireEvent.change(screen.getByLabelText("验证提示词"), {
     target: { value: "一张白底图" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "保存并查看验证预算" }));
+  fireEvent.click(screen.getByRole("button", { name: "准备验证" }));
   await waitFor(() =>
     expect(send).toHaveBeenCalledWith(
       "/api/ai/admin/routes",
@@ -613,14 +626,12 @@ it("prepares a supported media driver with an explicit probe and no key", async 
 });
 
 it("saves a media model with typed modes, parameters and exact prices after collapsing advanced fields", async () => {
-  render(<GatewayAdmin />);
+  render(<AiServiceAdmin />);
   fireEvent.click(await screen.findByRole("button", { name: "新增接入" }));
   fireEvent.change(screen.getByLabelText("销售模型名称"), {
     target: { value: "image/preset" },
   });
-  fireEvent.change(screen.getByLabelText("模型协议"), {
-    target: { value: "media" },
-  });
+  await chooseOption("模型协议", "媒体生成");
   fireEvent.click(screen.getByRole("button", { name: "添加模式" }));
   fireEvent.change(screen.getByLabelText("生成模式 2", { exact: true }), {
     target: { value: "image2image" },
@@ -642,7 +653,7 @@ it("saves a media model with typed modes, parameters and exact prices after coll
     target: { value: "0.001895" },
   });
   expect(screen.queryByLabelText("API Key")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "保存并继续采购配置" }));
+  fireEvent.click(screen.getByRole("button", { name: "保存模型" }));
   await waitFor(() =>
     expect(send).toHaveBeenCalledWith(
       "/api/ai/admin/models",
@@ -844,7 +855,7 @@ it("uses actual supplier logos for published and pending models and filters by c
     quotas: [],
     unknown: [],
   });
-  render(<GatewayAdmin />);
+  render(<AiServiceAdmin />);
   const table = await screen.findByRole("table", { name: "销售模型" });
   const imageRow = within(table).getByRole("row", { name: /Image model/ });
   expect(within(imageRow).getByText("可用")).toBeTruthy();
@@ -930,15 +941,13 @@ it("carries a selected supplier preset through draft and procurement without a k
     if (path.endsWith("/models"))
       models.push({ model: options.data, enabled: false, draft: true });
   });
-  render(<GatewayAdmin />);
+  render(<AiServiceAdmin />);
   fireEvent.click(await screen.findByRole("button", { name: "新增接入" }));
-  fireEvent.change(screen.getByLabelText("供应商"), {
-    target: { value: preset.adapter },
-  });
-  fireEvent.change(screen.getByLabelText("模型预设"), {
-    target: { value: preset.key },
-  });
-  expect(screen.getByRole("dialog", { name: "新增接入" })).toBeTruthy();
+  const dialog = screen.getByRole("dialog", { name: "新增接入" });
+  fireEvent.click(
+    within(dialog).getByRole("option", { name: new RegExp(preset.name) }),
+  );
+  expect(screen.getByRole("dialog", { name: "新增接入" })).toBe(dialog);
   const settings = screen.getByRole("button", { name: "高级配置" });
   expect(settings.getAttribute("aria-expanded")).toBe("false");
   fireEvent.click(settings);
@@ -950,8 +959,8 @@ it("carries a selected supplier preset through draft and procurement without a k
   fireEvent.change(screen.getByLabelText("销售按次价"), {
     target: { value: "1" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "保存并继续采购配置" }));
-  expect(await screen.findByDisplayValue(preset.upstream)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "保存模型" }));
+  expect(await within(dialog).findByDisplayValue(preset.upstream)).toBeTruthy();
   expect(screen.getByDisplayValue(preset.base_url)).toBeTruthy();
   expect(models[0].model).toMatchObject({
     preset_key: preset.key,

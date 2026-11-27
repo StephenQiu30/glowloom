@@ -1,9 +1,10 @@
 /** All management responses are synthetic; this fixture never contacts suppliers. */
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { GatewayAdmin } from "../../src/components/gateway/gateway-admin";
+import { AiServiceAdmin } from "../../src/components/ai-service/ai-service-admin";
 import { SpaceContext } from "../../src/components/spaces/space-context";
 import { installDevelopmentTransport } from "../../src/lib/development-transport";
+import type { GatewayPreset } from "../../src/lib/ai-service-admin";
 import "../../src/app/globals.css";
 const showPrepared = new URLSearchParams(location.search).has("prepared");
 const candidate = {
@@ -29,7 +30,15 @@ const arkPreset = {
   name: "Seedance 2.5",
   upstream: "doubao-seedance-2-5-260628",
   adapter: "volcengine_ark",
+  base_url: "https://ark.cn-beijing.volces.com/api/v3",
   capability: "video.generate",
+  modes: ["text2video"],
+  fields: [],
+  rates: [],
+  currency: "CNY",
+  request_micros: null,
+  concurrency: 1,
+  rpm: 60,
   video_estimate: {
     min_reference_seconds: 2,
     max_reference_seconds: 30,
@@ -40,7 +49,7 @@ const arkPreset = {
     },
   },
   price_source_url: "https://docs.volcengine.com/docs/ark/model-pricing",
-};
+} satisfies GatewayPreset;
 const params = new URLSearchParams(location.search);
 const showCreditReview = params.has("credit-review");
 let creditOrder: API.CreditGrantOrder = {
@@ -109,6 +118,49 @@ const quickPresets = [
   credits: Number(credits),
   purchaseMicros: Number(purchaseMicros),
 }));
+const textProviderPresets = [
+  [
+    "deepseek",
+    "DeepSeek",
+    "DeepSeek V4 Flash",
+    "deepseek-v4-flash",
+    "https://api.deepseek.com",
+  ],
+  [
+    "deepseek",
+    "DeepSeek",
+    "DeepSeek V4 Pro",
+    "deepseek-v4-pro",
+    "https://api.deepseek.com",
+  ],
+  ["openai", "OpenAI", "GPT-5.4", "gpt-5.4", "https://api.openai.com/v1"],
+  [
+    "openrouter",
+    "OpenRouter",
+    "DeepSeek V4 Flash",
+    "deepseek/deepseek-v4-flash",
+    "https://openrouter.ai/api/v1",
+  ],
+].map(
+  ([adapter, provider, name, upstream, base_url]) =>
+    ({
+      key: `fixture-text/${upstream}`,
+      adapter,
+      provider,
+      name,
+      upstream,
+      base_url,
+      capability: "text.generate",
+      modes: [],
+      fields: [],
+      rates: [],
+      currency: "USD",
+      request_micros: null,
+      concurrency: 1,
+      rpm: 60,
+    }) satisfies GatewayPreset,
+);
+
 let quickCandidate: typeof candidate | null = null;
 let quickSends = 0;
 
@@ -240,7 +292,9 @@ installDevelopmentTransport({
       ...(showCreditReview ? { credit_grants: [creditOrder] } : {}),
       ...(showArkEstimate || showQuick
         ? {
-            model_presets: showQuick ? quickPresets : [arkPreset],
+            model_presets: showQuick
+              ? [...quickPresets, ...textProviderPresets]
+              : [arkPreset],
             media_drivers: [
               {
                 key: arkPreset.adapter,
@@ -276,9 +330,9 @@ createRoot(document.getElementById("root")!).render(
         select: async () => {},
       }}
     >
-      <GatewayAdmin />
+      <AiServiceAdmin />
     </SpaceContext.Provider>
   ) : (
-    <GatewayAdmin />
+    <AiServiceAdmin />
   ),
 );

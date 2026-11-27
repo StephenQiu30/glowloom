@@ -6,7 +6,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { GatewayTable } from "@/components/gateway/gateway-table";
+import { AiServiceTable } from "@/components/ai-service/admin-table";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 afterEach(cleanup);
@@ -18,7 +18,7 @@ const rows = Array.from({ length: 22 }, (_, i) => ({
 function table(data = rows) {
   return (
     <TooltipProvider>
-      <GatewayTable
+      <AiServiceTable
         label="模型"
         columns={["模型"]}
         rows={data}
@@ -103,7 +103,7 @@ it("places bulk actions in the top toolbar and sends the confirmed IDs in a sing
     .mockResolvedValue(undefined);
   render(
     <TooltipProvider>
-      <GatewayTable
+      <AiServiceTable
         label="渠道"
         columns={["模型", "操作"]}
         empty="暂无渠道"

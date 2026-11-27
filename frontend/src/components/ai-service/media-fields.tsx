@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { listProjects } from "@/api/projects";
-import { GatewayAction } from "./gateway-action";
+import { AiServiceAction } from "./admin-action";
 import {
   FieldDescription,
   FieldGroup,
@@ -18,7 +18,7 @@ import type {
   GatewayVideoMetering,
   ParameterType,
   ParameterValue,
-} from "@/lib/ai-gateway-admin";
+} from "@/lib/ai-service-admin";
 import {
   FormDetails,
   InputField,
@@ -27,7 +27,7 @@ import {
   num,
   text,
   uuidPattern,
-} from "./gateway-fields";
+} from "./admin-fields";
 
 export const capabilities = [
   ["image.generate", "图像生成"],
@@ -261,7 +261,7 @@ function AddButton({
   onClick: () => void;
 }) {
   return (
-    <GatewayAction
+    <AiServiceAction
       label={label}
       icon={Plus}
       disabled={disabled}
@@ -277,7 +277,7 @@ function RemoveButton({
   label: string;
   onClick: () => void;
 }) {
-  return <GatewayAction label={label} icon={Trash2} onClick={onClick} />;
+  return <AiServiceAction label={label} icon={Trash2} onClick={onClick} />;
 }
 
 function ModeRow({

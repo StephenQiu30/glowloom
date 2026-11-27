@@ -1,6 +1,6 @@
 # Agent 服务 Mastra 架构与技术选型设计
 
-状态：已确认架构与选型（依据 [需求33 SRC-AGV2-01 / SRC-AGV2-02 / SRC-AGV2-03](../requirement/33-Agent服务架构重构与技术选型需求.md#src-agv2-01) 与 [研究01](../research/01-Agent服务架构与技术选型调研.md)）。本文自 2026-11-25 起作为 `agent/` 服务架构与技术选型的现行唯一技术合同（2026-11-26 增补零手写出网红线、模型中间件治理、画布分层投影、混合异步等待与结果态评测契约），[设计32](32-完整创作AgentHarness与Skill多Agent架构设计.md)维护创作业务合同。实施进度与调度只在 [BACKLOG](../../../BACKLOG.md) 维护。
+状态：已确认架构与选型。运行时网关的新分工见[§7.4.1](#ai-runtime-ownership-review)，当前实现见 §7.4。依据 [需求33 SRC-AGV2-01 / SRC-AGV2-02 / SRC-AGV2-03](../requirement/33-Agent服务架构重构与技术选型需求.md#src-agv2-01) 与 [研究01](../research/01-Agent服务架构与技术选型调研.md)。本文自 2026-11-25 起作为 `agent/` 服务架构与技术选型的现行唯一技术合同（2026-11-26 增补零手写出网红线、模型中间件治理、画布分层投影、混合异步等待与结果态评测契约），[设计32](32-完整创作AgentHarness与Skill多Agent架构设计.md)维护创作业务合同。实施进度与调度只在 [BACKLOG](../../../BACKLOG.md) 维护。
 
 ## 1. 摘要
 
@@ -9,7 +9,7 @@
 本设计采用**一步到位全量原地重构**，建立新一代 **Node 24 + TypeScript + Mastra** Agent 服务架构：
 
 - **纯内核库 + 强类型 gRPC + 内部 MCP**：移除 NestJS/Fastify/OpenAPI 双轨，Mastra 作为纯 TypeScript 内核库运行；Go→Agent 与 Agent→Go 鉴权计费采用重构后的强类型 `runtime.proto` gRPC；Go 业务工具暴露为内部 MCP Server，由 `@mastra/mcp` 原生消费。
-- **Go 统一渠道 AI 网关**：演进现有 Go `execution/gateway` 为厂商原生协议透传网关（OpenAI/Anthropic/Gemini）兼图/视/音异步多模态网关，无缝联动 `catalog` 与 `billing` 账本，同时支持将上游渠道 `Base URL` 灵活指向直连厂商、OpenRouter 或自托管 Bifrost。
+- **统一 AI 运行时网关**由 Agent 服务承载，统一处理文本和多模态调用，以及运行时预估、预算、计量与结算编排。Go 管理模型接入、预设、验证发布与积分钱包。供应商渠道配置支持直连和聚合路由。
 - **静态 Schema 持久化与单一 SQL 构建器**：`@mastra/pg`（关闭运行时 DDL）管理框架记忆与 Workflow 快照，Kysely 管理服务级会话/运行/事件/租约表，移除 Prisma 与旧 `runtime_*` 表，全部表结构继续唯一归口于 `backend/db/schema.sql`。
 - **混合编排 + 分离式记忆 + 声明式 Skill**：Producer 主 Agent 与专家子 Agent 处理动态探索，多阶段交付与收费审批走 Mastra Workflow 原生 `suspend/resume`；Mastra Memory 仅管对话与偏好，业务真源经 MCP 按需读取；Agent 容器内零脚本执行。
 - **分层双轨 Evals 与可观测性**：开发/CI 使用 Mastra Scorers + Vitest 做轨迹与约束门禁；线上深度集成自托管 Langfuse 承接 OTel Trace、Prompt 版本管理与线上采样评分。
@@ -20,7 +20,7 @@
 | --------------- | ------------------------------------------------------------------------------ |
 | 项目所有者      | 确认全量原地重构边界、技术选型、网关/评测方案与切换窗口                        |
 | Agent 维护者    | 清空重建 `agent/`（Mastra、gRPC、MCP、Kysely、Langfuse、Scorers 评测与门禁）   |
-| Go 后端维护者   | 升级 `execution/gateway` 透传端点、实现内部 MCP Server、对接强类型 gRPC 契约   |
+| Go 后端维护者   | 维护模型目录和钱包的权威写入，提供内部 MCP 与强类型 gRPC   |
 | 前端维护者      | 验证公共 `/api` 与对话 SSE 合同零破坏、审批交互与断线续传体验一致              |
 | 运维 / DBA      | 维护 `backend/db/schema.sql` 离线变更、独立 `agent` 角色与自托管 Langfuse 部署 |
 
@@ -51,7 +51,7 @@
 
 - 以 **Mastra + Vercel AI SDK + Kysely + Zod + `@grpc/grpc-js` + `@mastra/mcp`** 全量原地重建 `agent/`，彻底移除 NestJS、Fastify、Pi Durable、Prisma、TypeBox 与双向内部 OpenAPI 生成链。
 - 将 `runtime.proto` 升级为强类型语义化 gRPC（`AgentRuntime` 与 `AgentBusiness`），并用 Go 内部 MCP Server 统一承载业务工具暴露。
-- 演进 Go `execution/gateway` 为统一渠道网关（文本原生透传 + 图/视/音异步多模态），保真透传 Prompt Cache、Thinking 与流式块，并与计费账本强一致。
+- 将文本和多模态执行统一到 Agent 运行时网关，保留已支持的原生协议能力，通过 Go 钱包命令闭合计费。
 - 建立可断线重放（`Last-Event-ID`）、可崩溃恢复（PG 租约 + Mastra Workflow `suspend/resume`）、可量化回归（Mastra Scorers + Vitest）与全链路可观测（自托管 Langfuse）的生产级 Agent 底座。
 
 ### 4.2 非目标
@@ -78,7 +78,7 @@
 
 ## 7. 方案
 
-### 7.1 总体架构拓扑（已确认）
+### 7.1 当前服务拓扑
 
 ```mermaid
 flowchart LR
@@ -117,7 +117,7 @@ flowchart LR
 | 入站服务壳   | **Mastra 纯内核库 + `@grpc/grpc-js` + 极简 HTTP 健康探针**   | NestJS 12、Fastify 5、Swagger、`oapi-codegen`、旧 `Invoke` 隧道 |
 | 工具回调协议 | **Go 内部 MCP Server + `@mastra/mcp`**                       | `@umijs/openapi` 生成的 HTTP `BusinessClient`            |
 | 控制回调协议 | **强类型 `AgentBusiness` gRPC**（Buf 生成 Go + TS）          | HTTP 内部控制接口                                        |
-| AI 网关      | **演进 Go `execution/gateway` 统一渠道网关**（参考 BeefTV）  | 零强绑定外部独立 LLM 网关                                |
+| AI 网关 | **Agent 服务运行时网关**，Go 管理供应商目录与积分钱包 | 当前执行链与切换条件见 §7.4 和 §7.4.1 |
 | 数据访问层   | **`@mastra/pg`（禁用运行时 DDL）+ `Kysely` + `pg` + `Zod`**  | Prisma 7、`@prisma/adapter-pg`、`class-validator`、`TypeBox` |
 | 实时事件总线 | **可插拔 EventBus（单实例内存 / 多实例 Redis Pub/Sub）**     | 仅进程内单播                                             |
 | 可观测与评测 | **离线 Mastra Scorers + Vitest；线上自托管 Langfuse（OTel）** | 零散手写评测脚本与局部日志追踪                           |
@@ -140,7 +140,7 @@ flowchart LR
    - 暴露领域工具分组：项目/剧本读写、设定集（Bible）与主体库查询/更新、分镜与画布节点操作、媒体异步生成任务提交与状态查询。
    - 每个工具声明清晰 JSON Schema 与只读/写操作/计费副作用标签，供 Skill 白名单与审批拦截使用。
 
-### 7.4 Go 统一渠道 AI 网关设计（已确认）
+### 7.4 现有 Go 模型调用链与协议基线
 
 参照 [研究01](../research/01-Agent服务架构与技术选型调研.md) 对 BeefTV 与 Toonflow 的同赛道拆解，演进 Go 现有 `backend/internal/execution/gateway`（衔接 [设计33](33-多设计模式驱动的模型与供应商接入扩展体系设计.md#ai-gateway)、[设计40](40-模型号池与销售计费设计.md)、[设计41](41-模型销售定价与结算设计.md)）：
 
@@ -156,6 +156,36 @@ flowchart LR
 <a id="agent-gateway-support"></a>
 
 **当前支持范围（2026-11-27）。** Go SDK 网关的 Chat Completions、Responses 和 Messages 有独立 SSE 合同。Mastra 现有工作流通过内部 Agent 模型入口发起非流式请求，该入口在授权路径上拒绝模型流式请求。Gemini 客户端接线已存在，仍缺统一计量、授权和账本验收。Agent 进度事件、MCP 任务状态和供应商模型流分别验收。上方原生流式保真及 Gemini 的描述为实施目标，发布范围以协议、型号和用量证据为准。 [接入与计费底座](33-多设计模式驱动的模型与供应商接入扩展体系设计.md#agent-gateway-billing)
+
+<a id="ai-runtime-ownership-review"></a>
+
+#### 7.4.1 模型接入与 AI 运行时网关的职责
+
+[需求33 SRC-AGV2-06](../requirement/33-Agent服务架构重构与技术选型需求.md#src-agv2-06) 已确认目标分工。§7.4 的 Go 调用入口是现有实现，切换按 [Plan43](../plan/43-Agent服务Mastra架构重构执行计划.md#ai-runtime-gateway-rollout) 执行。
+
+| 边界 | 已确认职责 |
+| --- | --- |
+| Go 模型接入与目录 | 管理供应商、连接及凭据生命周期、模型预设、上游型号、能力和计价合同版本。受理验证并依据可信回执发布可用模型 |
+| Agent 服务的 AI 运行时网关 | 读取获授权的模型与合同。负责选路、运行时预估、预算校验、派发、可信用量归集和结算编排 |
+| 产品调用入口 | 画布、工作台和对话共用运行时网关。普通生成以业务操作身份直接调用，支持无需对话 Run 的幂等提交与查询 |
+| Go 积分钱包 | 唯一写入余额、冻结、实扣、释放、充值、赠送和流水。以稳定业务身份受理幂等命令并返回原回执 |
+
+```mermaid
+flowchart LR
+    UI["画布 · 工作台 · 对话 · SDK"] --> API["Go 公开 API 与业务授权"]
+    API -->|普通生成| Runtime["Agent 服务 · AI 运行时网关"]
+    API -->|启动对话| Run["Agent 对话编排"]
+    Run --> Runtime
+    Catalog["Go 模型目录 · 供应商接入与验证发布"] -->|已发布模型与计价快照| Runtime
+    Runtime -->|申请冻结与提交结算| Wallet["Go 积分钱包"]
+    Runtime <-->|派发、结果与可信用量| Provider["模型供应商"]
+```
+
+
+- **服务边界与命名。** 管理台归 `ai-service`，供应商和模型配置归 `model-onboarding`。AI 网关归 Agent 服务，调用入口与 Mastra 对话生命周期解耦。浏览器继续经 Go 的公开 API。Go 接受并核验调用者、空间、项目和收费批准，再转交 Agent 网关。面向 SDK 的公开协议路径在接入统一网关时保留原合同。
+- **版本和凭据。** Go 提供绑定发布版本、报价合同、付款空间和权限的调用快照。供应商密钥的持久化、轮换和吊销归 Go。Agent 通过受控服务身份使用与批准线路绑定的凭据，调用身份关联供应商回执。Agent 的运行记录、日志和前端响应不存储明文凭据。
+- **计费合同。** Agent 向 Go 申请预算冻结并凭回执派发，在可信用量到达后按原报价版本提交幂等结算。Go 在写入事务内验证余额、权限、稳定业务身份和冻结上限。每元 10 积分，文本授权段合计后向上取整，每次媒体生成独立确认，详见[设计41](41-模型销售定价与结算设计.md#agent-text-billing)。结果或实际用量待核对时保留原冻结。
+- **切换条件。** 先用 Seedance 2.0 Mini 的 720p 单镜规格隔离验收报价、冻结、派发、用量、核销与释放，再接文本授权段和其他入口。每次尝试只有一个派发与结算所有者。切换影响新请求，在途请求沿原身份和冻结快照恢复。用受理后超时、重复恢复、并发预算和回退案例验证。
 
 ### 7.5 持久化、静态 Schema 与控制层（已确认）
 
@@ -225,7 +255,7 @@ agent/
 #### 服务分工
 
 - `server.ts` 统一装配配置、存储、资源注册表和入站协议。`transport/` 校验 gRPC 调用身份。`sessions/` 持有会话、Run 受理、资源版本、事件、租约及恢复。`mastra/` 持有 Producer、专家 Agent、委派、阶段和审批编排。依赖从入口向运行层与适配器单向流动。
-- `skills/` 的加载代码归 `src/skills/`，内容包归包根 `skills/`。Prompt 和工作流定义按资源发布。模型供应商、Key、精确型号、额度和费率由 Go 网关持有，Agent 通过授权运行使用逻辑模型标识，收费工具由 Go 负责确认、派发与结算。 [AI 网关与计费合同](33-多设计模式驱动的模型与供应商接入扩展体系设计.md#agent-gateway-billing)
+- `skills/` 的加载代码归 `src/skills/`，内容包归包根 `skills/`。Prompt 和工作流定义按资源发布。Go 管理模型供应商、Key、精确型号、额度和费率。Agent 通过授权使用发布模型，运行时派发与计费编排按 [§7.4.1](#ai-runtime-ownership-review) 执行。 [AI 网关与计费合同](33-多设计模式驱动的模型与供应商接入扩展体系设计.md#agent-gateway-billing)
 - Go 业务域持有项目剧本、设定、分镜、素材和已接受的画布修订，Canvas 服务负责协作计算。Agent 通过 Go MCP 接收按项目授权的摘要和资源引用，按需读取证据与指定修订，写入沿既有工具与审批合同。工程文档的 `workspace/`、Mastra 的运行时 Workspace 和创作项目是三个独立边界。 [创作项目知识库设计](50-创作项目知识库设计.md)
 
 #### 资源配置与启动校验

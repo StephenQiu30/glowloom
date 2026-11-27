@@ -1,13 +1,16 @@
 "use client";
 
 import { AdminHeading } from "@/components/governance/admin-layout";
-import { GatewayAction } from "./gateway-action";
-import { GatewayArkVideoEstimate } from "./gateway-ark-video-estimate";
-import { GatewayModelList } from "./gateway-model-list";
-import { GatewayCreditGrants } from "./gateway-credit-grants";
+import { AiServiceAction } from "./admin-action";
+import { ArkVideoEstimate } from "./ark-video-estimate";
+import { ModelCatalog } from "./model-catalog";
+import { CreditGrants } from "./credit-grants";
 import { deleteAiRoutes } from "@/api/aiGateway";
-import { ensureIndependentCreation } from "@/api/projects";
-import { GatewayTable } from "./gateway-table";
+import { AiServiceTable } from "./admin-table";
+import {
+  ModelOnboardingDialog,
+  type ModelOnboarding,
+} from "./model-onboarding";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 import {
@@ -45,13 +48,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 
 import {
@@ -73,28 +69,20 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  loadGatewayConfiguration,
-  prepareQuickOnboarding,
+  loadAiServiceConfiguration,
   setCredentialState,
   type CredentialState,
-  type GatewayConfiguration,
-  type OnboardingReview,
-} from "@/lib/ai-gateway-admin";
+  type AiServiceConfiguration,
+} from "@/lib/ai-service-admin";
 import {
   SelectField,
   money,
   priceSummary,
   type RunMutation,
-} from "./gateway-fields";
-import {
-  CreditsForm,
-  ModelForm,
-  ReconciliationForm,
-  RouteForm,
-  protocolLabels,
-} from "./gateway-forms";
-import { OnboardingPanel, onboardingState } from "./gateway-onboarding";
-import { modeLabel } from "./gateway-media-fields";
+} from "./admin-fields";
+import { CreditsForm, ReconciliationForm, protocolLabels } from "./admin-forms";
+import { OnboardingPanel, onboardingState } from "./onboarding-verification";
+import { modeLabel } from "./media-fields";
 
 const tabs = [
   ["models", "模型"],
@@ -110,7 +98,7 @@ const tabs = [
 type Entry = "models" | "providers";
 type GatewayTab = (typeof tabs)[number][0];
 
-export function GatewayAdmin({
+export function AiServiceAdmin({
   entry = "models",
   entityID,
   initialTab,
@@ -129,7 +117,7 @@ export function GatewayAdmin({
       />
     );
   return (
-    <GatewayConfigurationPage
+    <AiServiceConfigurationPage
       key={`${session.actor.id}:${entry}:${entityID ?? ""}:${initialTab ?? ""}`}
       actorID={session.actor.id}
       entry={entry}
@@ -139,7 +127,7 @@ export function GatewayAdmin({
   );
 }
 
-function GatewayConfigurationPage({
+function AiServiceConfigurationPage({
   actorID,
   entry,
   entityID,
@@ -153,19 +141,16 @@ function GatewayConfigurationPage({
   const { selected: space } = useSpace();
   const defaultScope = space?.writable ? space.id : undefined;
   const [configuration, setConfiguration] =
-    useState<GatewayConfiguration | null>(null);
+    useState<AiServiceConfiguration | null>(null);
   const [revision, setRevision] = useState(0);
   const [tab, setTab] = useState<GatewayTab>(
     tabs.find(([key]) => key === initialTab)?.[0] ??
       (entry === "providers" ? "routes" : "models"),
   );
-  const [stage, setStage] = useState<
-    "preset" | "model" | "route" | "fund" | "reconcile"
-  >();
-  const [discard, setDiscard] = useState<GatewayTab>();
-  const [selectedModel, setSelectedModel] = useState<string>();
+  const [billingAction, setBillingAction] = useState<"fund" | "reconcile">();
+  const [setup, setSetup] = useState<ModelOnboarding>();
+  const [discard, setDiscard] = useState<() => void>();
   const [candidate, setCandidate] = useState<string>();
-  const [prepared, setPrepared] = useState<OnboardingReview>();
   const [inDetail, setInDetail] = useState(Boolean(entityID));
   const [readError, setReadError] = useState(false);
   const [error, setError] = useState("");
@@ -175,11 +160,12 @@ function GatewayConfigurationPage({
   const submitting = useRef(false);
   const dirty = useRef(false);
   const heading = useRef<HTMLDivElement>(null);
+  const setupTrigger = useRef<HTMLElement>(null);
   const refresh = useCallback(() => setRevision((value) => value + 1), []);
 
   useEffect(() => {
     const controller = new AbortController();
-    loadGatewayConfiguration(controller.signal).then(
+    loadAiServiceConfiguration(controller.signal).then(
       (next) => {
         if (controller.signal.aborted) return;
         setConfiguration(next);
@@ -242,51 +228,46 @@ function GatewayConfigurationPage({
       window.history.replaceState(null, "", url);
     }
     setCandidate(undefined);
-    setStage(undefined);
+    setBillingAction(undefined);
+    setSetup(undefined);
     setInDetail(false);
     setError("");
   }
 
-  function requestNavigation(next: GatewayTab) {
+  function requestChange(action: () => void) {
     if (busy) return;
-    if (stage && dirty.current) {
-      setDiscard(next);
+    if (dirty.current) {
+      setDiscard(() => () => {
+        dirty.current = false;
+        setError("");
+        action();
+      });
       return;
     }
-    go(next);
+    setError("");
+    action();
   }
 
-  const readyCandidates =
-    configuration?.onboarding.filter(
-      (item) =>
-        item.state === "prepared" &&
-        (!defaultScope || !item.scope_id || item.scope_id === defaultScope),
-    ) ?? [];
-  const quickPresets =
-    configuration?.model_presets?.filter((preset) => preset.quick_onboarding) ??
-    [];
-  const readyPresetKeys = new Set(
-    configuration?.models
-      .filter(({ model }) =>
-        readyCandidates.some(({ model_id }) => model_id === model.id),
-      )
-      .map(({ model }) => model.preset_key) ?? [],
-  );
-  const newQuickPresets = quickPresets.filter(
-    ({ key }) => !readyPresetKeys.has(key),
-  );
+  function requestNavigation(next: GatewayTab) {
+    requestChange(() => go(next));
+  }
+
+  function openSetup(next: ModelOnboarding) {
+    const trigger = document.activeElement;
+    setupTrigger.current =
+      trigger instanceof HTMLElement && trigger !== document.body
+        ? trigger
+        : null;
+    go(tab);
+    setSetup(next);
+  }
 
   function startModel() {
-    go(tab);
-    setStage(
-      readyCandidates.length || newQuickPresets.length ? "preset" : "model",
-    );
+    openSetup({});
   }
 
   function startRoute(id?: string) {
-    go(tab);
-    setSelectedModel(id);
-    setStage("route");
+    openSetup({ existing: true, modelID: id });
   }
 
   function openCandidate(id: string) {
@@ -295,42 +276,14 @@ function GatewayConfigurationPage({
     requestAnimationFrame(() => heading.current?.focus());
   }
 
-  async function selectOnboardingPreset(value: string) {
-    if (readyCandidates.some((item) => item.id === value)) {
-      openCandidate(value);
-      return;
-    }
-    if (!newQuickPresets.some(({ key }) => key === value)) return;
-    await run(async () => {
-      if (!defaultScope) throw new Error("请先选择可写的验证空间。");
-      const project = await ensureIndependentCreation();
-      if (!project.id) throw new Error("当前空间的独立创作容器不可用。");
-      const review = await prepareQuickOnboarding({
-        preset_key: value,
-        scope_id: defaultScope,
-        project_id: project.id,
-      });
-      setPrepared(review);
-      openCandidate(review.id);
-    }, "已准备验证计划。");
-  }
-
   function openBilling(action: "fund" | "reconcile", attempt = "") {
     go(action === "fund" ? "credit-grants" : "credits");
     setSelectedAttempt(attempt);
-    setStage(action);
+    setBillingAction(action);
     requestAnimationFrame(() => heading.current?.focus());
   }
   const title = "AI 服务";
-  const setupOpen =
-    stage === "preset" || stage === "model" || stage === "route";
-  const showListing = !inDetail && (!stage || setupOpen) && !candidate;
-  const currentStep =
-    stage === "model" ? 0 : stage === "route" ? 1 : candidate ? 2 : undefined;
-  const waitingForNewDraft =
-    stage === "route" &&
-    selectedModel &&
-    !configuration?.models.some(({ model }) => model.id === selectedModel);
+  const showListing = !inDetail && !billingAction && !candidate;
 
   const operationError = error && (
     <Alert id="gateway-operation-error" tabIndex={-1} variant="destructive">
@@ -346,7 +299,7 @@ function GatewayConfigurationPage({
   const toolbarActions = showListing && (
     <>
       {!readError && (
-        <GatewayAction
+        <AiServiceAction
           label="刷新配置"
           icon={RefreshCw}
           disabled={busy || loading}
@@ -354,10 +307,10 @@ function GatewayConfigurationPage({
         />
       )}
       {tab === "models" && (
-        <GatewayArkVideoEstimate presets={configuration?.model_presets} />
+        <ArkVideoEstimate presets={configuration?.model_presets} />
       )}
       {(tab === "models" || tab === "routes") && (
-        <GatewayAction
+        <AiServiceAction
           icon={Plus}
           variant="default"
           label="新增接入"
@@ -366,7 +319,7 @@ function GatewayConfigurationPage({
         />
       )}
       {tab === "credit-grants" && (
-        <GatewayAction
+        <AiServiceAction
           icon={Coins}
           label="赠送积分"
           disabled={busy}
@@ -374,7 +327,7 @@ function GatewayConfigurationPage({
         />
       )}
       {tab === "credits" && (
-        <GatewayAction
+        <AiServiceAction
           icon={ClipboardCheck}
           label="手动对账"
           disabled={busy}
@@ -389,7 +342,7 @@ function GatewayConfigurationPage({
       <div
         className="admin-page"
         onChangeCapture={() => {
-          if (stage && stage !== "preset") dirty.current = true;
+          if (billingAction) dirty.current = true;
         }}
       >
         {inDetail ? (
@@ -412,7 +365,7 @@ function GatewayConfigurationPage({
             role="group"
             className="admin-toolbar"
           >
-            <TabsList variant="secondary" aria-label="网关管理">
+            <TabsList variant="secondary" aria-label="AI 服务管理">
               {tabs.map(([value, label]) => (
                 <TabsTrigger
                   key={value}
@@ -426,7 +379,7 @@ function GatewayConfigurationPage({
           </div>
           {readError && (
             <Alert variant="destructive">
-              <AlertTitle>网关配置暂时无法读取</AlertTitle>
+              <AlertTitle>AI 服务配置暂时无法读取</AlertTitle>
               <AlertDescription>
                 <Button
                   variant="outline"
@@ -439,20 +392,17 @@ function GatewayConfigurationPage({
               </AlertDescription>
             </Alert>
           )}
-          {!setupOpen && operationError}
+          {!setup && operationError}
           {notice && (
             <Alert role="status">
               <AlertDescription>{notice}</AlertDescription>
             </Alert>
           )}
           {!configuration && loading && (
-            <Skeleton className="h-48 w-full" aria-label="读取网关配置" />
+            <Skeleton className="h-48 w-full" aria-label="读取AI 服务配置" />
           )}
           {configuration && (
             <>
-              {!setupOpen && currentStep !== undefined && (
-                <OnboardingSteps current={currentStep} />
-              )}
               <TabsContent key={tab} value={tab} className="min-w-0">
                 {inDetail && entityID ? (
                   <EntityDetail
@@ -466,7 +416,6 @@ function GatewayConfigurationPage({
                   <OnboardingPanel
                     key={candidate}
                     id={candidate}
-                    initial={prepared?.id === candidate ? prepared : undefined}
                     run={run}
                     busy={busy}
                     refreshConfiguration={refresh}
@@ -474,7 +423,7 @@ function GatewayConfigurationPage({
                     retryRoute={startRoute}
                   />
                 ) : tab === "onboarding" || tab === "pending" ? (
-                  <GatewayTable
+                  <AiServiceTable
                     toolbarActions={toolbarActions}
                     label={tab === "pending" ? "待接入渠道" : "接入验证"}
                     onDelete={tab === "pending" ? deleteChannels : undefined}
@@ -509,7 +458,7 @@ function GatewayConfigurationPage({
                             <Badge key="status" variant="secondary">
                               {onboardingState[item.state]}
                             </Badge>,
-                            <GatewayAction
+                            <AiServiceAction
                               key="review"
                               onClick={() => openCandidate(item.id)}
                               label={
@@ -524,7 +473,7 @@ function GatewayConfigurationPage({
                       })}
                   />
                 ) : tab === "models" ? (
-                  <GatewayModelList
+                  <ModelCatalog
                     toolbarActions={toolbarActions}
                     configuration={configuration}
                     startRoute={startRoute}
@@ -536,7 +485,7 @@ function GatewayConfigurationPage({
                     onDelete={deleteChannels}
                   />
                 ) : tab === "quotas" ? (
-                  <GatewayTable
+                  <AiServiceTable
                     toolbarActions={toolbarActions}
                     label="共享配额"
                     columns={["配额组", "并发", "请求／分钟"]}
@@ -554,14 +503,17 @@ function GatewayConfigurationPage({
                     busy={busy}
                     run={run}
                   />
-                ) : stage === "fund" || stage === "reconcile" ? (
+                ) : billingAction === "fund" ||
+                  billingAction === "reconcile" ? (
                   <Card>
                     <CardHeader>
                       <CardTitle>
-                        {stage === "fund" ? "提交积分赠送单" : "供应商账单对账"}
+                        {billingAction === "fund"
+                          ? "提交积分赠送单"
+                          : "供应商账单对账"}
                       </CardTitle>
                       <CardAction>
-                        <GatewayAction
+                        <AiServiceAction
                           label="返回列表"
                           icon={ArrowLeft}
                           disabled={busy}
@@ -570,7 +522,7 @@ function GatewayConfigurationPage({
                       </CardAction>
                     </CardHeader>
                     <CardContent>
-                      {stage === "fund" ? (
+                      {billingAction === "fund" ? (
                         <CreditsForm
                           run={run}
                           busy={busy}
@@ -587,7 +539,7 @@ function GatewayConfigurationPage({
                     </CardContent>
                   </Card>
                 ) : tab === "credit-grants" ? (
-                  <GatewayCreditGrants
+                  <CreditGrants
                     actorID={actorID}
                     orders={configuration.credit_grants ?? []}
                     busy={busy}
@@ -595,7 +547,7 @@ function GatewayConfigurationPage({
                     toolbarActions={toolbarActions}
                   />
                 ) : (
-                  <GatewayTable
+                  <AiServiceTable
                     toolbarActions={toolbarActions}
                     label="待对账请求"
                     columns={["原请求", "原尝试", "状态", "操作"]}
@@ -608,7 +560,7 @@ function GatewayConfigurationPage({
                         row.request_id,
                         row.attempt_id,
                         "待核对",
-                        <GatewayAction
+                        <AiServiceAction
                           key="reconcile"
                           label="核对账单"
                           icon={ClipboardCheck}
@@ -624,126 +576,31 @@ function GatewayConfigurationPage({
             </>
           )}
         </Tabs>
-        {configuration && setupOpen && (
-          <Dialog
-            open
-            onOpenChange={(open) => {
-              if (!open) requestNavigation(tab);
+        {configuration && setup && (
+          <ModelOnboardingDialog
+            setup={setup}
+            configuration={configuration}
+            scope={defaultScope}
+            busy={busy}
+            error={operationError}
+            run={run}
+            refresh={refresh}
+            allowExistingModel={
+              tab === "routes" &&
+              configuration.models.some(
+                ({ enabled, draft }) => enabled || draft,
+              )
+            }
+            onDirty={(value) => {
+              dirty.current = value;
             }}
-          >
-            <DialogContent
-              className="gap-3 p-4 sm:max-w-[504px] sm:p-5"
-              onCloseAutoFocus={(event) => {
-                event.preventDefault();
-                heading.current?.focus();
-              }}
-            >
-              <DialogHeader>
-                <DialogTitle>
-                  {stage === "route" ? "采购配置" : "新增接入"}
-                </DialogTitle>
-                <DialogDescription>
-                  {stage === "preset"
-                    ? "选择已准备好的模型，填写 API Key 后验证。"
-                    : stage === "model"
-                      ? "1 / 3 · 模型预设"
-                      : "2 / 3 · 采购路由"}
-                </DialogDescription>
-              </DialogHeader>
-              {operationError}
-              {stage === "preset" ? (
-                <form
-                  className="grid gap-4"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    const id = new FormData(event.currentTarget).get("preset");
-                    if (typeof id === "string") void selectOnboardingPreset(id);
-                  }}
-                >
-                  <SelectField
-                    label="已准备的模型"
-                    name="preset"
-                    required
-                    defaultValue=""
-                    options={[
-                      ["", "选择型号"],
-                      ...newQuickPresets.map(
-                        ({ key, provider, name, quick_onboarding }) =>
-                          [
-                            key,
-                            `${provider} · ${name} · ${quick_onboarding?.resolution} 文生视频`,
-                          ] as const,
-                      ),
-                      ...readyCandidates.map((item) => {
-                        const model = configuration.models.find(
-                          ({ model }) => model.id === item.model_id,
-                        )?.model;
-                        const name = model?.name ?? item.upstream_model;
-                        return [
-                          item.id,
-                          name === item.upstream_model
-                            ? name
-                            : `${name} · ${item.upstream_model}`,
-                        ] as const;
-                      }),
-                    ]}
-                  />
-                  <div className="flex flex-wrap justify-end gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={busy}
-                      onClick={() => setStage("model")}
-                    >
-                      准备其他型号
-                    </Button>
-                    <Button type="submit" disabled={busy}>
-                      继续填写 API Key
-                    </Button>
-                  </div>
-                </form>
-              ) : stage === "model" ? (
-                <>
-                  {tab === "routes" &&
-                    configuration.models.some(
-                      (row) => row.enabled || row.draft,
-                    ) && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="mb-3"
-                        onClick={() => startRoute()}
-                      >
-                        使用已有模型
-                      </Button>
-                    )}
-                  <ModelForm
-                    configuration={configuration}
-                    busy={busy}
-                    run={run}
-                    onPrepared={startRoute}
-                  />
-                </>
-              ) : waitingForNewDraft ? (
-                <p role="status" className="text-sm text-muted-foreground">
-                  正在读取刚保存的模型预设…
-                </p>
-              ) : (
-                <RouteForm
-                  key={selectedModel ?? "choose"}
-                  configuration={configuration}
-                  busy={busy}
-                  run={run}
-                  initialModelID={selectedModel}
-                  defaultScope={defaultScope}
-                  onPrepared={(review) => {
-                    setPrepared(review);
-                    openCandidate(review.id);
-                  }}
-                />
-              )}
-            </DialogContent>
-          </Dialog>
+            onChangeRequest={requestChange}
+            onClose={() => requestNavigation(tab)}
+            restoreFocus={() => {
+              const trigger = setupTrigger.current;
+              (trigger?.isConnected ? trigger : heading.current)?.focus();
+            }}
+          />
         )}
         <AlertDialog
           open={discard !== undefined}
@@ -755,14 +612,14 @@ function GatewayConfigurationPage({
             <AlertDialogHeader>
               <AlertDialogTitle>离开当前表单？</AlertDialogTitle>
               <AlertDialogDescription>
-                本步骤尚未保存，离开后需重新填写。
+                尚未保存的内容需要重新填写。
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>继续填写</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => {
-                  if (discard) go(discard);
+                  discard?.();
                 }}
               >
                 离开表单
@@ -772,28 +629,6 @@ function GatewayConfigurationPage({
         </AlertDialog>
       </div>
     </TooltipProvider>
-  );
-}
-
-function OnboardingSteps({ current }: { current: number }) {
-  return (
-    <ol
-      aria-label="接入进度"
-      className="flex flex-wrap items-center gap-x-4 gap-y-2"
-    >
-      {["模型预设", "采购路由", "验证启用"].map((label, index) => (
-        <li
-          key={label}
-          aria-current={index === current ? "step" : undefined}
-          className="flex items-center gap-2 text-sm text-muted-foreground aria-[current=step]:font-medium aria-[current=step]:text-foreground"
-        >
-          <Badge variant={index === current ? "default" : "secondary"}>
-            {index + 1}
-          </Badge>
-          {label}
-        </li>
-      ))}
-    </ol>
   );
 }
 
@@ -833,12 +668,12 @@ function RoutesList({
   toolbarActions,
   onDelete,
 }: {
-  configuration: GatewayConfiguration;
+  configuration: AiServiceConfiguration;
   toolbarActions: ReactNode;
   onDelete: (ids: string[]) => Promise<void>;
 }) {
   return (
-    <GatewayTable
+    <AiServiceTable
       toolbarActions={toolbarActions}
       label="供应商路由"
       onDelete={onDelete}
@@ -876,7 +711,7 @@ function RoutesList({
               {enabled ? "已启用" : "未启用"}
             </Badge>,
             route.id && (
-              <GatewayAction
+              <AiServiceAction
                 label="查看路由"
                 icon={Eye}
                 href={`/providers/${route.id}`}
@@ -898,7 +733,7 @@ function EntityDetail({
 }: {
   entry: Entry;
   id: string;
-  configuration: GatewayConfiguration;
+  configuration: AiServiceConfiguration;
   startRoute: (id: string) => void;
   openCandidate: (id: string) => void;
 }) {
@@ -918,7 +753,7 @@ function EntityDetail({
     configuration.models.find((row) => row.model.id === route?.model_id)?.model;
   return (
     <div className="flex flex-col gap-4">
-      <GatewayAction
+      <AiServiceAction
         label="返回列表"
         icon={ArrowLeft}
         href={entry === "models" ? "/models" : "/models?tab=routes"}
@@ -987,14 +822,14 @@ function EntityDetail({
             <Detail label="版本标识" value={id} />
             <div className="flex flex-wrap gap-2">
               {model && (modelRow?.draft || modelRow?.enabled) && (
-                <GatewayAction
+                <AiServiceAction
                   onClick={() => startRoute(model.id)}
                   label="准备采购"
                   icon={Route}
                 />
               )}
               {candidate && (
-                <GatewayAction
+                <AiServiceAction
                   onClick={() => openCandidate(candidate.id)}
                   label="查看验证"
                   icon={ClipboardCheck}
@@ -1012,7 +847,7 @@ function EntityDetail({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <GatewayAction
+            <AiServiceAction
               label="查看验证"
               icon={ClipboardCheck}
               onClick={() => openCandidate(candidate.id)}
@@ -1050,7 +885,7 @@ function CredentialList({
   run,
   busy,
 }: {
-  configuration: GatewayConfiguration;
+  configuration: AiServiceConfiguration;
   toolbarActions: ReactNode;
   run: RunMutation;
   busy: boolean;
@@ -1075,7 +910,7 @@ function CredentialList({
   }
   return (
     <>
-      <GatewayTable
+      <AiServiceTable
         toolbarActions={toolbarActions}
         label="供应商凭据"
         columns={["凭据", "状态", "操作"]}
@@ -1107,7 +942,7 @@ function CredentialList({
                 }))
               }
             />,
-            <GatewayAction
+            <AiServiceAction
               key="save"
               disabled={
                 busy ||

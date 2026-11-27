@@ -10,9 +10,9 @@ vi.mock("next/navigation", () => ({ redirect }));
 vi.mock("@/components/layout/page-layout", () => ({
   PageLayout: ({ children }: { children: React.ReactNode }) => children,
 }));
-vi.mock("@/components/gateway/gateway-admin", () => ({
-  GatewayAdmin: ({ initialTab }: { initialTab?: string }) => (
-    <div>{initialTab ?? "当前统一网关管理"}</div>
+vi.mock("@/components/ai-service/ai-service-admin", () => ({
+  AiServiceAdmin: ({ initialTab }: { initialTab?: string }) => (
+    <div>{initialTab ?? "当前统一AI 服务管理"}</div>
   ),
 }));
 afterEach(cleanup);
@@ -26,5 +26,5 @@ it("preserves links to the former provider list and selects its channel tab", as
 
 it.each([ModelsPage, ProvidersPage])("uses the shared admin", (Page) => {
   render(<Page />);
-  expect(screen.getByText("当前统一网关管理")).toBeTruthy();
+  expect(screen.getByText("当前统一AI 服务管理")).toBeTruthy();
 });
