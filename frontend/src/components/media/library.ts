@@ -24,6 +24,7 @@ const revision = (v: unknown) => Number.isSafeInteger(v) && Number(v) >= 0;
 export function requireLibraryPage(
   value: unknown,
   actorID: string,
+  cursorLimit?: number,
 ): LibraryPage {
   const p = value as Partial<LibraryPage> | null;
   if (
@@ -34,14 +35,8 @@ export function requireLibraryPage(
     p.scope?.kind !== "personal" ||
     p.scope.project_id ||
     !revision(p.revision) ||
-    !Number.isSafeInteger(p.page) ||
-    p.page! < 1 ||
-    !Number.isSafeInteger(p.page_size) ||
-    p.page_size! < 1 ||
-    p.page_size! > 120 ||
     !revision(p.total) ||
     !Array.isArray(p.items) ||
-    p.items.length > p.page_size! ||
     !Array.isArray(p.folders) ||
     new Set(p.items.map((i) => i.id)).size !== p.items.length ||
     p.items.some(
@@ -62,6 +57,21 @@ export function requireLibraryPage(
         typeof f.name !== "string" ||
         !revision(f.revision),
     )
+  )
+    throw new RequestError("invalid_receipt");
+  if (
+    cursorLimit === undefined
+      ? !Number.isSafeInteger(p.page) ||
+        p.page! < 1 ||
+        !Number.isSafeInteger(p.page_size) ||
+        p.page_size! < 1 ||
+        p.page_size! > 120 ||
+        p.items.length > p.page_size!
+      : p.items.length > cursorLimit ||
+        (p.next_cursor !== null &&
+          (typeof p.next_cursor !== "string" ||
+            !p.next_cursor.length ||
+            p.next_cursor.length > 2048))
   )
     throw new RequestError("invalid_receipt");
   return p as LibraryPage;

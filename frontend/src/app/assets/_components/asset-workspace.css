@@ -1,0 +1,45 @@
+.workspace-page:has(> .asset-workspace-tabs) {
+  display: flex;
+  flex-direction: column;
+}
+@media (width >= 768px) and (pointer: fine) {
+  [data-product-navigation="assets"] > .product-header {
+    min-height: calc(var(--control-height) + 4 * var(--spacing));
+  }
+  .workspace-page:has(> .asset-workspace-tabs) {
+    padding-block-start: 0;
+  }
+}
+.asset-workspace-tabs {
+  flex: 1;
+  gap: 16px;
+}
+.asset-workspace-tabs > [data-slot="tabs-content"]:has([data-slot="empty"]),
+.asset-workspace-tabs
+  > [data-slot="tabs-content"]
+  > :has(> [data-slot="empty"]) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.product-page
+  .workspace-content-state:is(.asset-history-empty, .asset-guest-empty) {
+  flex: none;
+  min-height: 280px;
+  gap: 24px;
+}
+
+@media (width < 768px) {
+  [data-product-navigation="assets"] .product-header-toolbar {
+    padding-inline: calc(
+      var(--layout-content-x) - var(--product-header-mobile-inset)
+    );
+  }
+  [data-product-navigation="assets"] .product-header-page-actions:not(:empty) {
+    grid-area: 1 / 2;
+    justify-self: end;
+  }
+  [data-product-navigation="assets"] [data-slot="tabs-trigger"] {
+    padding-inline: var(--ui-tab-padding-inline);
+  }
+}

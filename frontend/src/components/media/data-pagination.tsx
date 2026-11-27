@@ -32,7 +32,7 @@ export function DataPagination({
   disabled?: boolean;
   compact?: boolean;
   onPageChange: (page: number) => void;
-  onPageSizeChange: (size: PageSize) => void;
+  onPageSizeChange?: (size: PageSize) => void;
 }) {
   const pages = total === undefined ? undefined : Math.ceil(total / pageSize);
   if (compact && !hasNext && (pages ?? page) <= 1) return null;
@@ -44,7 +44,7 @@ export function DataPagination({
       className="data-pagination"
       data-compact={compact || undefined}
     >
-      {!compact && (
+      {!compact && onPageSizeChange && (
         <PageSizeSelect
           label={`${label}每页数量`}
           value={pageSize}

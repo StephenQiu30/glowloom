@@ -325,7 +325,15 @@ func Present(h domain.Head, v domain.Version, favorite bool) Detail {
 
 // Validate checks bounded filters before query execution.
 func (in ListInput) Validate() error {
-	if !domain.ValidType(in.Type) || !utf8.ValidString(in.Query) || utf8.RuneCountInString(in.Query) > 512 || strings.ContainsRune(in.Query, 0) || in.Page < 1 || in.Page > 100000 || in.PageSize < 1 || in.PageSize > 120 {
+	if !domain.ValidType(in.Type) || !utf8.ValidString(in.Query) || utf8.RuneCountInString(in.Query) > 512 || strings.ContainsRune(in.Query, 0) {
+		return domain.ErrInvalid
+	}
+	if in.Limit != 0 {
+		if in.Limit < 1 || in.Limit > 120 || in.Page != 0 || in.PageSize != 0 ||
+			(in.After != nil && (in.After.ID == uuid.Nil || in.After.Time.IsZero())) {
+			return domain.ErrInvalid
+		}
+	} else if in.Page < 1 || in.Page > 100000 || in.PageSize < 1 || in.PageSize > 120 || in.After != nil {
 		return domain.ErrInvalid
 	}
 	if in.TimeField != "created" && in.TimeField != "updated" {

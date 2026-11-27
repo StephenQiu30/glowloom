@@ -38,14 +38,19 @@ export type UnifiedSubject = {
   created_at: string;
   updated_at: string;
 };
-export type UnifiedSubjectPage = {
+type UnifiedSubjectCollection = {
   current_actor_id: string;
   current_scope_id: string;
   items: UnifiedSubject[];
+  capabilities: { intelligent_voice: { available: boolean; reason?: string } };
+};
+export type UnifiedSubjectPage = UnifiedSubjectCollection & {
   page: number;
   page_size: number;
   total: number;
-  capabilities: { intelligent_voice: { available: boolean; reason?: string } };
+};
+export type UnifiedSubjectCursorPage = UnifiedSubjectCollection & {
+  next_cursor: string | null;
 };
 export type SubjectOrder =
   "updated_desc" | "updated_asc" | "created_desc" | "created_asc";
@@ -126,31 +131,65 @@ export function requireUnifiedSubject(
   if (new Set(bindings).size !== bindings.length) return fail();
   return v;
 }
-export function requireUnifiedSubjectPage(
+function requireUnifiedSubjectCollection(
   value: unknown,
   actorID: string,
   scopeID: string,
-): UnifiedSubjectPage {
-  const v = value as UnifiedSubjectPage | null;
+): UnifiedSubjectCollection {
+  const v = value as UnifiedSubjectCollection | null;
   if (
     !v ||
     v.current_actor_id !== actorID ||
     v.current_scope_id !== scopeID ||
-    !positive(v.page) ||
-    !positive(v.page_size) ||
-    v.page_size > 120 ||
-    !Number.isSafeInteger(v.total) ||
-    v.total < 0 ||
     !Array.isArray(v.items) ||
-    v.items.length > v.page_size ||
     !v.capabilities ||
     typeof v.capabilities.intelligent_voice?.available !== "boolean"
   )
     return fail();
   v.items.forEach((s) => requireUnifiedSubject(s, scopeID));
+  if (new Set(v.items.map((s) => s.id)).size !== v.items.length) return fail();
+  return v;
+}
+export function requireUnifiedSubjectPage(
+  value: unknown,
+  actorID: string,
+  scopeID: string,
+): UnifiedSubjectPage {
+  const v = requireUnifiedSubjectCollection(
+    value,
+    actorID,
+    scopeID,
+  ) as UnifiedSubjectPage;
   if (
-    new Set(v.items.map((s) => s.id)).size !== v.items.length ||
+    !positive(v.page) ||
+    !positive(v.page_size) ||
+    v.page_size > 120 ||
+    !Number.isSafeInteger(v.total) ||
+    v.total < 0 ||
+    v.items.length > v.page_size ||
     v.items.length > v.total
+  )
+    return fail();
+  return v;
+}
+
+export function requireUnifiedSubjectCursorPage(
+  value: unknown,
+  actorID: string,
+  scopeID: string,
+  limit: number,
+): UnifiedSubjectCursorPage {
+  const v = requireUnifiedSubjectCollection(
+    value,
+    actorID,
+    scopeID,
+  ) as UnifiedSubjectCursorPage;
+  if (
+    v.items.length > limit ||
+    (v.next_cursor !== null &&
+      (typeof v.next_cursor !== "string" ||
+        !v.next_cursor.length ||
+        v.next_cursor.length > 1024))
   )
     return fail();
   return v;

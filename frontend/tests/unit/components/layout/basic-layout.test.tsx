@@ -694,7 +694,7 @@ it("asset header options stay stable under the shared login context", async () =
   const fallback = await request("/api/session");
   vi.mocked(request).mockImplementation(async (url) =>
     url === "/api/operations/history"
-      ? { items: [], next_cursor: null }
+      ? { items: [], day_groups: [], next_cursor: null }
       : fallback,
   );
   const errors = vi.spyOn(console, "error").mockImplementation(() => {});

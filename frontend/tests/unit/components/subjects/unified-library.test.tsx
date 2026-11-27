@@ -74,9 +74,7 @@ const second = {
 const page = {
   current_actor_id: actorID,
   current_scope_id: scopeID,
-  page: 1,
-  page_size: 20,
-  total: 2,
+  next_cursor: null,
   items: [first, second],
   capabilities: {
     intelligent_voice: {
@@ -195,8 +193,8 @@ it("当前空间无需项目就读取完整库，搜索传给服务端", async (
   );
   await screen.findByRole("button", { name: "设置主体 海边香氛" });
   expect(api.list.mock.calls[0][0]).toMatchObject({
-    page: 1,
-    page_size: 20,
+    cursor: undefined,
+    limit: 20,
     order: "updated_desc",
   });
   expect(screen.queryByText("角色")).toBeNull();
@@ -206,7 +204,7 @@ it("当前空间无需项目就读取完整库，搜索传给服务端", async (
   await waitFor(() =>
     expect(api.list.mock.calls.at(-1)![0]).toMatchObject({
       q: "香氛",
-      page: 1,
+      cursor: undefined,
     }),
   );
 });
@@ -230,7 +228,7 @@ it.each([
     expect(api.list.mock.calls.at(-1)![0]).toMatchObject({
       order,
       time_field: timeField,
-      page: 1,
+      cursor: undefined,
     }),
   );
   expect(
@@ -425,6 +423,9 @@ beforeEach(() => {
       observe(target: Element) {
         observers.set(target, this.callback);
       }
+      unobserve(target: Element) {
+        observers.delete(target);
+      }
       disconnect() {
         observers.clear();
       }
@@ -452,7 +453,11 @@ function intersectTail(times = 1) {
 
 it("触底按20条追加，重复触发不并发，末批耗尽后无分页或结束提示", async () => {
   let resolve!: (value: unknown) => void;
-  api.list.mockResolvedValueOnce({ ...page, total: 21, items: [first] });
+  api.list.mockResolvedValueOnce({
+    ...page,
+    next_cursor: "next",
+    items: [first],
+  });
   api.list.mockImplementationOnce(
     () =>
       new Promise((r) => {
@@ -466,10 +471,11 @@ it("触底按20条追加，重复触发不并发，末批耗尽后无分页或�
     screen.getByRole("button", { name: "设置主体 海边香氛" }),
   ).toBeTruthy();
   expect(api.list).toHaveBeenCalledTimes(2);
-  expect(api.list.mock.calls[1][0]).toMatchObject({ page: 2, page_size: 20 });
-  await act(async () =>
-    resolve({ ...page, page: 2, total: 21, items: [first, second] }),
-  );
+  expect(api.list.mock.calls[1][0]).toMatchObject({
+    cursor: "next",
+    limit: 20,
+  });
+  await act(async () => resolve({ ...page, items: [first, second] }));
   expect(
     screen.getAllByRole("button", { name: "设置主体 海边香氛" }),
   ).toHaveLength(1);
@@ -480,35 +486,45 @@ it("触底按20条追加，重复触发不并发，末批耗尽后无分页或�
 });
 
 it("追加失败保留卡片，点击重试请求同一批次", async () => {
-  api.list.mockResolvedValueOnce({ ...page, total: 21, items: [first] });
+  api.list.mockResolvedValueOnce({
+    ...page,
+    next_cursor: "next",
+    items: [first],
+  });
   api.list.mockRejectedValueOnce(new Error("network"));
   api.list.mockResolvedValueOnce({
     ...page,
-    page: 2,
-    total: 21,
     items: [second],
   });
   render(<UnifiedSubjectLibrary actorID={actorID} scopeID={scopeID} />);
   await screen.findByRole("button", { name: "设置主体 海边香氛" });
   intersectTail();
-  fireEvent.click(await screen.findByRole("button", { name: "重试加载" }));
+  fireEvent.click(await screen.findByRole("button", { name: "重试加载更多" }));
   await screen.findByRole("button", { name: "设置主体 纸飞机" });
   expect(
     screen.getByRole("button", { name: "设置主体 海边香氛" }),
   ).toBeTruthy();
-  expect(api.list.mock.calls.map((call) => call[0].page)).toEqual([1, 2, 2]);
+  expect(api.list.mock.calls.map((call) => call[0].cursor)).toEqual([
+    undefined,
+    "next",
+    "next",
+  ]);
 });
 
 it("追加中搜索变化取消请求，晚到旧批次不能污染新查询", async () => {
   let resolve!: (value: unknown) => void;
-  api.list.mockResolvedValueOnce({ ...page, total: 21, items: [first] });
+  api.list.mockResolvedValueOnce({
+    ...page,
+    next_cursor: "next",
+    items: [first],
+  });
   api.list.mockImplementationOnce(
     () =>
       new Promise((r) => {
         resolve = r;
       }),
   );
-  api.list.mockResolvedValueOnce({ ...page, total: 1, items: [second] });
+  api.list.mockResolvedValueOnce({ ...page, items: [second] });
   const view = render(
     <UnifiedSubjectLibrary actorID={actorID} scopeID={scopeID} />,
   );
@@ -519,15 +535,23 @@ it("追加中搜索变化取消请求，晚到旧批次不能污染新查询", a
   );
   await screen.findByRole("button", { name: "设置主体 纸飞机" });
   expect(api.list.mock.calls[1][1].signal.aborted).toBe(true);
-  await act(async () => resolve({ ...page, page: 2, items: [first] }));
+  await act(async () => resolve({ ...page, items: [first] }));
   expect(
     screen.queryByRole("button", { name: "设置主体 海边香氛" }),
   ).toBeNull();
 });
 
 it("空追加批次停止观察，避免总数变化导致自动请求死循环", async () => {
-  api.list.mockResolvedValueOnce({ ...page, total: 80, items: [first] });
-  api.list.mockResolvedValueOnce({ ...page, page: 2, total: 80, items: [] });
+  api.list.mockResolvedValueOnce({
+    ...page,
+    next_cursor: "next",
+    items: [first],
+  });
+  api.list.mockResolvedValueOnce({
+    ...page,
+    next_cursor: "unexpected",
+    items: [],
+  });
   render(<UnifiedSubjectLibrary actorID={actorID} scopeID={scopeID} />);
   await screen.findByRole("button", { name: "设置主体 海边香氛" });
   intersectTail();
@@ -538,18 +562,19 @@ it("空追加批次停止观察，避免总数变化导致自动请求死循环"
   ).toBeTruthy();
 });
 
-it("offset并发移动造成整批重复时继续下一批，不提前隐藏后续主体", async () => {
-  api.list.mockResolvedValueOnce({ ...page, total: 41, items: [first] });
+it("游标续载整批重复时继续下一批，不提前隐藏后续主体", async () => {
   api.list.mockResolvedValueOnce({
     ...page,
-    page: 2,
-    total: 41,
+    next_cursor: "next",
     items: [first],
   });
   api.list.mockResolvedValueOnce({
     ...page,
-    page: 3,
-    total: 41,
+    next_cursor: "third",
+    items: [first],
+  });
+  api.list.mockResolvedValueOnce({
+    ...page,
     items: [second],
   });
   render(<UnifiedSubjectLibrary actorID={actorID} scopeID={scopeID} />);
@@ -561,15 +586,21 @@ it("offset并发移动造成整批重复时继续下一批，不提前隐藏后�
   expect(
     screen.getAllByRole("button", { name: "设置主体 海边香氛" }),
   ).toHaveLength(1);
-  expect(api.list.mock.calls.map((call) => call[0].page)).toEqual([1, 2, 3]);
+  expect(api.list.mock.calls.map((call) => call[0].cursor)).toEqual([
+    undefined,
+    "next",
+    "third",
+  ]);
 });
 
 it("追加后的收藏写入刷新首批，不遗留旧版本和原排序", async () => {
-  api.list.mockResolvedValueOnce({ ...page, total: 21, items: [first] });
   api.list.mockResolvedValueOnce({
     ...page,
-    page: 2,
-    total: 21,
+    next_cursor: "next",
+    items: [first],
+  });
+  api.list.mockResolvedValueOnce({
+    ...page,
     items: [second],
   });
   api.list.mockResolvedValueOnce({
@@ -588,7 +619,11 @@ it("追加后的收藏写入刷新首批，不遗留旧版本和原排序", asyn
   expect(
     screen.queryByRole("button", { name: "设置主体 海边香氛" }),
   ).toBeNull();
-  expect(api.list.mock.calls.map((call) => call[0].page)).toEqual([1, 2, 1]);
+  expect(api.list.mock.calls.map((call) => call[0].cursor)).toEqual([
+    undefined,
+    "next",
+    undefined,
+  ]);
 });
 
 it.each([false, true])(

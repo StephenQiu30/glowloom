@@ -53,7 +53,9 @@ export function hasAssetFilters(value: AssetFilters) {
 export function historyFilterParams(value: AssetFilters) {
   return {
     search: value.search || undefined,
-    ...assetDateRange(value.from, value.through),
+    from_day: value.from || undefined,
+    through_day: value.through || undefined,
+    time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
     favorite_only: value.favorite || undefined,
     process_types: value.processTypes.join(",") || undefined,
     resolutions: value.resolutions.join(",") || undefined,
@@ -182,11 +184,47 @@ export function requirePersonalHistory(value: API.PersonalHistoryPageResponse) {
   };
 }
 
+export function requireGroupedPersonalHistory(
+  value: API.PersonalHistoryPageResponse,
+) {
+  const page = requirePersonalHistory(value);
+  const remaining = new Map(page.items.map((item) => [item.id, item]));
+  const dates = new Set<string>();
+  const groups = value.day_groups;
+  if (!Array.isArray(groups) || groups.length > page.items.length) {
+    throw new RequestError("invalid_receipt");
+  }
+  const dayGroups = groups.map((group) => {
+    const { date, title, task_ids: taskIds } = group ?? {};
+    if (
+      typeof date !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+      dates.has(date) ||
+      typeof title !== "string" ||
+      !title.trim() ||
+      !Array.isArray(taskIds) ||
+      !taskIds.length
+    ) {
+      throw new RequestError("invalid_receipt");
+    }
+    dates.add(date);
+    const items = taskIds.map((id) => {
+      const item = remaining.get(id);
+      if (!item) throw new RequestError("invalid_receipt");
+      remaining.delete(id);
+      return item;
+    });
+    return { date, title, items };
+  });
+  if (remaining.size) throw new RequestError("invalid_receipt");
+  return { dayGroups, next_cursor: page.next_cursor };
+}
+
 export function requireAssetCanvases(
   value: API.AssetListResponse,
   kind: "canvas" | "short_drama",
   collection: "current" | "legacy" = "current",
-) {
+): { items: AssetCanvasItem[]; next_cursor: string | null } {
   if (
     !value ||
     !Array.isArray(value.items) ||
@@ -224,7 +262,7 @@ export function requireAssetCanvases(
   }
   return {
     items: value.items as AssetCanvasItem[],
-    next_cursor: value.next_cursor,
+    next_cursor: value.next_cursor ?? null,
   };
 }
 

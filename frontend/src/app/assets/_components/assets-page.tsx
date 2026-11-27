@@ -1,5 +1,9 @@
 "use client";
-import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import {
+  DEFAULT_PAGE_SIZE,
+  appendPageItems,
+  nextPageCursor,
+} from "@/lib/pagination";
 import { toast } from "@/components/feedback/notification";
 import {
   AlertDialog,
@@ -20,6 +24,7 @@ import {
 } from "@/components/ui/field";
 import { ContentState } from "@/components/layout/content-state";
 import { readErrorMessage } from "@/lib/read-error";
+import { CollectionContinuation } from "@/components/layout/collection-continuation";
 import { cn } from "cn";
 import {
   useEffect,
@@ -56,10 +61,7 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
-import {
-  DataPagination,
-  type PageSize,
-} from "@/components/media/data-pagination";
+import { DataPagination } from "@/components/media/data-pagination";
 import { Input } from "@/components/ui/input";
 import {
   Card,
@@ -104,8 +106,6 @@ function Library({
   filter,
   onFilter,
   onLock,
-  pageSize,
-  onPageSizeChange,
   onClearSearch,
   onBack,
   panel,
@@ -114,8 +114,6 @@ function Library({
   filter: Filter;
   onFilter: (filter: Filter) => void;
   onLock: (locked: boolean) => void;
-  pageSize: PageSize;
-  onPageSizeChange: (size: PageSize) => void;
   onClearSearch: () => void;
   onBack?: () => void;
   panel?: ComponentProps<typeof LibraryToolbar>["panel"];
@@ -127,8 +125,11 @@ function Library({
   const [authRequired, setAuthRequired] = useState(false);
   const [page, setPage] = useState<LibraryPage | null>(null);
   const [pageIndex, setPageIndex] = useState(1);
+  const [cursor, setCursor] = useState<string>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [errorStatus, setErrorStatus] = useState(0);
+  const loadedCursors = useRef(new Set<string>());
   const [retry, setRetry] = useState(0);
   const [selected, setSelected] = useState<string[]>([]);
   const [batch, setBatch] = useState(false);
@@ -154,10 +155,15 @@ function Library({
     base: LibraryPage;
   } | null>(null);
   const actorID = session?.actor.id;
+  const usesCursor = !panel;
+  const appendError = !!(usesCursor && cursor && page && error);
+  const showPageContent = (!loading && !error) || (usesCursor && !!cursor);
   useEffect(() => () => onLock(false), [onLock]);
   useEffect(() => {
     if (!actorID) return;
     const controller = new AbortController();
+    const loaded = loadedCursors.current;
+    if (!cursor) loaded.clear();
     let adjustingPage = false;
     listMediaLibrary(
       {
@@ -169,30 +175,62 @@ function Library({
         catalog_state: filter.trash ? "trashed" : "active",
         folder_id: filter.folder || undefined,
         order: filter.order,
-        page: pageIndex,
-        page_size: pageSize,
+        ...(usesCursor
+          ? { cursor, limit: DEFAULT_PAGE_SIZE }
+          : { page: pageIndex, page_size: DEFAULT_PAGE_SIZE }),
       },
       { signal: controller.signal },
     )
-      .then((v) => requireLibraryPage(v, actorID))
+      .then((v) =>
+        requireLibraryPage(
+          v,
+          actorID,
+          usesCursor ? DEFAULT_PAGE_SIZE : undefined,
+        ),
+      )
       .then((result) => {
         if (!controller.signal.aborted) {
-          const lastPage = Math.max(1, Math.ceil(result.total / pageSize));
-          if (pageIndex > lastPage) {
-            adjustingPage = true;
-            setPageIndex(lastPage);
-            setSelected([]);
-            return;
+          if (!usesCursor) {
+            const lastPage = Math.max(
+              1,
+              Math.ceil(result.total / DEFAULT_PAGE_SIZE),
+            );
+            if (pageIndex > lastPage) {
+              adjustingPage = true;
+              setPageIndex(lastPage);
+              setSelected([]);
+              return;
+            }
+            setPage(result);
+          } else {
+            if (cursor) loaded.add(cursor);
+            const next = nextPageCursor(
+              result.next_cursor,
+              result.items.length,
+              loaded,
+            );
+            setPage((previous) => {
+              if (!cursor || !previous) return { ...result, next_cursor: next };
+              return {
+                ...result,
+                items: appendPageItems(previous.items, result.items),
+                next_cursor: next,
+              };
+            });
           }
-          setPage(result);
           setError("");
+          setErrorStatus(0);
         }
       })
       .catch((e) => {
         if (!controller.signal.aborted) {
-          setPage(null);
-          if (e instanceof RequestError && e.status === 401)
-            setAuthRequired(true);
+          const status = e instanceof RequestError ? e.status : 0;
+          setErrorStatus(status);
+          if (!usesCursor || !cursor || status === 401 || status === 403) {
+            setPage(null);
+            setSelected([]);
+          }
+          if (status === 401) setAuthRequired(true);
           else setError(readErrorMessage(e));
         }
       })
@@ -200,12 +238,19 @@ function Library({
         if (!controller.signal.aborted && !adjustingPage) setLoading(false);
       });
     return () => controller.abort();
-  }, [filter, actorID, pageIndex, pageSize, retry, refreshKey]);
+  }, [filter, actorID, pageIndex, retry, refreshKey, usesCursor, cursor]);
+  function readMore(next: string | undefined) {
+    setLoading(true);
+    setError("");
+    setCursor(next);
+    setRetry((n) => n + 1);
+  }
   function reload() {
     setLoading(true);
     setError("");
     setSelected([]);
     setDetail(null);
+    setCursor(undefined);
     setRetry((n) => n + 1);
   }
   async function command(body?: API.LibraryCommand) {
@@ -250,6 +295,7 @@ function Library({
           setLoading(true);
           setError("");
           setSelected([]);
+          setCursor(undefined);
           setRetry((n) => n + 1);
         } else reload();
       } else reload();
@@ -368,7 +414,7 @@ function Library({
             <Field orientation="horizontal">
               <Checkbox
                 id="library-select-page"
-                aria-label="选择本页全部素材"
+                aria-label={usesCursor ? "选择已加载素材" : "选择本页全部素材"}
                 checked={
                   selection.length > 0 &&
                   selection.length < (page?.items.length ?? 0)
@@ -376,7 +422,7 @@ function Library({
                     : !!page?.items.length &&
                       selection.length === page.items.length
                 }
-                disabled={locked || loading}
+                disabled={locked || loading || (page?.items.length ?? 0) > 200}
                 onCheckedChange={(v) =>
                   setSelected(
                     v === true ? (page?.items.map((i) => i.id) ?? []) : [],
@@ -403,7 +449,9 @@ function Library({
               <>
                 <Button
                   className="max-md:min-h-11"
-                  disabled={!selection.length || locked}
+                  disabled={
+                    !selection.length || selection.length > 200 || locked
+                  }
                   variant="ghost"
                   onClick={() =>
                     setConfirm(filter.trash ? "restore_items" : "recycle_items")
@@ -491,8 +539,7 @@ function Library({
               />
             )}
             {page &&
-              !loading &&
-              !error &&
+              showPageContent &&
               !filter.trash &&
               !filter.folder &&
               page.folders.length > 0 && (
@@ -542,7 +589,7 @@ function Library({
                   </ItemGroup>
                 </section>
               )}
-            {((page && !loading && !error) ||
+            {((page && showPageContent) ||
               filter.favorite ||
               filter.trash ||
               filter.folder) && (
@@ -583,7 +630,7 @@ function Library({
                           : `全部${kinds.find((k) => k.id === filter.kind)?.label ?? "素材"}`)}
                   </ItemTitle>
                 </ItemContent>
-                {page && !loading && !error && (
+                {page && showPageContent && (
                   <ItemActions>
                     <ItemDescription>共 {page.total} 个素材</ItemDescription>
                     {panel ? (
@@ -610,7 +657,7 @@ function Library({
                 )}
               </Item>
             )}
-            {loading ? (
+            {loading && (!usesCursor || !page) ? (
               <ItemGroup
                 className="asset-grid"
                 role="status"
@@ -620,7 +667,7 @@ function Library({
                   <Skeleton key={n} className="aspect-video rounded-xl" />
                 ))}
               </ItemGroup>
-            ) : error ? (
+            ) : error && !appendError ? (
               <ContentState
                 className="library-login-state"
                 state="error"
@@ -739,12 +786,12 @@ function Library({
                 ))}
               </ItemGroup>
             )}
-            {page && !error && (
+            {panel && page && !error && (
               <DataPagination
                 label="素材分页"
                 compact={!!panel}
                 page={pageIndex}
-                pageSize={pageSize}
+                pageSize={DEFAULT_PAGE_SIZE}
                 total={page.total}
                 disabled={loading || locked}
                 onPageChange={(next) => {
@@ -753,7 +800,21 @@ function Library({
                   setDetail(null);
                   setLoading(true);
                 }}
-                onPageSizeChange={onPageSizeChange}
+              />
+            )}
+            {usesCursor && (
+              <CollectionContinuation
+                cursor={page?.next_cursor}
+                loading={loading}
+                disabled={locked}
+                error={appendError ? error : undefined}
+                onContinue={() => readMore(page?.next_cursor ?? undefined)}
+                onRetry={() => readMore(cursor)}
+                onRestart={
+                  appendError && (errorStatus === 400 || errorStatus === 422)
+                    ? reload
+                    : undefined
+                }
               />
             )}
             <Dialog
@@ -960,7 +1021,6 @@ function ReferenceAssets({
   embedded?: boolean;
   refreshKey?: number;
 }) {
-  const [pageSize, setPageSize] = useState<PageSize>(DEFAULT_PAGE_SIZE);
   const [filter, setFilter] = useState<Filter>(
     initialFilter ?? {
       kind: "image",
@@ -1000,13 +1060,11 @@ function ReferenceAssets({
   }
   const library = (
     <Library
-      key={JSON.stringify([filter, pageSize])}
+      key={JSON.stringify(filter)}
       filter={filter}
       onFilter={setFilter}
       onLock={setLocked}
       onBack={onBack}
-      pageSize={pageSize}
-      onPageSizeChange={setPageSize}
       panel={
         embedded
           ? {

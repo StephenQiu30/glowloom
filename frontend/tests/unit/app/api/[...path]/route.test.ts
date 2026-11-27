@@ -414,7 +414,7 @@ const context = (path: string) => ({
 it.each([
   [
     "operations/history",
-    "kind=document&favorite_only=true&process_types=super_resolution&resolutions=2K%2C4K&ratios=16%3A9&generation_modes=multi_frame&search=story&created_from=2026-10-01T00%3A00%3A00Z&order=asc&limit=24&cursor=fixture",
+    "kind=document&favorite_only=true&process_types=super_resolution&resolutions=2K%2C4K&ratios=16%3A9&generation_modes=multi_frame&search=story&from_day=2026-10-01&through_day=2026-10-03&time_zone=Asia%2FShanghai&order=asc&limit=24&cursor=fixture",
   ],
   [
     "canvases",
@@ -1017,9 +1017,9 @@ it("统计查询不能携带分页或越范围字段，CSV下载保留授权与�
 it("编辑器和目录管理已注册合同均经过同站代理", async () => {
   const { readFile, readdir } = await import("node:fs/promises");
   const handlers = await import("@/app/api/[...path]/route");
-  const files = (await readdir("../backend/internal/execution/catalog/adapter/http")).map(
-    (f) => `execution/catalog/adapter/http/${f}`,
-  );
+  const files = (
+    await readdir("../backend/internal/execution/catalog/adapter/http")
+  ).map((f) => `execution/catalog/adapter/http/${f}`);
   files.push(
     "creation/prompt/adapter/http/drafts.go",
     "creation/prompt/adapter/http/preferences.go",
@@ -1715,3 +1715,26 @@ it("主体类型筛选透传给拥有方，拒绝重复参数", async () => {
   ).toBe(422);
   expect(fetcher).not.toHaveBeenCalled();
 });
+
+it.each(["subjects", "media/library"])(
+  "%s 透传服务端游标并拒绝重复分页参数",
+  async (path) => {
+    const fetcher = vi.fn().mockResolvedValue(new Response("{}"));
+    vi.stubGlobal("fetch", fetcher);
+    const result = await GET(
+      new Request(`http://localhost/api/${path}?limit=20&cursor=next`),
+      context(path),
+    );
+    expect(result.status).toBe(200);
+    const params = (fetcher.mock.calls[0][0] as URL).searchParams;
+    expect(params.get("cursor")).toBe("next");
+    expect(params.get("limit")).toBe("20");
+    expect(params.has("page")).toBe(false);
+    const repeated = await GET(
+      new Request(`http://localhost/api/${path}?cursor=next&cursor=other`),
+      context(path),
+    );
+    expect(repeated.status).toBe(422);
+    expect(fetcher).toHaveBeenCalledOnce();
+  },
+);

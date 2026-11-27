@@ -19,9 +19,7 @@ function batch(page: number, favorite = false) {
   return {
     current_actor_id: actorID,
     current_scope_id: scopeID,
-    page,
-    page_size: 20,
-    total: favorite ? 1 : 21,
+    next_cursor: page === 1 && !favorite ? "next" : null,
     items: [
       {
         id: `33333333-3333-4333-8333-${String(favorite ? 3 : page).padStart(12, "0")}`,
@@ -54,16 +52,16 @@ afterEach(() => {
 });
 
 it("已加载第二批后切收藏再返回，从第一批重读且不混入旧批次", async () => {
-  api.list.mockImplementation(async ({ page, favorite }) =>
-    batch(page, !!favorite),
+  api.list.mockImplementation(async ({ cursor, favorite }) =>
+    batch(cursor ? 2 : 1, !!favorite),
   );
   const { result, rerender } = renderHook(
     ({ filter }) => useSubjectList(actorID, scopeID, "", filter),
     { initialProps: { filter: all } },
   );
-  await waitFor(() => expect(result.current.page?.page).toBe(1));
+  await waitFor(() => expect(result.current.page?.items.length).toBe(1));
   act(() => result.current.loadMore());
-  await waitFor(() => expect(result.current.page?.page).toBe(2));
+  await waitFor(() => expect(result.current.page?.items.length).toBe(2));
   expect(result.current.page?.items.map((item) => item.name)).toEqual([
     "第1批主体",
     "第2批主体",
@@ -84,16 +82,19 @@ it("已加载第二批后切收藏再返回，从第一批重读且不混入旧�
     ]),
   );
   expect(
-    api.list.mock.calls.map(([query]) => [query.favorite ?? false, query.page]),
+    api.list.mock.calls.map(([query]) => [
+      query.favorite ?? false,
+      query.cursor,
+    ]),
   ).toEqual([
-    [false, 1],
-    [false, 2],
-    [true, 1],
-    [false, 1],
+    [false, undefined],
+    [false, "next"],
+    [true, undefined],
+    [false, undefined],
   ]);
-  expect(result.current.hasMore).toBe(true);
+  expect(result.current.page?.next_cursor).toBe("next");
   act(() => result.current.loadMore());
-  await waitFor(() => expect(result.current.page?.page).toBe(2));
+  await waitFor(() => expect(result.current.page?.items.length).toBe(2));
   expect(result.current.page?.items.map((item) => item.name)).toEqual([
     "第1批主体",
     "第2批主体",
@@ -102,52 +103,52 @@ it("已加载第二批后切收藏再返回，从第一批重读且不混入旧�
 
 it("收藏请求尚未完成就返回时也从第一批重读，丢弃迟到的收藏回执", async () => {
   let resolveFavorite!: (value: unknown) => void;
-  api.list.mockImplementation(({ page, favorite }) =>
+  api.list.mockImplementation(({ cursor, favorite }) =>
     favorite
       ? new Promise((resolve) => {
           resolveFavorite = resolve;
         })
-      : Promise.resolve(batch(page)),
+      : Promise.resolve(batch(cursor ? 2 : 1)),
   );
   const { result, rerender } = renderHook(
     ({ filter }) => useSubjectList(actorID, scopeID, "", filter),
     { initialProps: { filter: all } },
   );
-  await waitFor(() => expect(result.current.page?.page).toBe(1));
+  await waitFor(() => expect(result.current.page?.items.length).toBe(1));
   act(() => result.current.loadMore());
-  await waitFor(() => expect(result.current.page?.page).toBe(2));
+  await waitFor(() => expect(result.current.page?.items.length).toBe(2));
   rerender({ filter: favorites });
   const favoriteSignal = api.list.mock.calls[2][1].signal;
   rerender({ filter: all });
   expect(favoriteSignal.aborted).toBe(true);
-  await waitFor(() => expect(result.current.page?.page).toBe(1));
+  await waitFor(() => expect(result.current.page?.items.length).toBe(1));
   await act(async () => resolveFavorite(batch(1, true)));
   expect(result.current.page?.items.map((item) => item.name)).toEqual([
     "第1批主体",
   ]);
   expect(api.list.mock.calls.at(-1)![0]).toMatchObject({
     favorite: undefined,
-    page: 1,
-    page_size: 20,
+    cursor: undefined,
+    limit: 20,
   });
   expect(result.current.error).toBeUndefined();
 });
 
 it("切换主体类型向服务端提交类型，从第一批重读并取消旧请求", async () => {
-  api.list.mockImplementation(async ({ page }) => batch(page));
+  api.list.mockImplementation(async ({ cursor }) => batch(cursor ? 2 : 1));
   const { result, rerender } = renderHook(
     ({ filter }) => useSubjectList(actorID, scopeID, "", filter),
     { initialProps: { filter: all } },
   );
-  await waitFor(() => expect(result.current.page?.page).toBe(1));
+  await waitFor(() => expect(result.current.page?.items.length).toBe(1));
   const oldSignal = api.list.mock.calls[0][1].signal as AbortSignal;
   act(() => result.current.loadMore());
-  await waitFor(() => expect(result.current.page?.page).toBe(2));
+  await waitFor(() => expect(result.current.page?.items.length).toBe(2));
   rerender({ filter: { ...all, type: "product" } });
   expect(result.current.page).toBeUndefined();
   await waitFor(() =>
     expect(api.list).toHaveBeenLastCalledWith(
-      expect.objectContaining({ type: "product", page: 1 }),
+      expect.objectContaining({ type: "product", cursor: undefined }),
       expect.anything(),
     ),
   );

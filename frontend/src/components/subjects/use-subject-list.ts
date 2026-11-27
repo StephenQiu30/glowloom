@@ -1,30 +1,32 @@
-import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
-import { useCallback, useEffect, useState } from "react";
+import {
+  DEFAULT_PAGE_SIZE,
+  appendPageItems,
+  nextPageCursor,
+} from "@/lib/pagination";
+import { useEffect, useState } from "react";
 import { listSubjects } from "@/api/subjects";
 import { RequestError } from "@/lib/request";
 import {
-  requireUnifiedSubjectPage,
+  requireUnifiedSubjectCursorPage,
   subjectDateRange,
   subjectError,
-  type UnifiedSubjectPage,
+  type UnifiedSubjectCursorPage,
 } from "./unified-contracts";
 import type { SubjectFilter } from "./unified-toolbar";
 
-type Result = {
-  key: string;
-  page?: UnifiedSubjectPage;
-  hasMore: boolean;
-  error?: string;
-  failedAttempt?: number;
+type Position = { key: string; cursor?: string; attempt: number };
+type Result = Position & {
+  page?: UnifiedSubjectCursorPage;
+  loadedCursors?: ReadonlySet<string>;
+  failure?: { status: number; message: string };
 };
 
-// The API keeps its bounded offset contract; only the subject view accumulates batches.
 export function useSubjectList(
   actorID: string,
   scopeID: string,
   query: string,
   filter: SubjectFilter,
-  batchSize: number = DEFAULT_PAGE_SIZE,
+  limit = DEFAULT_PAGE_SIZE,
 ) {
   const [revision, setRevision] = useState(0);
   const key = JSON.stringify([
@@ -32,20 +34,20 @@ export function useSubjectList(
     scopeID,
     query,
     filter,
+    limit,
     revision,
-    batchSize,
   ]);
-  const [position, setPosition] = useState({ key, page: 1, attempt: 0 });
-  const pageIndex = position.key === key ? position.page : 1;
-  const attempt = position.key === key ? position.attempt : 0;
+  const [position, setPosition] = useState<Position>({ key, attempt: 0 });
   const [result, setResult] = useState<Result | null>(null);
   if (position.key !== key) {
-    setPosition({ key, page: 1, attempt: 0 });
+    setPosition({ key, attempt: 0 });
     setResult(null);
   }
+  const cursor = position.key === key ? position.cursor : undefined;
+  const attempt = position.key === key ? position.attempt : 0;
   const current = result?.key === key ? result : null;
-  const error = current?.failedAttempt === attempt ? current.error : undefined;
-  const loading = !error && (!current?.page || current.page.page < pageIndex);
+  const settled = current?.cursor === cursor && current?.attempt === attempt;
+  const failure = settled ? current?.failure : undefined;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -57,64 +59,70 @@ export function useSubjectList(
         ...subjectDateRange(filter.from, filter.through),
         time_field: filter.order.startsWith("created") ? "created" : "updated",
         order: filter.order,
-        page: pageIndex,
-        page_size: batchSize,
+        limit,
+        cursor,
       },
       { signal: controller.signal },
     )
-      .then((value) => requireUnifiedSubjectPage(value, actorID, scopeID))
+      .then((value) =>
+        requireUnifiedSubjectCursorPage(value, actorID, scopeID, limit),
+      )
       .then((page) => {
         if (controller.signal.aborted) return;
-        if (page.page !== pageIndex || page.page_size !== batchSize)
-          throw new Error("subject_batch_mismatch");
         setResult((previous) => {
-          const oldItems =
-            pageIndex > 1 && previous?.key === key
-              ? (previous.page?.items ?? [])
-              : [];
-          const ids = new Set(oldItems.map((item) => item.id));
-          const added = page.items.filter((item) => !ids.has(item.id));
+          const prior = cursor && previous?.key === key ? previous : undefined;
+          const oldItems = prior?.page?.items ?? [];
+          const loadedCursors = new Set(prior?.loadedCursors);
+          if (cursor) loadedCursors.add(cursor);
+          const next = nextPageCursor(
+            page.next_cursor,
+            page.items.length,
+            loadedCursors,
+          );
           return {
             key,
-            page: { ...page, items: [...oldItems, ...added] },
-            hasMore:
-              page.items.length > 0 && pageIndex * batchSize < page.total,
+            cursor,
+            attempt,
+            page: {
+              ...page,
+              items: appendPageItems(oldItems, page.items),
+              next_cursor: next,
+            },
+            loadedCursors,
           };
         });
       })
       .catch((reason) => {
         if (controller.signal.aborted) return;
+        const status = reason instanceof RequestError ? reason.status : 0;
+        const denied = status === 401 || status === 403;
         setResult((previous) => ({
-          ...(previous?.key === key ? previous : { key, hasMore: false }),
-          error:
-            reason instanceof RequestError && [401, 403].includes(reason.status)
-              ? subjectError(reason)
-              : "加载失败，请重试。",
-          failedAttempt: attempt,
+          ...(!denied && previous?.key === key ? previous : undefined),
+          key,
+          cursor,
+          attempt,
+          failure: {
+            status,
+            message: denied ? subjectError(reason) : "加载失败，请重试。",
+          },
         }));
       });
     return () => controller.abort();
-  }, [actorID, scopeID, query, filter, batchSize, key, pageIndex, attempt]);
+  }, [actorID, scopeID, query, filter, key, cursor, attempt, limit]);
 
-  const loadedPage = current?.page?.page ?? 0;
-  const hasMore = current?.hasMore ?? false;
-  const loadMore = useCallback(() => {
-    if (!hasMore || loading || error) return;
-    // Multiple observer callbacks in the same frame still request exactly one batch.
-    setPosition((previous) =>
-      previous.key === key && previous.page > loadedPage
-        ? previous
-        : { key, page: loadedPage + 1, attempt: 0 },
-    );
-  }, [key, loadedPage, hasMore, loading, error]);
-
+  const next = current?.page?.next_cursor;
   return {
     page: current?.page,
-    error,
-    loading,
-    hasMore,
-    loadMore,
-    retry: () => setPosition({ key, page: pageIndex, attempt: attempt + 1 }),
+    hasMore: !!next,
+    error: failure?.message,
+    loading: !settled,
+    restartRequired:
+      !!failure && (failure.status === 400 || failure.status === 422),
+    loadMore: () => {
+      if (settled && !failure && next)
+        setPosition({ key, cursor: next, attempt: 0 });
+    },
+    retry: () => setPosition({ key, cursor, attempt: attempt + 1 }),
     refresh: () => setRevision((value) => value + 1),
   };
 }

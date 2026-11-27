@@ -82,7 +82,7 @@ func (s *Store) Get(ctx context.Context, a identity.Principal, id uuid.UUID) (ap
 	return result, err
 }
 
-// List performs complete-space filters and ordering before applying offset bounds.
+// List performs complete-space filters and ordering before applying pagination.
 func (s *Store) List(ctx context.Context, a identity.Principal, in application.ListInput) (application.Page, error) {
 	if err := in.Validate(); err != nil {
 		return application.Page{}, err
@@ -122,14 +122,42 @@ func (s *Store) List(ctx context.Context, a identity.Principal, in application.L
 			where += ` AND ` + field + `<?`
 			args = append(args, in.To.UTC())
 		}
-		if err := b.tx.WithContext(ctx).Raw(`SELECT count(*)`+detailFrom+where, args...).Scan(&result.Total).Error; err != nil {
+		sortField := "h.updated_at"
+		byCreated := strings.HasPrefix(in.Order, "created")
+		if byCreated {
+			sortField = "h.created_at"
+		}
+		direction, comparison := "ASC", ">"
+		if strings.HasSuffix(in.Order, "_desc") {
+			direction, comparison = "DESC", "<"
+		}
+		order := sortField + " " + direction + ",h.id " + direction
+		bounds := " LIMIT ?"
+		if in.Limit > 0 {
+			if in.After != nil {
+				where += " AND (" + sortField + ",h.id) " + comparison + " (?,?)"
+				args = append(args, in.After.Time.UTC(), in.After.ID)
+			}
+			args = append(args, in.Limit+1)
+		} else {
+			if err := b.tx.WithContext(ctx).Raw(`SELECT count(*)`+detailFrom+where, args...).Scan(&result.Total).Error; err != nil {
+				return err
+			}
+			bounds += " OFFSET ?"
+			args = append(args, in.PageSize, (in.Page-1)*in.PageSize)
+		}
+		var rows []detailRow
+		if err := b.tx.WithContext(ctx).Raw(`SELECT `+detailColumns+detailFrom+where+` ORDER BY `+order+bounds, args...).Scan(&rows).Error; err != nil {
 			return err
 		}
-		order := map[string]string{"created_asc": "h.created_at ASC,h.id ASC", "created_desc": "h.created_at DESC,h.id DESC", "updated_asc": "h.updated_at ASC,h.id ASC", "updated_desc": "h.updated_at DESC,h.id DESC"}[in.Order]
-		pageArgs := append(append([]any{}, args...), in.PageSize, (in.Page-1)*in.PageSize)
-		var rows []detailRow
-		if err := b.tx.WithContext(ctx).Raw(`SELECT `+detailColumns+detailFrom+where+` ORDER BY `+order+` LIMIT ? OFFSET ?`, pageArgs...).Scan(&rows).Error; err != nil {
-			return err
+		if in.Limit > 0 && len(rows) > in.Limit {
+			rows = rows[:in.Limit]
+			last := rows[len(rows)-1]
+			at := last.UpdatedAt
+			if byCreated {
+				at = last.CreatedAt
+			}
+			result.Next = &application.ListCursor{ID: last.ID, Time: at.UTC()}
 		}
 		for _, row := range rows {
 			h, v, fav, err := decode(row)

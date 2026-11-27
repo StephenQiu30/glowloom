@@ -1,7 +1,4 @@
 "use client";
-import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
-import { PageSizeSelect } from "@/components/ui/page-size-select";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useEffect, useRef, useState, type SetStateAction } from "react";
 import dynamic from "next/dynamic";
 import { toast } from "@/components/feedback/notification";
@@ -10,7 +7,6 @@ import {
   Download,
   ListChecks,
   Star,
-  LoaderCircle,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -42,6 +38,7 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ContentState } from "@/components/layout/content-state";
+import { CollectionContinuation } from "@/components/layout/collection-continuation";
 import {
   RequestError,
   getScopeGeneration,
@@ -93,11 +90,9 @@ export function UnifiedSubjectLibrary({
   query?: string;
   onSelect?: (value: UnifiedSubject) => void;
 }) {
-  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [filter, setFilter] = useState<SubjectFilter>(defaultSubjectFilter);
-  const { page, error, loading, hasMore, loadMore, retry, refresh } =
-    useSubjectList(actorID, scopeID, query, filter, pageSize);
-  const tail = useRef<HTMLDivElement>(null);
+  const { page, error, loading, restartRequired, loadMore, retry, refresh } =
+    useSubjectList(actorID, scopeID, query, filter);
   const [batch, setBatch] = useState(false);
   const [batchQuery, setBatchQuery] = useState(query);
   if (batchQuery !== query) {
@@ -108,7 +103,8 @@ export function UnifiedSubjectLibrary({
     query: string;
     items: UnifiedSubject[];
   }>({ query, items: [] });
-  const selected = selectionState.query === query ? selectionState.items : [];
+  const selected =
+    page && selectionState.query === query ? selectionState.items : [];
   function setSelected(value: SetStateAction<UnifiedSubject[]>) {
     setSelectionState((previous) => ({
       query,
@@ -138,22 +134,6 @@ export function UnifiedSubjectLibrary({
     onBatchMode?.(batch);
     return () => onBatchMode?.(false);
   }, [batch, onBatchMode]);
-  useEffect(() => {
-    if (!hasMore || loading || error || locked || !tail.current) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (
-          entries.some(
-            (entry) => entry.isIntersecting && entry.intersectionRatio >= 0.2,
-          )
-        )
-          loadMore();
-      },
-      { threshold: 0.2 },
-    );
-    observer.observe(tail.current);
-    return () => observer.disconnect();
-  }, [hasMore, loading, error, locked, loadMore]);
   useEffect(() => () => flight.current?.abort(), []);
   async function mutate(action?: string, subjects?: UnifiedSubject[]) {
     if (busy.current || exportBusy.current) return;
@@ -340,7 +320,7 @@ export function UnifiedSubjectLibrary({
   }
   return (
     <section
-      className="unified-subject-library flex min-w-0 flex-col gap-6"
+      className="unified-subject-library flex min-w-0 flex-col gap-4"
       aria-label="主体"
     >
       <PageToolbar inHeader={toolbarInHeader && !embedded}>
@@ -621,35 +601,15 @@ export function UnifiedSubjectLibrary({
               }
             />
           ) : null}
-          <PageSizeSelect
-            value={pageSize}
-            label="主体每页数量"
-            onChange={setPageSize}
+          <CollectionContinuation
+            cursor={page?.next_cursor}
+            loading={loading}
             disabled={locked}
+            error={error}
+            onContinue={loadMore}
+            onRetry={retry}
+            onRestart={restartRequired ? refresh : undefined}
           />
-          {loading ? (
-            <div
-              role="status"
-              aria-label="正在加载更多主体"
-              className="flex justify-center py-4"
-            >
-              <LoaderCircle
-                className="size-5 animate-spin"
-                aria-hidden="true"
-              />
-            </div>
-          ) : error ? (
-            <Alert role="alert">
-              <AlertDescription>
-                <span className="text-sm text-muted-foreground">{error}</span>
-                <Button variant="secondary" onClick={retry}>
-                  重试加载
-                </Button>
-              </AlertDescription>
-            </Alert>
-          ) : hasMore ? (
-            <div ref={tail} className="h-4" aria-hidden="true" />
-          ) : null}
         </>
       )}
       {editing ? (

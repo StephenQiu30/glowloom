@@ -134,6 +134,7 @@ func TestLibraryFullQueryFiltersBeforePageAndStableThreeOrders(t *testing.T) {
 		q := libraryQuery()
 		q.Order, q.PageSize = order, 20
 		seen := make(map[uuid.UUID]bool)
+		var ordered []uuid.UUID
 		for page := 1; page <= 3; page++ {
 			q.Page = page
 			result, err := store.ListLibrary(t.Context(), mediaActor(actor), scope, q)
@@ -145,10 +146,29 @@ func TestLibraryFullQueryFiltersBeforePageAndStableThreeOrders(t *testing.T) {
 					t.Fatal("page tie repeated an item", order, item.ID)
 				}
 				seen[item.ID] = true
+				ordered = append(ordered, item.ID)
 			}
 		}
 		if len(seen) != 43 {
 			t.Fatal("stable page missed an item", order, len(seen))
+		}
+		q.Page, q.PageSize, q.Limit = 0, 0, 20
+		offset := 0
+		for range 3 {
+			result, err := store.ListLibrary(t.Context(), mediaActor(actor), scope, q)
+			if err != nil || result.Total != 43 || len(result.Items) != min(q.Limit, len(ordered)-offset) {
+				t.Fatal("invalid cursor batch", order, len(result.Items), err)
+			}
+			for _, item := range result.Items {
+				if item.ID != ordered[offset] {
+					t.Fatal("cursor order diverged", order, offset, item.ID, ordered[offset])
+				}
+				offset++
+			}
+			q.After = result.Next
+		}
+		if offset != len(ordered) || q.After != nil {
+			t.Fatal("cursor did not exhaust", order, offset, q.After)
 		}
 	}
 	q := libraryQuery()

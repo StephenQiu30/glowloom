@@ -1,7 +1,6 @@
 "use client";
 
-import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
-import { PageSizeSelect } from "@/components/ui/page-size-select";
+import { DEFAULT_PAGE_SIZE, nextPageCursor } from "@/lib/pagination";
 import { useEffect, useRef, useState } from "react";
 import { ListChecks } from "lucide-react";
 import { useBatchToolbarFocus } from "./use-batch-toolbar-focus";
@@ -32,6 +31,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { CollectionContinuation } from "@/components/layout/collection-continuation";
 import {
   Dialog,
   DialogContent,
@@ -50,7 +50,7 @@ import { readErrorMessage } from "@/lib/read-error";
 import {
   hasAssetFilters,
   historyFilterParams,
-  requirePersonalHistory,
+  requireGroupedPersonalHistory,
   type AssetFilters,
   type AssetKind,
 } from "./asset-query";
@@ -101,14 +101,16 @@ export function PersonalHistoryList({
   onBatchMode: (batch: boolean) => void;
 }) {
   const [page, setPage] = useState<ReturnType<
-    typeof requirePersonalHistory
+    typeof requireGroupedPersonalHistory
   > | null>(null);
-  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [cursor, setCursor] = useState<string>();
   const [pending, setPending] = useState(true);
-  const [error, setError] = useState("");
-  const [denied, setDenied] = useState(0);
+  const [failure, setFailure] = useState<{
+    message: string;
+    status: number;
+  } | null>(null);
   const [retry, setRetry] = useState(0);
+  const loadedCursors = useRef(new Set<string>());
   const [batch, setBatch] = useState(false);
   const batchToolbar = useBatchToolbarFocus(batch);
   const [chosen, setChosen] = useState<string[]>([]);
@@ -133,6 +135,9 @@ export function PersonalHistoryList({
   const busy = useRef(false);
   const actionFlight = useRef<AbortController | null>(null);
   const locked = writing || !!intent;
+  const error = failure?.message;
+  const nextCursor = page?.next_cursor;
+  const tailError = !!(error && page && cursor);
   useEffect(
     () => () => {
       actionFlight.current?.abort();
@@ -143,46 +148,69 @@ export function PersonalHistoryList({
   );
   useEffect(() => {
     const controller = new AbortController();
+    const loaded = loadedCursors.current;
+    if (!cursor) loaded.clear();
     listPersonalOperationHistory(
-      { kind, ...historyFilterParams(filters), limit: pageSize, cursor },
+      {
+        kind,
+        ...historyFilterParams(filters),
+        limit: DEFAULT_PAGE_SIZE,
+        cursor,
+      },
       { signal: controller.signal },
     )
-      .then(requirePersonalHistory)
+      .then(requireGroupedPersonalHistory)
       .then((result) => {
         if (controller.signal.aborted) return;
-        setPage((previous) => ({
-          items: cursor
-            ? [
-                ...(previous?.items ?? []),
-                ...result.items.filter(
-                  (item) => !previous?.items.some((old) => old.id === item.id),
-                ),
-              ]
-            : result.items,
-          next_cursor: result.next_cursor,
-        }));
-        setError("");
-        setDenied(0);
+        if (cursor) loaded.add(cursor);
+        const next = nextPageCursor(
+          result.next_cursor,
+          result.dayGroups.length,
+          loaded,
+        );
+        setPage((previous) => {
+          if (!cursor || !previous) return { ...result, next_cursor: next };
+          const seen = new Set(
+            previous.dayGroups.flatMap((day) =>
+              day.items.map((item) => item.id),
+            ),
+          );
+          const days = new Map(
+            previous.dayGroups.map((day) => [day.date, day]),
+          );
+          for (const day of result.dayGroups) {
+            const items = day.items.filter((item) => !seen.has(item.id));
+            if (!items.length) continue;
+            const received = days.get(day.date);
+            days.set(day.date, {
+              ...day,
+              items: [...(received?.items ?? []), ...items],
+            });
+          }
+          return { dayGroups: [...days.values()], next_cursor: next };
+        });
+        setFailure(null);
       })
       .catch((reason) => {
         if (controller.signal.aborted) return;
-        if (
-          reason instanceof RequestError &&
-          [401, 403].includes(reason.status)
-        ) {
-          setDenied(reason.status);
+        const status = reason instanceof RequestError ? reason.status : 0;
+        if (status === 401 || status === 403) {
           setPage(null);
           setDetail(null);
           setChosen([]);
         }
-        setError(readErrorMessage(reason));
+        setFailure({ message: readErrorMessage(reason), status });
       })
       .finally(() => {
         if (!controller.signal.aborted) setPending(false);
       });
     return () => controller.abort();
-  }, [kind, filters, cursor, retry, pageSize]);
-  const cards = historyCardTargets(page?.items ?? [], kind);
+  }, [kind, filters, cursor, retry]);
+  const groups = (page?.dayGroups ?? []).map((day) => ({
+    ...day,
+    cards: historyCardTargets(day.items, kind),
+  }));
+  const cards = groups.flatMap((day) => day.cards);
   const selected = cards.filter((card) => chosen.includes(card.key));
   const selectionLimit = kind === "image" || kind === "document" ? 200 : 50;
   const smallActionLimit = kind === "image" || kind === "document" ? 50 : 100;
@@ -198,9 +226,10 @@ export function PersonalHistoryList({
         : [...previous, card.key],
     );
   }
-  function reload() {
+  function readHistory(cursor?: string) {
     setPending(true);
-    setCursor(undefined);
+    setFailure(null);
+    setCursor(cursor);
     setRetry((value) => value + 1);
   }
   async function command(
@@ -292,7 +321,7 @@ export function PersonalHistoryList({
       setIntent(null);
       setDeleting(null);
       onLock(false);
-      reload();
+      readHistory();
     } catch (reason) {
       if (controller.signal.aborted) return;
       if (
@@ -537,7 +566,7 @@ export function PersonalHistoryList({
           label="批量操作"
           icon={ListChecks}
           variant="ghost"
-          disabled={locked || pending || !page || !!error}
+          disabled={locked || !page || (!!error && !tailError)}
           onClick={() => {
             setBatch(true);
             onBatchMode(true);
@@ -588,19 +617,19 @@ export function PersonalHistoryList({
       {batch && kind === "image" && selected.length > 7 && (
         <p className="text-sm text-muted-foreground">最多选择7项发布</p>
       )}
-      {error && (
+      {error && !tailError && (
         <ContentState
           state="error"
           title={
-            denied === 403
+            failure?.status === 403
               ? "无权查看此空间的生成历史"
-              : denied === 401
+              : failure?.status === 401
                 ? "请重新登录查看生成历史"
                 : "暂时无法读取生成历史"
           }
           description={error}
           actions={
-            <Button disabled={pending || locked} onClick={reload}>
+            <Button disabled={pending || locked} onClick={() => readHistory()}>
               重试读取
             </Button>
           }
@@ -635,53 +664,62 @@ export function PersonalHistoryList({
           }
         />
       )}
-      <div className="resource-card-grid">
-        {cards.map((card) => (
-          <HistoryResultCard
-            key={card.key}
-            card={card}
-            kind={kind}
-            batch={batch}
-            checked={chosen.includes(card.key)}
-            disabled={locked || pending || !!error}
-            onOpen={() => {
-              setDetailAvailable(false);
-              setDetail(card);
-            }}
-            onToggle={() => toggle(card)}
-            onFavorite={() => void command("favorite", [card], !card.favorite)}
-            onDelete={() => {
-              setNotice("");
-              setDeleting([card]);
-            }}
-            onDownload={() => void download([card])}
-            onPublish={() => setPublishing([card])}
-            onReuse={() => void startReuse(card)}
-          />
-        ))}
-      </div>
-      <PageSizeSelect
-        label="个人生成记录每页数量"
-        value={pageSize}
-        disabled={false}
-        onChange={(size) => {
-          setCursor(undefined);
-          setPageSize(size);
-        }}
-      />
-      {page?.next_cursor && (
-        <Button
-          className="justify-self-center"
-          variant="ghost"
-          disabled={pending || locked}
-          onClick={() => {
-            setPending(true);
-            setCursor(page.next_cursor!);
-          }}
+      {groups.map((group) => (
+        <section
+          key={group.date}
+          aria-labelledby={`history-date-${group.date}`}
+          className="grid min-w-0 gap-4"
         >
-          更多记录
-        </Button>
-      )}
+          <h2
+            id={`history-date-${group.date}`}
+            className="text-2xl leading-8 font-normal"
+          >
+            {group.title}
+          </h2>
+          <div className="resource-card-grid">
+            {group.cards.map((card) => (
+              <HistoryResultCard
+                key={card.key}
+                card={card}
+                kind={kind}
+                batch={batch}
+                checked={chosen.includes(card.key)}
+                disabled={
+                  locked || (pending && !cursor) || (!!error && !tailError)
+                }
+                onOpen={() => {
+                  setDetailAvailable(false);
+                  setDetail(card);
+                }}
+                onToggle={() => toggle(card)}
+                onFavorite={() =>
+                  void command("favorite", [card], !card.favorite)
+                }
+                onDelete={() => {
+                  setNotice("");
+                  setDeleting([card]);
+                }}
+                onDownload={() => void download([card])}
+                onPublish={() => setPublishing([card])}
+                onReuse={() => void startReuse(card)}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
+      <CollectionContinuation
+        cursor={nextCursor}
+        loading={pending}
+        disabled={locked}
+        error={tailError ? error : undefined}
+        onContinue={() => readHistory(nextCursor ?? undefined)}
+        onRetry={() => readHistory(cursor)}
+        onRestart={
+          tailError && (failure?.status === 400 || failure?.status === 422)
+            ? () => readHistory()
+            : undefined
+        }
+      />
       <section
         aria-label="下载结果"
         aria-live="polite"

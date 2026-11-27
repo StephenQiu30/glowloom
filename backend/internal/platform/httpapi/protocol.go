@@ -7,6 +7,8 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -39,6 +41,16 @@ func PathUUID(c *gin.Context, name string) (uuid.UUID, bool) {
 		return uuid.Nil, false
 	}
 	return id, true
+}
+
+// SingleValueQuery reports whether every supplied query key is declared and has one value.
+func SingleValueQuery(query url.Values, allowed ...string) bool {
+	for key, values := range query {
+		if len(values) != 1 || !slices.Contains(allowed, key) {
+			return false
+		}
+	}
+	return true
 }
 
 // Middleware owns request IDs, public panic recovery and write Origin/key checks.

@@ -17,6 +17,8 @@ description: Glowloom 的工程工具链、运行约定、数据契约与质量�
 
 前端现有 Next.js App Router、React、TypeScript strict、pnpm、Tailwind、shadcn/Radix、ESLint/Prettier；后端现有 Go、Gin、GORM、pgx、gRPC-Go/Protobuf、Kafka（`franz-go`）、Redis、swag（已移除归档的 Wire）。安装版本以包清单和 lockfile 为准。继续使用工具不等于继续使用旧业务合同或要求所有旧依赖进入新运行架构。
 
+新增实现先查标准库、框架原语和仓库已有实现。请求标识、通用错误响应、公共协议校验复用 `backend/internal/platform/httpapi`，请求级横切行为由中间件处理，接口参数和业务规则由所属模块维护。前端复用现有请求层、状态工具和 shadcn 组件。已有实现覆盖不了合同且复用收益明确时，选用职责明确、持续维护的依赖，核对版本、许可证和维护状态。内部复用放在最小共同拥有者下，以职责命名。
+
 Agent 服务与多 Agent 的现行唯一架构合同（2026-11-25，SRC-AGV2-02，见[设计48](./content/design/48-Agent服务Mastra架构与技术选型设计.md)）：同仓库独立 `agent/`（Node 24、TypeScript strict ESM），基于 **Mastra**（底层 **Vercel AI SDK**）以纯内核库形态运行，移除 NestJS、Fastify、Prisma、Pi Durable、TypeBox 与双向内部 OpenAPI 生成链。Go → Agent 与 Agent → Go 鉴权/配额/摘要通过唯一真源 `backend/api/proto/glowloom/agent/runtime.proto` 的强类型 gRPC（含 Server Streaming）通信；Agent → Go 业务工具通过 Go 内部 MCP Server（`/internal/agent-mcp`）与 `@mastra/mcp` 交互；Agent 文本 LLM 调用通过 Go 统一渠道透传网关（`/internal/agent-gateway`）完成，100% 保留 Prompt Cache/Thinking/流式特性并闭环多租户计费账本。
 
 `agent` 服务与根目录 `agent/`、包名 `agent`（private）、Compose/CI `agent`、镜像 `glowloom/agent` 统一命名，仅监听内部 gRPC（`:4402`）与极简 HTTP 健康探针（`:4401`，仅 `/healthz`、`/readyz`）。数据访问层采用 **`@mastra/pg`（显式关闭运行时自动 DDL）+ `Kysely` + `pg` + `Zod`**，复用 PostgreSQL 独立 `agent` schema 与受限角色，所有表结构仍唯一静态声明于 `backend/db/schema.sql`。编排采用混合模式（Producer 主 Agent + 专家子 Agent + 关键审批流程走 Mastra Workflow 原生 `suspend/resume`）；记忆与业务真源分离；声明式 Skill 绑定 MCP 白名单且容器内零脚本执行；可观测性与评测采用双轨（离线 Mastra Scorers + Vitest 轨迹门禁，线上自托管 Langfuse OTel Trace + Prompt 管理与本地兜底）。目录与编码规范见 [agent/AGENTS.md](https://github.com/StephenQiu30/glowloom/blob/main/agent/AGENTS.md)。
@@ -35,10 +37,13 @@ Go 业务代码收敛于 `backend/internal/`（按业务域组织 `identity`、`
 
 前端复用组件按 feature 放在 `frontend/src/components/<feature>/`；`components/ui/` 只保留有消费者的 shadcn/Radix 基础组件。当前跨页面复用内容按实际业务职责归属维护，直接导入具体文件，不使用产品拼音目录或统一导出层。
 
+CSS 由使用范围决定归属。`globals.css` 管理基础样式、主题和跨路由布局。共享设计值由设计令牌维护，单路由或单组件的样式文件由对应组件导入。
+
 页面与页面独有组件放在对应 App Router 页面目录：`src/app/<路由>/page.tsx` 负责入口与元数据，`src/app/<路由>/_components/` 存放页面实现、局部状态和私有组件；首页使用 `src/app/_components/`。不额外建立 `src/features/` 或另一套 Pages Router。共享认证视图服务登录、注册和重置密码三个页面；公共灵感素材在 `components/inspiration/`，个人素材合同和预览在 `components/media/`。复用组件不得反向导入路由页面或页面私有组件；页面不得从其他页面模块导入共用数据或控件。
 
 ## 3. 数据与契约
 
+- 业务规则由对应后端模块维护。授权、业务校验、状态与可用操作、日期边界、结果分组、排序、筛选和分页由服务端确定，接口返回前端可直接消费的结果。前端采集输入、管理交互与请求生命周期、渲染回执。跨批追加只按服务端标识拼接回执。共享规则的变更先修改业务拥有者和接口合同。
 - 按接受的设计维护 Handler/DTO 和注解，由固定版本 swag 生成规范，再由固定版本 @umijs/openapi 生成前端调用；`frontend/src/api/` 全部为生成文件，不手改，不在组件目录手写业务请求函数或维护另一套客户端。`frontend/openapi2ts.config.ts` 只声明生成配置，遵循 [@umijs/openapi 官方用法](https://github.com/chenshuai2144/openapi2typescript#usage)，不执行外部命令、切换进程目录或改写工具模板。在 `frontend/` 执行 `pnpm api:generate`：先运行 `api:schema` 将后端注解导出到忽略目录 `node_modules/.cache/openapi/swagger.json`，再运行官方 openapi2ts 和项目 Prettier。无需启动后端；生成需要 Go、Node 和已安装的前端依赖。`pnpm api:check` 独立重生成并逐文件核对、核对全部 operationId，发现手改、漏生成或额外文件即失败。
 - 通用请求层为 `frontend/src/lib/request.ts`：使用 Axios 实例、原生 Axios 配置和拦截器，统一超时、幂等键、multipart 与 HTTP 错误转换，直接返回后端 payload。取消保留 Axios 的取消语义；传输层不导入 UI/认证组件，不弹窗或跳转。认证文案和会话校验位于 `components/auth/contracts.ts`。页面导入 `@/api/<标签>`，类型使用生成的 `API` 命名空间。下载传入自定义 options 时显式指定 `responseType: "blob"`；@umijs/openapi 1.14.1 原始模板只有在 options 未提供时使用 hook 默认值，不通过改写模板改变该行为。
 - 后端不提供在线 Swagger 路由，不新增跟踪的 backend/docs 产物。生成合同检查与实际路由双向核对。

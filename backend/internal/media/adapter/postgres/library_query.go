@@ -182,8 +182,32 @@ func (s *LibraryStore) ListLibrary(ctx context.Context, actor application.Actor,
 			order = `lower(title) COLLATE "C" ASC, id ASC`
 		}
 		var entries []libraryEntryRow
-		if err := libraryEntries(tx, actor, scope, row.ID).Where(filter, arguments...).Order(order).Limit(q.PageSize).Offset((q.Page - 1) * q.PageSize).Find(&entries).Error; err != nil {
+		list := libraryEntries(tx, actor, scope, row.ID).Where(filter, arguments...).Order(order)
+		if q.Limit > 0 {
+			if after := q.After; after != nil {
+				switch q.Order {
+				case "updated_desc":
+					list = list.Where("(update_time < ? OR (update_time = ? AND id > ?))", after.Time, after.Time, after.ID)
+				case "updated_asc":
+					list = list.Where("(update_time,id) > (?,?)", after.Time, after.ID)
+				case "name_asc":
+					list = list.Where(`(lower(title) COLLATE "C",id) > (lower(CAST(? AS text)) COLLATE "C",?)`, after.Title, after.ID)
+				}
+			}
+			list = list.Limit(q.Limit + 1)
+		} else {
+			list = list.Limit(q.PageSize).Offset((q.Page - 1) * q.PageSize)
+		}
+		if err := list.Find(&entries).Error; err != nil {
 			return fmt.Errorf("read media library page: %w", err)
+		}
+		if q.Limit > 0 && len(entries) > q.Limit {
+			entries = entries[:q.Limit]
+			last := entries[len(entries)-1]
+			result.Next = &application.LibraryPosition{ID: last.ID, Time: last.UpdateTime.UTC()}
+			if q.Order == "name_asc" {
+				result.Next.Title = last.Title
+			}
 		}
 		for _, entry := range entries {
 			detail, err := entry.detail(row.ID)

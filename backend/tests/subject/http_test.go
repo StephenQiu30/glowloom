@@ -5,12 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
 
 	subjecthttp "github.com/StephenQiu30/glowloom-server/backend/internal/creation/subject/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/subject/application"
@@ -25,7 +27,7 @@ func TestSubjectHTTPRejectsUnknownAndAmbiguousQuery(t *testing.T) {
 	router := gin.New()
 	router.Use(func(c *gin.Context) { c.Set("principal", actor) })
 	subjecthttp.NewHandler(nil, query).Register(router.Group("/api"))
-	for _, path := range []string{"/api/subjects?page_size=121", "/api/subjects?q=a&q=b", "/api/subjects?project_id=" + uuid.NewString(), "/api/subjects?order=name", "/api/subjects?from=bad"} {
+	for _, path := range []string{"/api/subjects?page_size=121", "/api/subjects?q=a&q=b", "/api/subjects?project_id=" + uuid.NewString(), "/api/subjects?order=name", "/api/subjects?from=bad", "/api/subjects?limit=0", "/api/subjects?limit=121", "/api/subjects?limit=20&page=1", "/api/subjects?cursor=invalid"} {
 		response := httptest.NewRecorder()
 		router.ServeHTTP(response, httptest.NewRequestWithContext(t.Context(), "GET", path, nil))
 		if response.Code != 422 {
@@ -46,15 +48,48 @@ func TestSubjectHTTPRejectsUnknownAndAmbiguousQuery(t *testing.T) {
 	}
 }
 
+func TestSubjectHTTPBindsCursorToQueryAndScope(t *testing.T) {
+	actor := identity.Principal{ID: uuid.New(), ScopeID: uuid.New(), OrgID: uuid.New()}
+	position := &application.ListCursor{ID: uuid.New(), Time: time.Unix(100, 0).UTC()}
+	query := &queryFake{next: position}
+	router := gin.New()
+	router.Use(func(c *gin.Context) { c.Set("principal", actor) })
+	subjecthttp.NewHandler(nil, query).Register(router.Group("/api"))
+	read := func(path string) *httptest.ResponseRecorder {
+		t.Helper()
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, httptest.NewRequestWithContext(t.Context(), "GET", path, nil))
+		return response
+	}
+	first := read("/api/subjects?limit=1&type=character")
+	require.Equal(t, 200, first.Code)
+	var page application.Page
+	require.NoError(t, json.Unmarshal(first.Body.Bytes(), &page))
+	require.NotNil(t, page.NextCursor)
+	token := "&cursor=" + url.QueryEscape(*page.NextCursor)
+	require.Equal(t, 422, read("/api/subjects?limit=1&type=prop"+token).Code)
+	scope := actor.ScopeID
+	actor.ScopeID = uuid.New()
+	require.Equal(t, 422, read("/api/subjects?limit=1&type=character"+token).Code)
+	require.Equal(t, 1, query.calls)
+	actor.ScopeID = scope
+	query.next = nil
+	second := read("/api/subjects?limit=1&type=character" + token)
+	require.Equal(t, 200, second.Code)
+	require.Equal(t, position, query.last.After)
+	require.Contains(t, second.Body.String(), `"next_cursor":null`)
+}
+
 type queryFake struct {
 	calls int
 	last  application.ListInput
+	next  *application.ListCursor
 }
 
 func (q *queryFake) List(_ context.Context, a identity.Principal, in application.ListInput) (application.Page, error) {
 	q.calls++
 	q.last = in
-	return application.Page{CurrentActorID: a.ID, CurrentScopeID: a.ScopeID, Items: []application.Detail{}}, nil
+	return application.Page{CurrentActorID: a.ID, CurrentScopeID: a.ScopeID, Items: []application.Detail{}, Next: q.next}, nil
 }
 func (q *queryFake) Get(context.Context, identity.Principal, uuid.UUID) (application.Detail, error) {
 	return application.Detail{}, application.ErrNotFound

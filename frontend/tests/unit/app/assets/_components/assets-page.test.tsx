@@ -56,6 +56,7 @@ const emptyPage = {
   revision: 1,
   page: 1,
   page_size: 20,
+  next_cursor: null,
   total: 0,
   items: [],
   folders: [],
@@ -191,8 +192,8 @@ it("请求成功后才显示真实空库，最近30天参数发送到生成的�
       params: expect.objectContaining({
         scope: "personal",
         kind: "image",
-        page: 1,
-        page_size: 20,
+        limit: 20,
+        cursor: undefined,
         order: "updated_desc",
       }),
     }),
@@ -279,7 +280,7 @@ it("创建文件夹携带库版本和幂等键，成功后重新读取列表", a
   ).toHaveLength(2);
 });
 
-it("跨页读取清空本页批量选择，不把上一页素材带入下一次批量操作", async () => {
+it("独立参考素材按游标续载，保留已展示素材和批量选择", async () => {
   const item = (n: number) => ({
     id: `33333333-3333-4333-8333-${String(n).padStart(12, "0")}`,
     title: `素材 ${n}`,
@@ -291,81 +292,51 @@ it("跨页读取清空本页批量选择，不把上一页素材带入下一次�
   });
   vi.mocked(request).mockImplementation(async (url, options) => {
     if (url !== "/api/media/library") return {};
-    const index = (options?.params as { page?: number })?.page ?? 1;
+    const next = (options?.params as { cursor?: string })?.cursor === "more";
     return {
       ...emptyPage,
-      page: index,
-      total: 21,
-      items:
-        index === 1
-          ? Array.from({ length: 20 }, (_, n) => item(n + 1))
-          : [item(21)],
+      total: 2,
+      items: [item(next ? 2 : 1)],
+      next_cursor: next ? null : "more",
     };
   });
-  render(<AssetsPage />);
-  await screen.findByRole("button", { name: "查看 素材 1" });
-  fireEvent.click(screen.getByRole("button", { name: "批量操作" }));
-  expect(screen.queryByRole("button", { name: "上传素材" })).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "选择 素材 1" }));
-  expect(screen.getByText("已选择 1 项")).toBeTruthy();
-  expect(screen.queryByRole("dialog")).toBeNull();
-  fireEvent.click(screen.getByRole("checkbox", { name: "选择本页全部素材" }));
-  expect(screen.getByText("已选择 20 项")).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "下一页" }));
-  await screen.findByRole("button", { name: "选择 素材 21" });
-  expect(screen.queryByRole("button", { name: "选择 素材 1" })).toBeNull();
-  expect(screen.getByText("已选择 0 项")).toBeTruthy();
-  expect(screen.getByRole("button", { name: "移入回收站" })).toHaveProperty(
-    "disabled",
-    true,
-  );
-  expect(request).toHaveBeenCalledWith(
-    "/api/media/library",
-    expect.objectContaining({
-      params: expect.objectContaining({ page: 2, page_size: 20 }),
-    }),
-  );
-  fireEvent.click(screen.getByRole("button", { name: "选择 素材 21" }));
-  fireEvent.click(screen.getByRole("button", { name: "移入回收站" }));
-  expect(screen.getByRole("alertdialog")).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: /^取消$/ }));
-  fireEvent.click(screen.getByRole("button", { name: "取消选择" }));
-  expect(screen.queryByText("已选择 1 项")).toBeNull();
-  expect(screen.getByRole("button", { name: "上传素材" })).toBeTruthy();
-  expect(
-    vi.mocked(request).mock.calls.some(([url]) => url.endsWith("/commands")),
-  ).toBe(false);
-});
-
-it("每页数量选择发送真实分页参数，调整筛选时保留数量", async () => {
-  render(<AssetsPage />);
-  await screen.findByText("这里还没有素材");
-  fireEvent.keyDown(
-    screen.getByRole("combobox", { name: "素材分页每页数量" }),
-    { key: "ArrowDown" },
-  );
-  fireEvent.click(await screen.findByRole("option", { name: "50" }));
-  await waitFor(() =>
-    expect(request).toHaveBeenLastCalledWith(
+  const original = globalThis.IntersectionObserver;
+  let reachTail: (() => void) | undefined;
+  globalThis.IntersectionObserver = class {
+    constructor(private notify: IntersectionObserverCallback) {}
+    observe(target: Element) {
+      if (target.getAttribute("data-slot") === "collection-continuation")
+        reachTail = () =>
+          this.notify(
+            [{ target, isIntersecting: true } as IntersectionObserverEntry],
+            this as unknown as IntersectionObserver,
+          );
+    }
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof IntersectionObserver;
+  try {
+    render(<AssetsPage />);
+    await screen.findByRole("button", { name: "查看 素材 1" });
+    expect(screen.queryByText("每页")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "批量操作" }));
+    fireEvent.click(screen.getByRole("button", { name: "选择 素材 1" }));
+    expect(reachTail).toBeDefined();
+    act(() => reachTail?.());
+    await screen.findByRole("button", { name: "选择 素材 2" });
+    expect(screen.getByRole("button", { name: "选择 素材 1" })).toBeTruthy();
+    expect(screen.getByText("已选择 1 项")).toBeTruthy();
+    expect(request).toHaveBeenCalledWith(
       "/api/media/library",
       expect.objectContaining({
-        params: expect.objectContaining({ page: 1, page_size: 50 }),
+        params: expect.objectContaining({ cursor: "more", limit: 20 }),
       }),
-    ),
-  );
-  fireEvent.click(screen.getByRole("button", { name: "最近30天" }));
-  await waitFor(() =>
-    expect(request).toHaveBeenLastCalledWith(
-      "/api/media/library",
-      expect.objectContaining({
-        params: expect.objectContaining({
-          page: 1,
-          page_size: 50,
-          recent_only: true,
-        }),
-      }),
-    ),
-  );
+    );
+    expect(screen.queryByRole("button", { name: "下一页" })).toBeNull();
+  } finally {
+    cleanup();
+    globalThis.IntersectionObserver = original;
+  }
 });
 
 async function toggleFavoriteFilter() {
@@ -490,9 +461,7 @@ it("手机管理菜单启动批量模式后关闭菜单", async () => {
   });
   fireEvent.click(await screen.findByRole("menuitem", { name: "批量操作" }));
   await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
-  expect(
-    screen.getByRole("checkbox", { name: "选择本页全部素材" }),
-  ).toBeTruthy();
+  expect(screen.getByRole("checkbox", { name: "选择已加载素材" })).toBeTruthy();
 });
 it("空搜索保留关键词并可直接清除且保留其他筛选", async () => {
   render(<AssetsPage />);

@@ -1,5 +1,6 @@
 "use client";
 import { Toolbar, ToolbarGroup } from "@/components/ui/toolbar";
+import { CollectionFilterBar } from "@/components/layout/collection-filter-bar";
 import type { Ref } from "react";
 import { ChevronDown, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -53,12 +54,9 @@ export function UnifiedSubjectToolbar({
   onChange: (filter: SubjectFilter) => void;
   onBatch: () => void;
 }) {
+  const FilterBar = showTypes ? CollectionFilterBar : Toolbar;
   return (
-    <Toolbar
-      role="group"
-      aria-label="主体筛选"
-      className={showTypes ? "asset-filter-bar" : "flex-wrap"}
-    >
+    <FilterBar role="group" aria-label="主体筛选" className="flex-wrap">
       {showTypes && (
         <ToggleGroup
           variant="text"
@@ -66,7 +64,7 @@ export function UnifiedSubjectToolbar({
           spacing={1}
           type="single"
           value={value.type || "all"}
-          className="max-w-full justify-start overflow-x-auto p-px"
+          className="max-w-full justify-start gap-0 overflow-x-auto"
           aria-label="主体类型"
           onValueChange={(type) => {
             if (type)
@@ -210,6 +208,6 @@ export function UnifiedSubjectToolbar({
           批量操作
         </Button>
       ) : null}
-    </Toolbar>
+    </FilterBar>
   );
 }

@@ -40,17 +40,34 @@ type LibraryQuery struct {
 	State          domain.LibraryItemState
 	Search         string
 	Order          string
+	Limit          int
+	After          *LibraryPosition
+}
+
+// LibraryPosition is the last authorized entry under the selected order.
+type LibraryPosition struct {
+	ID    uuid.UUID `json:"id"`
+	Time  time.Time `json:"time"`
+	Title string    `json:"title,omitempty"`
 }
 
 // Validate permits only the mounted source's query semantics and bounded pages.
 func (q LibraryQuery) Validate(scope domain.LibraryScope) error {
-	if !validLibraryPickerFilters(q) || scope.Validate() != nil || q.Page < 1 || q.Page > 100000 || q.PageSize < 1 || q.PageSize > 120 ||
+	if !validLibraryPickerFilters(q) || scope.Validate() != nil ||
 		!slices.Contains([]string{"", domain.LibraryItemKindText, string(domain.KindImage), string(domain.KindVideo), string(domain.KindAudio), string(domain.KindDocument), string(domain.KindModel)}, q.Kind) ||
 		!slices.Contains([]string{"", domain.LibraryItemCategoryCharacter, domain.LibraryItemCategoryEnvironment, domain.LibraryItemCategoryProp, domain.LibraryItemCategoryMaterial, domain.LibraryItemCategoryOther}, q.Category) ||
 		!slices.Contains([]domain.LibraryItemState{domain.LibraryItemStateActive, domain.LibraryItemStateTrashed}, q.State) ||
 		!slices.Contains([]string{"updated_desc", "updated_asc", "name_asc"}, q.Order) ||
 		q.FolderID != nil && (*q.FolderID == uuid.Nil || q.RootOnly) || q.FavoriteOnly && scope.Kind != domain.LibraryPersonal ||
 		!utf8.ValidString(q.Search) || utf8.RuneCountInString(q.Search) > 512 || strings.ContainsRune(q.Search, 0) {
+		return domain.ErrInvalidLibrary
+	}
+	if q.Limit != 0 {
+		if q.Limit < 1 || q.Limit > 120 || q.Page != 0 || q.PageSize != 0 ||
+			(q.After != nil && (q.After.ID == uuid.Nil || q.After.Time.IsZero() || utf8.RuneCountInString(q.After.Title) > 240)) {
+			return domain.ErrInvalidLibrary
+		}
+	} else if q.Page < 1 || q.Page > 100000 || q.PageSize < 1 || q.PageSize > 120 || q.After != nil {
 		return domain.ErrInvalidLibrary
 	}
 	return nil
@@ -110,6 +127,8 @@ type LibraryPage struct {
 	CategoryCounts map[string]int64       `json:"category_counts"`
 	FolderCounts   map[string]int64       `json:"folder_counts"`
 	Folders        []domain.LibraryFolder `json:"folders"`
+	NextCursor     *string                `json:"next_cursor" extensions:"x-nullable"`
+	Next           *LibraryPosition       `json:"-"`
 }
 
 // LibraryMetadata contains only editable text and classification.

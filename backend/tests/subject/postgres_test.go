@@ -382,6 +382,22 @@ func TestSubjectPostgresQueryPaginationSortDatesAndTeamFavorites(t *testing.T) {
 		if !reflect.DeepEqual(got, want) {
 			t.Fatalf("%s unstable paged order: got %v want %v", order, got, want)
 		}
+		input := subject.ListInput{Query: "检索", TimeField: "updated", Order: order, Limit: 1}
+		got = nil
+		for range want {
+			result, err := store.List(t.Context(), actor, input)
+			if err != nil || len(result.Items) != 1 {
+				t.Fatalf("%s keyset page %d: %#v %v", order, len(got)+1, result, err)
+			}
+			got = append(got, result.Items[0].ID)
+			input.After = result.Next
+			if len(got) < len(want) && input.After == nil {
+				t.Fatalf("%s keyset pagination ended early", order)
+			}
+		}
+		if !reflect.DeepEqual(got, want) || input.After != nil {
+			t.Fatalf("%s unstable keyset order: got %v want %v", order, got, want)
+		}
 	}
 	from, to := base.Add(time.Minute), base.Add(2*time.Minute)
 	page, err := store.List(t.Context(), actor, subject.ListInput{TimeField: "created", From: &from, To: &to, Order: "created_asc", Page: 1, PageSize: 120})

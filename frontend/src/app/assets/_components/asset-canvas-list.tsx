@@ -1,7 +1,10 @@
 "use client";
 
-import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
-import { PageSizeSelect } from "@/components/ui/page-size-select";
+import {
+  DEFAULT_PAGE_SIZE,
+  appendPageItems,
+  nextPageCursor,
+} from "@/lib/pagination";
 import { useEffect, useRef, useState } from "react";
 import { ListChecks } from "lucide-react";
 import { useBatchToolbarFocus } from "./use-batch-toolbar-focus";
@@ -16,6 +19,7 @@ import { CanvasDeleteConfirmation } from "@/components/projects/canvas-delete-co
 import { ProjectMediaPreview } from "@/components/media/project-media";
 import { useSpace } from "@/components/spaces/space-context";
 import { ContentState } from "@/components/layout/content-state";
+import { CollectionContinuation } from "@/components/layout/collection-continuation";
 import { FeedbackToast } from "@/components/feedback/feedback-toast";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -82,12 +86,12 @@ export function AssetCanvasList({
   const [page, setPage] = useState<ReturnType<
     typeof requireAssetCanvases
   > | null>(null);
-  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [cursor, setCursor] = useState<string>();
   const [pending, setPending] = useState(true);
   const [error, setError] = useState("");
-  const [denied, setDenied] = useState(0);
+  const [errorStatus, setErrorStatus] = useState(0);
   const [retry, setRetry] = useState(0);
+  const loadedCursors = useRef(new Set<string>());
   const [creating, setCreating] = useState(false);
   const [template, setTemplate] = useState<AssetTemplate | undefined>();
   const [batch, setBatch] = useState(false);
@@ -117,6 +121,7 @@ export function AssetCanvasList({
   const busy = useRef(false);
   const flight = useRef<AbortController | null>(null);
   const locked = writing || !!intent;
+  const tailError = !!(error && page && cursor);
   const writable = !space.pending && !!space.selected?.writable;
   useEffect(
     () => () => {
@@ -128,6 +133,8 @@ export function AssetCanvasList({
   );
   useEffect(() => {
     const controller = new AbortController();
+    const loaded = loadedCursors.current;
+    if (!cursor) loaded.clear();
     listAssetCanvases(
       {
         kind,
@@ -137,7 +144,7 @@ export function AssetCanvasList({
         ...assetDateRange(filters.from, filters.through),
         sort: filters.sort,
         order: filters.order,
-        limit: recent ? 2 : pageSize,
+        limit: recent ? 2 : DEFAULT_PAGE_SIZE,
         cursor,
       },
       { signal: controller.signal },
@@ -145,27 +152,28 @@ export function AssetCanvasList({
       .then((value) => requireAssetCanvases(value, kind, collection))
       .then((result) => {
         if (controller.signal.aborted) return;
-        setPage((previous) => ({
-          items: cursor
-            ? [
-                ...(previous?.items ?? []),
-                ...result.items.filter(
-                  (item) => !previous?.items.some((old) => old.id === item.id),
-                ),
-              ]
-            : result.items,
-          next_cursor: result.next_cursor,
-        }));
+        if (cursor) loaded.add(cursor);
+        const nextCursor = nextPageCursor(
+          result.next_cursor,
+          result.items.length,
+          loaded,
+        );
+        setPage((previous) => {
+          if (!cursor || !previous)
+            return { ...result, next_cursor: nextCursor };
+          return {
+            items: appendPageItems(previous.items, result.items),
+            next_cursor: nextCursor,
+          };
+        });
         setError("");
-        setDenied(0);
+        setErrorStatus(0);
       })
       .catch((reason) => {
         if (controller.signal.aborted) return;
-        if (
-          reason instanceof RequestError &&
-          [401, 403].includes(reason.status)
-        ) {
-          setDenied(reason.status);
+        const status = reason instanceof RequestError ? reason.status : 0;
+        setErrorStatus(status);
+        if (status === 401 || status === 403) {
           setPage(null);
           setSelected([]);
         }
@@ -175,10 +183,11 @@ export function AssetCanvasList({
         if (!controller.signal.aborted) setPending(false);
       });
     return () => controller.abort();
-  }, [kind, collection, filters, cursor, retry, recent, pageSize]);
-  function reload() {
+  }, [kind, collection, filters, cursor, retry, recent]);
+  function readPage(next?: string) {
     setPending(true);
-    setCursor(undefined);
+    setError("");
+    setCursor(next);
     setRetry((value) => value + 1);
   }
   const selectionLimit = kind === "short_drama" ? 100 : 50;
@@ -301,7 +310,7 @@ export function AssetCanvasList({
       setDeleting(null);
       setRenaming(null);
       onLock(false);
-      reload();
+      readPage();
     } catch (reason) {
       if (controller.signal.aborted) return;
       if (
@@ -427,13 +436,13 @@ export function AssetCanvasList({
           本产品每次最多操作100项，请减少选择。
         </p>
       )}
-      {error && (
+      {error && !tailError && (
         <ContentState
           state="error"
           title={
-            denied === 403
+            errorStatus === 403
               ? "无权查看此空间的画布"
-              : denied === 401
+              : errorStatus === 401
                 ? "请重新登录查看画布"
                 : kind === "short_drama"
                   ? "暂时无法读取短剧"
@@ -441,12 +450,19 @@ export function AssetCanvasList({
           }
           description={error}
           actions={
-            <Button disabled={pending || locked} onClick={reload}>
+            <Button disabled={pending || locked} onClick={() => readPage()}>
               重试读取
             </Button>
           }
         />
       )}
+      {!pending &&
+        !error &&
+        !page?.items.length &&
+        collection === "legacy" &&
+        !hasAssetFilters(filters) && (
+          <ContentState variant="workspace" title="暂无历史画布" />
+        )}
       {pending && !page && (
         <ContentState
           state="loading"
@@ -491,25 +507,28 @@ export function AssetCanvasList({
           />
         )}
       <div className="resource-card-grid">
-        {!recent && !!page && !error && !hasAssetFilters(filters) && (
-          <Button
-            variant="asset-card"
-            size="asset-card"
-            aria-label={kind === "short_drama" ? "新建短剧画布" : "新建项目"}
-            disabled={locked || !writable || pending}
-            onClick={() => {
-              setTemplate(undefined);
-              setCreating(true);
-            }}
-          >
-            <AssetCardCover variant="create">
-              <Plus aria-hidden="true" />
-            </AssetCardCover>
-            <AssetCardTitle>
-              {kind === "short_drama" ? "新建短剧画布" : "新建项目"}
-            </AssetCardTitle>
-          </Button>
-        )}
+        {!recent &&
+          !!page &&
+          (!error || tailError) &&
+          !hasAssetFilters(filters) && (
+            <Button
+              variant="asset-card"
+              size="asset-card"
+              aria-label={kind === "short_drama" ? "新建短剧画布" : "新建项目"}
+              disabled={locked || !writable || pending}
+              onClick={() => {
+                setTemplate(undefined);
+                setCreating(true);
+              }}
+            >
+              <AssetCardCover variant="create">
+                <Plus aria-hidden="true" />
+              </AssetCardCover>
+              <AssetCardTitle>
+                {kind === "short_drama" ? "新建短剧画布" : "新建项目"}
+              </AssetCardTitle>
+            </Button>
+          )}
         {page?.items.map((item) => (
           <article
             key={item.id}
@@ -627,7 +646,7 @@ export function AssetCanvasList({
         {collection === "current" &&
           !batch &&
           !!page &&
-          !error &&
+          (!error || tailError) &&
           !hasAssetFilters(filters) && (
             <AssetTemplateList
               kind={kind}
@@ -641,28 +660,19 @@ export function AssetCanvasList({
           )}
       </div>
       {!recent && (
-        <PageSizeSelect
-          value={pageSize}
-          label="画布每页数量"
-          onChange={(size) => {
-            setPageSize(size);
-            setCursor(undefined);
-          }}
-          disabled={false}
+        <CollectionContinuation
+          cursor={page?.next_cursor}
+          loading={pending}
+          disabled={locked}
+          error={tailError ? error : undefined}
+          onContinue={() => readPage(page?.next_cursor ?? undefined)}
+          onRetry={() => readPage(cursor)}
+          onRestart={
+            tailError && (errorStatus === 400 || errorStatus === 422)
+              ? () => readPage()
+              : undefined
+          }
         />
-      )}
-      {!recent && page?.next_cursor && (
-        <Button
-          variant="ghost"
-          className="justify-self-center"
-          disabled={pending || locked}
-          onClick={() => {
-            setPending(true);
-            setCursor(page.next_cursor!);
-          }}
-        >
-          更多画布
-        </Button>
       )}
       {creating && (
         <AssetCreateProject

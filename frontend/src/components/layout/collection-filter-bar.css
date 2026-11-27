@@ -1,0 +1,40 @@
+.collection-filter-bar {
+  --toolbar-control-size: var(--ui-control-size-default);
+  display: flex;
+  min-width: 0;
+  min-height: var(--toolbar-control-size);
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--secondary-tab-gap);
+}
+.collection-filter-bar [data-slot="toggle-group-item"] {
+  padding-inline: var(--secondary-tab-padding-inline);
+}
+.collection-filter-bar [data-slot="toggle-group-item"]:focus-visible {
+  outline: 1px solid var(--ring);
+  outline-offset: -2px;
+}
+.collection-filter-bar
+  :is([data-slot="toggle-group-item"], [data-slot="button"]) {
+  font-size: var(--workspace-navigation-label-size);
+  line-height: var(--workspace-navigation-label-line-height);
+}
+.collection-filter-bar > [data-slot="separator"] {
+  block-size: var(--ui-icon-size);
+  align-self: center;
+}
+.collection-filter-bar > [data-slot="toolbar-group"] {
+  max-inline-size: 100%;
+}
+@media (max-width: 767px), (pointer: coarse) {
+  .collection-filter-bar {
+    --toolbar-control-size: var(--ui-control-size-touch);
+  }
+  .collection-filter-bar
+    :is([data-slot="toggle-group-item"], [data-slot="button"]) {
+    min-block-size: var(--ui-control-size-touch);
+  }
+  .collection-filter-bar [data-slot="toggle-group-item"] {
+    padding-inline: var(--ui-tab-padding-inline);
+  }
+}

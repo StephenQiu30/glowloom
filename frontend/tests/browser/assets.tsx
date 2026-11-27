@@ -189,6 +189,7 @@ installDevelopmentTransport({
         page: Number(params.page) || 1,
         page_size: Number(params.page_size) || 20,
         total: items.length,
+        next_cursor: null,
         capabilities: { intelligent_voice: { available: false } },
       };
     }
@@ -259,6 +260,15 @@ installDevelopmentTransport({
             (output) => !params.favorite_only || output.favorite,
           ),
         })),
+        day_groups: items.length
+          ? [
+              {
+                date: "2026-10-28",
+                title: "10月28日",
+                task_ids: items.map((item) => item.id),
+              },
+            ]
+          : [],
         next_cursor: null,
       };
     }

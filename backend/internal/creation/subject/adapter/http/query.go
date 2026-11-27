@@ -6,20 +6,37 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/subject/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/creation/subject/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 
+type subjectCursor struct {
+	ID      uuid.UUID `json:"id"`
+	Time    time.Time `json:"time"`
+	Binding string    `json:"binding"`
+}
+
 func listInput(query url.Values) (application.ListInput, error) {
-	allowed := map[string]bool{"type": true, "q": true, "favorite": true, "from": true, "to": true, "time_field": true, "order": true, "page": true, "page_size": true}
-	for key, values := range query {
-		if !allowed[key] || len(values) != 1 {
-			return application.ListInput{}, domain.ErrInvalid
-		}
+	if !httpapi.SingleValueQuery(query, "type", "q", "favorite", "from", "to", "time_field", "order", "page", "page_size", "cursor", "limit") {
+		return application.ListInput{}, domain.ErrInvalid
 	}
 	in := application.ListInput{Type: query.Get("type"), Query: query.Get("q"), TimeField: "updated", Order: "updated_desc", Page: 1, PageSize: 20}
+	if query.Has("cursor") || query.Has("limit") {
+		if query.Has("page") || query.Has("page_size") {
+			return in, domain.ErrInvalid
+		}
+		in.Page, in.PageSize, in.Limit = 0, 0, 20
+		if query.Has("limit") {
+			limit, err := strconv.Atoi(query.Get("limit"))
+			if err != nil || limit < 1 {
+				return in, domain.ErrInvalid
+			}
+			in.Limit = limit
+		}
+	}
 	if query.Has("favorite") {
 		value := query.Get("favorite")
 		if value != "true" && value != "false" {
@@ -55,7 +72,7 @@ func listInput(query url.Values) (application.ListInput, error) {
 	return in, in.Validate()
 }
 
-// List returns complete-space filtered results with bounded offset pagination.
+// List returns complete-space filtered results with keyset or offset pagination.
 // @Summary 查询当前空间主体
 // @ID listSubjects
 // @Tags subjects
@@ -69,11 +86,14 @@ func listInput(query url.Values) (application.ListInput, error) {
 // @Param order query string false "created_asc/created_desc/updated_asc/updated_desc"
 // @Param page query int false "页码1..100000"
 // @Param page_size query int false "每页1..120"
+// @Param limit query int false "游标批大小1..120，默认20，与页码参数互斥"
+// @Param cursor query string false "当前查询的上一批游标，与页码参数互斥"
 // @Success 200 {object} application.Page
 // @Failure 401,403,404,422,503 {object} httpapi.Problem
 // @Router /api/subjects [get]
 func (h *Handler) List(c *gin.Context) {
-	in, err := listInput(c.Request.URL.Query())
+	query := c.Request.URL.Query()
+	in, err := listInput(query)
 	if err != nil {
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 		return
@@ -82,10 +102,37 @@ func (h *Handler) List(c *gin.Context) {
 		writeError(c, application.ErrUnavailable)
 		return
 	}
-	page, err := h.query.List(c.Request.Context(), currentActor(c), in)
+	actor := currentActor(c)
+	var binding string
+	if in.Limit > 0 {
+		binding, err = httpapi.CursorBinding(struct {
+			Actor, Org, Scope uuid.UUID
+			Input             application.ListInput
+		}{Actor: actor.ID, Org: actor.OrgID, Scope: actor.ScopeID, Input: in})
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+		if token := query.Get("cursor"); token != "" {
+			var cursor subjectCursor
+			if len(token) > 1024 || !httpapi.DecodeCursorToken(token, &cursor) || cursor.Binding != binding || cursor.ID == uuid.Nil || cursor.Time.IsZero() {
+				writeError(c, domain.ErrInvalid)
+				return
+			}
+			in.After = &application.ListCursor{ID: cursor.ID, Time: cursor.Time}
+		}
+	}
+	page, err := h.query.List(c.Request.Context(), actor, in)
 	if err != nil {
 		writeError(c, err)
 		return
+	}
+	if page.Next != nil {
+		page.NextCursor, err = httpapi.EncodeCursorToken(subjectCursor{ID: page.Next.ID, Time: page.Next.Time, Binding: binding})
+		if err != nil {
+			writeError(c, err)
+			return
+		}
 	}
 	c.JSON(200, page)
 }

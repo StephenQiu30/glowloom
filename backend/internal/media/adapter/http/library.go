@@ -33,11 +33,13 @@ func (h *LibraryHandler) Register(group *gin.RouterGroup) {
 }
 
 func libraryScope(query url.Values) (domain.LibraryScope, error) {
-	allowed := map[string]bool{"scope": true, "project_id": true, "page": true, "page_size": true, "kind": true, "category": true, "folder_id": true, "root_only": true, "favorite_only": true, "recent_only": true, "catalog_state": true, "search": true, "order": true, "created_from": true, "created_before": true, "origin": true, "resolutions": true, "ratios": true}
-	for key, values := range query {
-		if !allowed[key] || len(values) != 1 {
-			return domain.LibraryScope{}, domain.ErrInvalidLibrary
-		}
+	if !httpapi.SingleValueQuery(query,
+		"scope", "project_id", "kind", "category", "folder_id", "root_only",
+		"favorite_only", "recent_only", "catalog_state", "search", "order", "page", "page_size",
+		"created_from", "created_before", "origin", "resolutions", "ratios",
+		"cursor", "limit",
+	) {
+		return domain.LibraryScope{}, domain.ErrInvalidLibrary
 	}
 	scope := domain.LibraryScope{Kind: domain.LibraryKind(query.Get("scope"))}
 	if scope.Kind == "" {
@@ -55,6 +57,19 @@ func libraryScope(query url.Values) (domain.LibraryScope, error) {
 
 func libraryPageQuery(query url.Values, scope domain.LibraryScope) (application.LibraryQuery, error) {
 	page := application.LibraryQuery{Page: 1, PageSize: 20, Kind: query.Get("kind"), Category: query.Get("category"), State: domain.LibraryItemStateActive, Search: query.Get("search"), Order: "updated_desc"}
+	if query.Has("cursor") || query.Has("limit") {
+		if query.Has("page") || query.Has("page_size") {
+			return page, domain.ErrInvalidLibrary
+		}
+		page.Page, page.PageSize, page.Limit = 0, 0, 20
+		if query.Has("limit") {
+			limit, err := strconv.Atoi(query.Get("limit"))
+			if err != nil || limit < 1 {
+				return page, domain.ErrInvalidLibrary
+			}
+			page.Limit = limit
+		}
+	}
 	for key, destination := range map[string]*int{"page": &page.Page, "page_size": &page.PageSize} {
 		if query.Has(key) {
 			value, err := strconv.Atoi(query.Get(key))
@@ -101,6 +116,8 @@ func libraryPageQuery(query url.Values, scope domain.LibraryScope) (application.
 // @Param project_id query string false "project scope必要UUID"
 // @Param page query int false "页码1..100000；默认1"
 // @Param page_size query int false "每页1..120；默认20"
+// @Param limit query int false "游标批大小1..120，与页码参数互斥"
+// @Param cursor query string false "当前查询的上一批游标，与页码参数互斥"
 // @Param kind query string false "text/image/video/audio/document/model"
 // @Param category query string false "character/environment/prop/material/other"
 // @Param folder_id query string false "当前库目录UUID"
@@ -131,20 +148,56 @@ func (h *LibraryHandler) List(c *gin.Context) {
 		writeLibraryError(c, application.ErrUnavailable)
 		return
 	}
-	scope, err := libraryScope(c.Request.URL.Query())
+	values := c.Request.URL.Query()
+	scope, err := libraryScope(values)
 	if err != nil {
 		writeLibraryError(c, err)
 		return
 	}
-	query, err := libraryPageQuery(c.Request.URL.Query(), scope)
+	query, err := libraryPageQuery(values, scope)
 	if err != nil {
 		writeLibraryError(c, err)
 		return
+	}
+	type cursorToken struct {
+		application.LibraryPosition
+		Binding string `json:"binding"`
+	}
+	var binding string
+	if query.Limit > 0 {
+		binding, err = httpapi.CursorBinding(struct {
+			Actor, Org, Space uuid.UUID
+			Scope             domain.LibraryScope
+			Query             application.LibraryQuery
+		}{actor.ID, actor.OrgID, actor.ScopeID, scope, query})
+		if err != nil {
+			writeLibraryError(c, err)
+			return
+		}
+		if token := values.Get("cursor"); token != "" {
+			var cursor cursorToken
+			if !httpapi.DecodeCursorToken(token, &cursor) || cursor.Binding != binding {
+				writeLibraryError(c, domain.ErrInvalidLibrary)
+				return
+			}
+			query.After = &cursor.LibraryPosition
+			if err := query.Validate(scope); err != nil {
+				writeLibraryError(c, err)
+				return
+			}
+		}
 	}
 	page, err := h.library.ListLibrary(c.Request.Context(), actor, scope, query)
 	if err != nil {
 		writeLibraryError(c, err)
 		return
+	}
+	if page.Next != nil {
+		page.NextCursor, err = httpapi.EncodeCursorToken(cursorToken{LibraryPosition: *page.Next, Binding: binding})
+		if err != nil {
+			writeLibraryError(c, err)
+			return
+		}
 	}
 	c.Header("Cache-Control", "private, no-store")
 	c.JSON(200, page)

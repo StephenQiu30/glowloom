@@ -1,5 +1,6 @@
 "use client";
 
+import "./asset-workspace.css";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -15,7 +16,8 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Toolbar, ToolbarGroup } from "@/components/ui/toolbar";
+import { ToolbarGroup } from "@/components/ui/toolbar";
+import { CollectionFilterBar } from "@/components/layout/collection-filter-bar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -235,23 +237,28 @@ function WorkspaceScope({
       <Tabs
         value={view}
         onValueChange={(value) => changeView(value as AssetSource)}
-        className="asset-workspace-tabs gap-6"
+        className="asset-workspace-tabs"
       >
         <HeaderNavigation label="资产分类" active={view}>
-          <TabsList variant="secondary" aria-label="资产来源">
+          <TabsList
+            variant="workspace"
+            aria-label="资产来源"
+            className="gap-(--secondary-tab-gap)"
+          >
             {sources.map((source) => (
-              <TabsTrigger key={source.id} value={source.id} disabled={locked}>
+              <TabsTrigger
+                key={source.id}
+                value={source.id}
+                disabled={locked}
+                className="rounded-full px-(--secondary-tab-padding-inline)"
+              >
                 {source.label}
               </TabsTrigger>
             ))}
           </TabsList>
         </HeaderNavigation>
         {authenticated && view !== "subjects" && (
-          <Toolbar
-            role="group"
-            aria-label="资产筛选"
-            className="asset-filter-bar"
-          >
+          <CollectionFilterBar aria-label="资产筛选">
             {(view === "history" ||
               view === "motion" ||
               view === "marketing") && (
@@ -274,7 +281,7 @@ function WorkspaceScope({
                   }
                 }}
                 aria-label="生成内容类型"
-                className="max-w-full"
+                className="max-w-full gap-0"
               >
                 {assetKinds
                   .filter((item) => view !== "motion" || item.id !== "document")
@@ -300,6 +307,7 @@ function WorkspaceScope({
                   if (value) setCollection(value as "current" | "legacy");
                 }}
                 aria-label="画布类型"
+                className="gap-0"
               >
                 <ToggleGroupItem value="current" disabled={locked}>
                   画布
@@ -397,7 +405,7 @@ function WorkspaceScope({
                 </Button>
               )}
             </ToolbarGroup>
-          </Toolbar>
+          </CollectionFilterBar>
         )}
         <TabsContent value={view} className="min-w-0">
           {!authenticated ? (

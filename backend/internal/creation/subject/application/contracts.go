@@ -100,7 +100,7 @@ type Capabilities struct {
 	IntelligentVoice Capability `json:"intelligent_voice"`
 }
 
-// Page is an offset-paged, fully filtered current-space result.
+// Page is a fully filtered current-space result.
 type Page struct {
 	CurrentActorID uuid.UUID    `json:"current_actor_id"`
 	CurrentScopeID uuid.UUID    `json:"current_scope_id"`
@@ -109,6 +109,14 @@ type Page struct {
 	PageSize       int          `json:"page_size"`
 	Total          int64        `json:"total"`
 	Capabilities   Capabilities `json:"capabilities"`
+	NextCursor     *string      `json:"next_cursor" extensions:"x-nullable"`
+	Next           *ListCursor  `json:"-"`
+}
+
+// ListCursor is the stable position within the selected ordering.
+type ListCursor struct {
+	ID   uuid.UUID
+	Time time.Time
 }
 
 // ListInput filters before stable ordering and pagination.
@@ -122,6 +130,8 @@ type ListInput struct {
 	Order     string
 	Page      int
 	PageSize  int
+	Limit     int
+	After     *ListCursor
 }
 
 // RevisionInput binds a content mutation to its observed shared revision.

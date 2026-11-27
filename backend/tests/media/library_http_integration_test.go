@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
@@ -89,4 +91,31 @@ func TestLibraryHTTPRealScopedPersistenceStrictInputAndReplay(t *testing.T) {
 	if response := libraryHTTPRequest(t, reloaded, http.MethodPost, "/api/media/library/commands", body, uuid.New()); response.Code != 409 {
 		t.Fatal("stale library CAS accepted", response.Code, response.Body.String())
 	}
+
+	command.ExpectedRevision = receipt.Revision
+	command.Metadata.Title = "另一条文字"
+	body, err = json.Marshal(command)
+	require.NoError(t, err)
+	second := libraryHTTPRequest(t, reloaded, http.MethodPost, "/api/media/library/commands", body, uuid.New())
+	require.Equal(t, 200, second.Code, second.Body.String())
+
+	const list = "/api/media/library?scope=personal&limit=1"
+	firstBatch := libraryHTTPRequest(t, reloaded, http.MethodGet, list, nil, uuid.Nil)
+	require.Equal(t, 200, firstBatch.Code, firstBatch.Body.String())
+	var batch mediaapp.LibraryPage
+	require.NoError(t, json.Unmarshal(firstBatch.Body.Bytes(), &batch))
+	require.Len(t, batch.Items, 1)
+	require.NotNil(t, batch.NextCursor)
+	cursor := "&cursor=" + url.QueryEscape(*batch.NextCursor)
+	for _, path := range []string{list + cursor + "&search=changed", list + cursor + "&page=1"} {
+		require.Equal(t, 422, libraryHTTPRequest(t, reloaded, http.MethodGet, path, nil, uuid.Nil).Code)
+	}
+	require.Equal(t, 422, libraryHTTPRequest(t, libraryRouter(db, foreign), http.MethodGet, list+cursor, nil, uuid.Nil).Code)
+	finalBatch := libraryHTTPRequest(t, reloaded, http.MethodGet, list+cursor, nil, uuid.Nil)
+	require.Equal(t, 200, finalBatch.Code, finalBatch.Body.String())
+	var last mediaapp.LibraryPage
+	require.NoError(t, json.Unmarshal(finalBatch.Body.Bytes(), &last))
+	require.Len(t, last.Items, 1)
+	require.NotEqual(t, batch.Items[0].ID, last.Items[0].ID)
+	require.Nil(t, last.NextCursor)
 }

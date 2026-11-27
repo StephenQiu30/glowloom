@@ -887,6 +887,8 @@ async function proxy(
         "order",
         "page",
         "page_size",
+        "limit",
+        "cursor",
       ],
     },
     { pattern: "subjects/(batch|export)", methods: ["POST"], query: [] },
@@ -958,6 +960,9 @@ async function proxy(
         "search",
         "created_from",
         "created_before",
+        "time_zone",
+        "from_day",
+        "through_day",
         "order",
         "limit",
         "cursor",
@@ -1151,6 +1156,8 @@ async function proxy(
       if (
         incoming.searchParams.getAll("scope").length > 1 ||
         incoming.searchParams.getAll("project_id").length > 1 ||
+        incoming.searchParams.getAll("limit").length > 1 ||
+        incoming.searchParams.getAll("cursor").length > 1 ||
         !["personal", "project"].includes(scope) ||
         (scope === "project"
           ? !projectID || !new RegExp(`^${identityUUID}$`, "i").test(projectID)
@@ -1167,6 +1174,8 @@ async function proxy(
               "project_id",
               "page",
               "page_size",
+              "limit",
+              "cursor",
               "kind",
               "category",
               "folder_id",

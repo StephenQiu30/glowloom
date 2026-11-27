@@ -2908,6 +2908,7 @@ declare namespace API {
     folders?: LibraryFolder[];
     items?: LibraryItemSummary[];
     library_id?: string;
+    next_cursor?: string | null;
     page?: number;
     page_size?: number;
     revision?: number;
@@ -3128,6 +3129,10 @@ declare namespace API {
     page?: number;
     /** 每页1..120；默认20 */
     page_size?: number;
+    /** 游标批大小1..120，与页码参数互斥 */
+    limit?: number;
+    /** 当前查询的上一批游标，与页码参数互斥 */
+    cursor?: string;
     /** text/image/video/audio/document/model */
     kind?: string;
     /** character/environment/prop/material/other */
@@ -3216,6 +3221,12 @@ declare namespace API {
     created_from?: string;
     /** RFC3339创建时间终点，不包含 */
     created_before?: string;
+    /** IANA 时区，默认 UTC，决定日历日期和日期分组 */
+    time_zone?: string;
+    /** 创建日期起点 YYYY-MM-DD，包含当天 */
+    from_day?: string;
+    /** 创建日期终点 YYYY-MM-DD，包含当天 */
+    through_day?: string;
     /** desc/asc，默认desc */
     order?: string;
     /** 1..200，默认20 */
@@ -3503,6 +3514,10 @@ declare namespace API {
     page?: number;
     /** 每页1..120 */
     page_size?: number;
+    /** 游标批大小1..120，默认20，与页码参数互斥 */
+    limit?: number;
+    /** 当前查询的上一批游标，与页码参数互斥 */
+    cursor?: string;
   };
 
   type listSystemVoicesParams = {
@@ -4023,6 +4038,12 @@ declare namespace API {
     revision?: number;
   };
 
+  type PersonalHistoryDay = {
+    date?: string;
+    task_ids?: string[];
+    title?: string;
+  };
+
   type PersonalHistoryItem = {
     batch_id?: string | null;
     cancel_requested?: boolean;
@@ -4077,6 +4098,7 @@ declare namespace API {
   };
 
   type PersonalHistoryPageResponse = {
+    day_groups?: PersonalHistoryDay[];
     items?: PersonalHistoryItem[];
     next_cursor?: string | null;
   };
@@ -5941,6 +5963,7 @@ declare namespace API {
     current_actor_id?: string;
     current_scope_id?: string;
     items?: SubjectDetail[];
+    next_cursor?: string | null;
     page?: number;
     page_size?: number;
     total?: number;

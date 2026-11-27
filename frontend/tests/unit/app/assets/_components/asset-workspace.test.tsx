@@ -36,7 +36,23 @@ const state = vi.hoisted(() => ({
   pickProject: null as null | ((value: { id: string }) => void),
 }));
 vi.mock("@/api/operations", () => ({
-  listPersonalOperationHistory: state.history,
+  listPersonalOperationHistory: async (...args: unknown[]) => {
+    const payload = await state.history(...args);
+    if (!Array.isArray(payload?.items) || "day_groups" in payload)
+      return payload;
+    return {
+      ...payload,
+      day_groups: payload.items.length
+        ? [
+            {
+              date: "2026-10-28",
+              title: "10月28日",
+              task_ids: payload.items.map((item: { id: string }) => item.id),
+            },
+          ]
+        : [],
+    };
+  },
   applyPersonalHistoryCommand: state.historyCommand,
   publishHistoryResults: state.publish,
   getOperation: vi.fn(),
@@ -125,7 +141,47 @@ beforeEach(() => {
   state.canvases.mockResolvedValue({ items: [], next_cursor: null });
   state.templates.mockResolvedValue({ items: [] });
 });
-afterEach(cleanup);
+let restoreHistoryObserver: (() => void) | undefined;
+afterEach(() => {
+  cleanup();
+  restoreHistoryObserver?.();
+  restoreHistoryObserver = undefined;
+});
+
+function observeHistoryTail() {
+  let notify: IntersectionObserverCallback | undefined;
+  const original = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "IntersectionObserver",
+  );
+  Object.defineProperty(globalThis, "IntersectionObserver", {
+    configurable: true,
+    value: class {
+      constructor(callback: IntersectionObserverCallback) {
+        notify = callback;
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  });
+  restoreHistoryObserver = () => {
+    if (original) {
+      Object.defineProperty(globalThis, "IntersectionObserver", original);
+    } else {
+      Reflect.deleteProperty(globalThis, "IntersectionObserver");
+    }
+  };
+  return () => {
+    expect(notify).toBeDefined();
+    act(() =>
+      notify!(
+        [{ isIntersecting: true }] as IntersectionObserverEntry[],
+        {} as IntersectionObserver,
+      ),
+    );
+  };
+}
 
 it("a bookmarked query restores its media, selected filters and server search on first read", async () => {
   const initialLocation = readAssetLocation(
@@ -142,7 +198,9 @@ it("a bookmarked query restores its media, selected filters and server search on
       favorite_only: true,
       resolutions: "1080P",
       order: "asc",
-      ...assetDateRange("2026-10-01", "2026-10-28"),
+      from_day: "2026-10-01",
+      through_day: "2026-10-28",
+      time_zone: expect.any(String),
     }),
     expect.anything(),
   );
@@ -276,10 +334,11 @@ it("游客不读取私人接口，并使用既有登录入口", () => {
 });
 
 it("切换媒体和搜索时重新服务端筛选，不继续使用旧游标", async () => {
+  const reachTail = observeHistoryTail();
   state.history.mockResolvedValueOnce({ items: [task], next_cursor: "next" });
   render(<AssetWorkspace />);
   await screen.findByText("本人的创作记录");
-  fireEvent.click(screen.getByRole("button", { name: "更多记录" }));
+  reachTail();
   await waitFor(() =>
     expect(state.history).toHaveBeenLastCalledWith(
       expect.objectContaining({ cursor: "next" }),
@@ -304,6 +363,63 @@ it("切换媒体和搜索时重新服务端筛选，不继续使用旧游标", a
       expect.anything(),
     ),
   );
+});
+
+it("续载用同一游标重试，同日结果只显示一个日期标题", async () => {
+  const reachTail = observeHistoryTail();
+  const year = new Date().getFullYear();
+  const first = { ...task, create_time: "2026-10-27T23:59:00Z" };
+  const later = {
+    ...first,
+    id: "55555555-5555-4555-8555-555555555555",
+    create_time: "2026-10-28T00:01:00Z",
+    prompt_preview: "同日续载",
+  };
+  const older = {
+    ...first,
+    id: "66666666-6666-4666-8666-666666666666",
+    prompt_preview: "上年任务",
+    status: "failed",
+  };
+  const today = { date: `${year}-10-28`, title: "10月28日" };
+  state.history
+    .mockResolvedValueOnce({
+      items: [first],
+      day_groups: [{ ...today, task_ids: [first.id] }],
+      next_cursor: "next",
+    })
+    .mockRejectedValueOnce(new RequestError("unavailable", 503))
+    .mockResolvedValueOnce({
+      items: [later, older],
+      day_groups: [
+        { ...today, task_ids: [later.id] },
+        {
+          date: `${year - 1}-10-28`,
+          title: `${year - 1}年10月28日`,
+          task_ids: [older.id],
+        },
+      ],
+      next_cursor: "next",
+    });
+  render(<AssetWorkspace />);
+  await screen.findByRole("heading", { name: "10月28日" });
+  expect(screen.queryByText("每页")).toBeNull();
+  reachTail();
+  const retry = await screen.findByRole("button", { name: "重试加载更多" });
+  expect(screen.getByText(first.prompt_preview)).toBeTruthy();
+  fireEvent.click(retry);
+  await screen.findByText("同日续载");
+  expect(state.history.mock.calls.map(([params]) => params.cursor)).toEqual([
+    undefined,
+    "next",
+    "next",
+  ]);
+  const sameDay = screen.getByRole("region", { name: "10月28日" });
+  expect(within(sameDay).getAllByRole("article")).toHaveLength(2);
+  expect(
+    screen.getByRole("region", { name: `${year - 1}年10月28日` }),
+  ).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "更多记录" })).toBeNull();
 });
 
 it("错误与空账户分开，重试读取真实接口", async () => {
@@ -448,6 +564,56 @@ it("画布卡片使用实际画布ID和项目上下文打开", async () => {
   ).toBe(`/canvas?project_id=${task.project_id}&canvas_id=${task.id}`);
   expect(state.history).not.toHaveBeenCalled();
 });
+
+it.each(["canvas", "short_drama"] as const)(
+  "%s 触底续载并以原游标重试",
+  async (kind) => {
+    const reachTail = observeHistoryTail();
+    const first = {
+      id: task.id,
+      project_id: task.project_id,
+      name: "首批画布",
+      kind,
+      revision: "7",
+      created_at: task.create_time,
+      updated_at: task.create_time,
+      is_main: false,
+      collection: "current",
+      favorite: false,
+      favorite_revision: "0",
+      project_revision: 2,
+      cover_asset_id: null,
+      cover_unavailable: false,
+      can_copy_project: true,
+    };
+    const second = {
+      ...first,
+      name: "追加画布",
+      id: "55555555-5555-4555-8555-555555555555",
+    };
+    state.canvases
+      .mockResolvedValueOnce({ items: [first], next_cursor: "next" })
+      .mockRejectedValueOnce(new RequestError("unavailable", 503))
+      .mockResolvedValueOnce({ items: [first, second], next_cursor: "next" });
+    render(<AssetWorkspace initialView={kind} />);
+    await screen.findByRole("link", { name: /首批画布/ });
+    reachTail();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "重试加载更多" }),
+    );
+    await screen.findByRole("link", { name: /追加画布/ });
+    expect(screen.getAllByRole("link", { name: /首批画布/ })).toHaveLength(1);
+    expect(state.canvases.mock.calls.map(([input]) => input.cursor)).toEqual([
+      undefined,
+      "next",
+      "next",
+    ]);
+    expect(screen.queryByText("每页")).toBeNull();
+    expect(
+      document.querySelector('[data-slot="collection-continuation"]'),
+    ).toBeNull();
+  },
+);
 
 it("显式创建短剧，未知结果重试保持原命令和幂等键", async () => {
   state.createAsset

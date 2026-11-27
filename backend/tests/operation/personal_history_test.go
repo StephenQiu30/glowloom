@@ -73,6 +73,54 @@ func TestPersonalHistoryNormalizesInputsAndKeepsErrorChain(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestPersonalHistoryReturnsCalendarDaysAndValidatesZone(t *testing.T) {
+	firstTime := time.Date(2026, time.March, 9, 3, 59, 0, 0, time.UTC)
+	secondTime := time.Date(2026, time.March, 8, 5, 1, 0, 0, time.UTC)
+	first := operationapp.PersonalHistoryItem{TaskSummary: operationapp.TaskSummary{
+		ID: uuid.New(), ProjectID: uuid.New(), CreateTime: firstTime,
+	}}
+	second := operationapp.PersonalHistoryItem{TaskSummary: operationapp.TaskSummary{
+		ID: uuid.New(), ProjectID: uuid.New(), CreateTime: secondTime,
+	}}
+	store := &personalHistoryReader{page: operationapp.PersonalHistoryPage{
+		Items: []operationapp.PersonalHistoryItem{first, second},
+		Next:  &operationapp.TaskCursor{ID: second.ID, CreateTime: secondTime},
+	}}
+	router := historyRouter(historyActor(), store)
+	const rangeQuery = "&from_day=2026-03-08&through_day=2026-03-08"
+	const zone = "&time_zone=America%2FNew_York"
+	base := "/api/operations/history?limit=2"
+	response := historyRequest(t.Context(), router, base+rangeQuery+zone)
+	var result operationhttp.PersonalHistoryPageResponse
+	if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &result) != nil ||
+		len(result.DayGroups) != 1 || result.NextCursor == nil {
+		t.Fatalf("response=%d %s", response.Code, response.Body)
+	}
+	day := result.DayGroups[0]
+	if day.Date != "2026-03-08" || !strings.HasSuffix(day.Title, "3月8日") ||
+		len(day.TaskIDs) != 2 || day.TaskIDs[0] != first.ID || day.TaskIDs[1] != second.ID {
+		t.Fatalf("day=%+v", day)
+	}
+	if store.input.CreatedFrom == nil || store.input.CreatedBefore == nil ||
+		!store.input.CreatedFrom.Equal(time.Date(2026, time.March, 8, 5, 0, 0, 0, time.UTC)) ||
+		!store.input.CreatedBefore.Equal(time.Date(2026, time.March, 9, 4, 0, 0, 0, time.UTC)) {
+		t.Fatalf("range=%+v", store.input)
+	}
+	cursor := "&cursor=" + url.QueryEscape(*result.NextCursor)
+	for _, query := range []string{
+		base + rangeQuery + "&time_zone=UTC" + cursor,
+		base + rangeQuery + "&time_zone=Unknown%2FZone",
+		base + rangeQuery + zone + "&created_from=2026-03-08T00%3A00%3A00Z",
+	} {
+		if invalid := historyRequest(t.Context(), router, query); invalid.Code != 422 {
+			t.Fatalf("invalid query returned %d: %s", invalid.Code, invalid.Body)
+		}
+	}
+	if store.calls != 1 {
+		t.Fatalf("invalid requests reached the store: %d", store.calls)
+	}
+}
 func historyRouter(actor identityapp.Principal, s *personalHistoryReader) *gin.Engine {
 	r := gin.New()
 	r.Use(httpapi.Middleware("http://localhost:3000"))

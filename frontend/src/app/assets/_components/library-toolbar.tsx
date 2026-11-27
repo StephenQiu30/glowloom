@@ -1,6 +1,7 @@
 "use client";
 
-import { Toolbar, ToolbarGroup } from "@/components/ui/toolbar";
+import { ToolbarGroup } from "@/components/ui/toolbar";
+import { CollectionFilterBar } from "@/components/layout/collection-filter-bar";
 import type { ReactNode } from "react";
 import Link from "next/link";
 
@@ -282,7 +283,7 @@ export function LibraryToolbar({
           </>
         )}
       </PageHeader>
-      <Toolbar className="library-controls">
+      <div className="flex min-w-0 flex-col items-start gap-3">
         {onBack ? (
           <Button
             size="toolbar"
@@ -297,8 +298,9 @@ export function LibraryToolbar({
             <Link href="/assets">返回资产</Link>
           </Button>
         )}
-        <div className="library-filter-row">
+        <CollectionFilterBar aria-label="参考素材筛选" className="w-full">
           <ToggleGroup
+            variant="text"
             size="toolbar"
             spacing={1}
             type="single"
@@ -307,6 +309,7 @@ export function LibraryToolbar({
               if (kind) onFilter({ ...filter, kind });
             }}
             aria-label="素材类型"
+            className="max-w-full justify-start gap-0 overflow-x-auto"
           >
             {mediaKinds.map((kind) => (
               <ToggleGroupItem
@@ -318,8 +321,8 @@ export function LibraryToolbar({
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
-          <Separator orientation="vertical" className="toolbar-separator" />
-          <ToolbarGroup appearance="plain" className="toolbar-filter-group">
+          <Separator orientation="vertical" className="max-md:hidden" />
+          <ToolbarGroup appearance="plain" className="flex-wrap">
             {filterMenu}
             <Button
               variant="ghost"
@@ -363,8 +366,8 @@ export function LibraryToolbar({
               </DropdownMenuContent>
             </DropdownMenu>
           </ToolbarGroup>
-        </div>
-      </Toolbar>
+        </CollectionFilterBar>
+      </div>
     </>
   );
 }
