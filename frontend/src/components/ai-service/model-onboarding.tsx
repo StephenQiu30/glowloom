@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, type ReactNode } from "react";
-import { Settings2 } from "lucide-react";
+import { ArrowLeft, Settings2 } from "lucide-react";
 import { ensureIndependentCreation } from "@/api/projects";
 import { ProviderLogo } from "@/components/providers/provider-logo";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   prepareQuickOnboarding,
@@ -75,6 +74,7 @@ export function ModelOnboardingDialog({
   const model = configuration.models.find(
     ({ model }) => model.id === modelID,
   )?.model;
+  const modelSearch = useRef<HTMLInputElement>(null);
   const modelHeading = useRef<HTMLHeadingElement>(null);
   const routeHeading = useRef<HTMLHeadingElement>(null);
   const verificationHeading = useRef<HTMLHeadingElement>(null);
@@ -112,16 +112,11 @@ export function ModelOnboardingDialog({
         project_id: project.id,
       });
       showCandidate(review.id, review);
-    }, "已准备验证计划。");
+    }, "");
   }
 
   function chooseModel(choice: SetupModel) {
-    if (
-      catalogLocked ||
-      choice.id === selected?.id ||
-      (choice.candidateID && choice.candidateID === candidate?.id)
-    )
-      return;
+    if (catalogLocked || choice.id === selected?.id) return;
     onChangeRequest(() => {
       setSelected(choice);
       setCandidate(undefined);
@@ -141,10 +136,12 @@ export function ModelOnboardingDialog({
       (selected?.preset &&
         !selected.preset.quick_onboarding &&
         !selected.candidateID));
-  const selectedRow = provider?.models.find(
-    ({ candidateID, id }) =>
-      id === selected?.id || (candidateID && candidateID === candidate?.id),
-  );
+  function returnToCatalog() {
+    onChangeRequest(() => {
+      resetSelection();
+      requestAnimationFrame(() => modelSearch.current?.focus());
+    });
+  }
 
   const configurationPanel = (
     <>
@@ -155,14 +152,13 @@ export function ModelOnboardingDialog({
           className="flex flex-col gap-4"
           onChangeCapture={() => onDirty(true)}
         >
-          {provider && <Separator />}
           <h3
             id="gateway-setup-model"
             ref={modelHeading}
             tabIndex={-1}
             className="text-base font-semibold"
           >
-            {selected?.title ?? "自定义模型"}
+            {selected ? "销售配置" : "自定义模型"}
           </h3>
           {modelID ? (
             <p role="status" className="text-sm text-muted-foreground">
@@ -186,13 +182,12 @@ export function ModelOnboardingDialog({
           )}
         </section>
       )}
-      {(existing || modelID) && (
+      {!candidate && (existing || modelID) && (
         <section
           aria-labelledby="gateway-setup-route"
           className="flex flex-col gap-4"
           onChangeCapture={() => onDirty(true)}
         >
-          {needsModel && <Separator />}
           <h3
             id="gateway-setup-route"
             ref={routeHeading}
@@ -204,11 +199,7 @@ export function ModelOnboardingDialog({
           {setup.existing && model && (
             <p className="text-sm text-muted-foreground">{model.name}</p>
           )}
-          {candidate ? (
-            <p className="text-sm text-muted-foreground">
-              {candidate.initial?.upstream_model}
-            </p>
-          ) : existing || model ? (
+          {(existing || model) && (
             <RouteForm
               configuration={configuration}
               busy={busy}
@@ -218,7 +209,7 @@ export function ModelOnboardingDialog({
               defaultScope={scope}
               onPrepared={(review) => showCandidate(review.id, review)}
             />
-          ) : null}
+          )}
         </section>
       )}
       {selected?.preset?.quick_onboarding &&
@@ -238,36 +229,24 @@ export function ModelOnboardingDialog({
           </Button>
         ))}
       {candidate && (
-        <section
-          aria-labelledby="gateway-setup-verification"
-          className="flex min-w-0 flex-col gap-4"
-        >
-          <Separator />
-          <h3
-            id="gateway-setup-verification"
-            ref={verificationHeading}
-            tabIndex={-1}
-            className="text-base font-semibold"
-          >
-            验证与启用
-          </h3>
-          <OnboardingPanel
-            key={candidate.id}
-            id={candidate.id}
-            initial={candidate.initial}
-            run={run}
-            busy={busy}
-            refreshConfiguration={refresh}
-            onKeyDirty={onDirty}
-            retryRoute={(id) => {
-              onDirty(false);
-              resetSelection();
-              setExisting(true);
-              setModelID(id);
-              requestAnimationFrame(() => routeHeading.current?.focus());
-            }}
-          />
-        </section>
+        <OnboardingPanel
+          key={candidate.id}
+          id={candidate.id}
+          initial={candidate.initial}
+          models={configuration.models}
+          headingRef={verificationHeading}
+          run={run}
+          busy={busy}
+          refreshConfiguration={refresh}
+          onKeyDirty={onDirty}
+          retryRoute={(id) => {
+            onDirty(false);
+            resetSelection();
+            setExisting(true);
+            setModelID(id);
+            requestAnimationFrame(() => routeHeading.current?.focus());
+          }}
+        />
       )}
     </>
   );
@@ -275,24 +254,24 @@ export function ModelOnboardingDialog({
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        className="flex max-h-[calc(100dvh-1rem)] flex-col gap-0 overflow-hidden border p-0 motion-reduce:animate-none max-sm:max-w-[calc(100%-1rem)] sm:max-h-[calc(100dvh-3rem)] sm:max-w-4xl max-md:[&>[data-slot=dialog-close]]:size-11"
+        className="flex max-h-[calc(100dvh-1rem)] flex-col gap-0 overflow-hidden p-0 motion-reduce:animate-none max-sm:max-w-[calc(100%-1rem)] sm:max-h-[calc(100dvh-3rem)] sm:max-w-4xl max-md:[&>[data-slot=dialog-close]]:size-11"
         overlayClassName="motion-reduce:animate-none"
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           restoreFocus();
         }}
       >
-        <DialogHeader className="gap-1 border-b px-5 py-4 pr-14 text-left sm:px-6 sm:pr-14">
+        <DialogHeader className="gap-1 px-5 pt-5 pr-14 pb-3 text-left sm:px-6 sm:pr-14">
           <DialogTitle className="text-lg">
             {setup.existing ? "配置渠道" : "新增接入"}
           </DialogTitle>
-          <DialogDescription>
-            为模型配置供应商渠道并确认验证预算。
+          <DialogDescription className="sr-only">
+            选择供应商和型号，配置价格并验证接入。
           </DialogDescription>
           {allowExistingModel && !setup.existing && !modelID && !candidate && (
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               size="sm"
               className="mt-2 w-fit max-md:min-h-11"
               disabled={busy}
@@ -317,9 +296,9 @@ export function ModelOnboardingDialog({
             value={activeProvider}
             onValueChange={chooseProvider}
             orientation="vertical"
-            className="grid min-h-0 min-w-0 gap-0 overflow-y-auto md:h-[min(29rem,65dvh)] md:grid-cols-[13rem_minmax(0,1fr)] md:overflow-hidden"
+            className="grid min-h-0 min-w-0 gap-0 overflow-y-auto md:h-[min(31rem,75dvh)] md:grid-cols-[12rem_minmax(0,1fr)] md:overflow-hidden"
           >
-            <div className="min-h-0 min-w-0 max-md:hidden md:overflow-y-auto md:overscroll-contain md:border-r md:bg-muted/30 md:px-3 md:py-4">
+            <div className="min-h-0 min-w-0 max-md:hidden md:overflow-y-auto md:overscroll-contain md:bg-muted/25 md:px-3 md:py-3">
               <h3 className="px-3 pb-2 text-sm font-medium text-muted-foreground">
                 供应商
               </h3>
@@ -353,7 +332,7 @@ export function ModelOnboardingDialog({
               <TabsContent
                 key={id}
                 value={id}
-                className="min-h-0 min-w-0 px-5 py-5 focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset md:overflow-y-auto md:overscroll-contain md:px-6"
+                className="min-h-0 min-w-0 px-5 pt-3 pb-5 focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset md:overflow-y-auto md:overscroll-contain md:px-6"
               >
                 {id === activeProvider && (
                   <div className="flex min-w-0 flex-col gap-5">
@@ -371,14 +350,41 @@ export function ModelOnboardingDialog({
                         ]}
                       />
                     </div>
-                    {provider && (
+                    {provider && !selected && !modelID && (
                       <SetupModelCatalog
                         key={provider.id}
                         provider={provider}
-                        selected={selectedRow?.id}
+                        searchRef={modelSearch}
                         disabled={catalogLocked}
                         onSelect={chooseModel}
                       />
+                    )}
+                    {selected && (
+                      <div className="flex min-w-0 items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <h3 className="text-lg font-semibold wrap-anywhere">
+                            {selected.title}
+                          </h3>
+                          {selected.title !== selected.upstream && (
+                            <p className="text-xs wrap-anywhere text-muted-foreground">
+                              {selected.upstream}
+                            </p>
+                          )}
+                        </div>
+                        {!modelID && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            disabled={busy}
+                            className="shrink-0 max-md:min-h-11"
+                            onClick={returnToCatalog}
+                          >
+                            <ArrowLeft data-icon="inline-start" />
+                            更换型号
+                          </Button>
+                        )}
+                      </div>
                     )}
                     {configurationPanel}
                   </div>

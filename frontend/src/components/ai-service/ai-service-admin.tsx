@@ -416,6 +416,7 @@ function AiServiceConfigurationPage({
                   <OnboardingPanel
                     key={candidate}
                     id={candidate}
+                    models={configuration.models}
                     run={run}
                     busy={busy}
                     refreshConfiguration={refresh}

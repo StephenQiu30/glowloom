@@ -200,6 +200,48 @@ func TestOnboardingChargesOnceAndSwitchesOnlyOnEvidence(t *testing.T) {
 	require.Equal(t, live.ID, current.ID)
 }
 
+func TestOnboardingConcurrentEquivalentRoutesShareOneBudget(t *testing.T) {
+	db, _, model, actor := fixture(t, 1000)
+	entrypointProject(t, db, actor)
+	entrypointSession(t, db, actor)
+	ctx := t.Context()
+	store := pg.New(db, actor, aigateway.Authority)
+	in := application.Onboarding{
+		Scope: actor.ScopeID, Concurrency: 2, RPM: 1000,
+		Route: domain.Route{ModelID: model.ID, Supplier: uuid.New(), Group: uuid.NewString(), Protocol: model.Protocol,
+			BaseURL: "https://8.8.8.8/v1", UpstreamModel: "actual-supplier", Purchase: model.Price},
+	}
+	var candidates [2]pg.OnboardingReview
+	for i := range candidates {
+		in.Route.ID = uuid.New()
+		require.NoError(t, store.PrepareOnboarding(ctx, in))
+		review, err := store.ReviewOnboarding(ctx, in.Route.ID)
+		require.NoError(t, err)
+		candidates[i] = review
+	}
+	var seals atomic.Int64
+	var selected [2]uuid.UUID
+	var outcomes [2]error
+	var requests sync.WaitGroup
+	for i, candidate := range candidates {
+		requests.Go(func() {
+			selected[i], outcomes[i] = store.ConfirmOnboarding(ctx, candidate.ID, candidate.Plan.Credits, candidate.Plan.PurchaseMicros,
+				func(uuid.UUID, uuid.UUID) ([]byte, string, error) {
+					seals.Add(1)
+					return []byte("sealed fixture"), "fixture", nil
+				})
+		})
+	}
+	requests.Wait()
+	require.NoError(t, outcomes[0])
+	require.NoError(t, outcomes[1])
+	require.Equal(t, selected[0], selected[1])
+	require.EqualValues(t, 1, seals.Load())
+	var budgets int
+	require.NoError(t, db.Raw("SELECT count(*) FROM ai.budget WHERE scope_id=? AND id IN ?", actor.ScopeID, []uuid.UUID{candidates[0].ID, candidates[1].ID}).Scan(&budgets).Error)
+	require.Equal(t, 1, budgets)
+}
+
 func TestOnboardingCompetingCandidatesAndTransactionFailure(t *testing.T) {
 	db, oldStore, model, actor := fixture(t)
 	entrypointProject(t, db, actor)
@@ -217,8 +259,9 @@ func TestOnboardingCompetingCandidatesAndTransactionFailure(t *testing.T) {
 		require.NoError(t, store.PrepareOnboarding(t.Context(), in))
 		review, err := store.ReviewOnboarding(t.Context(), in.Route.ID)
 		require.NoError(t, err)
-		require.NoError(t, store.ConfirmOnboarding(t.Context(), in.Route.ID, review.Plan.Credits, review.Plan.PurchaseMicros,
-			func(uuid.UUID, uuid.UUID) ([]byte, string, error) { return []byte("sealed fixture"), "fixture", nil }))
+		_, err = store.ConfirmOnboarding(t.Context(), in.Route.ID, review.Plan.Credits, review.Plan.PurchaseMicros,
+			func(uuid.UUID, uuid.UUID) ([]byte, string, error) { return []byte("sealed fixture"), "fixture", nil })
+		require.NoError(t, err)
 		work, err := store.OnboardingWork(t.Context(), in.Route.ID)
 		require.NoError(t, err)
 		validation := store.WithOnboarding(in.Route.ID, nil)
@@ -303,8 +346,9 @@ func TestOnboardingMediaWaitsForOriginalPollAndDelivery(t *testing.T) {
 	require.NoError(t, store.PrepareOnboarding(t.Context(), in))
 	review, err := store.ReviewOnboarding(t.Context(), route.ID)
 	require.NoError(t, err)
-	require.NoError(t, store.ConfirmOnboarding(t.Context(), route.ID, review.Plan.Credits, review.Plan.PurchaseMicros,
-		func(uuid.UUID, uuid.UUID) ([]byte, string, error) { return []byte("sealed fixture"), "fixture", nil }))
+	_, err = store.ConfirmOnboarding(t.Context(), route.ID, review.Plan.Credits, review.Plan.PurchaseMicros,
+		func(uuid.UUID, uuid.UUID) ([]byte, string, error) { return []byte("sealed fixture"), "fixture", nil })
+	require.NoError(t, err)
 
 	objects := &durableBytes{t: t, db: db, routes: pgmedia.NewStorageRoutes(db), files: map[string][]byte{}}
 	runtime := &aigateway.Runtime{DB: db, Objects: fixtureMediaStorage(t, db), MediaArchive: mediaapp.NewGeneratedOutputArchiver(objects.routes, objects, mediaflow.FFProber{}, mediaflow.FFRenderer{})}
@@ -377,8 +421,9 @@ func TestOnboardingReservesSharedQuotaForLiveTraffic(t *testing.T) {
 	require.NoError(t, store.PrepareOnboarding(t.Context(), in))
 	review, err := store.ReviewOnboarding(t.Context(), candidate.ID)
 	require.NoError(t, err)
-	require.NoError(t, store.ConfirmOnboarding(t.Context(), candidate.ID, review.Plan.Credits, review.Plan.PurchaseMicros,
-		func(uuid.UUID, uuid.UUID) ([]byte, string, error) { return []byte("test-candidate"), "fixture", nil }))
+	_, err = store.ConfirmOnboarding(t.Context(), candidate.ID, review.Plan.Credits, review.Plan.PurchaseMicros,
+		func(uuid.UUID, uuid.UUID) ([]byte, string, error) { return []byte("test-candidate"), "fixture", nil })
+	require.NoError(t, err)
 
 	upstream := providerFunc(func(_ context.Context, _ application.Dispatch, _ func(json.RawMessage) error) (domain.Receipt, error) {
 		t.Error("onboarding consumed the only slot of a shared live quota")
@@ -443,7 +488,8 @@ func TestOnboardingArkEmbeddingRequiresSettledVector(t *testing.T) {
 	review, err := store.ReviewOnboarding(ctx, in.Route.ID)
 	require.NoError(t, err)
 	require.Len(t, review.Plan.Probes, 1)
-	require.NoError(t, store.ConfirmOnboarding(ctx, in.Route.ID, review.Plan.Credits, review.Plan.PurchaseMicros, func(uuid.UUID, uuid.UUID) ([]byte, string, error) { return []byte("sealed-test-value"), "fixture", nil }))
+	_, err = store.ConfirmOnboarding(ctx, in.Route.ID, review.Plan.Credits, review.Plan.PurchaseMicros, func(uuid.UUID, uuid.UUID) ([]byte, string, error) { return []byte("sealed-test-value"), "fixture", nil })
+	require.NoError(t, err)
 	sends := 0
 	upstream := provider.New(keyFixture{}, &http.Client{Transport: transportFunc(func(req *http.Request) (*http.Response, error) {
 		require.Equal(t, "/api/v3/embeddings/multimodal", req.URL.Path)

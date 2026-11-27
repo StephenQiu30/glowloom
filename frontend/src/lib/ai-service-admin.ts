@@ -144,6 +144,7 @@ export function modelPreset(
 export type OnboardingReview = OnboardingSummary & {
   scope_id: string;
   project_id: string;
+  available?: boolean;
   plan: {
     credits: number;
     estimated_credits?: number;
@@ -161,8 +162,9 @@ export async function prepareQuickOnboarding(
   requireValue(
     uuid.test(result.id ?? "") &&
       uuid.test(result.model_id ?? "") &&
-      result.scope_id === input.scope_id &&
-      result.project_id === input.project_id &&
+      (result.state !== "prepared" ||
+        (result.scope_id === input.scope_id &&
+          result.project_id === input.project_id)) &&
       Boolean(result.upstream_model) &&
       validStates.includes(result.state ?? "") &&
       result.plan !== undefined &&

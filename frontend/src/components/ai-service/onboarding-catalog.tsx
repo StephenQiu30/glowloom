@@ -1,5 +1,5 @@
+import type { Ref } from "react";
 import { ChevronRight, Search } from "lucide-react";
-import { ProviderLogo } from "@/components/providers/provider-logo";
 import { Badge } from "@/components/ui/badge";
 import {
   Command,
@@ -27,6 +27,7 @@ export type SetupModel = {
   upstream: string;
   preset?: GatewayPreset;
   candidateID?: string;
+  candidateState?: "active" | "verifying" | "prepared";
 };
 
 export type SetupProvider = {
@@ -58,14 +59,43 @@ export function setupProviders(
     providers.set(adapter, provider);
   }
 
-  const preparedPresetKeys = new Set<string>();
-  for (const review of configuration.onboarding) {
-    if (
-      review.state !== "prepared" ||
-      (scope && review.scope_id && review.scope_id !== scope)
-    ) {
+  const selectable = new Map([
+    ["active", 0],
+    ["verifying", 1],
+    ["prepared", 2],
+  ]);
+  const candidates = [...configuration.onboarding].sort(
+    (a, b) => (selectable.get(a.state) ?? 3) - (selectable.get(b.state) ?? 3),
+  );
+  const presetKeys = new Set<string>();
+  for (const review of candidates) {
+    const state = review.state;
+    if (state !== "active" && state !== "verifying" && state !== "prepared")
       continue;
-    }
+    if (
+      state === "prepared" &&
+      scope &&
+      review.scope_id &&
+      review.scope_id !== scope
+    )
+      continue;
+    if (
+      state === "active" &&
+      !(
+        configuration.models.some(
+          ({ model, enabled }) => model.id === review.model_id && enabled,
+        ) &&
+        configuration.routes.some(
+          ({ route, enabled }) =>
+            route.id === review.id &&
+            enabled &&
+            configuration.credentials.some(
+              ({ id, state }) => id === route.credential && state === "active",
+            ),
+        )
+      )
+    )
+      continue;
     const model = configuration.models.find(
       ({ model }) => model.id === review.model_id,
     )?.model;
@@ -82,7 +112,8 @@ export function setupProviders(
           adapter === review.provider_key && upstream === review.upstream_model,
       );
     const adapter = preset?.adapter ?? review.provider_key ?? "other";
-    if (preset) preparedPresetKeys.add(preset.key);
+    if (preset && presetKeys.has(preset.key)) continue;
+    if (preset) presetKeys.add(preset.key);
 
     add(
       adapter,
@@ -99,12 +130,13 @@ export function setupProviders(
         upstream: review.upstream_model,
         preset,
         candidateID: review.id,
+        candidateState: state,
       },
     );
   }
 
   for (const preset of presets) {
-    if (!preparedPresetKeys.has(preset.key)) {
+    if (!presetKeys.has(preset.key)) {
       add(preset.adapter, preset.provider, {
         id: preset.key,
         title: preset.name,
@@ -125,12 +157,12 @@ export function setupProviders(
 
 export function SetupModelCatalog({
   provider,
-  selected,
+  searchRef,
   disabled,
   onSelect,
 }: {
   provider: SetupProvider;
-  selected?: string;
+  searchRef: Ref<HTMLInputElement>;
   disabled: boolean;
   onSelect: (model: SetupModel) => void;
 }) {
@@ -139,16 +171,11 @@ export function SetupModelCatalog({
       aria-label={`${provider.name} 的模型`}
       className="flex min-w-0 flex-col gap-4"
     >
-      <div className="flex min-w-0 items-center gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-          <ProviderLogo adapterKey={provider.id} iconOnly />
-        </span>
-        <div className="min-w-0">
-          <h3 className="text-base font-semibold">{provider.name}</h3>
-          <p className="text-sm text-muted-foreground">
-            {provider.models.length} 个型号
-          </p>
-        </div>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <h3 className="text-base font-semibold">型号</h3>
+        <p className="text-xs text-muted-foreground">
+          {provider.models.length} 个型号
+        </p>
       </div>
 
       <Command
@@ -156,13 +183,14 @@ export function SetupModelCatalog({
         className="min-w-0 gap-2 p-0 max-md:[&_[data-slot=input-group]]:h-11!"
       >
         <CommandInput
-          placeholder="搜索模型名称或上游型号"
+          ref={searchRef}
+          placeholder="搜索名称或型号"
           className="max-md:text-base"
           disabled={disabled}
         />
         <CommandList
           label="模型列表"
-          className="max-h-[min(44dvh,26rem)] overscroll-contain"
+          className="max-h-[min(52dvh,24rem)] overscroll-contain"
         >
           <CommandEmpty className="p-0">
             <Empty className="py-8">
@@ -181,7 +209,6 @@ export function SetupModelCatalog({
                 value={model.id}
                 keywords={[model.title, model.upstream]}
                 disabled={disabled}
-                data-checked={selected === model.id}
                 onSelect={() => onSelect(model)}
                 className="min-h-12 cursor-pointer gap-3 px-3 py-2"
               >
@@ -193,12 +220,18 @@ export function SetupModelCatalog({
                     </span>
                   )}
                 </span>
-                {model.candidateID ? (
-                  <Badge variant="secondary">待验证</Badge>
+                {model.candidateState ? (
+                  <Badge variant="secondary">
+                    {model.candidateState === "active"
+                      ? "可用"
+                      : model.candidateState === "verifying"
+                        ? "验证中"
+                        : "待验证"}
+                  </Badge>
                 ) : model.preset?.quick_onboarding ? (
                   <Badge variant="outline">快速接入</Badge>
                 ) : null}
-                {selected !== model.id && <ChevronRight aria-hidden="true" />}
+                <ChevronRight aria-hidden="true" />
               </CommandItem>
             ))}
           </CommandGroup>

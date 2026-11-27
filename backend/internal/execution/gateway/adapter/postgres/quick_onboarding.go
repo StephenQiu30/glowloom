@@ -13,6 +13,12 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/execution/gateway/domain"
 )
 
+const quickOnboardingPrefix = "quick-ark/"
+
+func quickOnboardingGroup(scope uuid.UUID) string {
+	return quickOnboardingPrefix + scope.String()
+}
+
 // PrepareFromPreset prepares one reusable keyless candidate from a reviewed catalogue version.
 func (s *Store) PrepareFromPreset(ctx context.Context, req domain.QuickOnboardingInput) (OnboardingReview, error) {
 	version, modelKey, ok := strings.Cut(req.PresetKey, "/")
@@ -68,18 +74,15 @@ func (s *Store) PrepareFromPreset(ctx context.Context, req domain.QuickOnboardin
 		if err := lockAlias(tx, model.Name); err != nil {
 			return err
 		}
-		group := "quick-ark/" + req.ScopeID.String()
+		group := quickOnboardingGroup(req.ScopeID)
 		bound := New(tx, s.actor, s.authorize)
 		var existing struct{ ID uuid.UUID }
 		result = tx.Raw(`SELECT o.id FROM ai.onboarding o
-		 WHERE o.model_id=? AND o.deleted_at IS NULL
-		  AND (o.state IN ('prepared','verifying') OR (o.state='active' AND EXISTS (
-		   SELECT 1 FROM ai.route r JOIN ai.credential c ON c.id=r.credential_id
-		   JOIN ai.model m ON m.id=r.model_id
-		   WHERE r.id=o.id AND r.enabled AND r.deleted_at IS NULL AND c.state='active' AND m.enabled)))
-		  AND o.document->>'scope_id'=? AND o.document->>'project_id'=?
-		  AND o.document->'route'->>'group'=?
-		 ORDER BY o.created_at DESC,o.id LIMIT 1`, model.ID, req.ScopeID.String(), req.ProjectID.String(), group).Scan(&existing)
+		 WHERE o.model_id=? AND o.deleted_at IS NULL AND o.document->'route'->>'group' LIKE ?
+		  AND (o.state='verifying' OR (o.state='active' AND `+activeOnboardingRoute+`)
+		   OR (o.state='prepared' AND o.document->>'scope_id'=? AND o.document->>'project_id'=?))
+		 ORDER BY CASE o.state WHEN 'active' THEN 0 WHEN 'verifying' THEN 1 ELSE 2 END,
+		  o.created_at,o.id LIMIT 1`, model.ID, quickOnboardingPrefix+"%", req.ScopeID.String(), req.ProjectID.String()).Scan(&existing)
 		if result.Error != nil {
 			return result.Error
 		}

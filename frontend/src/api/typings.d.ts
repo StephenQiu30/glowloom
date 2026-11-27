@@ -3941,6 +3941,7 @@ declare namespace API {
   };
 
   type OnboardingReview = {
+    available?: boolean;
     id?: string;
     model_id?: string;
     plan?: OnboardingPlan;

@@ -4,10 +4,13 @@ import { createRoot } from "react-dom/client";
 import { AiServiceAdmin } from "../../src/components/ai-service/ai-service-admin";
 import { SpaceContext } from "../../src/components/spaces/space-context";
 import { installDevelopmentTransport } from "../../src/lib/development-transport";
-import type { GatewayPreset } from "../../src/lib/ai-service-admin";
+import type {
+  GatewayPreset,
+  OnboardingReview,
+} from "../../src/lib/ai-service-admin";
 import "../../src/app/globals.css";
 const showPrepared = new URLSearchParams(location.search).has("prepared");
-const candidate = {
+const candidate: OnboardingReview = {
   id: "44444444-4444-4444-8444-444444444444",
   model_id: "33333333-3333-4333-8333-333333333333",
   state: "prepared",
@@ -163,6 +166,7 @@ const textProviderPresets = [
 
 let quickCandidate: typeof candidate | null = null;
 let quickSends = 0;
+let quickVerificationReads = 0;
 
 installDevelopmentTransport({
   matches: (path) =>
@@ -227,6 +231,7 @@ installDevelopmentTransport({
       quickCandidate = {
         ...candidate,
         upstream_model: preset.upstream,
+        provider_key: preset.adapter,
         plan: {
           credits: preset.credits,
           estimated_credits: preset.estimatedCredits,
@@ -240,7 +245,7 @@ installDevelopmentTransport({
               },
             },
           ],
-        } as typeof candidate.plan,
+        },
       };
       return quickCandidate;
     }
@@ -263,15 +268,26 @@ installDevelopmentTransport({
       )
         throw new Error("Invalid budget confirmation");
       quickSends++;
-      quickCandidate = { ...quickCandidate, state: "active" };
+      quickCandidate = { ...quickCandidate, state: "verifying" };
       return quickCandidate;
     }
     if (
       showQuick &&
       quickCandidate &&
       url === `/api/ai/admin/onboarding/${candidate.id}`
-    )
+    ) {
+      if (
+        quickCandidate.state === "verifying" &&
+        ++quickVerificationReads === 2
+      ) {
+        quickCandidate = {
+          ...quickCandidate,
+          state: "active",
+          available: true,
+        };
+      }
       return quickCandidate;
+    }
     if (options.method && options.method.toUpperCase() !== "GET")
       throw new Error("Unexpected fixture mutation");
     if (showPrepared && url === `/api/ai/admin/onboarding/${candidate.id}`)

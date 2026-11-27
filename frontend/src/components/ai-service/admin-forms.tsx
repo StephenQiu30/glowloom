@@ -87,25 +87,13 @@ function PriceFields({
     value: "0",
   };
   return (
-    <FieldSet>
-      <FieldLegend>{kind}定价</FieldLegend>
-      {preset?.rates.length ? (
-        <FieldDescription>
-          供应商参考价 · {preset.rates.join("；")}
-        </FieldDescription>
-      ) : null}
-      {(!media || videoTokens || !preset?.rates.length) && (
-        <FieldDescription>
-          {videoTokens
-            ? `按 ${unit} / 百万视频 Token 计价。`
-            : media
-              ? `每次请求按 ${unit} 计价。`
-              : embedding
-                ? `输入按 ${unit} / 百万 token 计价。`
-                : `输入和输出按 ${unit} / 百万 token 计价。`}
-        </FieldDescription>
-      )}
-      <FieldGroup className="grid gap-3 min-[360px]:grid-cols-2">
+    <FieldSet className="gap-3">
+      <FieldLegend>{kind}价</FieldLegend>
+      <FieldDescription>
+        {kind === "销售" ? "用户计费" : "上游成本"} · {unit}{" "}
+        {videoTokens ? "/ 百万视频 Token" : media ? "/ 次" : "/ 百万 Token"}
+      </FieldDescription>
+      <FieldGroup className="grid gap-3 md:grid-cols-2">
         <SetupSelectField
           name="currency"
           label={`${kind}币种`}
@@ -143,10 +131,33 @@ function PriceFields({
           </FieldGroup>
         )}
       </FieldGroup>
+      {(Boolean(preset?.rates.length) || preset?.price_source_url) && (
+        <FormDetails label="供应商参考价" keepMounted={false}>
+          <div className="flex flex-col items-start gap-2 px-2 text-sm text-muted-foreground">
+            {preset?.rates.length ? (
+              <ul className="flex flex-col gap-1">
+                {preset.rates.map((rate) => (
+                  <li key={rate}>{rate}</li>
+                ))}
+              </ul>
+            ) : null}
+            {preset?.price_source_url && (
+              <a
+                href={preset.price_source_url}
+                target="_blank"
+                rel="noreferrer"
+                className="underline underline-offset-4"
+              >
+                供应商价目
+              </a>
+            )}
+          </div>
+        </FormDetails>
+      )}
       <FormDetails
         label={
           advanced
-            ? "高级配置"
+            ? "更多设置"
             : media || embedding
               ? "汇率与折扣"
               : "缓存与其他费率"
@@ -182,7 +193,7 @@ function PriceFields({
               label={`${kind}汇率`}
               inputMode="decimal"
               value="1"
-              description="兑换人民币的汇率。"
+              description="折算人民币"
             />
             <InputField
               name="multiplier"
@@ -268,7 +279,6 @@ export function ModelSettings({
       inputMode="decimal"
       maxLength={18}
       pattern="[0-9]+([.][0-9]{1,6})?"
-      description="限制一次模型调用的最高采购费用。"
     />
   );
   const modelFields = (
@@ -280,7 +290,6 @@ export function ModelSettings({
           value={preset?.name}
           placeholder="例如 doubao/seed"
           maxLength={160}
-          description="同名同协议的新版本通过验证后才会切换。"
         />
         <SetupSelectField
           label="模型协议"

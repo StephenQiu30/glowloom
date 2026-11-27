@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type Ref } from "react";
 import {
   ArrowLeft,
   RefreshCw,
@@ -22,39 +22,24 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { AiServiceAction } from "./admin-action";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { FieldGroup } from "@/components/ui/field";
-import { Separator } from "@/components/ui/separator";
+import { AiServiceAction } from "./admin-action";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   loadOnboarding,
   rollbackOnboarding,
   verifyOnboarding,
+  type AiServiceConfiguration,
   type OnboardingReview,
   type OnboardingSummary,
 } from "@/lib/ai-service-admin";
 import {
-  CheckField,
   FormDetails,
   InputField,
   SubmitButton,
   money,
+  priceSummary,
   type RunMutation,
 } from "./admin-fields";
 import { modeLabel } from "./media-fields";
@@ -80,6 +65,8 @@ const progressLabels: Record<string, string> = {
 export function OnboardingPanel({
   id,
   initial,
+  models,
+  headingRef,
   run,
   busy,
   refreshConfiguration,
@@ -89,6 +76,8 @@ export function OnboardingPanel({
 }: {
   id: string;
   initial?: OnboardingReview;
+  models: AiServiceConfiguration["models"];
+  headingRef?: Ref<HTMLHeadingElement>;
   run: RunMutation;
   busy: boolean;
   refreshConfiguration: () => void;
@@ -99,7 +88,8 @@ export function OnboardingPanel({
   const [review, setReview] = useState(initial);
   const [readError, setReadError] = useState(false);
   const [revision, setRevision] = useState(0);
-  const [confirmed, setConfirmed] = useState(false);
+  const [keyEntered, setKeyEntered] = useState(false);
+  const readID = review?.id ?? id;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -107,7 +97,7 @@ export function OnboardingPanel({
     let verifying = false;
     async function read() {
       try {
-        const next = await loadOnboarding(id, controller.signal);
+        const next = await loadOnboarding(readID, controller.signal);
         if (controller.signal.aborted) return;
         setReview(next);
         setReadError(false);
@@ -126,12 +116,25 @@ export function OnboardingPanel({
       controller.abort();
       clearTimeout(timer);
     };
-  }, [id, revision, refreshConfiguration]);
+  }, [readID, revision, refreshConfiguration]);
 
   const unknown = review?.progress.some((record) => record.state === "unknown");
+  const availability =
+    review?.state === "active"
+      ? review.available === false
+        ? "不可用"
+        : "可用"
+      : review?.state === "verifying" && !unknown
+        ? "验证中"
+        : review?.state === "prepared"
+          ? "待验证"
+          : "不可用";
+  const model = models.find(
+    ({ model }) => model.id === review?.model_id,
+  )?.model;
   return (
     <div className="flex min-w-0 flex-col gap-4">
-      {(back || readError || (review && review.state !== "prepared")) && (
+      {(back || readError) && (
         <div className="flex flex-wrap justify-between gap-2">
           {back && (
             <AiServiceAction
@@ -150,6 +153,23 @@ export function OnboardingPanel({
           </div>
         </div>
       )}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <h3 ref={headingRef} tabIndex={-1} className="text-sm font-semibold">
+          接入验证
+        </h3>
+        {review && (
+          <Badge
+            role="status"
+            variant={review.state === "failed" ? "outline" : "secondary"}
+          >
+            {back
+              ? unknown
+                ? "待对账"
+                : onboardingState[review.state]
+              : availability}
+          </Badge>
+        )}
+      </div>
       {readError && (
         <Alert variant="destructive">
           <AlertTitle>无法读取验证回执</AlertTitle>
@@ -161,23 +181,22 @@ export function OnboardingPanel({
       )}
       {review && (
         <>
-          <Card>
-            <CardHeader>
-              <CardTitle>验证采购上限</CardTitle>
-              <CardDescription className="wrap-anywhere">
-                {review.upstream_model}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-                <Summary
-                  label="人民币"
-                  value={money(review.plan.purchase_micros)}
-                />
-                <Summary
-                  label="最高验证积分"
-                  value={`${review.plan.credits} 积分`}
-                />
+          {back && (
+            <>
+              <div className="flex flex-col gap-1">
+                <p className="font-medium wrap-anywhere">
+                  {review.upstream_model}
+                </p>
+                {model && (
+                  <p className="text-sm wrap-anywhere text-muted-foreground">
+                    <span className="mr-2 font-medium text-foreground">
+                      销售基准
+                    </span>
+                    {priceSummary(model.price, model.protocol)}
+                  </p>
+                )}
+              </div>
+              <dl className="flex flex-wrap gap-x-6 gap-y-3">
                 {typeof review.plan.estimated_credits === "number" && (
                   <Summary
                     label="预计验证积分"
@@ -185,124 +204,104 @@ export function OnboardingPanel({
                   />
                 )}
                 <Summary
-                  label="供应商验证请求"
-                  value={`${review.plan.probes.length} 次`}
+                  label="最高验证积分"
+                  value={`${review.plan.credits} 积分`}
+                />
+                <Summary
+                  label="采购上限"
+                  value={money(review.plan.purchase_micros)}
                 />
               </dl>
-              <div className="flex items-center gap-2" role="status">
-                <Badge
-                  variant={review.state === "failed" ? "outline" : "secondary"}
-                >
-                  {unknown ? "待对账" : onboardingState[review.state]}
-                </Badge>
-                {unknown && (
-                  <span className="text-sm text-muted-foreground">
-                    供应商受理状态待确认。
+              <div className="flex flex-col gap-1">
+                <p className="text-sm font-medium">
+                  验证请求{" "}
+                  <span className="tabular-nums">
+                    {review.plan.probes.length} 次
                   </span>
-                )}
-              </div>
-              <Separator />
-              <Table aria-label="验证用例">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>验证用例</TableHead>
-                    <TableHead>测试内容</TableHead>
-                    <TableHead>状态与回执</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {review.plan.probes.map((probe, index) => (
-                    <ProbeSummary
-                      key={probe.name}
-                      probe={probe}
-                      progress={review.progress[index]}
-                    />
-                  ))}
-                </TableBody>
-              </Table>
-              <FormDetails label="验证对象与版本">
-                <dl className="grid gap-3 sm:grid-cols-2">
-                  <Summary
-                    label="测试付款空间"
-                    value={review.scope_id}
-                    compact
-                  />
-                  <Summary label="销售版本" value={review.model_id} compact />
-                  <Summary label="采购版本" value={review.id} compact />
-                </dl>
-              </FormDetails>
-            </CardContent>
-          </Card>
-          {review.state === "prepared" && !readError && (
-            <Card>
-              <CardHeader>
-                <CardTitle>API Key 与最终验证</CardTitle>
-                <CardDescription>
-                  验证通过后自动启用，或切换到这个版本。
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form
-                  aria-label="确认预算并验证"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    const form = event.currentTarget;
-                    const data = new FormData(form);
-                    if (!confirmed || data.get("confirm_budget") !== "on")
-                      return;
-                    const key = String(data.get("key") ?? "");
-                    const input = form.elements.namedItem("key");
-                    if (input instanceof HTMLInputElement) input.value = "";
-                    setConfirmed(false);
-                    onKeyDirty?.(false);
-                    void run(async () => {
-                      try {
-                        setReview(await verifyOnboarding(review, key));
-                      } finally {
-                        setRevision((value) => value + 1);
-                      }
-                    }, "验证已提交。");
-                  }}
+                </p>
+                <ul
+                  aria-label="验证用例"
+                  className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground"
                 >
-                  <FieldGroup>
-                    <InputField
-                      label="API Key"
-                      name="key"
-                      type="password"
-                      maxLength={8192}
-                      onChange={(event) =>
-                        onKeyDirty?.(Boolean(event.currentTarget.value))
-                      }
-                    />
-                    <CheckField
-                      label="确认以上测试和费用上限"
-                      name="confirm_budget"
-                      required
-                      checked={confirmed}
-                      onCheckedChange={(value) => setConfirmed(value === true)}
-                    />
-                    <div>
-                      <SubmitButton
-                        busy={busy}
-                        disabled={!confirmed}
-                        label="确认预算并验证"
-                        icon={ShieldCheck}
-                      />
-                    </div>
-                  </FieldGroup>
-                </form>
-              </CardContent>
-            </Card>
+                  {review.plan.probes.map((probe) => (
+                    <li key={probe.name}>{probeLabel(probe)}</li>
+                  ))}
+                </ul>
+              </div>
+            </>
           )}
-          {unknown && (
+          {review.state === "prepared" && !readError && (
+            <form
+              aria-label="保存接入"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const form = event.currentTarget;
+                const data = new FormData(form);
+                const key = String(data.get("key") ?? "").trim();
+                if (!key || busy) return;
+                const input = form.elements.namedItem("key");
+                if (input instanceof HTMLInputElement) input.value = "";
+                setKeyEntered(false);
+                onKeyDirty?.(false);
+                void run(async () => {
+                  try {
+                    setReview(await verifyOnboarding(review, key));
+                  } finally {
+                    setRevision((value) => value + 1);
+                  }
+                }, "");
+              }}
+            >
+              <FieldGroup className="gap-3">
+                <InputField
+                  label="API Key"
+                  disabled={busy}
+                  name="key"
+                  type="password"
+                  maxLength={8192}
+                  description={`保存后自动验证，最多使用 ${review.plan.credits} 积分。`}
+                  onChange={(event) => {
+                    const hasKey = Boolean(event.currentTarget.value.trim());
+                    setKeyEntered(hasKey);
+                    onKeyDirty?.(hasKey);
+                  }}
+                />
+                <div>
+                  <SubmitButton
+                    busy={busy}
+                    disabled={!keyEntered}
+                    label="保存接入"
+                    icon={ShieldCheck}
+                  />
+                </div>
+              </FieldGroup>
+            </form>
+          )}
+          {back && (
+            <FormDetails label="验证详情" keepMounted={false}>
+              <ul className="flex flex-col gap-4">
+                {review.plan.probes.map((probe, index) => (
+                  <ProbeSummary
+                    key={probe.name}
+                    probe={probe}
+                    progress={review.progress[index]}
+                  />
+                ))}
+              </ul>
+              <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+                <Summary label="测试付款空间" value={review.scope_id} compact />
+                <Summary label="模型版本" value={review.model_id} compact />
+                <Summary label="接入记录" value={review.id} compact />
+              </dl>
+            </FormDetails>
+          )}
+          {back && unknown && (
             <Alert>
-              <AlertTitle>先核对原请求</AlertTitle>
-              <AlertDescription>
-                请在积分与对账中按供应商证据处理原验证请求。
-              </AlertDescription>
+              <AlertTitle>供应商受理状态待确认</AlertTitle>
+              <AlertDescription>在对账中核对原请求后处理。</AlertDescription>
             </Alert>
           )}
-          {(review.state === "failed" || review.state === "stale") && (
+          {back && (review.state === "failed" || review.state === "stale") && (
             <Alert variant="destructive">
               <AlertTitle>{onboardingState[review.state]}</AlertTitle>
               <AlertDescription>
@@ -317,7 +316,7 @@ export function OnboardingPanel({
               </AlertDescription>
             </Alert>
           )}
-          {review.state === "active" && (
+          {back && review.state === "active" && review.available !== false && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <AiServiceAction label="回退该候选" icon={Undo2} />
@@ -340,7 +339,7 @@ export function OnboardingPanel({
                     disabled={busy}
                     onClick={() => {
                       void run(async () => {
-                        await rollbackOnboarding(id);
+                        await rollbackOnboarding(readID);
                         setRevision((value) => value + 1);
                       }, "已回退该版本。");
                     }}
@@ -367,13 +366,13 @@ function Summary({
   compact?: boolean;
 }) {
   return (
-    <div className="flex min-w-0 flex-col-reverse gap-1">
+    <div className="flex min-w-0 flex-col gap-1">
       <dt className="text-sm text-muted-foreground">{label}</dt>
       <dd
         className={
           compact
             ? "font-mono text-sm break-all"
-            : "text-xl font-semibold wrap-anywhere tabular-nums"
+            : "text-lg font-semibold wrap-anywhere tabular-nums"
         }
       >
         {value}
@@ -411,45 +410,54 @@ function ProbeSummary({
   );
   const refs = Array.isArray(input.references) ? input.references.length : 0;
   return (
-    <TableRow>
-      <TableCell className="whitespace-normal">
-        {modeLabel(probe.name)}
-      </TableCell>
-      <TableCell className="whitespace-normal">
-        {prompt && (
-          <p className="text-sm wrap-anywhere whitespace-pre-wrap text-muted-foreground">
-            {prompt}
-          </p>
-        )}
-        {typeof maxOutput === "number" && (
-          <p className="text-sm text-muted-foreground">
-            最多输出 {maxOutput} token
-          </p>
-        )}
-        {refs > 0 && (
-          <p className="text-sm text-muted-foreground">测试素材 {refs} 个</p>
-        )}
-        {!!params.length && (
-          <dl className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-            {params.map(([name, value]) => (
-              <div className="flex min-w-0 gap-1 break-all" key={name}>
-                <dt>{name}</dt>
-                <dd>{String(value)}</dd>
-              </div>
-            ))}
-          </dl>
-        )}
-      </TableCell>
-      <TableCell className="whitespace-normal">
-        {progress ? (progressLabels[progress.state] ?? "状态待更新") : "待验证"}
-        {progress && (
-          <p className="font-mono text-xs break-all text-muted-foreground">
-            原请求 {progress.request_id}
-          </p>
-        )}
-      </TableCell>
-    </TableRow>
+    <li className="flex min-w-0 flex-col gap-1">
+      <p className="text-sm font-medium">{modeLabel(probe.name)}</p>
+      {prompt && (
+        <p className="text-sm wrap-anywhere whitespace-pre-wrap text-muted-foreground">
+          {prompt}
+        </p>
+      )}
+      {typeof maxOutput === "number" && (
+        <p className="text-sm text-muted-foreground">
+          最多输出 {maxOutput} token
+        </p>
+      )}
+      {refs > 0 && (
+        <p className="text-sm text-muted-foreground">测试素材 {refs} 个</p>
+      )}
+      {!!params.length && (
+        <dl className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+          {params.map(([name, value]) => (
+            <div className="flex min-w-0 gap-1 break-all" key={name}>
+              <dt>{name}</dt>
+              <dd>{String(value)}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {progress && (
+        <p className="text-sm wrap-anywhere text-muted-foreground">
+          {progressLabels[progress.state] ?? "状态待更新"} ·{" "}
+          {progress.request_id}
+        </p>
+      )}
+    </li>
   );
+}
+
+function probeLabel(probe: OnboardingReview["plan"]["probes"][number]) {
+  const input = record(probe.input);
+  const { resolution, duration, ratio } = record(input.params);
+  const maxOutput = input.max_tokens ?? input.max_output_tokens;
+  return [
+    modeLabel(probe.name),
+    typeof resolution === "string" && resolution,
+    typeof duration === "number" && `${duration} 秒`,
+    typeof ratio === "string" && ratio,
+    typeof maxOutput === "number" && `最多 ${maxOutput} Token`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function record(value: unknown): Record<string, unknown> {

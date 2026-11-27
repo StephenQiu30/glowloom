@@ -20,6 +20,12 @@ import (
 // OnboardingKind is the Execution worker job for an approved verification.
 const OnboardingKind = "ai.onboard"
 
+// activeOnboardingRoute checks that the original verified route can still serve.
+const activeOnboardingRoute = `EXISTS (
+ SELECT 1 FROM ai.route r JOIN ai.credential c ON c.id=r.credential_id
+ JOIN ai.model m ON m.id=r.model_id
+ WHERE r.id=o.id AND r.enabled AND r.deleted_at IS NULL AND c.state='active' AND m.enabled)`
+
 // OnboardingSummary is safe to list without test inputs, credentials or provider output.
 type OnboardingSummary struct {
 	ID       uuid.UUID `json:"id"`
@@ -32,9 +38,10 @@ type OnboardingSummary struct {
 // OnboardingReview is the persisted verification plan and its current progress.
 type OnboardingReview struct {
 	OnboardingSummary
-	Plan    application.OnboardingPlan `json:"plan"`
-	Project uuid.UUID                  `json:"project_id"`
-	Probes  []OnboardingProgress       `json:"progress"`
+	Plan      application.OnboardingPlan `json:"plan"`
+	Project   uuid.UUID                  `json:"project_id"`
+	Probes    []OnboardingProgress       `json:"progress"`
+	Available bool                       `json:"available"`
 }
 
 // OnboardingProgress identifies a probe and its original ledger state.
@@ -236,6 +243,11 @@ func (s *Store) ReviewOnboarding(ctx context.Context, id uuid.UUID) (OnboardingR
 			Plan:              work.Plan, Project: work.Input.Project,
 			Probes: make([]OnboardingProgress, 0, len(work.Plan.Probes)),
 		}
+		if row.State == "active" {
+			if err := tx.Raw("SELECT "+activeOnboardingRoute+" FROM ai.onboarding o WHERE o.id=?", id).Row().Scan(&result.Available); err != nil {
+				return err
+			}
+		}
 		var estimated int64
 		for i, probe := range work.Plan.Probes {
 			call, err := application.OnboardingCall(work.Input, work.Model, work.Actor.ID, probe, i)
@@ -265,10 +277,18 @@ func (s *Store) ReviewOnboarding(ctx context.Context, id uuid.UUID) (OnboardingR
 	return result, err
 }
 
-// ConfirmOnboarding durably records approval before any supplier request can occur.
-func (s *Store) ConfirmOnboarding(ctx context.Context, id uuid.UUID, credits, purchase int64, seal func(uuid.UUID, uuid.UUID) ([]byte, string, error)) error {
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+// ConfirmOnboarding approves one durable verification or returns an existing equivalent run.
+func (s *Store) ConfirmOnboarding(ctx context.Context, id uuid.UUID, credits, purchase int64, seal func(uuid.UUID, uuid.UUID) ([]byte, string, error)) (uuid.UUID, error) {
+	result := id
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := s.check(ctx, tx, s.actor.ScopeID, uuid.Nil, true); err != nil {
+			return err
+		}
+		_, work, err := loadOnboarding(tx, id, false)
+		if err != nil {
+			return err
+		}
+		if err := lockAlias(tx, work.Model.Name); err != nil {
 			return err
 		}
 		row, work, err := loadOnboarding(tx, id, true)
@@ -282,11 +302,21 @@ func (s *Store) ConfirmOnboarding(ctx context.Context, id uuid.UUID, credits, pu
 			return domain.ErrBudget
 		}
 		if row.State != "prepared" {
-			// The first accepted confirmation owns the existing verification.
-			if work.Actor.ID != s.actor.ID {
+			// A duplicate carries neither a new credential nor a new approval.
+			if row.State != "verifying" && row.State != "active" && work.Actor.ID != s.actor.ID {
 				return domain.ErrConflict
 			}
 			return nil
+		}
+		if work.Input.Replacement == uuid.Nil {
+			existing, err := equivalentOnboarding(tx, work)
+			if err != nil {
+				return err
+			}
+			if existing != uuid.Nil {
+				result = existing
+				return nil
+			}
 		}
 		if err := checkPrevious(tx, row, work.Model); err != nil {
 			return err
@@ -320,6 +350,23 @@ func (s *Store) ConfirmOnboarding(ctx context.Context, id uuid.UUID, credits, pu
 		}
 		return taskruntime.Enqueue(ctx, tx, OnboardingKind, id.String(), time.Now())
 	})
+	return result, err
+}
+
+func equivalentOnboarding(tx *gorm.DB, work OnboardingWork) (uuid.UUID, error) {
+	route := work.Input.Route
+	group := quickOnboardingGroup(work.Input.Scope)
+	quick := route.Group == group && route.Supplier == uuid.NewSHA1(uuid.NameSpaceURL, []byte(group))
+	var row struct{ ID uuid.UUID }
+	q := tx.Raw(`SELECT o.id FROM ai.onboarding o
+	 WHERE o.model_id=? AND o.id<>? AND o.deleted_at IS NULL
+	   AND (o.state='verifying' OR (o.state='active' AND `+activeOnboardingRoute+`))
+	   AND (((o.document->'route') - ARRAY['id','credential']) =
+	        (?::jsonb - ARRAY['id','credential'])
+	        OR (? AND o.document->'route'->>'group' LIKE ?))
+	 ORDER BY (o.state='active') DESC,o.created_at,o.id LIMIT 1`,
+		work.Model.ID, route.ID, string(mustJSON(route)), quick, quickOnboardingPrefix+"%").Scan(&row)
+	return row.ID, q.Error
 }
 
 func checkPrevious(tx *gorm.DB, row onboardingRow, model domain.Model) error {

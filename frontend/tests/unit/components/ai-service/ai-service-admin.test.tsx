@@ -139,13 +139,62 @@ it("opens a prepared model at API Key verification without requesting manual pri
   expect(await within(dialog).findByLabelText("API Key")).toBeTruthy();
   expect(screen.getByRole("dialog", { name: "新增接入" })).toBe(dialog);
   expect(document.querySelector('[aria-current="step"]')).toBeNull();
+  expect(
+    within(dialog).queryByRole("listbox", { name: "模型列表" }),
+  ).toBeNull();
+  expect(within(dialog).getByText("待验证")).toBeTruthy();
+  expect(within(dialog).queryByRole("button", { name: "验证详情" })).toBeNull();
+  expect(
+    within(dialog).getByText("保存后自动验证，最多使用 2 积分。"),
+  ).toBeTruthy();
   expect(screen.queryByLabelText("销售输入价")).toBeNull();
   expect(screen.queryByLabelText("采购输入价")).toBeNull();
   expect(
     screen.getByRole<HTMLButtonElement>("button", {
-      name: "确认预算并验证",
+      name: "保存接入",
     }).disabled,
   ).toBe(true);
+  expect(send.mock.calls.map(([path]) => path)).toEqual([
+    "/api/ai/admin/configuration",
+    `/api/ai/admin/onboarding/${verificationID}`,
+  ]);
+  fireEvent.click(within(dialog).getByRole("button", { name: "更换型号" }));
+  expect(
+    within(dialog).getByRole("listbox", { name: "模型列表" }),
+  ).toBeTruthy();
+  expect(within(dialog).queryByLabelText("API Key")).toBeNull();
+});
+
+it("reuses a serving supplier model without requesting a key or sending a probe", async () => {
+  const active = { ...review, state: "active", available: true };
+  send
+    .mockResolvedValueOnce({
+      models: [{ model, enabled: true }],
+      onboarding: [active],
+      routes: [
+        {
+          route: {
+            id: verificationID,
+            model_id: modelID,
+            upstream_model: review.upstream_model,
+            credential,
+            group: "account",
+            purchase: price,
+          },
+          enabled: true,
+        },
+      ],
+      credentials: [{ id: credential, supplier_id: supplier, state: "active" }],
+    })
+    .mockResolvedValueOnce(active);
+  render(<AiServiceAdmin />);
+  fireEvent.click(await screen.findByRole("button", { name: "新增接入" }));
+  const dialog = screen.getByRole("dialog", { name: "新增接入" });
+  fireEvent.click(
+    within(dialog).getByRole("option", { name: /^text\/default.*可用/ }),
+  );
+  expect(await within(dialog).findByText("可用")).toBeTruthy();
+  expect(within(dialog).queryByLabelText("API Key")).toBeNull();
   expect(send.mock.calls.map(([path]) => path)).toEqual([
     "/api/ai/admin/configuration",
     `/api/ai/admin/onboarding/${verificationID}`,
@@ -409,20 +458,16 @@ it("saves the keyless procurement plan before showing API Key and budget confirm
   const secret =
     await within(dialog).findByLabelText<HTMLInputElement>("API Key");
   expect(screen.getByRole("dialog", { name: "新增接入" })).toBe(dialog);
-  expect(screen.getByText("¥0.0005")).toBeTruthy();
-  expect(screen.getByText("2 积分")).toBeTruthy();
+  expect(screen.getByText("保存后自动验证，最多使用 2 积分。")).toBeTruthy();
   expect(
     send.mock.calls.find(([path]) => path.endsWith("/routes"))?.[1].data,
   ).not.toHaveProperty("key");
+  const verify = screen.getByRole<HTMLButtonElement>("button", {
+    name: "保存接入",
+  });
+  expect(verify.disabled).toBe(true);
   fireEvent.change(secret, { target: { value: "secret-once" } });
-  const verify = screen.getByRole("button", { name: "确认预算并验证" });
-  fireEvent.click(verify);
-  expect(send.mock.calls.some(([path]) => path.endsWith("/verify"))).toBe(
-    false,
-  );
-  fireEvent.click(
-    screen.getByRole("checkbox", { name: "确认以上测试和费用上限" }),
-  );
+  expect(verify.disabled).toBe(false);
   send.mockImplementation(async (path: string) => {
     if (path.endsWith("/verify")) throw new Error("cannot-save");
     return review;
@@ -916,9 +961,10 @@ it("carries a selected supplier preset through draft and procurement without a k
     ],
     concurrency: 2,
     rpm: 30,
-    rates: [],
-    currency: null,
-    request_micros: null,
+    rates: ["¥0.123456 / 次"],
+    currency: "CNY",
+    request_micros: 123456,
+    price_source_url: "https://pricing.example.test/speech",
   };
   const models: { model: typeof model; enabled: boolean; draft: boolean }[] =
     [];
@@ -948,7 +994,15 @@ it("carries a selected supplier preset through draft and procurement without a k
     within(dialog).getByRole("option", { name: new RegExp(preset.name) }),
   );
   expect(screen.getByRole("dialog", { name: "新增接入" })).toBe(dialog);
-  const settings = screen.getByRole("button", { name: "高级配置" });
+  const reference = screen.getByRole("button", { name: "供应商参考价" });
+  expect(reference.getAttribute("aria-expanded")).toBe("false");
+  fireEvent.click(reference);
+  expect(screen.getByText("¥0.123456 / 次")).toBeTruthy();
+  expect(
+    screen.getByRole("link", { name: "供应商价目" }).getAttribute("href"),
+  ).toBe(preset.price_source_url);
+  expect(screen.getByLabelText<HTMLInputElement>("销售按次价").value).toBe("");
+  const settings = screen.getByRole("button", { name: "更多设置" });
   expect(settings.getAttribute("aria-expanded")).toBe("false");
   fireEvent.click(settings);
   expect(settings.getAttribute("aria-expanded")).toBe("true");
@@ -962,6 +1016,9 @@ it("carries a selected supplier preset through draft and procurement without a k
   fireEvent.click(screen.getByRole("button", { name: "保存模型" }));
   expect(await within(dialog).findByDisplayValue(preset.upstream)).toBeTruthy();
   expect(screen.getByDisplayValue(preset.base_url)).toBeTruthy();
+  expect(screen.getByLabelText<HTMLInputElement>("采购按次价").value).toBe(
+    "0.123456",
+  );
   expect(models[0].model).toMatchObject({
     preset_key: preset.key,
     modes: ["text2audio"],

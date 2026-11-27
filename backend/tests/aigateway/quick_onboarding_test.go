@@ -107,11 +107,26 @@ func TestSeedancePresetsActivateOnlyAfterOriginalVideoAndUsage(t *testing.T) {
 			require.EqualValues(t, item.estimate, *review.Plan.EstimatedCredits)
 			_, err := fixtureStore.Model(ctx, review.Upstream, "media")
 			require.ErrorIs(t, err, domain.ErrUnavailable)
+			otherProject := in
+			otherProject.ProjectID = entrypointProject(t, db, actor)
+			unconfirmed, err := store.PrepareFromPreset(ctx, otherProject)
+			require.NoError(t, err)
+			require.NotEqual(t, review.ID, unconfirmed.ID)
 			budget := map[string]any{"key": "simulated-key", "credits": item.estimate, "purchase_micros": review.Plan.PurchaseMicros}
 			require.Equal(t, 402, post(review.ID.String()+"/verify", budget).Code)
 			budget["credits"] = review.Plan.Credits
 			confirmed := post(review.ID.String()+"/verify", budget)
 			require.Equal(t, 202, confirmed.Code, confirmed.Body.String())
+			inFlight, err := store.PrepareFromPreset(ctx, otherProject)
+			require.NoError(t, err)
+			require.Equal(t, review.ID, inFlight.ID)
+			require.Equal(t, "verifying", inFlight.State)
+			reused, err := store.ConfirmOnboarding(ctx, unconfirmed.ID, unconfirmed.Plan.Credits, unconfirmed.Plan.PurchaseMicros, func(uuid.UUID, uuid.UUID) ([]byte, string, error) {
+				t.Error("an equivalent verification must not seal a second credential")
+				return nil, "", domain.ErrInvalid
+			})
+			require.NoError(t, err)
+			require.Equal(t, review.ID, reused)
 			objects := &durableBytes{t: t, db: db, routes: pgmedia.NewStorageRoutes(db), files: map[string][]byte{}}
 			sends, polls := 0, 0
 			client := mediaClient(func(req *http.Request) (*http.Response, error) {
@@ -157,9 +172,10 @@ func TestSeedancePresetsActivateOnlyAfterOriginalVideoAndUsage(t *testing.T) {
 			var available int
 			require.NoError(t, db.Raw("SELECT count(*) FROM ai.available_model WHERE id=? AND route_id=?", current.ID, review.ID).Scan(&available).Error)
 			require.Equal(t, 1, available)
-			again, err := store.PrepareFromPreset(ctx, in)
+			again, err := store.PrepareFromPreset(ctx, otherProject)
 			require.NoError(t, err)
 			require.Equal(t, review.ID, again.ID)
+			require.True(t, again.Available)
 			record, err := fixtureStore.Read(ctx, actor.ScopeID, request)
 			require.NoError(t, err)
 			require.Equal(t, "settled", record.State)

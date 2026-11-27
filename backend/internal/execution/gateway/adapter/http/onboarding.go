@@ -136,7 +136,7 @@ func (h *Handler) verifyOnboarding(c *gin.Context) {
 		return
 	}
 	store := h.store(identityhttp.Principal(c))
-	err = store.ConfirmOnboarding(c.Request.Context(), id, *in.Credits, *in.PurchaseMicros, func(supplier, credential uuid.UUID) ([]byte, string, error) {
+	candidate, err := store.ConfirmOnboarding(c.Request.Context(), id, *in.Credits, *in.PurchaseMicros, func(supplier, credential uuid.UUID) ([]byte, string, error) {
 		raw, err := json.Marshal(map[string]string{"api_key": in.Key})
 		if err != nil {
 			return nil, "", err
@@ -149,7 +149,7 @@ func (h *Handler) verifyOnboarding(c *gin.Context) {
 		problem(c, err)
 		return
 	}
-	writeOnboardingReview(c, store, id, http.StatusAccepted)
+	writeOnboardingReview(c, store, candidate, http.StatusAccepted)
 }
 
 // rollbackOnboarding 停止候选路线接新单并恢复仍合格的原版本.
