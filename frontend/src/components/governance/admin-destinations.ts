@@ -4,6 +4,7 @@ import {
   Building2,
   ClipboardList,
   Cpu,
+  Coins,
   SlidersHorizontal,
   Users,
   type LucideIcon,
@@ -19,6 +20,12 @@ export const adminDestinations: readonly {
   { id: "users", href: "/users", label: "用户管理", icon: Users },
   { id: "teams", href: "/platform/teams", label: "平台团队", icon: Building2 },
   { id: "models", href: "/models", label: "AI 服务", icon: Cpu },
+  {
+    id: "platform-billing",
+    href: "/platform/billing",
+    label: "平台账务",
+    icon: Coins,
+  },
   {
     id: "settings",
     href: "/platform/settings",

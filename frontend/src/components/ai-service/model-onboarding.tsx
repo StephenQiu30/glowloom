@@ -120,7 +120,11 @@ export function ModelOnboardingDialog({
     onChangeRequest(() => {
       setSelected(choice);
       setCandidate(undefined);
-      if (choice.candidateID) {
+      if (
+        choice.candidateID &&
+        (!choice.preset?.quick_onboarding ||
+          choice.candidateState !== "prepared")
+      ) {
         showCandidate(choice.candidateID);
       } else if (choice.preset?.quick_onboarding) {
         preparePreset(choice);

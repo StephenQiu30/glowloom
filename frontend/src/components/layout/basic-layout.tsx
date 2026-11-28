@@ -41,6 +41,7 @@ const adminScreens = [
   "audit",
   "health",
   "platform/teams",
+  "platform/billing",
   "platform/settings",
   "platform/notifications",
 ];

@@ -1038,6 +1038,16 @@ async function proxy(
       query: [],
     },
     {
+      pattern: `ai/admin/models/${identityUUID}/price/preview`,
+      methods: ["POST"],
+      query: [],
+    },
+    {
+      pattern: `ai/admin/(models|routes)/${identityUUID}/price`,
+      methods: ["PUT"],
+      query: [],
+    },
+    {
       pattern: `ai/admin/credits/${identityUUID}/review`,
       methods: ["POST"],
       query: [],

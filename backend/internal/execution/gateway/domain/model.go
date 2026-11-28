@@ -181,6 +181,7 @@ type Model struct {
 	Name          string               `json:"name"`
 	Protocol      string               `json:"protocol"`
 	Price         Price                `json:"price"`
+	SaleVersion   int64                `json:"sale_version,omitempty"`
 	MaxInput      int64                `json:"max_input"`
 	MaxOutput     int64                `json:"max_output"`
 	PurchaseCap   int64                `json:"purchase_cap"`
@@ -242,6 +243,7 @@ type Route struct {
 	UpstreamModel   string          `json:"upstream_model"`
 	Protocol        string          `json:"protocol"`
 	Purchase        Price           `json:"purchase"`
+	PurchaseVersion int64           `json:"purchase_version,omitempty"`
 	KeyID           string          `json:"key_id"`
 	Ciphertext      []byte          `json:"-"`
 	Priority        int             `json:"priority"`

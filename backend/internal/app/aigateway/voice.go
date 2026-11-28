@@ -107,7 +107,7 @@ func (v *VoiceJobs) Options(ctx context.Context, a identity.Principal) (subject.
 			return nil
 		}
 		var rows []struct{ Document []byte }
-		if err := tx.Raw(`SELECT document FROM ai.model m WHERE enabled AND document->>'protocol'='media' AND document->>'capability'='audio.generate' AND EXISTS(SELECT 1 FROM ai.route r JOIN ai.credential k ON k.id=r.credential_id WHERE r.model_id=m.id AND r.enabled AND k.state='active') ORDER BY name,id`).Scan(&rows).Error; err != nil {
+		if err := tx.Raw(`SELECT document FROM ai.model_current m WHERE enabled AND document->>'protocol'='media' AND document->>'capability'='audio.generate' AND EXISTS(SELECT 1 FROM ai.route r JOIN ai.credential k ON k.id=r.credential_id WHERE r.model_id=m.id AND r.enabled AND k.state='active') ORDER BY name,id`).Scan(&rows).Error; err != nil {
 			return err
 		}
 		for _, row := range rows {
@@ -160,7 +160,7 @@ func (v *VoiceJobs) Create(ctx context.Context, a identity.Principal, key uuid.U
 		}
 		var model domain.Model
 		var row struct{ Document []byte }
-		q = tx.Raw("SELECT document FROM ai.model WHERE id=? AND enabled", in.ReleaseID).Scan(&row)
+		q = tx.Raw("SELECT document FROM ai.model_current WHERE id=? AND enabled", in.ReleaseID).Scan(&row)
 		if q.Error != nil {
 			return q.Error
 		}

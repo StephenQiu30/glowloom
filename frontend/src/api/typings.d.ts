@@ -3672,6 +3672,20 @@ declare namespace API {
     project_id?: string;
   };
 
+  type MediaTariff = {
+    adapter?: string;
+    cutoff_pixels?: number;
+    extra_reference_price?: string;
+    high_price?: string;
+    max_quantity?: number;
+    meter?: string;
+    observed_on?: string;
+    output_token_price?: string;
+    source_url?: string;
+    unit_price?: string;
+    unit_size?: number;
+  };
+
   type MediatoolCreateInput = {
     canvas_id?: string;
     node_id?: string;
@@ -3731,6 +3745,26 @@ declare namespace API {
     available?: boolean;
     mode?: string;
     unavailable_reasons?: string[];
+  };
+
+  type Model = {
+    capability?: string;
+    id?: string;
+    max_input?: number;
+    max_output?: number;
+    modes?: string[];
+    name?: string;
+    /** OutputPolicy declares the published provider success review contract; empty remains pending. */
+    output_policy?: string;
+    parameters?: Record<string, any>;
+    preset_key?: string;
+    price?: Price;
+    protocol?: string;
+    purchase_cap?: number;
+    sale_version?: number;
+    stream?: boolean;
+    tools?: boolean;
+    video_metering?: VideoMetering;
   };
 
   type ModelCount = {
@@ -4046,6 +4080,14 @@ declare namespace API {
     type?: string;
   };
 
+  type Parameter = {
+    default?: number[];
+    enum?: number[][];
+    max?: number;
+    min?: number;
+    type?: string;
+  };
+
   type PasswordResetCompleteRequest = {
     confirm_password: string;
     password: string;
@@ -4346,6 +4388,11 @@ declare namespace API {
     url?: string;
   };
 
+  type previewAiModelSaleParams = {
+    /** 模型 */
+    id: string;
+  };
+
   type previewLibraryMediaAssetParams = {
     /** 二进制素材条目UUID */
     item_id: string;
@@ -4372,6 +4419,21 @@ declare namespace API {
   type previewSubjectSourceParams = {
     /** 资产条目UUID */
     item_id: string;
+  };
+
+  type Price = {
+    cache_read?: number;
+    cache_write?: number;
+    currency?: string;
+    discount?: string;
+    explicit_free?: boolean;
+    fx?: string;
+    input?: number;
+    media_tariff?: MediaTariff;
+    multiplier?: string;
+    output?: number;
+    request?: number;
+    text_tariff?: TextTariff;
   };
 
   type PricingPreview = {
@@ -4746,6 +4808,16 @@ declare namespace API {
     part_index: number;
     run_id: string;
     sequence: string;
+  };
+
+  type publishAiModelSaleParams = {
+    /** 模型 */
+    id: string;
+  };
+
+  type publishAiRoutePurchaseParams = {
+    /** 渠道 */
+    id: string;
   };
 
   type PublishAnnouncementRequest = {
@@ -5319,6 +5391,23 @@ declare namespace API {
     id: string;
   };
 
+  type Route = {
+    base_url?: string;
+    credential?: string;
+    driver_config?: number[];
+    group?: string;
+    id?: string;
+    key_id?: string;
+    key_verification?: string;
+    model_id?: string;
+    priority?: number;
+    protocol?: string;
+    purchase?: Price;
+    purchase_version?: number;
+    supplier?: string;
+    upstream_model?: string;
+  };
+
   type RunPage = {
     items: RunSummary[];
     next_cursor?: string;
@@ -5349,6 +5438,21 @@ declare namespace API {
     root_run_id: string;
     session_id: string;
     status: string;
+  };
+
+  type SaleChange = {
+    price?: Price;
+    version?: number;
+  };
+
+  type salePreview = {
+    credits?: number;
+  };
+
+  type salePreviewInput = {
+    price?: Price;
+    usage?: Usage;
+    version?: number;
   };
 
   type SampleInput = {
@@ -6396,6 +6500,33 @@ declare namespace API {
     outline?: OutlineOptions;
   };
 
+  type TextRates = {
+    cache_read?: string;
+    cache_write?: string;
+    input?: string;
+    output?: string;
+    reasoning?: string;
+  };
+
+  type TextTariff = {
+    max_input?: number;
+    observed_on?: string;
+    off_peak?: TextRates;
+    schedule?: string;
+    source_url?: string;
+    tiers?: TextTier[];
+    vercel_provider?: string;
+  };
+
+  type TextTier = {
+    cache_read?: string;
+    cache_write?: string;
+    from_input?: number;
+    input?: string;
+    output?: string;
+    reasoning?: string;
+  };
+
   type TimelineClip = {
     asset_id?: string | null;
     crop?: TimelineCrop | null;
@@ -6621,6 +6752,22 @@ declare namespace API {
     duplicate_of?: string;
   };
 
+  type Usage = {
+    billing_received_at?: string;
+    billing_started_at?: string;
+    cache_read?: number;
+    cache_write?: number;
+    characters?: number;
+    input?: number;
+    original_seconds?: string;
+    output?: number;
+    pixels?: number;
+    provider_amount?: string;
+    reasoning?: number;
+    reference_images?: number;
+    video_duration_ms?: number;
+  };
+
   type UserCommandReceipt = {
     action?: string;
     request_id?: string;
@@ -6710,9 +6857,22 @@ declare namespace API {
     text?: string;
   };
 
+  type VideoGeometry = {
+    height?: number;
+    width?: number;
+  };
+
   type VideoLinkRequest = {
     local_review_confirmed?: boolean;
     url?: string;
+  };
+
+  type VideoMetering = {
+    frames_per_second?: number;
+    geometries?: Record<string, any>;
+    minimum_tokens?: number;
+    pixels_per_token?: number;
+    resolution?: string;
   };
 
   type Voice = {

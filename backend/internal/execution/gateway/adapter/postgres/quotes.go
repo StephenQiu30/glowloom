@@ -55,6 +55,9 @@ func (s *Store) Quote(ctx context.Context, call domain.Call) (Quote, error) {
 			}
 			result = Quote{ID: prior.ID, Credits: original.Limit, Expires: prior.ExpiresAt, Call: original}
 		} else {
+			if err := checkCallSale(tx, call, call.Origin == application.OnboardingOrigin, false); err != nil {
+				return err
+			}
 			raw, _ := json.Marshal(call)
 			expires := time.Now().Add(15 * time.Minute)
 			if err := tx.Exec("INSERT INTO ai.quote(id,scope_id,actor_id,idempotency_key,input_hash,contract,expires_at) VALUES(?,?,?,?,?,?::jsonb,?)", call.ID, call.Scope, call.Actor, call.Key, call.Hash, string(raw), expires).Error; err != nil {

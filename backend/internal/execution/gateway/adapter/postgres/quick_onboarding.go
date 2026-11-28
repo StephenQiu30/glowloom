@@ -80,9 +80,10 @@ func (s *Store) PrepareFromPreset(ctx context.Context, req domain.QuickOnboardin
 		result = tx.Raw(`SELECT o.id FROM ai.onboarding o
 		 WHERE o.model_id=? AND o.deleted_at IS NULL AND o.document->'route'->>'group' LIKE ?
 		  AND (o.state='verifying' OR (o.state='active' AND `+activeOnboardingRoute+`)
-		   OR (o.state='prepared' AND o.document->>'scope_id'=? AND o.document->>'project_id'=?))
+		   OR (o.state='prepared' AND o.document->>'scope_id'=? AND o.document->>'project_id'=?
+               AND o.document->'plan'->>'method' IN (?,?)))
 		 ORDER BY CASE o.state WHEN 'active' THEN 0 WHEN 'verifying' THEN 1 ELSE 2 END,
-		  o.created_at,o.id LIMIT 1`, model.ID, quickOnboardingPrefix+"%", req.ScopeID.String(), req.ProjectID.String()).Scan(&existing)
+		  o.created_at,o.id LIMIT 1`, model.ID, quickOnboardingPrefix+"%", req.ScopeID.String(), req.ProjectID.String(), application.ArkKeyVerification, application.ReadOnlyKeyVerification).Scan(&existing)
 		if result.Error != nil {
 			return result.Error
 		}

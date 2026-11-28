@@ -1,5 +1,9 @@
 "use client";
 
+import Link from "next/link";
+import { ProviderLogo } from "@/components/providers/provider-logo";
+import { providerLabel } from "@/components/providers/provider-label";
+import { ModelPrice } from "./model-sale";
 import { AdminHeading } from "@/components/governance/admin-layout";
 import { toast } from "@/components/feedback/notification";
 import { RequestError } from "@/lib/request";
@@ -68,7 +72,6 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -78,8 +81,8 @@ import {
   type AiServiceConfiguration,
 } from "@/lib/ai-service-admin";
 import {
+  FormDetails,
   SelectField,
-  money,
   priceSummary,
   type RunMutation,
 } from "./admin-fields";
@@ -88,42 +91,39 @@ import { OnboardingPanel, onboardingState } from "./onboarding-verification";
 import { modeLabel } from "./media-fields";
 
 const operationErrors = new Map([
-  ["invalid_request_error", "请检查接入配置"],
+  ["invalid_request_error", "请检查配置"],
   ["permission_error", "当前账号无权执行此操作"],
-  ["idempotency_conflict", "接入状态已变化，请刷新后重试"],
+  ["idempotency_conflict", "数据已更新，请刷新后重试"],
   ["insufficient_credits", "验证空间积分不足"],
   ["provider_key_rejected", "供应商未接受 API Key，请核对后重试"],
   ["provider_key_scope", "API Key 缺少只读接口权限"],
   ["provider_key_check_unsupported", "该地址不支持只读鉴权，可选择生成试跑"],
   ["trial_confirmation_required", "请先确认试跑费用"],
-  ["budget_exceeded", "验证预算已更新，请核对后重试"],
+  ["budget_exceeded", "超出预算上限，请核对后重试"],
   ["model_unavailable", "接入服务暂时不可用"],
   ["ai_result_unknown", "提交结果待确认，请核对原记录"],
   ["request_unconfirmed", "提交结果待确认，请核对原记录"],
 ]);
 
-const tabs = [
-  ["models", "模型"],
-  ["routes", "渠道"],
-  ["pending", "待接入"],
-  ["onboarding", "验证"],
-  ["quotas", "配额"],
-  ["credentials", "凭据"],
+const billingTabs = [
   ["credit-grants", "赠送单"],
   ["credits", "对账"],
 ] as const;
-
-type Entry = "models" | "providers";
-type GatewayTab = (typeof tabs)[number][0];
+type Entry = "models" | "providers" | "billing";
+type BillingTab = (typeof billingTabs)[number][0];
+const serviceLinks = [
+  ["models", "/models", "模型"],
+  ["providers", "/providers", "渠道"],
+] as const;
 
 export function AiServiceAdmin({
   entry = "models",
   entityID,
-  initialTab,
+  initialProvider,
 }: {
   entry?: Entry;
   entityID?: string;
-  initialTab?: string;
+  initialProvider?: string;
 }) {
   const session = useOptionalSession();
   if (session?.actor.platform_role !== "platform_admin")
@@ -136,11 +136,11 @@ export function AiServiceAdmin({
     );
   return (
     <AiServiceConfigurationPage
-      key={`${session.actor.id}:${entry}:${entityID ?? ""}:${initialTab ?? ""}`}
+      key={`${session.actor.id}:${entry}:${entityID ?? ""}:${initialProvider ?? ""}`}
       actorID={session.actor.id}
       entry={entry}
       entityID={entityID}
-      initialTab={initialTab}
+      initialProvider={initialProvider}
     />
   );
 }
@@ -149,22 +149,19 @@ function AiServiceConfigurationPage({
   actorID,
   entry,
   entityID,
-  initialTab,
+  initialProvider,
 }: {
   actorID: string;
   entry: Entry;
   entityID?: string;
-  initialTab?: string;
+  initialProvider?: string;
 }) {
   const { selected: space } = useSpace();
   const defaultScope = space?.writable ? space.id : undefined;
   const [configuration, setConfiguration] =
     useState<AiServiceConfiguration | null>(null);
   const [revision, setRevision] = useState(0);
-  const [tab, setTab] = useState<GatewayTab>(
-    tabs.find(([key]) => key === initialTab)?.[0] ??
-      (entry === "providers" ? "routes" : "models"),
-  );
+  const [tab, setTab] = useState<BillingTab>("credit-grants");
   const [billingAction, setBillingAction] = useState<"fund" | "reconcile">();
   const [setup, setSetup] = useState<ModelOnboarding>();
   const [discard, setDiscard] = useState<() => void>();
@@ -199,7 +196,7 @@ function AiServiceConfigurationPage({
     return () => controller.abort();
   }, [revision]);
 
-  const run: RunMutation = async (action, success) => {
+  const run: RunMutation = async (action, success, reload = true) => {
     if (submitting.current) return false;
     submitting.current = true;
     setBusy(true);
@@ -208,7 +205,7 @@ function AiServiceConfigurationPage({
       await action();
       if (success) toast.success(success, { id: feedbackID });
       else toast.dismiss(feedbackID);
-      refresh();
+      if (reload) refresh();
       return true;
     } catch (cause) {
       const fallback = "保存失败，请重试";
@@ -236,15 +233,9 @@ function AiServiceConfigurationPage({
 
   const [selectedAttempt, setSelectedAttempt] = useState("");
 
-  function go(next: GatewayTab) {
+  function go(next: BillingTab = tab) {
     dirty.current = false;
     setTab(next);
-    if (!entityID && next !== tab && window.location.pathname === "/models") {
-      const url = new URL(window.location.href);
-      if (next === "models") url.searchParams.delete("tab");
-      else url.searchParams.set("tab", next);
-      window.history.replaceState(null, "", url);
-    }
     setCandidate(undefined);
     setBillingAction(undefined);
     setSetup(undefined);
@@ -266,7 +257,7 @@ function AiServiceConfigurationPage({
     action();
   }
 
-  function requestNavigation(next: GatewayTab) {
+  function requestNavigation(next: BillingTab = tab) {
     requestChange(() => go(next));
   }
 
@@ -289,7 +280,7 @@ function AiServiceConfigurationPage({
   }
 
   function openCandidate(id: string) {
-    go(tab === "pending" ? "pending" : "onboarding");
+    go();
     setCandidate(id);
     requestAnimationFrame(() => heading.current?.focus());
   }
@@ -300,7 +291,7 @@ function AiServiceConfigurationPage({
     setBillingAction(action);
     requestAnimationFrame(() => heading.current?.focus());
   }
-  const title = "AI 服务";
+  const title = entry === "billing" ? "平台账务" : "AI 服务";
   const showListing = !inDetail && !billingAction && !candidate;
 
   function reload() {
@@ -318,10 +309,10 @@ function AiServiceConfigurationPage({
           onClick={reload}
         />
       )}
-      {tab === "models" && (
+      {entry === "models" && (
         <ArkVideoEstimate presets={configuration?.model_presets} />
       )}
-      {(tab === "models" || tab === "routes") && (
+      {entry === "providers" && (
         <AiServiceAction
           icon={Plus}
           variant="default"
@@ -330,7 +321,7 @@ function AiServiceConfigurationPage({
           onClick={startModel}
         />
       )}
-      {tab === "credit-grants" && (
+      {entry === "billing" && tab === "credit-grants" && (
         <AiServiceAction
           icon={Coins}
           label="赠送积分"
@@ -338,7 +329,7 @@ function AiServiceConfigurationPage({
           onClick={() => openBilling("fund")}
         />
       )}
-      {tab === "credits" && (
+      {entry === "billing" && tab === "credits" && (
         <AiServiceAction
           icon={ClipboardCheck}
           label="手动对账"
@@ -346,6 +337,177 @@ function AiServiceConfigurationPage({
           onClick={() => openBilling("reconcile")}
         />
       )}
+    </>
+  );
+
+  const wrapContent = (body: ReactNode) =>
+    entry === "billing" ? (
+      <TabsContent value={tab} className="min-w-0">
+        {body}
+      </TabsContent>
+    ) : (
+      <div className="min-w-0">{body}</div>
+    );
+  const content = (
+    <>
+      <div
+        ref={heading}
+        tabIndex={-1}
+        aria-label={title}
+        role="group"
+        className="admin-toolbar"
+      >
+        {entry === "billing" ? (
+          <TabsList variant="secondary" aria-label="账务管理">
+            {billingTabs.map(([value, label]) => (
+              <TabsTrigger key={value} value={value} disabled={!configuration}>
+                {label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        ) : (
+          <nav aria-label="AI 服务管理" className="flex gap-1">
+            {serviceLinks.map(([key, href, label]) => (
+              <Button
+                key={key}
+                variant={key === entry ? "secondary" : "ghost"}
+                size="sm"
+                asChild
+              >
+                <Link
+                  href={href}
+                  aria-current={key === entry ? "page" : undefined}
+                >
+                  {label}
+                </Link>
+              </Button>
+            ))}
+          </nav>
+        )}
+      </div>
+      {readError && (
+        <Alert variant="destructive">
+          <AlertTitle>AI 服务配置暂时无法读取</AlertTitle>
+          <AlertDescription>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={loading}
+              onClick={reload}
+            >
+              刷新配置
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+      {!configuration && loading && (
+        <Skeleton className="h-48 w-full" aria-label="读取AI 服务配置" />
+      )}
+      {configuration &&
+        wrapContent(
+          inDetail && entityID ? (
+            <EntityDetail
+              entry={entry}
+              id={entityID}
+              configuration={configuration}
+              openCandidate={openCandidate}
+              run={run}
+              busy={busy}
+            />
+          ) : candidate ? (
+            <OnboardingPanel
+              key={candidate}
+              id={candidate}
+              models={configuration.models}
+              run={run}
+              busy={busy}
+              refreshConfiguration={refresh}
+              back={() => go(tab)}
+              retryRoute={startRoute}
+            />
+          ) : entry === "models" ? (
+            <ModelCatalog
+              toolbarActions={toolbarActions}
+              configuration={configuration}
+            />
+          ) : entry === "providers" ? (
+            <Channels
+              toolbarActions={toolbarActions}
+              configuration={configuration}
+              provider={initialProvider}
+              openCandidate={openCandidate}
+              startRoute={startRoute}
+              onDelete={deleteChannels}
+              busy={busy}
+              run={run}
+            />
+          ) : billingAction === "fund" || billingAction === "reconcile" ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  {billingAction === "fund"
+                    ? "提交积分赠送单"
+                    : "供应商账单对账"}
+                </CardTitle>
+                <CardAction>
+                  <AiServiceAction
+                    label="返回列表"
+                    icon={ArrowLeft}
+                    disabled={busy}
+                    onClick={() => requestNavigation(tab)}
+                  />
+                </CardAction>
+              </CardHeader>
+              <CardContent>
+                {billingAction === "fund" ? (
+                  <CreditsForm
+                    run={run}
+                    busy={busy}
+                    defaultScope={defaultScope}
+                  />
+                ) : (
+                  <ReconciliationForm
+                    run={run}
+                    busy={busy}
+                    unknown={configuration.unknown}
+                    initialAttempt={selectedAttempt}
+                  />
+                )}
+              </CardContent>
+            </Card>
+          ) : tab === "credit-grants" ? (
+            <CreditGrants
+              actorID={actorID}
+              orders={configuration.credit_grants ?? []}
+              busy={busy}
+              run={run}
+              toolbarActions={toolbarActions}
+            />
+          ) : (
+            <AiServiceTable
+              toolbarActions={toolbarActions}
+              label="待对账请求"
+              columns={["原请求", "原尝试", "状态", "操作"]}
+              empty="暂无待对账请求"
+              rows={configuration.unknown.map((row) => ({
+                id: row.attempt_id,
+                label: row.request_id,
+                terms: [row.attempt_id],
+                cells: [
+                  row.request_id,
+                  row.attempt_id,
+                  "待核对",
+                  <AiServiceAction
+                    key="reconcile"
+                    label="核对账单"
+                    icon={ClipboardCheck}
+                    onClick={() => openBilling("reconcile", row.attempt_id)}
+                  />,
+                ],
+              }))}
+            />
+          ),
+        )}
     </>
   );
 
@@ -365,224 +527,17 @@ function AiServiceConfigurationPage({
         ) : (
           <h1 className="sr-only">{title}</h1>
         )}
-        <Tabs
-          value={tab}
-          onValueChange={(value) => requestNavigation(value as GatewayTab)}
-          className="admin-page"
-        >
-          <div
-            ref={heading}
-            tabIndex={-1}
-            aria-label={title}
-            role="group"
-            className="admin-toolbar"
+        {entry === "billing" ? (
+          <Tabs
+            value={tab}
+            onValueChange={(value) => requestNavigation(value as BillingTab)}
+            className="admin-page"
           >
-            <TabsList variant="secondary" aria-label="AI 服务管理">
-              {tabs.map(([value, label]) => (
-                <TabsTrigger
-                  key={value}
-                  value={value}
-                  disabled={!configuration}
-                >
-                  {label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </div>
-          {readError && (
-            <Alert variant="destructive">
-              <AlertTitle>AI 服务配置暂时无法读取</AlertTitle>
-              <AlertDescription>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={loading}
-                  onClick={reload}
-                >
-                  刷新配置
-                </Button>
-              </AlertDescription>
-            </Alert>
-          )}
-          {!configuration && loading && (
-            <Skeleton className="h-48 w-full" aria-label="读取AI 服务配置" />
-          )}
-          {configuration && (
-            <>
-              <TabsContent key={tab} value={tab} className="min-w-0">
-                {inDetail && entityID ? (
-                  <EntityDetail
-                    entry={entry}
-                    id={entityID}
-                    configuration={configuration}
-                    startRoute={startRoute}
-                    openCandidate={openCandidate}
-                  />
-                ) : candidate ? (
-                  <OnboardingPanel
-                    key={candidate}
-                    id={candidate}
-                    models={configuration.models}
-                    run={run}
-                    busy={busy}
-                    refreshConfiguration={refresh}
-                    back={() => go(tab)}
-                    retryRoute={startRoute}
-                  />
-                ) : tab === "onboarding" || tab === "pending" ? (
-                  <AiServiceTable
-                    toolbarActions={toolbarActions}
-                    label={tab === "pending" ? "待接入渠道" : "接入验证"}
-                    onDelete={tab === "pending" ? deleteChannels : undefined}
-                    columns={["模型 / 上游型号", "状态", "操作"]}
-                    empty={
-                      tab === "pending" ? "暂无待接入渠道" : "暂无验证记录"
-                    }
-                    rows={configuration.onboarding
-                      .filter(
-                        (item) =>
-                          tab !== "pending" ||
-                          item.state === "prepared" ||
-                          item.state === "verifying",
-                      )
-                      .map((item) => {
-                        const name =
-                          configuration.models.find(
-                            ({ model }) => model.id === item.model_id,
-                          )?.model.name ?? item.upstream_model;
-                        return {
-                          id: item.id,
-                          deleteID: item.id,
-                          label: tab === "pending" ? item.upstream_model : name,
-                          terms: [name, item.upstream_model],
-                          status: onboardingState[item.state],
-                          cells: [
-                            <RouteModel
-                              key="model"
-                              name={name}
-                              upstream={item.upstream_model}
-                            />,
-                            <Badge key="status" variant="secondary">
-                              {onboardingState[item.state]}
-                            </Badge>,
-                            <AiServiceAction
-                              key="review"
-                              onClick={() => openCandidate(item.id)}
-                              label={
-                                item.state === "prepared"
-                                  ? "继续验证"
-                                  : "查看回执"
-                              }
-                              icon={ClipboardCheck}
-                            />,
-                          ],
-                        };
-                      })}
-                  />
-                ) : tab === "models" ? (
-                  <ModelCatalog
-                    toolbarActions={toolbarActions}
-                    configuration={configuration}
-                    startRoute={startRoute}
-                  />
-                ) : tab === "routes" ? (
-                  <RoutesList
-                    toolbarActions={toolbarActions}
-                    configuration={configuration}
-                    onDelete={deleteChannels}
-                  />
-                ) : tab === "quotas" ? (
-                  <AiServiceTable
-                    toolbarActions={toolbarActions}
-                    label="共享配额"
-                    columns={["配额组", "并发", "请求／分钟"]}
-                    empty="暂无共享配额组"
-                    rows={configuration.quotas.map((q) => ({
-                      id: q.name,
-                      label: q.name,
-                      cells: [q.name, q.concurrency, q.rpm],
-                    }))}
-                  />
-                ) : tab === "credentials" ? (
-                  <CredentialList
-                    toolbarActions={toolbarActions}
-                    configuration={configuration}
-                    busy={busy}
-                    run={run}
-                  />
-                ) : billingAction === "fund" ||
-                  billingAction === "reconcile" ? (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>
-                        {billingAction === "fund"
-                          ? "提交积分赠送单"
-                          : "供应商账单对账"}
-                      </CardTitle>
-                      <CardAction>
-                        <AiServiceAction
-                          label="返回列表"
-                          icon={ArrowLeft}
-                          disabled={busy}
-                          onClick={() => requestNavigation(tab)}
-                        />
-                      </CardAction>
-                    </CardHeader>
-                    <CardContent>
-                      {billingAction === "fund" ? (
-                        <CreditsForm
-                          run={run}
-                          busy={busy}
-                          defaultScope={defaultScope}
-                        />
-                      ) : (
-                        <ReconciliationForm
-                          run={run}
-                          busy={busy}
-                          unknown={configuration.unknown}
-                          initialAttempt={selectedAttempt}
-                        />
-                      )}
-                    </CardContent>
-                  </Card>
-                ) : tab === "credit-grants" ? (
-                  <CreditGrants
-                    actorID={actorID}
-                    orders={configuration.credit_grants ?? []}
-                    busy={busy}
-                    run={run}
-                    toolbarActions={toolbarActions}
-                  />
-                ) : (
-                  <AiServiceTable
-                    toolbarActions={toolbarActions}
-                    label="待对账请求"
-                    columns={["原请求", "原尝试", "状态", "操作"]}
-                    empty="暂无待对账请求"
-                    rows={configuration.unknown.map((row) => ({
-                      id: row.attempt_id,
-                      label: row.request_id,
-                      terms: [row.attempt_id],
-                      cells: [
-                        row.request_id,
-                        row.attempt_id,
-                        "待核对",
-                        <AiServiceAction
-                          key="reconcile"
-                          label="核对账单"
-                          icon={ClipboardCheck}
-                          onClick={() =>
-                            openBilling("reconcile", row.attempt_id)
-                          }
-                        />,
-                      ],
-                    }))}
-                  />
-                )}
-              </TabsContent>
-            </>
-          )}
-        </Tabs>
+            {content}
+          </Tabs>
+        ) : (
+          <div className="admin-page">{content}</div>
+        )}
         {configuration && setup && (
           <ModelOnboardingDialog
             setup={setup}
@@ -593,7 +548,7 @@ function AiServiceConfigurationPage({
             run={run}
             refresh={refresh}
             allowExistingModel={
-              tab === "routes" &&
+              entry === "providers" &&
               configuration.models.some(
                 ({ enabled, draft }) => enabled || draft,
               )
@@ -670,23 +625,271 @@ function RouteModel({ name, upstream }: { name?: string; upstream: string }) {
   );
 }
 
-function RoutesList({
+function Channels({
   configuration,
   toolbarActions,
+  provider,
+  openCandidate,
+  startRoute,
   onDelete,
+  busy,
+  run,
 }: {
   configuration: AiServiceConfiguration;
   toolbarActions: ReactNode;
+  provider?: string;
+  openCandidate: (id: string) => void;
+  startRoute: (id: string) => void;
+  onDelete: (ids: string[]) => Promise<void>;
+  busy: boolean;
+  run: RunMutation;
+}) {
+  const { routes, onboarding, models, quotas, credentials } = configuration;
+  const providerOf = (key?: string) => key ?? "custom";
+  const nameOf = (key: string) =>
+    configuration.model_presets?.find(({ adapter }) => adapter === key)
+      ?.provider ?? providerLabel(key);
+  const providers = [
+    ...new Set([
+      ...routes.map(({ provider_key }) => providerOf(provider_key)),
+      ...onboarding
+        .filter(({ supplier_id }) => supplier_id)
+        .map(({ provider_key }) => providerOf(provider_key)),
+    ]),
+  ].sort((a, b) => nameOf(a).localeCompare(nameOf(b), "zh-CN"));
+  const hasRecord = new Set(onboarding.map(({ model_id }) => model_id));
+  const withoutAccount = onboarding.filter(
+    ({ supplier_id, state }) =>
+      !supplier_id && ["prepared", "verifying", "failed"].includes(state),
+  );
+  const drafts = models.filter(
+    ({ draft, enabled, model }) =>
+      (draft || enabled) &&
+      !hasRecord.has(model.id) &&
+      !routes.some(({ route }) => route.model_id === model.id),
+  );
+  const modelNames = new Map(models.map(({ model }) => [model.id, model.name]));
+  const records = (
+    candidates: AiServiceConfiguration["onboarding"],
+    rawDrafts: typeof drafts = [],
+  ) => (
+    <AiServiceTable
+      label="接入记录"
+      columns={["模型", "状态", "操作"]}
+      empty="暂无接入记录"
+      onDelete={onDelete}
+      rows={[
+        ...candidates.map((candidate) => ({
+          id: candidate.id,
+          deleteID:
+            candidate.state === "prepared" || candidate.state === "failed"
+              ? candidate.id
+              : undefined,
+          label: candidate.upstream_model,
+          cells: [
+            <RouteModel
+              key="model"
+              name={modelNames.get(candidate.model_id)}
+              upstream={candidate.upstream_model}
+            />,
+            onboardingState[candidate.state],
+            <AiServiceAction
+              key="open"
+              label={candidate.state === "prepared" ? "继续接入" : "查看回执"}
+              icon={ClipboardCheck}
+              onClick={() => openCandidate(candidate.id)}
+            />,
+          ],
+        })),
+        ...rawDrafts.map(({ model }) => ({
+          id: model.id,
+          label: model.name,
+          cells: [
+            model.name,
+            "待接入",
+            <AiServiceAction
+              key="continue"
+              label="继续接入"
+              icon={Route}
+              onClick={() => startRoute(model.id)}
+            />,
+          ],
+        })),
+      ]}
+    />
+  );
+
+  if (!provider || !providers.includes(provider)) {
+    return (
+      <div className="flex flex-col gap-6">
+        <AiServiceTable
+          label="供应商"
+          columns={["供应商", "绑定渠道", "待处理", "操作"]}
+          empty="暂无供应商"
+          toolbarActions={toolbarActions}
+          rows={providers.map((key) => ({
+            id: key,
+            label: nameOf(key),
+            cells: [
+              <span
+                key="provider"
+                className="flex items-center gap-2 font-medium"
+              >
+                <ProviderLogo adapterKey={key} iconOnly />
+                {nameOf(key)}
+              </span>,
+              routes.filter(
+                ({ provider_key }) => providerOf(provider_key) === key,
+              ).length,
+              onboarding.filter(
+                ({ provider_key, state }) =>
+                  providerOf(provider_key) === key &&
+                  ["prepared", "verifying", "failed"].includes(state),
+              ).length,
+              <AiServiceAction
+                key="open"
+                label={`查看 ${nameOf(key)}`}
+                icon={Eye}
+                href={`/providers?provider=${encodeURIComponent(key)}`}
+              />,
+            ],
+          }))}
+        />
+        {(withoutAccount.length > 0 || drafts.length > 0) &&
+          records(withoutAccount, drafts)}
+      </div>
+    );
+  }
+
+  const supplierRoutes = routes.filter(
+    ({ provider_key }) => providerOf(provider_key) === provider,
+  );
+  const supplierRecords = onboarding.filter(
+    ({ provider_key, supplier_id }) =>
+      supplier_id && providerOf(provider_key) === provider,
+  );
+  const accounts = [
+    ...new Set([
+      ...supplierRoutes.map(({ route }) => route.supplier),
+      ...supplierRecords.flatMap(({ supplier_id }) =>
+        supplier_id ? [supplier_id] : [],
+      ),
+    ]),
+  ];
+  return (
+    <section
+      aria-label={nameOf(provider)}
+      className="flex min-w-0 flex-col gap-6"
+    >
+      <div className="flex flex-wrap items-center gap-3">
+        <AiServiceAction
+          label="返回供应商"
+          icon={ArrowLeft}
+          href="/providers"
+        />
+        <h2 className="font-medium">{nameOf(provider)}</h2>
+        <div className="ml-auto flex items-center gap-2">{toolbarActions}</div>
+      </div>
+      {accounts.map((account) => {
+        const accountRoutes = supplierRoutes.filter(
+          ({ route }) => route.supplier === account,
+        );
+        const accountRecords = supplierRecords.filter(
+          ({ supplier_id }) => supplier_id === account,
+        );
+        const groups = new Set([
+          ...accountRoutes.map(({ route }) => route.group),
+          ...accountRecords.map(({ group }) => group),
+        ]);
+        const accountQuotas = quotas.filter(({ name }) => groups.has(name));
+        const accountCredentials = credentials.filter(
+          ({ supplier_id }) => supplier_id === account,
+        );
+        const accountName =
+          accountRoutes[0]?.route.group ??
+          accountRecords[0]?.group ??
+          account.slice(0, 8);
+        return (
+          <section
+            key={account}
+            aria-label={`账号 ${accountName}`}
+            className="flex min-w-0 flex-col gap-3"
+          >
+            {accounts.length > 1 && (
+              <h3 className="text-sm font-medium">{accountName}</h3>
+            )}
+            {accountRoutes.length > 0 && (
+              <RoutesList
+                configuration={configuration}
+                routes={accountRoutes}
+                onDelete={onDelete}
+              />
+            )}
+            {accountRecords.some(({ state }) =>
+              ["prepared", "verifying", "failed"].includes(state),
+            ) &&
+              records(
+                accountRecords.filter(({ state }) =>
+                  ["prepared", "verifying", "failed"].includes(state),
+                ),
+              )}
+            <FormDetails label="账号设置" keepMounted={false}>
+              {accountCredentials.length > 0 && (
+                <CredentialList
+                  credentials={accountCredentials}
+                  busy={busy}
+                  run={run}
+                />
+              )}
+              {accountQuotas.length > 0 && (
+                <AiServiceTable
+                  label="共享配额"
+                  columns={["配额组", "并发", "请求／分钟"]}
+                  empty="暂无共享配额"
+                  rows={accountQuotas.map((quota) => ({
+                    id: quota.name,
+                    label: quota.name,
+                    cells: [quota.name, quota.concurrency, quota.rpm],
+                  }))}
+                />
+              )}
+            </FormDetails>
+            {accountRecords.some(
+              ({ state }) =>
+                !["prepared", "verifying", "failed"].includes(state),
+            ) && (
+              <FormDetails label="验证记录" keepMounted={false}>
+                {records(
+                  accountRecords.filter(
+                    ({ state }) =>
+                      !["prepared", "verifying", "failed"].includes(state),
+                  ),
+                )}
+              </FormDetails>
+            )}
+          </section>
+        );
+      })}
+    </section>
+  );
+}
+
+function RoutesList({
+  configuration,
+  routes,
+  onDelete,
+}: {
+  configuration: AiServiceConfiguration;
+  routes: AiServiceConfiguration["routes"];
   onDelete: (ids: string[]) => Promise<void>;
 }) {
   return (
     <AiServiceTable
-      toolbarActions={toolbarActions}
       label="供应商路由"
       onDelete={onDelete}
       columns={["渠道 / 上游型号", "配额组", "采购价", "状态", "操作"]}
       empty="暂无渠道"
-      rows={configuration.routes.map(({ route, enabled }) => {
+      rows={routes.map(({ route, enabled }) => {
         const modelName = configuration.models.find(
           ({ model }) => model.id === route.model_id,
         )?.model.name;
@@ -735,14 +938,16 @@ function EntityDetail({
   entry,
   id,
   configuration,
-  startRoute,
   openCandidate,
+  run,
+  busy,
 }: {
   entry: Entry;
   id: string;
   configuration: AiServiceConfiguration;
-  startRoute: (id: string) => void;
   openCandidate: (id: string) => void;
+  run: RunMutation;
+  busy: boolean;
 }) {
   const modelRow =
     entry === "models"
@@ -763,7 +968,13 @@ function EntityDetail({
       <AiServiceAction
         label="返回列表"
         icon={ArrowLeft}
-        href={entry === "models" ? "/models" : "/models?tab=routes"}
+        href={
+          entry === "models"
+            ? "/models"
+            : routeRow?.provider_key
+              ? `/providers?provider=${encodeURIComponent(routeRow.provider_key)}`
+              : "/providers"
+        }
       />
       {model || route ? (
         <Card>
@@ -790,51 +1001,40 @@ function EntityDetail({
                 value={linkedModel.modes.map(modeLabel).join("、")}
               />
             ) : null}
-            {model && (
-              <Detail
-                label="销售定价"
-                value={priceSummary(model.price, model.protocol)}
-              />
-            )}
-            {model && (
-              <Detail label="单次采购上限" value={money(model.purchase_cap)} />
-            )}
+            {model &&
+              modelRow?.enabled &&
+              configuration.routes.some(
+                ({ route, enabled }) =>
+                  enabled &&
+                  route.model_id === model.id &&
+                  configuration.credentials.some(
+                    ({ id, state }) =>
+                      id === route.credential && state === "active",
+                  ),
+              ) && (
+                <ModelPrice
+                  key={JSON.stringify([model.id, model.sale_version])}
+                  model={model}
+                  run={run}
+                  busy={busy}
+                />
+              )}
             {route && (
               <>
                 <Detail label="供应商地址" value={route.base_url} />
-                <Detail
-                  label="采购定价"
-                  value={priceSummary(route.purchase, route.protocol)}
-                />
+                {linkedModel && route.id && (
+                  <ModelPrice
+                    key={JSON.stringify([route.id, route.purchase_version])}
+                    model={linkedModel}
+                    route={route}
+                    run={run}
+                    busy={busy}
+                  />
+                )}
                 <Detail label="共享配额组" value={route.group} />
               </>
             )}
-            {model?.parameters &&
-              Object.entries(model.parameters).map(([key, p]) => (
-                <Detail
-                  key={key}
-                  label={key}
-                  value={[
-                    p.type,
-                    p.min !== undefined ? `最小 ${p.min}` : "",
-                    p.max !== undefined ? `最大 ${p.max}` : "",
-                    p.enum?.join(" / "),
-                    p.default !== undefined ? `默认 ${p.default}` : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                />
-              ))}
-            <Separator />
-            <Detail label="版本标识" value={id} />
             <div className="flex flex-wrap gap-2">
-              {model && (modelRow?.draft || modelRow?.enabled) && (
-                <AiServiceAction
-                  onClick={() => startRoute(model.id)}
-                  label="准备采购"
-                  icon={Route}
-                />
-              )}
               {candidate && (
                 <AiServiceAction
                   onClick={() => openCandidate(candidate.id)}
@@ -887,13 +1087,11 @@ const credentialOptions = [
 ] as const;
 
 function CredentialList({
-  configuration,
-  toolbarActions,
+  credentials,
   run,
   busy,
 }: {
-  configuration: AiServiceConfiguration;
-  toolbarActions: ReactNode;
+  credentials: AiServiceConfiguration["credentials"];
   run: RunMutation;
   busy: boolean;
 }) {
@@ -918,11 +1116,10 @@ function CredentialList({
   return (
     <>
       <AiServiceTable
-        toolbarActions={toolbarActions}
         label="供应商凭据"
         columns={["凭据", "状态", "操作"]}
         empty="暂无供应商凭据"
-        rows={configuration.credentials.map((credential) => ({
+        rows={credentials.map((credential) => ({
           id: credential.id,
           label: credential.id,
           terms: [credential.supplier_id],

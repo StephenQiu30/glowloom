@@ -46,7 +46,7 @@ func (s *Store) check(ctx context.Context, tx *gorm.DB, scope, project uuid.UUID
 // Model resolves the current published version for an exact name and protocol.
 func (s *Store) Model(ctx context.Context, name, protocol string) (domain.Model, error) {
 	var row struct{ Document []byte }
-	r := s.db.WithContext(ctx).Raw("SELECT document FROM ai.model WHERE name=? AND document->>'protocol'=? AND enabled", name, protocol).Scan(&row)
+	r := s.db.WithContext(ctx).Raw("SELECT document FROM ai.model_current WHERE name=? AND document->>'protocol'=? AND enabled", name, protocol).Scan(&row)
 	if r.Error != nil {
 		return domain.Model{}, r.Error
 	}
@@ -258,18 +258,8 @@ func (s *Store) Admit(ctx context.Context, call domain.Call) (application.Dispat
 				return err
 			}
 		}
-		var current struct{ Document []byte }
-		r = tx.Raw(`SELECT document FROM ai.model m WHERE id=? AND (? OR enabled OR EXISTS(
- SELECT 1 FROM ai.quote q WHERE q.id=? AND q.scope_id=? AND q.input_hash=?
- AND q.contract->'Model'=m.document AND q.contract->>'Origin' IS DISTINCT FROM ?
- AND q.expires_at>clock_timestamp())) FOR SHARE`, call.Model.ID, verification, call.ID, call.Scope, call.Hash, application.OnboardingOrigin).Scan(&current)
-		if r.Error != nil {
-			return r.Error
-		}
-		actual, _ := json.Marshal(call.Model)
-		var a, b any
-		if r.RowsAffected != 1 || json.Unmarshal(current.Document, &a) != nil || json.Unmarshal(actual, &b) != nil || domain.Digest(mustJSON(a)) != domain.Digest(mustJSON(b)) {
-			return domain.ErrUnavailable
+		if err := checkCallSale(tx, call, verification, true); err != nil {
+			return err
 		}
 		if account.Available < call.Limit {
 			return domain.ErrFunds
@@ -376,7 +366,8 @@ func selectRoute(tx *gorm.DB, call domain.Call, excluded, verification uuid.UUID
 	if err := tx.Exec(`SELECT q.name FROM ai.quota q WHERE q.name IN(SELECT quota_group FROM ai.route WHERE model_id=?) ORDER BY q.name FOR UPDATE`, call.Model.ID).Error; err != nil {
 		return uuid.Nil, domain.Route{}, err
 	}
-	err := tx.Raw(`SELECT r.id,r.credential_id,r.quota_group,r.document,c.key_id,c.supplier_id,c.ciphertext FROM ai.route r
+	err := tx.Raw(`SELECT r.id,r.credential_id,r.quota_group,current_route.document,c.key_id,c.supplier_id,c.ciphertext FROM ai.route r
+ JOIN ai.route_current current_route ON current_route.id=r.id
  JOIN ai.credential c ON c.id=r.credential_id AND c.state='active' JOIN ai.quota q ON q.name=r.quota_group
  CROSS JOIN LATERAL (
    SELECT CASE WHEN ?::uuid IS NOT NULL AND EXISTS(

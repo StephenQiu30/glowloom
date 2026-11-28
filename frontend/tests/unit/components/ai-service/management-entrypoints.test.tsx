@@ -2,29 +2,29 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import Models from "@/app/models/page";
 import Providers from "@/app/providers/page";
-import { ModelsPage } from "@/app/models/_components/models-page";
-import { ProvidersPage } from "@/app/providers/_components/providers-page";
+import PlatformBilling from "@/app/platform/billing/page";
 
-const { redirect } = vi.hoisted(() => ({ redirect: vi.fn() }));
-vi.mock("next/navigation", () => ({ redirect }));
 vi.mock("@/components/layout/page-layout", () => ({
   PageLayout: ({ children }: { children: React.ReactNode }) => children,
 }));
 vi.mock("@/components/ai-service/ai-service-admin", () => ({
-  AiServiceAdmin: ({ initialTab }: { initialTab?: string }) => (
-    <div>{initialTab ?? "当前统一AI 服务管理"}</div>
-  ),
+  AiServiceAdmin: ({
+    entry = "models",
+    initialProvider,
+  }: {
+    entry?: string;
+    initialProvider?: string;
+  }) => <div>{initialProvider ? `${entry}:${initialProvider}` : entry}</div>,
 }));
 afterEach(cleanup);
 
-it("preserves links to the former provider list and selects its channel tab", async () => {
-  Providers();
-  expect(redirect).toHaveBeenCalledWith("/models?tab=routes");
-  render(await Models({ searchParams: Promise.resolve({ tab: "routes" }) }));
-  expect(screen.getByText("routes")).toBeTruthy();
-});
-
-it.each([ModelsPage, ProvidersPage])("uses the shared admin", (Page) => {
-  render(<Page />);
-  expect(screen.getByText("当前统一AI 服务管理")).toBeTruthy();
+it("opens each management entry at its own canonical route", async () => {
+  render(<Models />);
+  render(
+    await Providers({ searchParams: Promise.resolve({ provider: "openai" }) }),
+  );
+  render(<PlatformBilling />);
+  expect(screen.getByText("models")).toBeTruthy();
+  expect(screen.getByText("providers:openai")).toBeTruthy();
+  expect(screen.getByText("billing")).toBeTruthy();
 });

@@ -267,6 +267,49 @@ const videoTariffFixture = {
   },
 } satisfies GatewayPreset;
 
+const showManagement = params.has("management");
+const section = params.get("section");
+const managementPrice = {
+  input: 6000000,
+  output: 30000000,
+  cache_read: 1200000,
+  cache_write: 0,
+  request: 0,
+  currency: "CNY",
+  fx: "1",
+  multiplier: "1",
+  discount: "1",
+};
+let managementModel: GatewayModel = {
+  id: candidate.model_id,
+  name: "Doubao Seed 2.1 Pro",
+  protocol: "chat",
+  price: managementPrice,
+  max_input: 4096,
+  max_output: 1024,
+  purchase_cap: 1000000,
+  tools: false,
+  stream: false,
+};
+const managementRoute = {
+  id: candidate.project_id,
+  model_id: managementModel.id,
+  supplier: candidate.scope_id,
+  credential: candidate.project_id,
+  group: "方舟创作账号",
+  base_url: arkPreset.base_url,
+  upstream_model: arkTextPreset.upstream,
+  protocol: "chat",
+  purchase: managementPrice,
+  priority: 0,
+} satisfies GatewayRoute;
+const failedCandidate = {
+  ...candidate,
+  state: "failed" as const,
+  supplier_id: managementRoute.supplier,
+  group: managementRoute.group,
+  provider_key: "volcengine_ark",
+};
 let stagedTariffModel: GatewayModel | null = null;
 let quickCandidate: OnboardingReview | null = null;
 let quickSends = 0;
@@ -279,6 +322,38 @@ installDevelopmentTransport({
       "/tests/browser/pool-sale.html",
     ].includes(path),
   request: async (url, options) => {
+    if (showManagement) {
+      const sale = `/api/ai/admin/models/${managementModel.id}/price`;
+      if (url === `${sale}/preview`) return { credits: 1 };
+      if (url === sale && options.method === "PUT") {
+        const { price } = options.data as { price: GatewayModel["price"] };
+        managementModel = { ...managementModel, price, sale_version: 1 };
+        return managementModel;
+      }
+      if (url === `/api/ai/admin/onboarding/${candidate.id}`)
+        return failedCandidate;
+      if (url === "/api/ai/admin/configuration")
+        return {
+          models: [{ model: managementModel, enabled: true }],
+          routes: [
+            {
+              route: managementRoute,
+              provider_key: "volcengine_ark",
+              enabled: true,
+            },
+          ],
+          credentials: [
+            {
+              id: managementRoute.credential,
+              supplier_id: managementRoute.supplier,
+              state: "active",
+            },
+          ],
+          quotas: [{ name: managementRoute.group, concurrency: 2, rpm: 60 }],
+          onboarding: [failedCandidate],
+          unknown: [],
+        };
+    }
     if (
       showQuick &&
       url === "/api/ai/admin/models" &&
@@ -518,7 +593,17 @@ const testSpace = {
 createRoot(document.getElementById("root")!).render(
   <>
     <Toaster />
-    {showQuick ? (
+    {showManagement ? (
+      <AiServiceAdmin
+        entry={
+          section === "channels" || section === "supplier"
+            ? "providers"
+            : "models"
+        }
+        initialProvider={section === "supplier" ? "volcengine_ark" : undefined}
+        entityID={section === "sale" ? managementModel.id : undefined}
+      />
+    ) : showQuick ? (
       <SpaceContext.Provider
         value={{
           spaces: [testSpace],
@@ -529,10 +614,14 @@ createRoot(document.getElementById("root")!).render(
           select: async () => {},
         }}
       >
-        <AiServiceAdmin />
+        <AiServiceAdmin entry="providers" />
       </SpaceContext.Provider>
     ) : (
-      <AiServiceAdmin />
+      <AiServiceAdmin
+        entry={
+          showCreditReview ? "billing" : showPrepared ? "providers" : "models"
+        }
+      />
     )}
   </>,
 );

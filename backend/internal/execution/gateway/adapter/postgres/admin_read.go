@@ -25,7 +25,7 @@ func (s *Store) Configuration(ctx context.Context) (map[string]any, error) {
 			Enabled  bool
 			Draft    bool
 		}
-		if err := tx.Raw("SELECT document,enabled,draft FROM ai.model WHERE document->>'protocol'<>'local' ORDER BY name,id LIMIT 500").Scan(&models).Error; err != nil {
+		if err := tx.Raw("SELECT document,enabled,draft FROM ai.model_current WHERE document->>'protocol'<>'local' ORDER BY name,id LIMIT 500").Scan(&models).Error; err != nil {
 			return err
 		}
 		products := []map[string]any{}
@@ -59,7 +59,9 @@ func (s *Store) Configuration(ctx context.Context) (map[string]any, error) {
 		}
 		type candidateListing struct {
 			OnboardingSummary
-			ProviderKey string `json:"provider_key,omitempty"`
+			ProviderKey string    `json:"provider_key,omitempty"`
+			SupplierID  uuid.UUID `json:"supplier_id"`
+			Group       string    `json:"group"`
 		}
 		candidates := make([]candidateListing, 0, len(candidateRows))
 		for _, row := range candidateRows {
@@ -67,14 +69,14 @@ func (s *Store) Configuration(ctx context.Context) (map[string]any, error) {
 			if json.Unmarshal(row.RouteDocument, &route) != nil {
 				return domain.ErrInvalid
 			}
-			candidates = append(candidates, candidateListing{row.OnboardingSummary, routeProviderKey(route)})
+			candidates = append(candidates, candidateListing{row.OnboardingSummary, routeProviderKey(route), route.Supplier, route.Group})
 		}
 		out["onboarding"] = candidates
 		var routes []struct {
 			Document []byte
 			Enabled  bool
 		}
-		if err := tx.Raw("SELECT document,enabled FROM ai.route WHERE deleted_at IS NULL AND document->>'protocol'<>'local' ORDER BY model_id,priority,id LIMIT 1000").Scan(&routes).Error; err != nil {
+		if err := tx.Raw("SELECT document,enabled FROM ai.route_current WHERE deleted_at IS NULL AND document->>'protocol'<>'local' ORDER BY model_id,priority,id LIMIT 1000").Scan(&routes).Error; err != nil {
 			return err
 		}
 		supplies := []map[string]any{}

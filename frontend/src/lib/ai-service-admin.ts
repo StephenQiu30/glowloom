@@ -3,6 +3,9 @@ import { request } from "@/lib/request";
 
 import {
   prepareAiOnboardingPreset,
+  previewAiModelSale,
+  publishAiModelSale,
+  publishAiRoutePurchase,
   submitAiCreditGrant,
 } from "@/api/aiGateway";
 
@@ -85,6 +88,7 @@ export type GatewayModel = {
   name: string;
   protocol: string;
   price: GatewayPrice;
+  sale_version?: number;
   max_input: number;
   max_output: number;
   purchase_cap: number;
@@ -106,6 +110,7 @@ export type GatewayRoute = {
   upstream_model: string;
   protocol: string;
   purchase: GatewayPrice;
+  purchase_version?: number;
   priority: number;
   driver_config?: Record<string, unknown>;
 };
@@ -183,6 +188,8 @@ export type OnboardingSummary = {
   upstream_model: string;
   scope_id?: string;
   provider_key?: string;
+  supplier_id?: string;
+  group?: string;
 };
 
 export function modelPreset(
@@ -893,4 +900,41 @@ export async function reconcileGateway(value: {
     );
   }
   return request(`${prefix}/reconciliations`, { method: "POST", data: value });
+}
+
+export type SaleUsage = {
+  input?: number;
+  output?: number;
+  characters?: number;
+  original_seconds?: string;
+  pixels?: number;
+  reference_images?: number;
+  video_duration_ms?: number;
+  provider_amount?: string;
+};
+
+export async function previewModelSale(
+  model: GatewayModel,
+  price: GatewayPrice,
+  usage: SaleUsage,
+) {
+  const result = await previewAiModelSale(
+    { id: id(model.id) },
+    { version: model.sale_version ?? 0, price: validatePrice(price), usage },
+  );
+  return { credits: result.credits };
+}
+
+export function publishModelSale(model: GatewayModel, price: GatewayPrice) {
+  return publishAiModelSale(
+    { id: id(model.id) },
+    { version: model.sale_version ?? 0, price: validatePrice(price) },
+  );
+}
+
+export function publishRoutePurchase(route: GatewayRoute, price: GatewayPrice) {
+  return publishAiRoutePurchase(
+    { id: id(route.id ?? "") },
+    { version: route.purchase_version ?? 0, price: validatePrice(price) },
+  );
 }

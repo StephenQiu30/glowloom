@@ -45,6 +45,7 @@ export const screens = [
     node: "4108:128289",
     group: "管理",
   },
+  { id: "platform/billing", name: "平台账务", group: "管理" },
   { id: "account", name: "个人空间", node: "4166:141002", group: "账号" },
   { id: "billing", name: "积分与会员", node: "4166:141347", group: "账号" },
   { id: "users", name: "用户管理", node: "4108:126578", group: "管理" },
@@ -83,6 +84,8 @@ export function resolveAdminSection(screen: Screen, platformAdmin = false) {
       return screen;
     case "analytics":
       return platformAdmin ? screen : undefined;
+    case "platform/billing":
+      return "platform-billing";
     case "platform/teams":
       return "teams";
     case "platform/settings":

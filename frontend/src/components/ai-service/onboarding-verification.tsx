@@ -142,11 +142,7 @@ export function OnboardingPanel({
       {(back || readError) && (
         <div className="flex flex-wrap justify-between gap-2">
           {back && (
-            <AiServiceAction
-              onClick={back}
-              label="返回验证列表"
-              icon={ArrowLeft}
-            />
+            <AiServiceAction onClick={back} label="返回渠道" icon={ArrowLeft} />
           )}
           <div className="ml-auto">
             <AiServiceAction
@@ -367,16 +363,15 @@ export function OnboardingPanel({
           {back && (review.state === "failed" || review.state === "stale") && (
             <Alert variant="destructive">
               <AlertTitle>{onboardingState[review.state]}</AlertTitle>
-              <AlertDescription>
-                当前线上版本继续服务。
-                {!unknown && (
+              {!unknown && (
+                <AlertDescription>
                   <AiServiceAction
                     onClick={() => retryRoute(review.model_id)}
-                    label="重新准备采购路由"
+                    label="重新接入"
                     icon={Route}
                   />
-                )}
-              </AlertDescription>
+                </AlertDescription>
+              )}
             </Alert>
           )}
           {back && review.state === "active" && review.available !== false && (

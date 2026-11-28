@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { GET, POST } from "@/app/api/[...path]/route";
+import { GET, POST, PUT } from "@/app/api/[...path]/route";
 
 const candidate = "11111111-1111-4111-8111-111111111111";
 const configuration = "ai/admin/configuration";
@@ -59,5 +59,46 @@ it("限制接入代理的候选 ID、方法和查询参数", async () => {
     (await GET(request(`${review}?scope_id=${candidate}`), context(review)))
       .status,
   ).toBe(422);
+  expect(upstream).not.toHaveBeenCalled();
+});
+
+it("只转发售价预览和售价、采购价发布的明确方法", async () => {
+  const upstream = vi
+    .fn<(url: URL, init: RequestInit) => Promise<Response>>()
+    .mockImplementation(async () => new Response("{}"));
+  vi.stubGlobal("fetch", upstream);
+  const modelPrice = `ai/admin/models/${candidate}/price`;
+  const purchasePrice = `ai/admin/routes/${candidate}/price`;
+  const preview = `${modelPrice}/preview`;
+  for (const [path, handler, method] of [
+    [preview, POST, "POST"],
+    [modelPrice, PUT, "PUT"],
+    [purchasePrice, PUT, "PUT"],
+  ] as const) {
+    const body = '{"version":0}';
+    const res = await handler(
+      request(path, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body,
+      }),
+      context(path),
+    );
+    expect(res.status).toBe(200);
+    const [upstreamURL, init] = upstream.mock.lastCall!;
+    expect(upstreamURL.pathname).toBe(`/api/${path}`);
+    expect(init.method).toBe(method);
+    expect(await new Response(init.body).text()).toBe(body);
+  }
+  upstream.mockClear();
+  expect((await GET(request(preview), context(preview))).status).toBe(405);
+  expect(
+    (
+      await POST(
+        request(purchasePrice, { method: "POST" }),
+        context(purchasePrice),
+      )
+    ).status,
+  ).toBe(405);
   expect(upstream).not.toHaveBeenCalled();
 });

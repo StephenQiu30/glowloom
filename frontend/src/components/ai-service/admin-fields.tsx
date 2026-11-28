@@ -31,6 +31,7 @@ import { Textarea } from "@/components/ui/textarea";
 export type RunMutation = (
   action: () => Promise<unknown>,
   success: string,
+  reload?: boolean,
 ) => Promise<boolean>;
 
 export const uuidPattern =
@@ -321,7 +322,7 @@ export function mediaTariffSummary(
   return `${tariff.unit_price} ${currency} / ${tariff.unit_size?.toLocaleString("zh-CN")} ${unit}`;
 }
 
-export function priceSummary(price: GatewayPrice, protocol: string) {
+function basePriceSummary(price: GatewayPrice, protocol: string) {
   if (price.explicit_free === true) return "免费";
   if (price.media_tariff)
     return mediaTariffSummary(price.media_tariff, price.currency);
@@ -339,4 +340,12 @@ export function priceSummary(price: GatewayPrice, protocol: string) {
   return protocol === "media"
     ? `${money(price.request, price.currency)} / 次`
     : `输入 ${money(price.input, price.currency)} · 输出 ${money(price.output, price.currency)} / 百万 token`;
+}
+
+export function priceSummary(price: GatewayPrice, protocol: string) {
+  const base = basePriceSummary(price, protocol);
+  const multiplier =
+    Number(price.multiplier) !== 1 ? `×${price.multiplier}` : "";
+  const discount = Number(price.discount) !== 1 ? `折扣 ${price.discount}` : "";
+  return [base, multiplier, discount].filter(Boolean).join(" · ");
 }

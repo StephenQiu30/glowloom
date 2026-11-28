@@ -9533,6 +9533,22 @@ CREATE TABLE ai.model (
  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),CHECK(NOT (enabled AND draft))
 );
 CREATE UNIQUE INDEX ai_model_published_name ON ai.model(name,(document->>'protocol')) WHERE enabled;
+CREATE TABLE ai.model_sale (
+ model_id uuid NOT NULL REFERENCES ai.model(id),version bigint NOT NULL CHECK(version>0),
+ price jsonb NOT NULL CHECK(jsonb_typeof(price)='object'),actor_id uuid NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ PRIMARY KEY(model_id,version)
+);
+CREATE VIEW ai.model_current AS
+SELECT m.id,m.name,m.enabled,m.draft,
+       CASE WHEN sale.version IS NULL THEN m.document
+            ELSE m.document || jsonb_build_object('price',sale.price,'sale_version',sale.version)
+       END AS document
+FROM ai.model m
+LEFT JOIN LATERAL (SELECT version,price FROM ai.model_sale WHERE model_id=m.id ORDER BY version DESC LIMIT 1) sale ON true;
+GRANT SELECT,INSERT ON ai.model_sale TO glowloom_app,glowloom_execution;
+GRANT SELECT ON ai.model_current TO glowloom_app,glowloom_execution;
+
 CREATE TABLE ai.quota (
  name text PRIMARY KEY CHECK(length(name) BETWEEN 1 AND 160),
  concurrency integer NOT NULL CHECK(concurrency BETWEEN 1 AND 1000),
@@ -9553,13 +9569,29 @@ CREATE TABLE ai.route (
  CHECK ((deleted_at IS NULL)=(deleted_by IS NULL)),CHECK (deleted_at IS NULL OR NOT enabled)
 );
 CREATE INDEX ai_route_model ON ai.route(model_id,priority);
+CREATE TABLE ai.route_purchase (
+ route_id uuid NOT NULL REFERENCES ai.route(id),version bigint NOT NULL CHECK(version>0),
+ price jsonb NOT NULL CHECK(jsonb_typeof(price)='object'),actor_id uuid NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ PRIMARY KEY(route_id,version)
+);
+CREATE VIEW ai.route_current AS
+SELECT r.id,r.model_id,r.credential_id,r.quota_group,r.priority,r.enabled,r.deleted_at,
+       CASE WHEN purchase.version IS NULL THEN r.document
+            ELSE r.document || jsonb_build_object('purchase',purchase.price,'purchase_version',purchase.version)
+       END AS document
+FROM ai.route r
+LEFT JOIN LATERAL (SELECT version,price FROM ai.route_purchase WHERE route_id=r.id ORDER BY version DESC LIMIT 1) purchase ON true;
+GRANT SELECT,INSERT ON ai.route_purchase TO glowloom_app,glowloom_execution;
+GRANT SELECT ON ai.route_current TO glowloom_app,glowloom_execution;
+
 
 -- Project consumers discover only published cloud products with a usable route.
 CREATE VIEW ai.available_model AS
 SELECT m.id,m.name,m.document,route.id AS route_id,route.credential_id,
        CASE WHEN m.document->>'protocol' IN ('media','ark_embedding') THEN m.document->>'capability'
             ELSE 'text.generate' END AS capability
-FROM ai.model m
+FROM ai.model_current m
 JOIN LATERAL (SELECT r.id,r.credential_id FROM ai.route r JOIN ai.credential k ON k.id=r.credential_id
               WHERE r.model_id=m.id AND r.enabled AND k.state='active'
               ORDER BY r.priority,r.id LIMIT 1) route ON true
@@ -9707,6 +9739,8 @@ CREATE TABLE ai.quote (
  contract jsonb NOT NULL,expires_at timestamptz NOT NULL,created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
  UNIQUE(scope_id,idempotency_key)
 );
+CREATE TRIGGER ai_route_purchase_immutable BEFORE UPDATE OR DELETE ON ai.route_purchase FOR EACH ROW EXECUTE FUNCTION ai.immutable_fact();
+CREATE TRIGGER ai_model_sale_immutable BEFORE UPDATE OR DELETE ON ai.model_sale FOR EACH ROW EXECUTE FUNCTION ai.immutable_fact();
 CREATE TRIGGER ai_quote_immutable BEFORE UPDATE OR DELETE ON ai.quote FOR EACH ROW EXECUTE FUNCTION ai.immutable_fact();
 GRANT SELECT,INSERT ON ai.quote TO glowloom_app,glowloom_execution;
 

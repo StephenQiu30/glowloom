@@ -61,7 +61,7 @@ func (s *Store) GrantModels(ctx context.Context, scope uuid.UUID) ([]domain.Mode
 			return err
 		}
 		var rows []struct{ Document []byte }
-		if err := tx.Raw(`SELECT m.document FROM ai.model m JOIN ai.integration_grant g ON g.model_ids @> jsonb_build_array(m.id::text) WHERE g.id=? AND g.scope_id=? AND NOT m.draft AND NOT g.revoked AND g.expires_at>clock_timestamp() ORDER BY m.name,m.id`, s.grant, scope).Scan(&rows).Error; err != nil {
+		if err := tx.Raw(`SELECT m.document FROM ai.model_current m JOIN ai.integration_grant g ON g.model_ids @> jsonb_build_array(m.id::text) WHERE g.id=? AND g.scope_id=? AND NOT m.draft AND NOT g.revoked AND g.expires_at>clock_timestamp() ORDER BY m.name,m.id`, s.grant, scope).Scan(&rows).Error; err != nil {
 			return err
 		}
 		for _, row := range rows {

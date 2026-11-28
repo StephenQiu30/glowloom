@@ -112,6 +112,47 @@ export async function prepareAiModel(
   });
 }
 
+/** 发布模型售价 PUT /api/ai/admin/models/${param0}/price */
+export async function publishAiModelSale(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.publishAiModelSaleParams,
+  body: API.SaleChange,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<API.Model>(`/api/ai/admin/models/${param0}/price`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    params: { ...queryParams },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+/** 预览模型单次销售积分 POST /api/ai/admin/models/${param0}/price/preview */
+export async function previewAiModelSale(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.previewAiModelSaleParams,
+  body: API.salePreviewInput,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<API.salePreview>(
+    `/api/ai/admin/models/${param0}/price/preview`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    },
+  );
+}
+
 /** 读取候选的验证计划或回执 GET /api/ai/admin/onboarding/${param0} */
 export async function getAiOnboarding(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
@@ -202,6 +243,25 @@ export async function prepareAiRoute(
     headers: {
       "Content-Type": "application/json",
     },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+/** 发布渠道采购价 PUT /api/ai/admin/routes/${param0}/price */
+export async function publishAiRoutePurchase(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.publishAiRoutePurchaseParams,
+  body: API.SaleChange,
+  options?: RequestOptions,
+) {
+  const { id: param0, ...queryParams } = params;
+  return request<API.Route>(`/api/ai/admin/routes/${param0}/price`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    params: { ...queryParams },
     data: body,
     ...(options || {}),
   });

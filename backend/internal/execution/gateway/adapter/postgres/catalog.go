@@ -18,7 +18,7 @@ import (
 
 // PublishModel adds an immutable version and atomically replaces its live alias.
 func (s *Store) PublishModel(ctx context.Context, m domain.Model) error {
-	if m.Validate() != nil {
+	if m.SaleVersion != 0 || m.Validate() != nil {
 		return domain.ErrInvalid
 	}
 	raw, _ := json.Marshal(m)
@@ -77,7 +77,7 @@ func (s *Store) PublishRoute(ctx context.Context, route domain.Route, ciphertext
 }
 
 func validateRoute(model domain.Model, route domain.Route, concurrency, rpm int) error {
-	if model.Protocol != route.Protocol || route.KeyID != "" || route.KeyVerification != "" || (route.Protocol != "media" && len(route.DriverConfig) != 0) {
+	if model.Protocol != route.Protocol || route.KeyID != "" || route.KeyVerification != "" || route.PurchaseVersion != 0 || (route.Protocol != "media" && len(route.DriverConfig) != 0) {
 		return domain.ErrInvalid
 	}
 	u, err := url.Parse(route.BaseURL)

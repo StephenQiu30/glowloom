@@ -133,7 +133,7 @@ it("opens a prepared model at API Key verification without requesting manual pri
     quotas: [],
     unknown: [],
   });
-  render(<AiServiceAdmin />);
+  render(<AiServiceAdmin entry="providers" />);
   fireEvent.click(await screen.findByRole("button", { name: "新增接入" }));
   const dialog = screen.getByRole("dialog", { name: "新增接入" });
   fireEvent.click(
@@ -193,7 +193,7 @@ it("reuses a serving supplier model without requesting a key or sending a probe"
       credentials: [{ id: credential, supplier_id: supplier, state: "active" }],
     })
     .mockResolvedValueOnce(active);
-  render(<AiServiceAdmin />);
+  render(<AiServiceAdmin entry="providers" />);
   fireEvent.click(await screen.findByRole("button", { name: "新增接入" }));
   const dialog = screen.getByRole("dialog", { name: "新增接入" });
   fireEvent.click(
@@ -207,12 +207,26 @@ it("reuses a serving supplier model without requesting a key or sending a probe"
   ]);
 });
 
-it("shows one resource table per provider tab and opens the selected billing attempt", async () => {
-  send.mockResolvedValueOnce({
+it("groups channels by supplier and keeps reconciliation in platform billing", async () => {
+  const configuration = {
     models: [{ model, enabled: true }],
-    routes: [{ route: { ...mediaRoute, id: verificationID }, enabled: true }],
+    routes: [
+      {
+        route: { ...mediaRoute, id: verificationID },
+        provider_key: "volcengine_ark",
+        enabled: true,
+      },
+    ],
     onboarding: [
-      { ...review, state: "prepared", upstream_model: "pending-model" },
+      {
+        ...review,
+        id: "pending",
+        state: "failed",
+        upstream_model: "pending-model",
+        provider_key: "volcengine_ark",
+        supplier_id: supplier,
+        group: "image-account",
+      },
     ],
     quotas: [{ name: "image-account", concurrency: 2, rpm: 60 }],
     credentials: [],
@@ -224,53 +238,42 @@ it("shows one resource table per provider tab and opens the selected billing att
         state: "unknown",
       },
     ],
-  });
-  render(<AiServiceAdmin entry="providers" />);
-  expect(await screen.findByRole("table", { name: "供应商路由" })).toBeTruthy();
-  expect(screen.getAllByRole("table")).toHaveLength(1);
+  };
+  send.mockResolvedValue(configuration);
+  const entry = render(<AiServiceAdmin entry="providers" />);
+  const table = await screen.findByRole("table", { name: "供应商" });
   expect(
-    screen.queryByRole("heading", { level: 1, name: "AI 服务接入" }),
-  ).toBeNull();
-  const toolbar = screen.getByRole("group", { name: "供应商路由工具栏" });
-  expect(
-    within(toolbar).getByRole("button", { name: "新增接入" }).textContent,
-  ).toBe("");
-  expect(
-    within(toolbar).getByRole("button", { name: "刷新配置" }),
-  ).toBeTruthy();
-  expect(
-    screen.getByRole("link", { name: "查看路由" }).getAttribute("href"),
-  ).toBe(`/providers/${verificationID}`);
-  fireEvent.click(screen.getByRole("button", { name: "筛选条件" }));
-  fireEvent.change(await screen.findByLabelText("关键词"), {
-    target: { value: "not-a-route" },
-  });
-  fireEvent.change(screen.getByRole("combobox", { name: "状态" }), {
-    target: { value: "已启用" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: "筛选" }));
-  expect(await screen.findByText("没有符合条件的记录")).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "重置筛选" }));
-  expect(await screen.findByRole("link", { name: "查看路由" })).toBeTruthy();
+    within(table)
+      .getByRole("link", { name: "查看 火山方舟" })
+      .getAttribute("href"),
+  ).toBe("/providers?provider=volcengine_ark");
   expect(screen.queryByText("pending-model")).toBeNull();
-  for (const [tab, table] of [
-    ["模型", "销售模型"],
-    ["待接入", "待接入渠道"],
-    ["验证", "接入验证"],
-    ["配额", "共享配额"],
-    ["凭据", "供应商凭据"],
-    ["赠送单", "积分赠送单"],
-    ["对账", "待对账请求"],
-  ]) {
-    fireEvent.mouseDown(screen.getByRole("tab", { name: tab }), {
-      button: 0,
-      ctrlKey: false,
-    });
-    expect(screen.getAllByRole("table")).toHaveLength(1);
-    expect(screen.getByRole("table", { name: table })).toBeTruthy();
-    if (tab === "待接入")
-      expect(screen.getByText("pending-model")).toBeTruthy();
-  }
+  const nav = screen.getByRole("navigation", { name: "AI 服务管理" });
+  expect(
+    within(nav)
+      .getAllByRole("link")
+      .map((link) => link.textContent),
+  ).toEqual(["模型", "渠道"]);
+  expect(screen.queryByRole("tab", { name: "对账" })).toBeNull();
+
+  entry.rerender(
+    <AiServiceAdmin entry="providers" initialProvider="volcengine_ark" />,
+  );
+  const routes = await screen.findByRole("table", { name: "供应商路由" });
+  expect(
+    within(routes).getByRole("link", { name: "查看路由" }).getAttribute("href"),
+  ).toBe(`/providers/${verificationID}`);
+  expect(screen.getByRole("table", { name: "接入记录" })).toBeTruthy();
+  expect(screen.getByText("pending-model")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "查看回执" })).toBeTruthy();
+
+  entry.rerender(<AiServiceAdmin entry="billing" />);
+  expect(await screen.findByRole("table", { name: "积分赠送单" })).toBeTruthy();
+  expect(screen.queryByRole("navigation", { name: "AI 服务管理" })).toBeNull();
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "对账" }), {
+    button: 0,
+    ctrlKey: false,
+  });
   fireEvent.click(screen.getByRole("button", { name: "核对账单" }));
   expect(screen.getByLabelText<HTMLInputElement>("原请求 ID").value).toBe(
     modelID,
@@ -278,7 +281,6 @@ it("shows one resource table per provider tab and opens the selected billing att
   expect(screen.getByLabelText<HTMLInputElement>("原尝试 ID").value).toBe(
     verificationID,
   );
-  expect(send).toHaveBeenCalledTimes(1);
 });
 
 it("does not request gateway configuration for a non-admin account", () => {
@@ -311,10 +313,8 @@ it("starts the provider entry on procurement and asks before discarding an edite
       <AiServiceAdmin entry="providers" />
     </SpaceContext.Provider>,
   );
-  const procurement = await screen.findByRole("tab", {
-    name: "渠道",
-  });
-  expect(procurement.getAttribute("aria-selected")).toBe("true");
+  const procurement = await screen.findByRole("link", { name: "渠道" });
+  expect(procurement.getAttribute("aria-current")).toBe("page");
   fireEvent.click(screen.getByRole("button", { name: "新增接入" }));
   fireEvent.click(screen.getByRole("button", { name: "使用已有模型" }));
   expect(screen.getByLabelText<HTMLInputElement>("验证付款空间 ID").value).toBe(
@@ -441,13 +441,9 @@ it("keeps supplier procurement independent from sale and refuses invalid amounts
 
 it("saves the keyless procurement plan before showing API Key and budget confirmation", async () => {
   render(<AiServiceAdmin entry="providers" />);
-  await screen.findByRole("table", { name: "供应商路由" });
+  await screen.findByRole("table", { name: "供应商" });
   expect(send.mock.calls[0][0]).toBe("/api/ai/admin/configuration");
   expect(screen.queryByText("must-not-render")).toBeNull();
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "渠道" }), {
-    button: 0,
-    ctrlKey: false,
-  });
   fireEvent.click(screen.getByRole("button", { name: "新增接入" }));
   fireEvent.click(screen.getByRole("button", { name: "使用已有模型" }));
   expect(screen.queryByLabelText("API Key")).toBeNull();
@@ -535,12 +531,8 @@ it("normalizes empty configuration and discards any credential read-back fields"
 });
 
 it("previews a promotional grant and submits it for independent review", async () => {
-  render(<AiServiceAdmin entry="providers" />);
-  await screen.findByRole("table", { name: "供应商路由" });
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "赠送单" }), {
-    button: 0,
-    ctrlKey: false,
-  });
+  render(<AiServiceAdmin entry="billing" />);
+  await screen.findByRole("table", { name: "积分赠送单" });
   fireEvent.click(screen.getByRole("button", { name: "赠送积分" }));
   fireEvent.change(screen.getByLabelText("积分空间 ID"), {
     target: { value: supplier },
@@ -639,11 +631,7 @@ it("prepares a supported media driver with an explicit probe and no key", async 
     ],
   });
   render(<AiServiceAdmin entry="providers" />);
-  await screen.findByRole("table", { name: "供应商路由" });
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "渠道" }), {
-    button: 0,
-    ctrlKey: false,
-  });
+  await screen.findByRole("table", { name: "供应商" });
   fireEvent.click(screen.getByRole("button", { name: "新增接入" }));
   fireEvent.click(screen.getByRole("button", { name: "使用已有模型" }));
   await chooseOption("媒体驱动", /OpenAI/i);
@@ -694,7 +682,7 @@ it("prepares a supported media driver with an explicit probe and no key", async 
 });
 
 it("saves a media model with typed modes, parameters and exact prices after collapsing advanced fields", async () => {
-  render(<AiServiceAdmin />);
+  render(<AiServiceAdmin entry="providers" />);
   fireEvent.click(await screen.findByRole("button", { name: "新增接入" }));
   fireEvent.change(screen.getByLabelText("销售模型名称"), {
     target: { value: "image/preset" },
@@ -860,7 +848,7 @@ it("prepares an input-priced Ark embedding release and enforces its fixed suppli
   });
 });
 
-it("uses actual supplier logos for published and pending models and filters by capability, route and availability", async () => {
+it("lists only models with an active channel and filters by capability", async () => {
   const draftID = "88888888-8888-4888-8888-888888888888";
   const videoID = "55555555-5555-4555-8555-555555555555";
   const routeID = "66666666-6666-4666-8666-666666666666";
@@ -924,44 +912,30 @@ it("uses actual supplier logos for published and pending models and filters by c
     unknown: [],
   });
   render(<AiServiceAdmin />);
-  const table = await screen.findByRole("table", { name: "销售模型" });
+  const table = await screen.findByRole("table", { name: "可用模型" });
   const imageRow = within(table).getByRole("row", { name: /Image model/ });
-  expect(within(imageRow).getByText("可用")).toBeTruthy();
-  expect(within(table).getAllByText("不可用")).toHaveLength(2);
   expect(
     within(imageRow)
-      .getByRole("link", { name: mediaRoute.upstream_model })
+      .getByRole("link", { name: "配置售价" })
       .getAttribute("href"),
-  ).toBe(`/providers/${routeID}`);
-  fireEvent.click(
-    within(imageRow).getByRole("checkbox", { name: "选择 Image model" }),
-  );
-  const logo = (name: string) =>
-    within(table).getByRole("cell", { name }).querySelector("img");
-  expect(logo("Image model")?.getAttribute("src")).toBe(
-    "/brand/providers/volcengine.svg",
-  );
-  expect(logo("Pending model")?.getAttribute("src")).toBe(
-    "/brand/providers/byteplus.svg",
-  );
-  expect(screen.queryByRole("heading", { name: "模型管理" })).toBeNull();
-  expect(screen.queryByRole("radio", { name: "网格视图" })).toBeNull();
-  const videoTab = screen.getByRole("tab", { name: "视频" });
-  fireEvent.mouseDown(videoTab, { button: 0, ctrlKey: false });
-  expect(within(table).queryByText("Image model")).toBeNull();
-  expect(within(table).getByText("Video model")).toBeTruthy();
-  expect(screen.queryByText("已选 1 项")).toBeNull();
-  const input = screen.getByRole("textbox", {
-    name: "搜索模型、上游型号或渠道",
+  ).toBe(`/models/${modelID}`);
+  expect(
+    within(imageRow)
+      .getByRole("cell", { name: "Image model" })
+      .querySelector("img")
+      ?.getAttribute("src"),
+  ).toBe("/brand/providers/volcengine.svg");
+  expect(within(table).queryByText("Video model")).toBeNull();
+  expect(within(table).queryByText("Pending model")).toBeNull();
+  expect(screen.queryByRole("button", { name: "新增接入" })).toBeNull();
+  fireEvent.change(screen.getByRole("combobox", { name: "模型能力" }), {
+    target: { value: "video" },
   });
-  fireEvent.change(input, { target: { value: " VIDEO-UPSTREAM " } });
-  fireEvent.click(screen.getByRole("button", { name: "搜索模型" }));
-  expect(within(table).getByText("Video model")).toBeTruthy();
-  fireEvent.keyDown(screen.getByRole("combobox", { name: "模型可用状态" }), {
-    key: "ArrowDown",
+  expect(await screen.findByText("暂无可用模型")).toBeTruthy();
+  fireEvent.change(screen.getByRole("combobox", { name: "模型能力" }), {
+    target: { value: "image" },
   });
-  fireEvent.click(await screen.findByRole("option", { name: "可用" }));
-  expect(await screen.findByText("没有符合条件的模型")).toBeTruthy();
+  expect(await screen.findByText("Image model")).toBeTruthy();
 });
 
 it("defaults text model sale rates to the supplier tariff and saves an override", async () => {
@@ -989,7 +963,7 @@ it("defaults text model sale rates to the supplier tariff and saves an override"
   send.mockImplementation(async (path: string) =>
     path.endsWith("/configuration") ? { model_presets: [preset] } : undefined,
   );
-  render(<AiServiceAdmin />);
+  render(<AiServiceAdmin entry="providers" />);
   fireEvent.click(await screen.findByRole("button", { name: "新增接入" }));
   const dialog = screen.getByRole("dialog", { name: "新增接入" });
   fireEvent.click(
@@ -1059,7 +1033,7 @@ it("uses the supplier video price for the selected output resolution", async () 
       },
     ],
   });
-  render(<AiServiceAdmin />);
+  render(<AiServiceAdmin entry="providers" />);
   fireEvent.click(await screen.findByRole("button", { name: "新增接入" }));
   const dialog = screen.getByRole("dialog", { name: "新增接入" });
   fireEvent.click(
@@ -1124,7 +1098,7 @@ it("carries a selected supplier preset through draft and procurement without a k
     if (path.endsWith("/models"))
       models.push({ model: options.data, enabled: false, draft: true });
   });
-  render(<AiServiceAdmin />);
+  render(<AiServiceAdmin entry="providers" />);
   fireEvent.click(await screen.findByRole("button", { name: "新增接入" }));
   const dialog = screen.getByRole("dialog", { name: "新增接入" });
   fireEvent.click(
@@ -1189,7 +1163,7 @@ it("shows insufficient verification credits in one centered toast and keeps the 
     }
     return confirmed ? { ...draft, state: "verifying" } : draft;
   });
-  render(<AiServiceAdmin />);
+  render(<AiServiceAdmin entry="providers" />);
   fireEvent.click(await screen.findByRole("button", { name: "新增接入" }));
   const dialog = screen.getByRole("dialog", { name: "新增接入" });
   fireEvent.click(
@@ -1243,7 +1217,7 @@ it("enables a Seedance channel after a zero-credit credential check", async () =
     if (path.endsWith("/verify")) live = true;
     return live ? { ...draft, state: "active", available: true } : draft;
   });
-  render(<AiServiceAdmin />);
+  render(<AiServiceAdmin entry="providers" />);
   fireEvent.click(await screen.findByRole("button", { name: "新增接入" }));
   const dialog = screen.getByRole("dialog", { name: "新增接入" });
   fireEvent.click(
@@ -1262,4 +1236,64 @@ it("enables a Seedance channel after a zero-credit credential check", async () =
     }),
   );
   expect(within(dialog).getByRole("status").textContent).toBe("可用");
+});
+
+it("previews whole credits and publishes only the edited sale price", async () => {
+  const route = { ...mediaRoute, id: verificationID };
+  const saleURL = `/api/ai/admin/models/${modelID}/price`;
+  send.mockImplementation(async (path: string) => {
+    if (path.endsWith("/configuration"))
+      return {
+        models: [{ model: { ...model, sale_version: 3 }, enabled: true }],
+        routes: [{ route, provider_key: "volcengine_ark", enabled: true }],
+        credentials: [
+          { id: credential, supplier_id: supplier, state: "active" },
+        ],
+      };
+    if (path === `${saleURL}/preview`) return { credits: 2 };
+    if (path === saleURL) return { ...model, sale_version: 4 };
+    throw new Error("Unexpected mutation");
+  });
+  render(<AiServiceAdmin entityID={modelID} />);
+  const multiplier = await screen.findByLabelText("倍率");
+  expect(screen.queryByText("采购价")).toBeNull();
+  expect(screen.queryByRole("button", { name: "新增接入" })).toBeNull();
+  fireEvent.change(multiplier, { target: { value: "1.25" } });
+  fireEvent.click(screen.getByRole("button", { name: "预览积分" }));
+  expect(await screen.findByText("预计 2 积分")).toBeTruthy();
+  const editedPrice = { ...price, multiplier: "1.25" };
+  expect(send).toHaveBeenCalledWith(
+    `${saleURL}/preview`,
+    expect.objectContaining({
+      data: {
+        version: 3,
+        price: editedPrice,
+        usage: { input: 1000, output: 1000 },
+      },
+    }),
+  );
+  expect(send.mock.calls.map(([path]) => path)).toEqual([
+    "/api/ai/admin/configuration",
+    `${saleURL}/preview`,
+  ]);
+  fireEvent.click(screen.getByRole("button", { name: "发布售价" }));
+  const dialog = screen.getByRole("alertdialog");
+  expect(
+    within(dialog).getByText(
+      "新报价立即使用新售价，已确认的任务仍按原价结算。",
+    ),
+  ).toBeTruthy();
+  const confirm = within(dialog).getByRole<HTMLButtonElement>("button", {
+    name: "确认发布",
+  });
+  await waitFor(() => expect(confirm.disabled).toBe(false));
+  fireEvent.click(confirm);
+  await findFeedback("售价已发布。");
+  expect(send.mock.calls.at(2)).toEqual([
+    saleURL,
+    expect.objectContaining({
+      method: "PUT",
+      data: { version: 3, price: editedPrice },
+    }),
+  ]);
 });

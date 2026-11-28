@@ -1,7 +1,7 @@
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { ProviderLogo } from "@/components/providers/provider-logo";
-import { providerLabel } from "@/app/providers/_components/provider-label";
+import { providerLabel } from "@/components/providers/provider-label";
 
 describe("ProviderLogo", () => {
   it("OpenAI、OpenRouter 和 Vercel 使用前景色遮罩自适应单色渲染", () => {
